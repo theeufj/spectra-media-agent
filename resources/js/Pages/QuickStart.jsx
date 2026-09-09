@@ -54,7 +54,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
             <Head title="Quick Start" />
 
             <div className="py-12">
-                <div className="max-w-2xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-2xl mx-auto sm:">
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-8 text-center">
                             <div className="text-5xl mb-4">🚀</div>
@@ -72,7 +72,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                         ${urlFocused ? 'border-brand-primary shadow-lg shadow-brand-primary/20' : 'border-gray-200'}
                                         ${errors.website_url ? 'border-red-400' : ''}
                                     `}>
-                                        <span className="pl-4 text-gray-400">
+                                        <span className="pl-4 text-gray-500">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                                             </svg>
@@ -155,7 +155,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                 </div>
                             </div>
 
-                            <p className="mt-6 text-xs text-gray-400">
+                            <p className="mt-6 text-xs text-gray-500">
                                 Or{' '}
                                 <a href={route('customers.create')} className="text-brand-dark hover:text-brand-darker">
                                     set up manually

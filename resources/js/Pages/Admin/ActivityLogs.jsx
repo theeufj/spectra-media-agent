@@ -94,11 +94,11 @@ const LogRow = ({ log }) => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                     <p className="text-sm text-gray-500">{log.created_at_human}</p>
-                    <p className="text-xs text-gray-400">{log.created_at}</p>
+                    <p className="text-xs text-gray-500">{log.created_at}</p>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                     <svg 
-                        className={`w-5 h-5 text-gray-400 transform transition-transform ${expanded ? 'rotate-180' : ''}`}
+                        className={`w-5 h-5 text-gray-500 transform transition-transform ${expanded ? 'rotate-180' : ''}`}
                         fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -157,7 +157,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Activity Logs</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>Activity Logs</h2>}
         >
             <Head title="Activity Logs" />
 
@@ -286,7 +286,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                                         ? 'bg-brand-dark text-white' 
                                                         : link.url 
                                                             ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' 
-                                                            : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                                                            : 'bg-gray-50 text-gray-500 cursor-not-allowed'
                                                 }`}
                                                 dangerouslySetInnerHTML={{ __html: link.label }}
                                             />

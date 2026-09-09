@@ -12,7 +12,7 @@ export default function Index({ proposals }) {
         <AuthenticatedLayout>
             <Head title="Proposals" />
 
-            <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto sm:">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Proposals</h1>
@@ -59,7 +59,7 @@ export default function Index({ proposals }) {
                                         <h3 className="text-lg font-semibold text-white truncate group-hover:underline">
                                             {proposal.client_name}
                                         </h3>
-                                        <p className="text-brand-primary/30 text-sm">{proposal.industry || 'General'}</p>
+                                        <p className="text-white/80 text-sm">{proposal.industry || 'General'}</p>
                                     </div>
                                     <div className="p-6">
                                         <div className="flex items-center justify-between mb-3">
@@ -87,7 +87,7 @@ export default function Index({ proposals }) {
                                                 ))}
                                             </div>
                                         )}
-                                        <p className="text-xs text-gray-400">
+                                        <p className="text-xs text-gray-500">
                                             Created {new Date(proposal.created_at).toLocaleDateString()}
                                         </p>
                                     </div>

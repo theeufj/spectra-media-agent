@@ -17,7 +17,7 @@ export default function Settings({ customer, canWhiteLabel }) {
             <AuthenticatedLayout>
                 <Head title="Report Branding" />
                 <div className="py-8">
-                    <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+                    <div className="mx-auto max-w-2xl sm:">
                         <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
                             <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -55,7 +55,7 @@ export default function Settings({ customer, canWhiteLabel }) {
             <Head title="Report Branding" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-2xl sm:">
                     <div className="mb-8">
                         <h1 className="text-2xl font-bold text-gray-900">Report Branding</h1>
                         <p className="mt-1 text-sm text-gray-500">
@@ -117,7 +117,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                 className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary text-sm"
                                 disabled={!form.enabled}
                             />
-                            <p className="mt-1 text-xs text-gray-400">Recommended: PNG or SVG, at least 200×60px.</p>
+                            <p className="mt-1 text-xs text-gray-500">Recommended: PNG or SVG, at least 200×60px.</p>
                             {form.logo_url && form.enabled && (
                                 <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                                     <p className="text-xs text-gray-500 mb-2">Preview:</p>

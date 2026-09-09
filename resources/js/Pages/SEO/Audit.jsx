@@ -90,7 +90,7 @@ export default function Audit({ audit }) {
         <AuthenticatedLayout>
             <Head title={`SEO Audit - ${audit.url}`} />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
@@ -207,12 +207,12 @@ export default function Audit({ audit }) {
                                 <div>
                                     <p className="text-gray-500">Title</p>
                                     <p className="font-medium text-gray-900 mt-1">{audit.meta_analysis.title || '—'}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Length: {audit.meta_analysis.title_length ?? 0}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Length: {audit.meta_analysis.title_length ?? 0}</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-500">Description</p>
                                     <p className="font-medium text-gray-900 mt-1">{audit.meta_analysis.description || '—'}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Length: {audit.meta_analysis.description_length ?? 0}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Length: {audit.meta_analysis.description_length ?? 0}</p>
                                 </div>
                             </div>
                         </Section>
@@ -227,11 +227,11 @@ export default function Audit({ audit }) {
                                     <span>HTTPS</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={audit.security_analysis.hsts == null ? 'text-gray-400' : audit.security_analysis.hsts ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.hsts == null ? '—' : audit.security_analysis.hsts ? '✓' : '✗'}</span>
+                                    <span className={audit.security_analysis.hsts == null ? 'text-gray-500' : audit.security_analysis.hsts ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.hsts == null ? '—' : audit.security_analysis.hsts ? '✓' : '✗'}</span>
                                     <span>HSTS</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={audit.security_analysis.csp == null ? 'text-gray-400' : audit.security_analysis.csp ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.csp == null ? '—' : audit.security_analysis.csp ? '✓' : '✗'}</span>
+                                    <span className={audit.security_analysis.csp == null ? 'text-gray-500' : audit.security_analysis.csp ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.csp == null ? '—' : audit.security_analysis.csp ? '✓' : '✗'}</span>
                                     <span>CSP</span>
                                 </div>
                             </div>

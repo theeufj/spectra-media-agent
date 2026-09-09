@@ -6,7 +6,7 @@ function MetricCard({ label, value, subValue, color }) {
         <div className="bg-white rounded-lg border border-gray-200 p-5">
             <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
             <p className={`text-2xl font-bold mt-1 ${color || 'text-gray-900'}`}>{value}</p>
-            {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
+            {subValue && <p className="text-xs text-gray-500 mt-0.5">{subValue}</p>}
         </div>
     );
 }
@@ -40,7 +40,7 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
         <AuthenticatedLayout>
             <Head title="Analytics" />
             <div className="py-8">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-7xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Advanced Analytics</h1>

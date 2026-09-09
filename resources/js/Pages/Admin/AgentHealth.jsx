@@ -34,7 +34,7 @@ export default function AgentHealth({ auth, jobs = [] }) {
     const healthy = jobs.filter(j => !j.is_stale && j.last_status !== 'failed' && j.last_status !== 'never_run').length;
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="Automation Health — Admin" />
             <div className="flex min-h-screen bg-gray-50">
                 <SideNav />
@@ -73,7 +73,7 @@ export default function AgentHealth({ auth, jobs = [] }) {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {jobs.length === 0 && (
-                                        <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">No runs recorded yet — jobs will appear here after their next scheduled run.</td></tr>
+                                        <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No runs recorded yet — jobs will appear here after their next scheduled run.</td></tr>
                                     )}
                                     {jobs.map((j) => {
                                         const b = badge(j.last_status);
@@ -81,7 +81,7 @@ export default function AgentHealth({ auth, jobs = [] }) {
                                             <tr key={j.job} className={j.is_stale ? 'bg-red-50' : ''}>
                                                 <td className="px-4 py-3">
                                                     <div className="font-medium text-gray-900 text-sm">{j.job}</div>
-                                                    {j.note && <div className="text-xs text-gray-400 truncate max-w-xs">{j.note}</div>}
+                                                    {j.note && <div className="text-xs text-gray-500 truncate max-w-xs">{j.note}</div>}
                                                 </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     <span className={j.is_stale ? 'text-red-600 font-medium' : 'text-gray-600'}>{ago(j.age_hours)}</span>
@@ -99,7 +99,7 @@ export default function AgentHealth({ auth, jobs = [] }) {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">{j.actions}</td>
-                                                <td className={`px-4 py-3 text-right text-sm font-medium ${j.errors > 0 ? 'text-red-600' : 'text-gray-400'}`}>{j.errors}</td>
+                                                <td className={`px-4 py-3 text-right text-sm font-medium ${j.errors > 0 ? 'text-red-600' : 'text-gray-500'}`}>{j.errors}</td>
                                                 <td className="px-4 py-3 text-sm text-gray-500">{j.scope || '—'}</td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1">

@@ -284,7 +284,7 @@ export default function Show({ proposal }) {
         <AuthenticatedLayout>
             <Head title={`Proposal — ${proposal.client_name}`} />
 
-            <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-5xl mx-auto sm:">
                 <Link
                     href={route('proposals.index')}
                     className="text-brand-dark hover:text-brand-darker text-sm font-medium inline-flex items-center mb-6"

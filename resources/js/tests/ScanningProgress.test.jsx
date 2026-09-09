@@ -12,7 +12,7 @@ describe('ScanningProgress', () => {
         expect(getByText('Setting up https://acme.example')).toBeInTheDocument();
         expect(getByText('Finding your pages…')).toBeInTheDocument();
         // The guideline step hasn't started yet.
-        expect(getByText('Building your brand guidelines').className).toContain('text-gray-400');
+        expect(getByText('Building your brand guidelines').className).toContain('text-gray-500');
         expect(getByLabelText('working')).toBeInTheDocument();
     });
 
@@ -23,7 +23,7 @@ describe('ScanningProgress', () => {
 
         expect(getByLabelText('done')).toBeInTheDocument();
         expect(getByText('12 pages read')).toBeInTheDocument();
-        expect(getByText('Building your brand guidelines').className).not.toContain('text-gray-400');
+        expect(getByText('Building your brand guidelines').className).not.toContain('text-gray-500');
     });
 
     it('shows the failure reason and the manual escape hatch', () => {

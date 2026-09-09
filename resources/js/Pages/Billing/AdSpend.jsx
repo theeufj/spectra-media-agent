@@ -201,7 +201,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
             <Head title="Ad Spend Billing" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+                <div className="max-w-7xl mx-auto sm: space-y-6">
                     
                     {/* Payment Failed Alert */}
                     {paymentFailed && (
@@ -253,9 +253,9 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                             {credit ? (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="bg-gradient-to-br from-brand-primary to-brand-dark rounded-xl p-6 text-white">
-                                        <p className="text-brand-primary/20 text-sm">Current Balance</p>
+                                        <p className="text-white/80 text-sm">Current Balance</p>
                                         <p className="text-3xl font-bold mt-1">{formatCurrency(credit.current_balance)}</p>
-                                        <p className="text-brand-primary/30 text-sm mt-2">
+                                        <p className="text-white/80 text-sm mt-2">
                                             ~{credit.days_remaining || 0} days remaining
                                         </p>
                                     </div>
@@ -274,11 +274,11 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                 </div>
                             ) : (
                                 <div className="text-center py-8">
-                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
                                     <p className="mt-2 text-gray-500">No ad spend account yet</p>
-                                    <p className="text-sm text-gray-400">Your credit account will be created when you launch your first campaign</p>
+                                    <p className="text-sm text-gray-500">Your credit account will be created when you launch your first campaign</p>
                                 </div>
                             )}
                         </div>
@@ -318,7 +318,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                 </Elements>
                             ) : (
                                 <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                                    <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
                                     <div className="ml-4">
@@ -413,11 +413,11 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                 </div>
                             ) : (
                                 <div className="text-center py-8">
-                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                     </svg>
                                     <p className="mt-2 text-gray-500">No transactions yet</p>
-                                    <p className="text-sm text-gray-400">Transactions will appear here once your campaigns start running</p>
+                                    <p className="text-sm text-gray-500">Transactions will appear here once your campaigns start running</p>
                                 </div>
                             )}
                         </div>

@@ -76,7 +76,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                     <div className="border-b border-gray-200 shrink-0">
                         {['to', 'cc', 'bcc'].map((field) => (
                             <div key={field} className="flex items-center border-b border-gray-100 last:border-0">
-                                <span className="w-16 text-xs font-semibold text-gray-400 uppercase px-5 py-2.5 shrink-0">
+                                <span className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">
                                     {field}
                                 </span>
                                 <input
@@ -90,7 +90,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                             </div>
                         ))}
                         <div className="flex items-center">
-                            <span className="w-16 text-xs font-semibold text-gray-400 uppercase px-5 py-2.5 shrink-0">
+                            <span className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">
                                 Subject
                             </span>
                             <input
@@ -118,7 +118,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                                 <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-2 py-1">
                                     {f.name}
                                     <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))}
-                                        className="text-gray-400 hover:text-red-500">×</button>
+                                        className="text-gray-500 hover:text-red-500">×</button>
                                 </span>
                             ))}
                         </div>
@@ -147,7 +147,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="ml-auto text-sm text-gray-400 hover:text-gray-600"
+                            className="ml-auto text-sm text-gray-500 hover:text-gray-600"
                         >
                             Discard
                         </button>
@@ -183,7 +183,7 @@ function AttachmentChip({ att }) {
         >
             <span>{icon}</span>
             <span className="font-medium">{att.filename}</span>
-            <span className="text-gray-400">{filesize(att.size)}</span>
+            <span className="text-gray-500">{filesize(att.size)}</span>
         </a>
     );
 }
@@ -195,7 +195,7 @@ function MessageBubble({ message, inbox }) {
 
     return (
         <div className={`flex flex-col gap-1 ${isOutbound ? 'items-end' : 'items-start'}`}>
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="font-medium text-gray-600">
                     {isOutbound ? `${inbox.display_name} (you)` : senderName(message.from)}
                 </span>
@@ -249,7 +249,7 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
 
     if (!thread) {
         return (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-gray-500">
                 <div className="text-center">
                     <svg className="w-16 h-16 mx-auto mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -265,14 +265,14 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
         <div className="flex-1 flex flex-col overflow-hidden">
             {/* Thread header */}
             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 lg:hidden">
+                <button onClick={onClose} className="text-gray-500 hover:text-gray-600 lg:hidden">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
                 <div className="flex-1 min-w-0">
                     <h2 className="font-semibold text-gray-900 truncate">{thread.subject}</h2>
-                    <p className="text-xs text-gray-400">{thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-gray-500">{thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}</p>
                 </div>
                 <button
                     onClick={onReply}
@@ -311,7 +311,7 @@ function ThreadItem({ thread, isActive, onClick }) {
                 <span className={`text-sm truncate ${thread.unread > 0 ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
                     {senderName(thread.from)}
                 </span>
-                <span className="text-xs text-gray-400 shrink-0 ml-2">{formatDate(thread.date)}</span>
+                <span className="text-xs text-gray-500 shrink-0 ml-2">{formatDate(thread.date)}</span>
             </div>
             <div className="flex items-center gap-2">
                 <span className={`text-sm truncate ${thread.unread > 0 ? 'font-medium text-gray-800' : 'text-gray-500'}`}>
@@ -323,7 +323,7 @@ function ThreadItem({ thread, isActive, onClick }) {
                     </span>
                 )}
             </div>
-            <p className="text-xs text-gray-400 truncate mt-0.5">{thread.snippet}</p>
+            <p className="text-xs text-gray-500 truncate mt-0.5">{thread.snippet}</p>
         </button>
     );
 }
@@ -395,7 +395,7 @@ function SettingsPane({ inbox }) {
                                 value={forwardTo}
                                 onChange={(e) => setForwardTo(e.target.value)}
                                 placeholder="you@example.com"
-                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                             />
                         </div>
                         <div className="flex items-center gap-3">
@@ -535,7 +535,7 @@ export default function InboxIndex({ inbox, threads }) {
                             </div>
                             <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">{inbox.display_name}</p>
-                                <p className="text-xs text-gray-400 truncate">{inbox.email_address}</p>
+                                <p className="text-xs text-gray-500 truncate">{inbox.email_address}</p>
                             </div>
                         </div>
                     </div>
@@ -595,11 +595,11 @@ export default function InboxIndex({ inbox, threads }) {
                     <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
                         <div className="px-4 py-3 border-b border-gray-100">
                             <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
-                            <p className="text-xs text-gray-400">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
+                            <p className="text-xs text-gray-500">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
                         </div>
 
                         {visibleThreads.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center p-8 text-center text-gray-400">
+                            <div className="flex-1 flex items-center justify-center p-8 text-center text-gray-500">
                                 <div>
                                     <svg className="w-12 h-12 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}

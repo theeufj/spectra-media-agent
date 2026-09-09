@@ -25,13 +25,19 @@ export default function Header({ auth }) {
                             <span className="text-2xl font-bold text-brand-primary">{tenant.logo_text}</span>
                         </Link>
 
-                        {/* Desktop Nav */}
+                        {/*
+                            Hover is brand-dark rather than brand-primary throughout this
+                            header: on the flagship skin #ff4d00 on white is 3.33:1, so
+                            hovering a 14px link made it harder to read, not easier.
+                            brand-dark is 4.96:1 and brand-darker 7.65:1, and both clear
+                            AA on the navy skin by a wide margin.
+                        */}
                         <nav className="hidden md:flex items-center space-x-8">
                             {navLinks.map((link) => (
                                 <Link
                                     key={link.href}
                                     href={link.href}
-                                    className="text-sm font-medium text-gray-600 hover:text-brand-primary transition-colors"
+                                    className="text-sm font-medium text-gray-600 hover:text-brand-dark transition-colors"
                                 >
                                     {link.label}
                                 </Link>
@@ -51,7 +57,7 @@ export default function Header({ auth }) {
                                     </a>
                                     <a
                                         href="/register"
-                                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-primary hover:bg-brand-dark transition-colors"
+                                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-dark hover:bg-brand-darker transition-colors"
                                     >
                                         Start Free
                                     </a>
@@ -59,12 +65,18 @@ export default function Header({ auth }) {
                             )}
                         </div>
 
-                        {/* Mobile menu button */}
+                        {/*
+                            The only control on a phone, and it had no accessible name and
+                            a gray-400 glyph at 2.54:1. gray-600 is 7.56:1.
+                        */}
                         <button
+                            type="button"
                             onClick={() => setMobileOpen(!mobileOpen)}
-                            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                            aria-expanded={mobileOpen}
+                            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+                            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                         >
-                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 {mobileOpen ? (
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 ) : (
@@ -83,7 +95,7 @@ export default function Header({ auth }) {
                                 <Link
                                     key={link.href}
                                     href={link.href}
-                                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-primary hover:bg-gray-50"
+                                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-dark hover:bg-gray-50"
                                     onClick={() => setMobileOpen(false)}
                                 >
                                     {link.label}
@@ -99,7 +111,7 @@ export default function Header({ auth }) {
                                         <a href="/login" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
                                             Log in
                                         </a>
-                                        <a href="/register" className="block px-3 py-2 rounded-md text-base font-medium text-white bg-brand-primary hover:bg-brand-dark text-center">
+                                        <a href="/register" className="block px-3 py-2 rounded-md text-base font-medium text-white bg-brand-dark hover:bg-brand-darker text-center">
                                             Start Free
                                         </a>
                                     </>

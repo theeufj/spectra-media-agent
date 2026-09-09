@@ -42,7 +42,7 @@ export default function Show({ ticket }) {
             <Head title={`Ticket #${ticket.id}`} />
 
             <div className="py-12">
-                <div className="max-w-3xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-3xl mx-auto sm:">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-200">

@@ -32,8 +32,8 @@ function LogEntry({ log }) {
                 {changes.map(c => (
                     <div key={c.name} className="text-sm">
                         <span className="text-gray-500">{c.name}:</span>{' '}
-                        <span className="text-gray-400">{c.before.toFixed(1)}%</span>
-                        <span className="text-gray-400 mx-1">→</span>
+                        <span className="text-gray-500">{c.before.toFixed(1)}%</span>
+                        <span className="text-gray-500 mx-1">→</span>
                         <span className="font-medium">{c.after.toFixed(1)}%</span>
                         <span className={`ml-1 text-xs ${c.diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
                             ({c.diff > 0 ? '+' : ''}{c.diff.toFixed(1)})
@@ -55,7 +55,7 @@ export default function History({ logs = [] }) {
         <AuthenticatedLayout>
             <Head title="Rebalance History" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Rebalance History</h1>

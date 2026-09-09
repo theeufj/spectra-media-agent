@@ -41,7 +41,7 @@ export default function Show({ ticket }) {
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" contained={false}>
                     <Link href={route('admin.support-tickets.index')} className="text-gray-500 hover:text-gray-700">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -143,11 +143,11 @@ export default function Show({ ticket }) {
                                                         }`}
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                                                                 {isBot ? 'Assistant' : 'Customer'}
                                                             </span>
                                                             {turn.at && (
-                                                                <span className="text-xs text-gray-400">
+                                                                <span className="text-xs text-gray-500">
                                                                     {new Date(turn.at).toLocaleString()}
                                                                 </span>
                                                             )}

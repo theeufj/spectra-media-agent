@@ -151,7 +151,7 @@ export function InstagramFeedPreview({
                         <p className="text-xs text-gray-500">Sponsored</p>
                     </div>
                 </div>
-                <span className="text-gray-400">•••</span>
+                <span className="text-gray-500">•••</span>
             </div>
             
             {/* Image */}
@@ -262,7 +262,7 @@ export default function AdPreviewPanel({
                 </div>
             </div>
             
-            <p className="text-xs text-gray-400 mt-4 text-center">
+            <p className="text-xs text-gray-500 mt-4 text-center">
                 Previews are approximations. Actual appearance may vary slightly.
             </p>
         </div>

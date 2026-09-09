@@ -49,7 +49,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
             <form onSubmit={submit} className="p-6">
                 {campaign.budget_rationale && (
                     <div className="mb-4 rounded-md bg-gray-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Why we suggested this</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Why we suggested this</p>
                         <p className="mt-1 text-sm text-gray-700">{campaign.budget_rationale}</p>
                     </div>
                 )}
@@ -72,7 +72,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
                     <button
                         type="submit"
                         disabled={processing || !data.daily_budget}
-                        className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-gray-300"
+                        className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
                     >
                         {processing ? 'Saving…' : 'Confirm budget'}
                     </button>

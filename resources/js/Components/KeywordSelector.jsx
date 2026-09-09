@@ -179,7 +179,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500">
                             Uses Google Keyword Planner + AI to find relevant keywords with volume & competition data.
                         </p>
                         <button
@@ -292,14 +292,14 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                                         <option value="EXACT">Exact</option>
                                     </select>
                                     {formatVolume(kw.avg_monthly_searches) && (
-                                        <span className="text-xs text-gray-400 hidden sm:inline">
+                                        <span className="text-xs text-gray-500 hidden sm:inline">
                                             {formatVolume(kw.avg_monthly_searches)}
                                         </span>
                                     )}
                                     <button
                                         type="button"
                                         onClick={() => removeKeyword(kw.text)}
-                                        className="p-0.5 text-gray-400 hover:text-red-500 rounded transition-colors"
+                                        className="p-0.5 text-gray-500 hover:text-red-500 rounded transition-colors"
                                         title="Remove keyword"
                                     >
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -93,7 +93,12 @@ const DropdownLink = ({ className = '', children, ...props }) => {
         <Link
             {...props}
             className={
-                'block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 transition duration-150 ease-in-out hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ' +
+                // focus:bg-gray-50 was the only focus signal, and gray-50 on white
+                // is 1.04:1 — inside the 19-link Insights menu a keyboard user was
+                // moving blind. The ring must be inset: Content wraps its children
+                // in `rounded-lg overflow-hidden`, which clips an outset ring off
+                // the first and last item.
+                'block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 transition duration-150 ease-in-out hover:bg-gray-50 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary ' +
                 className
             }
         >
@@ -103,7 +108,7 @@ const DropdownLink = ({ className = '', children, ...props }) => {
 };
 
 const DropdownHeader = ({ children }) => (
-    <p className="px-4 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+    <p className="px-4 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
         {children}
     </p>
 );

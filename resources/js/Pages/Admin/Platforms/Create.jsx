@@ -23,7 +23,7 @@ export default function Create({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-jet leading-tight">Create New Platform</h2>}
+            header={<h2 className="font-semibold text-xl text-jet leading-tight" contained={false}>Create New Platform</h2>}
         >
             <Head title="Create Platform" />
 

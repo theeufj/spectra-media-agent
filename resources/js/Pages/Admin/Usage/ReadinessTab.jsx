@@ -50,7 +50,7 @@ function Readiness({ readiness }) {
                         <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: t.color ?? INK.light.primary }}>
                             {t.value.toLocaleString()}
                         </p>
-                        <p className="mt-1 text-xs text-gray-400">{t.sub}</p>
+                        <p className="mt-1 text-xs text-gray-500">{t.sub}</p>
                     </div>
                 ))}
             </div>
@@ -135,7 +135,7 @@ function Readiness({ readiness }) {
                                     <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">{a.live}</td>
                                     <td className="px-4 py-3 text-sm">
                                         {a.blockers.length === 0 ? (
-                                            <span className="text-gray-400">—</span>
+                                            <span className="text-gray-500">—</span>
                                         ) : (
                                             <ul className="space-y-1">
                                                 {a.blockers.map((b) => (
@@ -145,7 +145,7 @@ function Readiness({ readiness }) {
                                                             style={{ backgroundColor: SEVERITY[b.severity]?.color }}
                                                         />
                                                         {b.label}
-                                                        {b.detail && <span className="text-gray-400"> — {b.detail}</span>}
+                                                        {b.detail && <span className="text-gray-500"> — {b.detail}</span>}
                                                     </li>
                                                 ))}
                                             </ul>

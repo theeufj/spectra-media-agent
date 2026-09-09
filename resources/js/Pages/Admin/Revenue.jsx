@@ -93,7 +93,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Revenue Dashboard</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>Revenue Dashboard</h2>}
         >
             <Head title="Revenue Dashboard" />
 

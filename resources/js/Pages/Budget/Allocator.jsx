@@ -64,7 +64,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
         <AuthenticatedLayout>
             <Head title="Budget Allocator" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Cross-Channel Budget Allocator</h1>
@@ -138,7 +138,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Total Monthly Budget</label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-2.5 text-gray-400">$</span>
+                                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
                                     <input type="number" step="0.01" value={data.total_monthly_budget} onChange={e => setData('total_monthly_budget', e.target.value)} className="w-full pl-7 rounded-lg border-gray-300 text-sm" />
                                 </div>
                             </div>

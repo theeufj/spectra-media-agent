@@ -71,7 +71,7 @@ export default function Index({ auth, campaigns = [] }) {
             />
 
             <div className="py-6 sm:py-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     {campaigns && campaigns.length > 0 ? (
                         campaigns.map(campaign => {
                             const isExpanded = expandedCampaign === campaign.id;
@@ -84,7 +84,7 @@ export default function Index({ auth, campaigns = [] }) {
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 sm:gap-4">
-                                                <svg className={`h-5 w-5 sm:h-6 sm:w-6 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <svg className={`h-5 w-5 sm:h-6 sm:w-6 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                 </svg>
                                                 <div className="min-w-0">

@@ -42,7 +42,7 @@ export default function Index({ tickets, stats, filters }) {
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                <h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>
                     Admin - Support Tickets
                 </h2>
             }
@@ -159,7 +159,7 @@ export default function Index({ tickets, stats, filters }) {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 <div>{ticket.user?.name}</div>
-                                                <div className="text-xs text-gray-400">{ticket.user?.email}</div>
+                                                <div className="text-xs text-gray-500">{ticket.user?.email}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${priorityColors[ticket.priority]}`}>

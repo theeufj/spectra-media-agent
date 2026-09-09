@@ -7,7 +7,7 @@ function StatCard({ label, value, sub }) {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
             <p className="text-xs text-gray-500">{label}</p>
             <p className="text-xl font-bold text-gray-900 mt-1">{value}</p>
-            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+            {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
         </div>
     );
 }
@@ -91,7 +91,7 @@ export default function Index({ integrations = [], conversionStats, availablePro
         <AuthenticatedLayout>
             <Head title="Integrations" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">CRM Integrations</h1>

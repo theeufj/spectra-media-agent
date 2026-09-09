@@ -119,7 +119,7 @@ export default function FunnelChart({ steps }) {
                                             "Has an ad account" does not say
                                             whether being invited counts. */}
                                         {step.means && (
-                                            <div className="mt-0.5 max-w-md text-xs font-normal text-gray-400">
+                                            <div className="mt-0.5 max-w-md text-xs font-normal text-gray-500">
                                                 {step.means}
                                             </div>
                                         )}

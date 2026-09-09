@@ -84,7 +84,7 @@ export default function QuickActions() {
                         </span>
                         <div>
                             <p className="font-medium">{action.title}</p>
-                            <p className={`text-sm ${action.primary ? 'text-brand-primary/30' : 'text-gray-500'}`}>
+                            <p className={`text-sm ${action.primary ? 'text-white/80' : 'text-gray-500'}`}>
                                 {action.description}
                             </p>
                         </div>
@@ -156,7 +156,7 @@ export function PendingTasks({ tasks = [] }) {
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-gray-900 text-sm">{task.title}</p>
                                 <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
-                                <p className="text-xs text-gray-400 mt-1">{task.campaign_name}</p>
+                                <p className="text-xs text-gray-500 mt-1">{task.campaign_name}</p>
                             </div>
                         </div>
                     </Link>
@@ -165,7 +165,7 @@ export function PendingTasks({ tasks = [] }) {
             {/* No /tasks route exists — the first five are shown above, and the
                 count in the header already says how many there are in total. */}
             {tasks.length > 5 && (
-                <p className="block mt-4 text-center text-sm text-gray-400">
+                <p className="block mt-4 text-center text-sm text-gray-500">
                     {tasks.length - 5} more on your campaigns
                 </p>
             )}

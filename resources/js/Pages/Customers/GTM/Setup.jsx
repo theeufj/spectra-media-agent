@@ -136,7 +136,7 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
             <Head title="Tracking Setup" />
 
             <div className="py-12">
-                <div className="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-6">
+                <div className="max-w-3xl mx-auto sm: space-y-6">
 
                     {successMessage && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
@@ -296,7 +296,7 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
                             )}
 
                             {customer.gtm_last_verified && (
-                                <p className="mt-3 text-xs text-gray-400">
+                                <p className="mt-3 text-xs text-gray-500">
                                     Last verified: {new Date(customer.gtm_last_verified).toLocaleString()}
                                 </p>
                             )}

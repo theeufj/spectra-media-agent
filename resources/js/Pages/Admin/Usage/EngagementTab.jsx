@@ -18,7 +18,7 @@ const Section = ({ title, subtitle, action, children }) => (
 
 const Loading = ({ label }) => (
     <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-sm text-gray-400">Loading {label}…</p>
+        <p className="text-sm text-gray-500">Loading {label}…</p>
     </div>
 );
 
@@ -102,7 +102,7 @@ const TimeToValue = ({ steps }) => (
                         {step.median_days != null ? `${step.median_days}d` : '—'}
                     </p>
                     <p className="text-sm font-medium text-gray-700 mt-1">{step.label}</p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                         {step.sample > 0 ? `${step.sample.toLocaleString()} accounts` : 'no accounts reached this step'}
                     </p>
                 </div>
@@ -209,7 +209,7 @@ const FeatureBreadth = ({ breadth, recordingSince }) => {
                             <tr key={f.key}>
                                 <td className="px-2 py-1 text-sm text-gray-700">{f.label}</td>
                                 <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-900">
-                                    {f.accounts} <span className="text-gray-400">/ {denominator}</span>
+                                    {f.accounts} <span className="text-gray-500">/ {denominator}</span>
                                 </td>
                                 {pctMeaningful && (
                                     <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-500">{f.pct}%</td>

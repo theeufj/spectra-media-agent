@@ -26,11 +26,11 @@ export default function Create() {
             <Head title="New Support Ticket" />
 
             <div className="py-12">
-                <div className="max-w-2xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-2xl mx-auto sm:">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
                         <div className="px-6 py-4 bg-gradient-to-r from-brand-dark to-purple-600">
                             <h3 className="text-lg font-semibold text-white">How can we help?</h3>
-                            <p className="text-sm text-brand-primary/20 mt-1">Describe your issue and we'll get back to you as soon as possible.</p>
+                            <p className="text-sm text-white/80 mt-1">Describe your issue and we'll get back to you as soon as possible.</p>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -99,7 +99,7 @@ export default function Create() {
                                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     maxLength={5000}
                                 />
-                                <p className="mt-1 text-xs text-gray-400">{data.description.length}/5000</p>
+                                <p className="mt-1 text-xs text-gray-500">{data.description.length}/5000</p>
                                 {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description}</p>}
                             </div>
 

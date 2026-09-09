@@ -33,7 +33,7 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
     };
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="Feature Flags" />
             <div className="flex">
                 <SideNav />
@@ -59,27 +59,27 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                         <div key={f.class} className="bg-white rounded-lg border border-gray-200 p-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <h3 className="text-sm font-semibold text-gray-900">{f.name}</h3>
-                                                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
                                                     {activeCount}/{users.length} users
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-400 mb-3 font-mono">{f.class}</p>
+                                            <p className="text-xs text-gray-500 mb-3 font-mono">{f.class}</p>
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => handleGlobalToggle(f.name, true)}
-                                                    className="text-[11px] px-2.5 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium transition"
+                                                    className="text-xs px-2.5 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium transition"
                                                 >
                                                     Activate All
                                                 </button>
                                                 <button
                                                     onClick={() => handleGlobalToggle(f.name, false)}
-                                                    className="text-[11px] px-2.5 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 font-medium transition"
+                                                    className="text-xs px-2.5 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 font-medium transition"
                                                 >
                                                     Deactivate All
                                                 </button>
                                                 <button
                                                     onClick={() => handlePurge(f.name)}
-                                                    className="text-[11px] px-2.5 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 font-medium transition ml-auto"
+                                                    className="text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 font-medium transition ml-auto"
                                                 >
                                                     Purge Cache
                                                 </button>
@@ -105,10 +105,10 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
-                                                <th className="px-4 py-2.5 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">User</th>
-                                                <th className="px-4 py-2.5 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
                                                 {features.map((f) => (
-                                                    <th key={f.class} className="px-4 py-2.5 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                                                    <th key={f.class} className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         {f.name}
                                                     </th>
                                                 ))}
@@ -120,11 +120,11 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                                     <td className="px-4 py-2.5">
                                                         <div>
                                                             <p className="text-xs font-medium text-gray-900">{user.name}</p>
-                                                            <p className="text-[10px] text-gray-400">{user.email}</p>
+                                                            <p className="text-xs text-gray-500">{user.email}</p>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-2.5">
-                                                        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                                                             {user.plan || 'Free'}
                                                         </span>
                                                     </td>
@@ -153,7 +153,7 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                     </table>
                                 </div>
                                 {filteredUsers.length === 0 && (
-                                    <div className="px-4 py-6 text-center text-xs text-gray-400">No users match the filter.</div>
+                                    <div className="px-4 py-6 text-center text-xs text-gray-500">No users match the filter.</div>
                                 )}
                             </div>
                         </>

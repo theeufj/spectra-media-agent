@@ -31,7 +31,7 @@ function ReportCard({ report, onDownload }) {
                         }`}>
                             {periodLabel}
                         </span>
-                        <span className="text-xs text-gray-400">{generatedAt}</span>
+                        <span className="text-xs text-gray-500">{generatedAt}</span>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">{dateRange}</p>
                     <div className="flex flex-wrap gap-4">
@@ -78,7 +78,7 @@ export default function Index({ reports = [], customer, canWhiteLabel }) {
             <Head title="Reports" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                         <div>
@@ -155,7 +155,7 @@ export default function Index({ reports = [], customer, canWhiteLabel }) {
                     )}
 
                     {/* Info footer */}
-                    <div className="mt-8 text-center text-xs text-gray-400">
+                    <div className="mt-8 text-center text-xs text-gray-500">
                         Weekly reports are automatically generated every Monday at 7:00 AM.
                         Monthly reports are generated on the 1st of each month.
                     </div>

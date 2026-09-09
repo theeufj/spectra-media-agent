@@ -14,7 +14,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
 function TrendSparkline({ data }) {
-    if (!data || data.length < 2) return <span className="text-xs text-gray-400">—</span>;
+    if (!data || data.length < 2) return <span className="text-xs text-gray-500">—</span>;
 
     const chartData = {
         labels: data.map(d => d.date),
@@ -51,7 +51,7 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
         <AuthenticatedLayout>
             <Head title="SEO Rankings" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-6xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
@@ -118,7 +118,7 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
                                                 <td className="py-2.5">
                                                     {r.change > 0 && <span className="text-green-600 font-medium">↑ {r.change}</span>}
                                                     {r.change < 0 && <span className="text-red-600 font-medium">↓ {Math.abs(r.change)}</span>}
-                                                    {(!r.change || r.change === 0) && <span className="text-gray-400">—</span>}
+                                                    {(!r.change || r.change === 0) && <span className="text-gray-500">—</span>}
                                                 </td>
                                                 <td className="py-2.5">
                                                     <TrendSparkline data={trends[r.keyword]} />

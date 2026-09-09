@@ -306,7 +306,7 @@ export default function ExecutionMetrics({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Execution Metrics</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Execution Metrics</h2>}
         >
             <Head title="Admin - Execution Metrics" />
 

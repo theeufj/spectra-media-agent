@@ -825,9 +825,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <h4 className="text-sm font-semibold text-gray-800">Images</h4>
                                     <p className="text-xs text-gray-500">JPEG, PNG, or WebP · Max 10MB each · Up to 10 images</p>
                                 </div>
-                                <span className="text-xs text-gray-400">{stagedImages.length}/10</span>
+                                <span className="text-xs text-gray-500">{stagedImages.length}/10</span>
                             </div>
-                            <p className="text-xs text-gray-400 mb-3">
+                            <p className="text-xs text-gray-500 mb-3">
                                 Toggle <span className="font-medium text-brand-primary">AI Seed</span> on any image to use it as a visual reference when generating new ad creatives.
                             </p>
 
@@ -876,7 +876,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             {stagedImages.length < 10 && (
                                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <svg className="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-8 h-8 mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                         </svg>
                                         <p className="text-sm text-gray-500">Click to upload images</p>
@@ -906,14 +906,14 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <h4 className="text-sm font-semibold text-gray-800">Videos</h4>
                                     <p className="text-xs text-gray-500">MP4, MOV, or WebM · Max 100MB each · Up to 3 videos</p>
                                 </div>
-                                <span className="text-xs text-gray-400">{stagedVideos.length}/3</span>
+                                <span className="text-xs text-gray-500">{stagedVideos.length}/3</span>
                             </div>
 
                             {stagedVideos.length > 0 && (
                                 <div className="space-y-2 mb-3">
                                     {stagedVideos.map((file, i) => (
                                         <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                            <svg className="w-8 h-8 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-8 h-8 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                             </svg>
                                             <div className="flex-1 min-w-0">
@@ -937,7 +937,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             {stagedVideos.length < 3 && (
                                 <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
                                     <div className="flex items-center gap-2">
-                                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                         </svg>
                                         <p className="text-sm text-gray-500">Click to upload a video</p>
@@ -958,7 +958,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             )}
                         </div>
 
-                        <p className="text-xs text-gray-400 text-center">
+                        <p className="text-xs text-gray-500 text-center">
                             Skipping this step is fine — our AI will generate creative assets for you automatically.
                         </p>
                     </div>
@@ -1007,7 +1007,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         {data.keywords.slice(0, 10).map((kw, i) => (
                                             <span key={i} className="text-xs bg-gray-100 border border-gray-200 rounded px-2 py-0.5 text-gray-700">{kw.text}</span>
                                         ))}
-                                        {data.keywords.length > 10 && <span className="text-xs text-gray-400">+{data.keywords.length - 10} more</span>}
+                                        {data.keywords.length > 10 && <span className="text-xs text-gray-500">+{data.keywords.length - 10} more</span>}
                                     </div>
                                 )}
                             </ReviewSection>
@@ -1076,7 +1076,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             <Head title="Create Campaign" />
             
             <div className="py-8">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="max-w-5xl mx-auto sm:">
                     {/* Progress Stepper — the full version squeezes 8 labelled
                         columns into a phone viewport, so small screens get the
                         compact dots with the current step named underneath. */}
@@ -1154,7 +1154,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                     
                     {/* Draft Saved Indicator — the real save time, not the render time */}
                     {currentStep > 0 && draftSavedAt && (
-                        <p className="text-center text-sm text-gray-400 mt-4">
+                        <p className="text-center text-sm text-gray-500 mt-4">
                             Draft auto-saved • {draftSavedAt.toLocaleTimeString()}
                         </p>
                     )}

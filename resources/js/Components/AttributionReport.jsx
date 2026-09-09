@@ -96,7 +96,7 @@ function SummaryCards({ summary }) {
 
 function ChannelBar({ channels, maxValue }) {
     if (!channels.length) {
-        return <p className="text-gray-400 text-sm py-4">No data available for this model.</p>;
+        return <p className="text-gray-500 text-sm py-4">No data available for this model.</p>;
     }
 
     return (
@@ -241,7 +241,7 @@ function TouchpointJourney({ touchpoints }) {
         return (
             <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Touchpoints</h3>
-                <p className="text-gray-400 text-sm">No touchpoints recorded yet. Install the tracking pixel to start tracking.</p>
+                <p className="text-gray-500 text-sm">No touchpoints recorded yet. Install the tracking pixel to start tracking.</p>
             </div>
         );
     }
@@ -274,11 +274,11 @@ function TouchpointJourney({ touchpoints }) {
                                                 {tp.utm_source || 'direct'} / {tp.utm_medium || 'none'}
                                             </span>
                                             {tp.utm_campaign && (
-                                                <span className="text-xs text-gray-400">{tp.utm_campaign}</span>
+                                                <span className="text-xs text-gray-500">{tp.utm_campaign}</span>
                                             )}
                                         </div>
                                         <p className="text-sm text-gray-600 truncate">{tp.page_url}</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">
+                                        <p className="text-xs text-gray-500 mt-0.5">
                                             {new Date(tp.touched_at).toLocaleString()}
                                         </p>
                                     </div>
@@ -289,7 +289,7 @@ function TouchpointJourney({ touchpoints }) {
                 </div>
 
                 {touchpoints.length > 20 && (
-                    <p className="text-sm text-gray-400 mt-4 text-center">
+                    <p className="text-sm text-gray-500 mt-4 text-center">
                         Showing 20 of {touchpoints.length} touchpoints
                     </p>
                 )}

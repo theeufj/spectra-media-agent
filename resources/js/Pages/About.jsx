@@ -135,7 +135,7 @@ export default function About({ auth }) {
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to see the difference?
                             </h2>
-                            <p className="mt-6 text-xl text-brand-primary/20">
+                            <p className="mt-6 text-xl text-white/80">
                                 Start free and discover what AI-powered marketing can do for your business.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
@@ -146,7 +146,7 @@ export default function About({ auth }) {
                                     Explore Features
                                 </Link>
                             </div>
-                            <p className="mt-8 text-brand-primary/20">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
+                            <p className="mt-8 text-white/80">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
                         </div>
                     </div>
                 </main>

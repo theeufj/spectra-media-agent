@@ -21,7 +21,7 @@ function KpiCard({ label, value, sub, trend }) {
         <div className="bg-white rounded-lg border border-gray-200 p-5">
             <p className="text-sm text-gray-500">{label}</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
             {trend !== undefined && (
                 <p className={`text-xs mt-1 font-medium ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}% vs previous period
@@ -90,7 +90,7 @@ function DailyChart({ data }) {
                                 />
                             </div>
                             {i % Math.ceil(data.length / 10) === 0 && (
-                                <span className="text-[10px] text-gray-400 mt-1 rotate-[-45deg] origin-top-left whitespace-nowrap">
+                                <span className="text-xs text-gray-500 mt-1 rotate-[-45deg] origin-top-left whitespace-nowrap">
                                     {day.date.split('-').slice(1).join('/')}
                                 </span>
                             )}
@@ -127,7 +127,7 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
             <Head title="ROI Dashboard" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+                <div className="mx-auto max-w-7xl sm: space-y-6">
                     {/* Time Range Selector */}
                     <div className="flex justify-end">
                         <div className="inline-flex rounded-lg border border-gray-200 bg-white">

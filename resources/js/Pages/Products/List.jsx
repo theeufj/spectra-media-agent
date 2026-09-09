@@ -20,7 +20,7 @@ export default function List({ products = [], filter }) {
         <AuthenticatedLayout>
             <Head title="Products" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-6xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Products</h1>
@@ -57,13 +57,13 @@ export default function List({ products = [], filter }) {
                                                     {p.image_link && <img src={p.image_link} alt="" className="w-10 h-10 rounded object-cover" />}
                                                     <div>
                                                         <p className="text-sm font-medium text-gray-900 line-clamp-1">{p.title}</p>
-                                                        <p className="text-xs text-gray-400">{p.brand || p.offer_id}</p>
+                                                        <p className="text-xs text-gray-500">{p.brand || p.offer_id}</p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-right text-sm">
                                                 {p.sale_price ? (
-                                                    <div><span className="line-through text-gray-400">${parseFloat(p.price).toFixed(2)}</span> <span className="text-red-600">${parseFloat(p.sale_price).toFixed(2)}</span></div>
+                                                    <div><span className="line-through text-gray-500">${parseFloat(p.price).toFixed(2)}</span> <span className="text-red-600">${parseFloat(p.sale_price).toFixed(2)}</span></div>
                                                 ) : (
                                                     <span className="text-gray-900">{p.price ? `$${parseFloat(p.price).toFixed(2)}` : '—'}</span>
                                                 )}

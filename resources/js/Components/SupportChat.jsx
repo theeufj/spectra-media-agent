@@ -132,14 +132,14 @@ export default function SupportChat() {
 
                         {sending && (
                             <div className="flex justify-start">
-                                <div className="rounded-lg bg-white px-3 py-2 text-sm text-gray-400 ring-1 ring-gray-200">
+                                <div className="rounded-lg bg-white px-3 py-2 text-sm text-gray-500 ring-1 ring-gray-200">
                                     Typing…
                                 </div>
                             </div>
                         )}
 
                         {ticketId && (
-                            <p className="pt-1 text-center text-xs text-gray-400">
+                            <p className="pt-1 text-center text-xs text-gray-500">
                                 Saved as ticket #{ticketId}. The team has been notified.
                             </p>
                         )}

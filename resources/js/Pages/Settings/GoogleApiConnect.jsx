@@ -36,7 +36,7 @@ export default function GoogleApiConnect({ connection }) {
         <AuthenticatedLayout>
             <Head title="Connect Google APIs" />
 
-            <div className="max-w-2xl mx-auto px-4 py-10">
+            <div className="max-w-2xl mx-auto py-10">
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-8">
                     <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
@@ -118,7 +118,7 @@ export default function GoogleApiConnect({ connection }) {
                     )}
                 </div>
 
-                <p className="text-xs text-gray-400 text-center mt-4">
+                <p className="text-xs text-gray-500 text-center mt-4">
                     You will be redirected to Google's authorisation screen. SiteToSpend never shares your credentials.
                 </p>
             </div>

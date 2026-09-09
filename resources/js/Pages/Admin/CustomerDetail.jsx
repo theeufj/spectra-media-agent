@@ -77,7 +77,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Customer Detail</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Customer Detail</h2>}
         >
             <Head title={`Admin - ${customer.business_name || 'Customer'}`} />
 
@@ -204,7 +204,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                         type="text"
                                                         value={googleForm.data.google_ads_customer_id}
                                                         onChange={e => googleForm.setData('google_ads_customer_id', e.target.value)}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-brand-primary focus:border-brand-primary"
                                                         placeholder="e.g., 123-456-7890 or 1234567890"
                                                     />
                                                     {googleForm.errors.google_ads_customer_id && (
@@ -217,7 +217,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                         type="text"
                                                         value={googleForm.data.google_ads_manager_customer_id}
                                                         onChange={e => googleForm.setData('google_ads_manager_customer_id', e.target.value)}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-brand-primary focus:border-brand-primary"
                                                         placeholder="e.g., 870-102-3448 (auto-fills from MCC config)"
                                                     />
                                                     {googleForm.errors.google_ads_manager_customer_id && (
@@ -232,7 +232,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                     >
                                                         {googleForm.processing ? 'Saving...' : 'Save'}
                                                     </button>
-                                                    <p className="text-xs text-gray-400">Create the sub-account in Google Ads UI, then paste the ID here.</p>
+                                                    <p className="text-xs text-gray-500">Create the sub-account in Google Ads UI, then paste the ID here.</p>
                                                 </div>
                                             </form>
                                         ) : customer.google_ads_customer_id ? (
@@ -240,7 +240,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                 <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
                                                     Customer: {customer.google_ads_customer_id}
                                                     {customer.google_ads_manager_customer_id && (
-                                                        <span className="ml-2 text-gray-400">/ MCC: {customer.google_ads_manager_customer_id}</span>
+                                                        <span className="ml-2 text-gray-500">/ MCC: {customer.google_ads_manager_customer_id}</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -283,7 +283,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                             type="text"
                                                             value={fbForm.data.facebook_ads_account_id}
                                                             onChange={e => fbForm.setData('facebook_ads_account_id', e.target.value)}
-                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md text-sm focus:ring-brand-primary focus:border-brand-primary"
                                                             placeholder="123456789"
                                                         />
                                                     </div>
@@ -298,13 +298,13 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                     type="text"
                                                     value={fbForm.data.facebook_page_url}
                                                     onChange={e => fbForm.setData('facebook_page_url', e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-brand-primary focus:border-brand-primary"
                                                     placeholder="https://www.facebook.com/YourPage"
                                                 />
                                                 {fbForm.errors.facebook_page_url && (
                                                     <p className="mt-1 text-xs text-red-600">{fbForm.errors.facebook_page_url}</p>
                                                 )}
-                                                <p className="mt-1 text-xs text-gray-400">Paste the full Facebook Page URL — we'll extract the Page ID automatically.</p>
+                                                <p className="mt-1 text-xs text-gray-500">Paste the full Facebook Page URL — we'll extract the Page ID automatically.</p>
                                             </div>
                                             <button
                                                 type="submit"
@@ -479,7 +479,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                                         <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{totalVideos} videos</span>
                                                                     )}
                                                                     {totalAdCopies === 0 && totalImages === 0 && totalVideos === 0 && (
-                                                                        <span className="text-gray-400">None</span>
+                                                                        <span className="text-gray-500">None</span>
                                                                     )}
                                                                 </div>
                                                             </td>
@@ -594,7 +594,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                         {log.type}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-gray-400 text-xs">system</span>
+                                                    <span className="text-gray-500 text-xs">system</span>
                                                 )}
                                             </td>
                                         </tr>

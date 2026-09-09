@@ -25,7 +25,7 @@ const EmailEditor = lazy(() => import('@/Components/Admin/EmailEditor'));
 const Field = ({ label, hint, children }) => (
     <label className="block">
         <span className="text-sm font-medium text-gray-700">{label}</span>
-        {hint && <span className="ml-2 text-xs text-gray-400">{hint}</span>}
+        {hint && <span className="ml-2 text-xs text-gray-500">{hint}</span>}
         <div className="mt-1">{children}</div>
     </label>
 );
@@ -186,7 +186,7 @@ function StepEditor({ step, onDirtyChange, canDelete }) {
                     hint="{{ first_name }} and {{ website }} are replaced; an unknown one is removed"
                 >
                     {data.format === 'html' ? (
-                        <Suspense fallback={<div className="rounded-lg border border-gray-300 px-4 py-10 text-center text-sm text-gray-400">Loading editor…</div>}>
+                        <Suspense fallback={<div className="rounded-lg border border-gray-300 px-4 py-10 text-center text-sm text-gray-500">Loading editor…</div>}>
                             <EmailEditor
                                 value={data.body}
                                 onChange={(html) => setData('body', html)}
@@ -359,7 +359,7 @@ function SequencePanel({ sequence }) {
                                 title={s.enabled ? 'Active' : 'Not sending'}
                             />
                             Email {s.position}
-                            <span className="text-xs text-gray-400">{humanDelay(s.delay_hours)}</span>
+                            <span className="text-xs text-gray-500">{humanDelay(s.delay_hours)}</span>
                         </button>
                     );
                 })}
@@ -425,7 +425,7 @@ export default function EmailSequences({ sequences, globallyEnabled, leads, repl
                     <div key={t.label} className="rounded-lg bg-white p-6 shadow">
                         <p className="truncate text-sm font-medium text-gray-500">{t.label}</p>
                         <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{t.value}</p>
-                        <p className="mt-1 text-xs text-gray-400">{t.sub}</p>
+                        <p className="mt-1 text-xs text-gray-500">{t.sub}</p>
                     </div>
                 ))}
             </div>
@@ -443,7 +443,7 @@ export default function EmailSequences({ sequences, globallyEnabled, leads, repl
                             }`}
                         >
                             {s.label}
-                            <span className="ml-2 text-xs text-gray-400">{s.steps.length} emails</span>
+                            <span className="ml-2 text-xs text-gray-500">{s.steps.length} emails</span>
                         </button>
                     ))}
                 </div>
@@ -467,7 +467,7 @@ export default function EmailSequences({ sequences, globallyEnabled, leads, repl
                                 <div key={r.id} className="rounded-lg border border-gray-200 p-4">
                                     <div className="flex items-baseline justify-between gap-2">
                                         <span className="text-sm font-medium text-gray-900">{r.from_email}</span>
-                                        <span className="text-xs text-gray-400">{r.received_at}</span>
+                                        <span className="text-xs text-gray-500">{r.received_at}</span>
                                     </div>
                                     {r.subject && <p className="mt-1 text-sm text-gray-700">{r.subject}</p>}
                                     <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">{r.body}</p>

@@ -51,7 +51,7 @@ export default function RuntimeExceptions({ auth, exceptions, stats, types, filt
     };
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="Runtime Exceptions" />
             <div className="flex">
                 <SideNav />
@@ -214,7 +214,7 @@ export default function RuntimeExceptions({ auth, exceptions, stats, types, filt
                                                     ? 'bg-indigo-600 text-white'
                                                     : link.url
                                                     ? 'bg-white text-gray-700 hover:bg-gray-50 border'
-                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-gray-100 text-gray-500 cursor-not-allowed'
                                             }`}
                                             dangerouslySetInnerHTML={{ __html: link.label }}
                                         />

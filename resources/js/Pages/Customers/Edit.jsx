@@ -127,7 +127,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
             <Head title="Edit Customer Profile" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     {flash?.success && (
                         <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
                             <p className="text-sm text-green-800">{flash.success}</p>

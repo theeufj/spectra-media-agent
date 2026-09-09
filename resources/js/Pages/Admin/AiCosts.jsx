@@ -96,8 +96,8 @@ const DailyChart = ({ data }) => {
                 ))}
             </div>
             <div className="flex justify-between mt-2">
-                <span className="text-xs text-gray-400">{data[0]?.date ?? ''}</span>
-                <span className="text-xs text-gray-400">{data[data.length - 1]?.date ?? ''}</span>
+                <span className="text-xs text-gray-500">{data[0]?.date ?? ''}</span>
+                <span className="text-xs text-gray-500">{data[data.length - 1]?.date ?? ''}</span>
             </div>
         </div>
     );
@@ -120,7 +120,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
     ];
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="AI Costs — Admin" />
             <div className="flex min-h-screen bg-gray-50">
                 <SideNav />
@@ -196,7 +196,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                         {/* By model */}
                         <Section title="Cost by Model">
                             {byModel.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-8">No data yet for this period.</p>
+                                <p className="text-sm text-gray-500 text-center py-8">No data yet for this period.</p>
                             ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
@@ -241,7 +241,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                         {/* By operation */}
                         <Section title="Cost by Operation">
                             {byOperation.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-8">No data yet for this period.</p>
+                                <p className="text-sm text-gray-500 text-center py-8">No data yet for this period.</p>
                             ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
@@ -286,7 +286,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                     <div className="mb-6">
                         <Section title="Cost per Customer">
                             {byCustomer.length === 0 && unattributed.calls === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-8">No attributed cost data yet.</p>
+                                <p className="text-sm text-gray-500 text-center py-8">No attributed cost data yet.</p>
                             ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
@@ -305,7 +305,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                                                 <tr key={r.customer_id} className="hover:bg-gray-50">
                                                     <td className="px-4 py-3">
                                                         <p className="text-sm font-semibold text-gray-900">{r.customer_name}</p>
-                                                        <p className="text-xs text-gray-400">ID #{r.customer_id}</p>
+                                                        <p className="text-xs text-gray-500">ID #{r.customer_id}</p>
                                                     </td>
                                                     <Td right bold mono>{fmt.usd(r.total_cost)}</Td>
                                                     <Td right>

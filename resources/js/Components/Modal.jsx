@@ -11,6 +11,11 @@ export default function Modal({
     maxWidth = '2xl',
     closeable = true,
     onClose = () => {},
+    // Headless UI otherwise focuses the first focusable node in the panel. In a
+    // destructive dialog that is the Confirm button, so the dialog would open
+    // with Enter already pointed at the irreversible answer. Callers pass the
+    // ref of the safe control instead.
+    initialFocus = undefined,
 }) {
     const close = () => {
         if (closeable) {
@@ -35,6 +40,7 @@ export default function Modal({
                 id="modal"
                 className="fixed inset-0 z-50 flex transform items-center overflow-y-auto px-4 py-6 transition-all sm:px-0"
                 onClose={close}
+                initialFocus={initialFocus}
             >
                 <TransitionChild
                     enter="ease-out duration-300"

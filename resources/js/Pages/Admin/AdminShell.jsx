@@ -15,7 +15,7 @@ import SideNav from './SideNav';
  */
 export default function AdminShell({ title, heading, subheading, actions, header, children }) {
     return (
-        <AuthenticatedLayout header={header}>
+        <AuthenticatedLayout header={header} contained={false}>
             <Head title={title} />
             <div className="flex">
                 <SideNav />

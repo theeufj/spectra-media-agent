@@ -319,7 +319,7 @@ export default function Plans({ plans }) {
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                <h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>
                     Admin - Plans
                 </h2>
             }
@@ -376,7 +376,7 @@ export default function Plans({ plans }) {
                                                             {plan.stripe_price_id ? (
                                                                 <code className="text-xs bg-gray-100 px-2 py-1 rounded">{plan.stripe_price_id}</code>
                                                             ) : (
-                                                                <span className="text-gray-400">—</span>
+                                                                <span className="text-gray-500">—</span>
                                                             )}
                                                         </td>
                                                         <td className="py-3">

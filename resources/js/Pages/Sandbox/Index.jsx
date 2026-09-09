@@ -57,7 +57,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
             <Head title="Sandbox Simulation" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+                <div className="mx-auto max-w-7xl sm: space-y-6">
                     {/* Hero */}
                     <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl p-8 text-white">
                         <h1 className="text-2xl font-bold mb-2">Test Our AI Agents — Risk Free</h1>

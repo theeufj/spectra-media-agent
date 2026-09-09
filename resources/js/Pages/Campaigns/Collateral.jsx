@@ -589,7 +589,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
 
                     {/* Runtime collateral generation failure banner */}
                     {collateralError && (
@@ -854,7 +854,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     disabled={uploadingImages}
                                                 />
                                             </label>
-                                            <span className="text-xs text-gray-400 self-center">
+                                            <span className="text-xs text-gray-500 self-center">
                                                 JPG, PNG, or WebP · max 10MB each · {(() => {
                                                     const uploaded = collateral.imageCollaterals?.filter(i => i.source === 'uploaded').length || 0;
                                                     return `${uploaded}/10 uploaded`;
@@ -893,9 +893,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 </div>
 
                                                 {loadingHarvested ? (
-                                                    <div className="text-center py-6 text-gray-400 text-sm">Loading assets...</div>
+                                                    <div className="text-center py-6 text-gray-500 text-sm">Loading assets...</div>
                                                 ) : harvestedAssets.length === 0 ? (
-                                                    <div className="text-center py-6 text-gray-400 text-sm">
+                                                    <div className="text-center py-6 text-gray-500 text-sm">
                                                         {harvestedAssetCount > 0
                                                             ? 'Loading your harvested assets...'
                                                             : 'No assets harvested yet. Click "Harvest from Website" to scan your site for usable images.'}
@@ -905,7 +905,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         {harvestedAssets.map((asset) => (
                                                             <div key={asset.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden group relative">
                                                                 <img src={asset.cloudfront_url} alt={asset.description || 'Harvested asset'} className="w-full h-32 object-cover" />
-                                                                <div className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-medium shadow ${
+                                                                <div className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-xs font-medium shadow ${
                                                                     asset.classification === 'product' ? 'bg-orange-100 text-orange-700' :
                                                                     asset.classification === 'lifestyle' ? 'bg-blue-100 text-blue-700' :
                                                                     'bg-gray-100 text-gray-600'
@@ -913,37 +913,37 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     {asset.classification}
                                                                 </div>
                                                                 {asset.status === 'processed' && (
-                                                                    <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 shadow">
+                                                                    <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 shadow">
                                                                         ✓ Ready
                                                                     </div>
                                                                 )}
                                                                 <div className="p-2">
-                                                                    <p className="text-[10px] text-gray-400 truncate">{asset.width}×{asset.height}</p>
+                                                                    <p className="text-xs text-gray-500 truncate">{asset.width}×{asset.height}</p>
                                                                     <div className="flex flex-wrap gap-1 mt-1.5">
                                                                         <button
                                                                             onClick={() => handleUseHarvestedAsset(asset.id, 'original')}
-                                                                            className="text-[10px] px-2 py-0.5 bg-brand-primary/10 text-brand-darker rounded hover:bg-brand-primary/20 font-medium"
+                                                                            className="text-xs px-2 py-0.5 bg-brand-primary/10 text-brand-darker rounded hover:bg-brand-primary/20 font-medium"
                                                                         >
                                                                             Use Original
                                                                         </button>
                                                                         <button
                                                                             onClick={() => handleUseHarvestedAsset(asset.id, 'original', true)}
                                                                             title="Guide AI-generated creatives with this image instead of running it as an ad"
-                                                                            className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
+                                                                            className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
                                                                         >
                                                                             ✦ AI Seed
                                                                         </button>
                                                                         {asset.bg_removed_url ? (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'bg_removed')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
+                                                                                className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
                                                                             >
                                                                                 No BG
                                                                             </button>
                                                                         ) : asset.classification === 'product' && (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'bg_removed')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-purple-50/50 text-purple-500 rounded hover:bg-purple-100 font-medium border border-dashed border-purple-200"
+                                                                                className="text-xs px-2 py-0.5 bg-purple-50/50 text-purple-500 rounded hover:bg-purple-100 font-medium border border-dashed border-purple-200"
                                                                             >
                                                                                 ✂ Remove BG
                                                                             </button>
@@ -951,14 +951,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         {asset.variants?.landscape ? (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'landscape')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
                                                                             >
                                                                                 16:9
                                                                             </button>
                                                                         ) : (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'landscape')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
                                                                             >
                                                                                 ✦ 16:9
                                                                             </button>
@@ -966,14 +966,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         {asset.variants?.square ? (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'square')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
                                                                             >
                                                                                 1:1
                                                                             </button>
                                                                         ) : (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'square')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
                                                                             >
                                                                                 ✦ 1:1
                                                                             </button>
@@ -981,14 +981,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         {asset.variants?.vertical ? (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'vertical')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
                                                                             >
                                                                                 9:16
                                                                             </button>
                                                                         ) : (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'vertical')}
-                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                                className="text-xs px-2 py-0.5 bg-gray-50 text-gray-500 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
                                                                             >
                                                                                 ✦ 9:16
                                                                             </button>
@@ -1147,7 +1147,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     disabled={uploadingVideo}
                                                 />
                                             </label>
-                                            <span className="text-xs text-gray-400 self-center">
+                                            <span className="text-xs text-gray-500 self-center">
                                                 MP4, MOV, or WebM · max 100MB · {(() => {
                                                     const uploaded = collateral.videoCollaterals?.filter(v => v.source === 'uploaded').length || 0;
                                                     return `${uploaded}/3 uploaded`;

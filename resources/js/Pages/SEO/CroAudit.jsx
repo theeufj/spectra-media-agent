@@ -17,13 +17,13 @@ function StatCard({ label, value, unit, good }) {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-4">
             <p className="text-xs text-gray-500">{label}</p>
-            <p className={`text-xl font-bold mt-1 ${color}`}>{value}{unit && <span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>}</p>
+            <p className={`text-xl font-bold mt-1 ${color}`}>{value}{unit && <span className="text-sm font-normal text-gray-500 ml-1">{unit}</span>}</p>
         </div>
     );
 }
 
 function CwvBadge({ status }) {
-    if (!status) return <span className="text-xs text-gray-400">N/A</span>;
+    if (!status) return <span className="text-xs text-gray-500">N/A</span>;
     const isGood = status === 'good';
     return (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isGood ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -40,7 +40,7 @@ function SeverityBadge({ severity }) {
         low: 'bg-gray-100 text-gray-600',
     };
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${colors[severity] || colors.medium}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${colors[severity] || colors.medium}`}>
             {severity}
         </span>
     );
@@ -54,7 +54,7 @@ function PriorityBadge({ priority }) {
         low: 'bg-gray-100 text-gray-600 border-gray-200',
     };
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase border ${colors[priority] || colors.medium}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase border ${colors[priority] || colors.medium}`}>
             {priority}
         </span>
     );
@@ -94,13 +94,13 @@ export default function CroAudit({ audit }) {
         <AuthenticatedLayout>
             <Head title={`CRO Audit — ${audit.url}`} />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-6xl sm:">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <Link href={route('seo.cro')} className="text-xs text-gray-400 hover:text-gray-600 transition">← Back to Audits</Link>
+                            <Link href={route('seo.cro')} className="text-xs text-gray-500 hover:text-gray-600 transition">← Back to Audits</Link>
                             <h1 className="text-xl font-bold text-gray-900 mt-1 break-all">{audit.url}</h1>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                                 Audited {audit.audited_at ? new Date(audit.audited_at).toLocaleString() : new Date(audit.created_at).toLocaleString()}
                                 {audit.overall_score >= 70 ? (
                                     <span className="ml-2 text-green-600 font-medium">● Passed</span>
@@ -170,7 +170,7 @@ export default function CroAudit({ audit }) {
                                         <p className="text-xs text-gray-500 mb-2">Detected Buttons</p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {ctaButtons.map((btn, i) => (
-                                                <span key={i} className="text-[10px] bg-brand-primary/10 text-brand-darker px-2 py-0.5 rounded-full border border-brand-primary/20">
+                                                <span key={i} className="text-xs bg-brand-primary/10 text-brand-darker px-2 py-0.5 rounded-full border border-brand-primary/20">
                                                     {btn.text || btn}
                                                 </span>
                                             ))}
@@ -184,7 +184,7 @@ export default function CroAudit({ audit }) {
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-gray-500">Message Score</span>
-                                    <span className={`text-lg font-bold ${audit.message_match_score == null ? 'text-gray-400' : audit.message_match_score >= 60 ? 'text-green-600' : 'text-red-600'}`}>
+                                    <span className={`text-lg font-bold ${audit.message_match_score == null ? 'text-gray-500' : audit.message_match_score >= 60 ? 'text-green-600' : 'text-red-600'}`}>
                                         {audit.message_match_score == null ? 'Not assessed' : `${audit.message_match_score}/100`}
                                     </span>
                                 </div>
@@ -196,7 +196,7 @@ export default function CroAudit({ audit }) {
                                         <p className="text-xs text-gray-500 mb-2">Keywords Found</p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {keywords.map((kw, i) => (
-                                                <span key={i} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">{kw}</span>
+                                                <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">{kw}</span>
                                             ))}
                                         </div>
                                     </div>
@@ -215,7 +215,7 @@ export default function CroAudit({ audit }) {
                                             <h4 className="text-xs font-semibold text-gray-700 mb-3 flex items-center gap-2">
                                                 <span>{categoryIcons[category] || '📋'}</span>
                                                 {categoryLabels[category] || category}
-                                                <span className="text-gray-400 font-normal">({catIssues.length})</span>
+                                                <span className="text-gray-500 font-normal">({catIssues.length})</span>
                                             </h4>
                                             <div className="space-y-2">
                                                 {catIssues.map((issue, i) => (

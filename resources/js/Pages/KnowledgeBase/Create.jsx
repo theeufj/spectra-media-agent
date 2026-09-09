@@ -84,7 +84,7 @@ export default function Create({ auth }) {
             <Head title="Create Knowledge Base" />
 
             <div className="py-8 sm:py-12">
-                <div className="max-w-3xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-3xl mx-auto sm:">
                     {/* Back Navigation */}
                     <Link
                         href={route('knowledge-base.index')}
@@ -177,7 +177,7 @@ export default function Create({ auth }) {
                                             <InputLabel htmlFor="sitemap_url" value="Sitemap URL" className="text-gray-700 font-medium" />
                                             <div className="mt-1.5 relative">
                                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                    <GlobeAltIcon className="h-5 w-5 text-gray-400" />
+                                                    <GlobeAltIcon className="h-5 w-5 text-gray-500" />
                                                 </div>
                                                 <input
                                                     id="sitemap_url"
@@ -275,7 +275,7 @@ export default function Create({ auth }) {
                                                     ) : (
                                                         <>
                                                             <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-xl bg-gray-100 mb-3">
-                                                                <DocumentArrowUpIcon className="h-6 w-6 text-gray-400" />
+                                                                <DocumentArrowUpIcon className="h-6 w-6 text-gray-500" />
                                                             </div>
                                                             <div className="flex text-sm text-gray-600">
                                                                 <label htmlFor="document" className="relative cursor-pointer font-semibold text-delft-blue hover:text-air-superiority-blue transition-colors">
@@ -292,7 +292,7 @@ export default function Create({ auth }) {
                                                                 </label>
                                                                 <p className="pl-1">or drag and drop</p>
                                                             </div>
-                                                            <p className="text-xs text-gray-400 mt-1.5">PDF or TXT up to 10MB</p>
+                                                            <p className="text-xs text-gray-500 mt-1.5">PDF or TXT up to 10MB</p>
                                                         </>
                                                     )}
                                                 </div>

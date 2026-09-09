@@ -1,8 +1,23 @@
 import React, { useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import DemoResultsPanel from '@/Components/DemoResultsPanel';
+import Hero, { brandTint, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE, CTA_SIZE_COMPACT } from '@/Components/Marketing/Hero';
+import StatsStrip from '@/Components/Marketing/StatsStrip';
+import FeatureGrid from '@/Components/Marketing/FeatureGrid';
+import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
+import CtaBand from '@/Components/Marketing/CtaBand';
+import {
+    BanknotesIcon,
+    ChartBarIcon,
+    EyeIcon,
+    MagnifyingGlassIcon,
+    PaintBrushIcon,
+    RocketLaunchIcon,
+    UserGroupIcon,
+    WrenchScrewdriverIcon,
+} from '@heroicons/react/24/outline';
 import { trackConversion } from '@/utils/conversions';
 
 /*
@@ -53,6 +68,73 @@ const DEFAULT_META = {
     title: 'AI Google & Meta Ads Automation Software | sitetospend',
     description: 'Automate your Google and Meta PPC campaigns with AI. Let intelligent agents handle keyword research, bidding, budgets, and tracking to maximize your ROI.',
 };
+
+/*
+ * Line icons, not emoji. The flagship used 👁️ 🧠 🚀 🔍 📊 🩹 💰 🎨 👥 where the
+ * real-estate skin used heroicons; emoji render as whatever the visitor's OS
+ * ships and are read out literally ("eye", "brain") by screen readers.
+ */
+const steps = [
+    {
+        icon: EyeIcon,
+        title: 'We read your website',
+        body: 'Just enter your URL. We pick up your colours, fonts, and brand voice automatically — no forms to fill in.',
+    },
+    {
+        icon: MagnifyingGlassIcon,
+        title: 'We find your competitors',
+        body: 'We look at who else is advertising in your space, check out their messaging, and figure out how to beat them.',
+    },
+    {
+        icon: RocketLaunchIcon,
+        title: 'Your ads run themselves',
+        body: 'We fix disapproved ads, shift budget to what\'s working, and keep testing new ideas — every day, on autopilot.',
+    },
+];
+
+// The one-line descriptions are the plain-English ones already used to answer
+// "What do the AI specialists actually do?" on the pricing page.
+const agents = [
+    {
+        icon: MagnifyingGlassIcon,
+        title: 'Competitor Discovery',
+        body: 'Finds who else is bidding in your space, including the competitors you did not know you had.',
+    },
+    {
+        icon: ChartBarIcon,
+        title: 'Competitor Analysis',
+        body: 'Digs into their websites and offers to find the angles you can use against them.',
+    },
+    {
+        icon: WrenchScrewdriverIcon,
+        title: 'Self-Optimising',
+        body: 'Fixes any rejected ads and resubmits them, usually before you would have noticed.',
+    },
+    {
+        icon: BanknotesIcon,
+        title: 'Budget Intelligence',
+        body: 'Moves your budget to the hours and days your customers are actually active.',
+    },
+    {
+        icon: PaintBrushIcon,
+        title: 'Creative Intelligence',
+        body: 'Tests different ad variations, keeps the winners, and writes replacements for the losers.',
+    },
+    {
+        icon: UserGroupIcon,
+        title: 'Audience Intelligence',
+        body: 'Finds new people who look like the customers you already have.',
+    },
+];
+
+// Every figure here is stated elsewhere on this page: six agents, four
+// platforms in the FAQ, and "live within minutes" against the 2–4 weeks the
+// pricing page attributes to an agency.
+const stats = [
+    { value: 'Six', label: 'AI specialists per account', detail: 'working daily, not weekly' },
+    { value: 'Four', label: 'ad platforms, one dashboard', detail: 'Google, Meta, Microsoft, LinkedIn' },
+    { value: 'Minutes', label: 'from URL to live campaign', detail: 'an agency takes two to four weeks' },
+];
 
 export default function Landing({ auth, plans = [], meta = {} }) {
     const pageMeta = { ...DEFAULT_META, ...meta };
@@ -123,6 +205,74 @@ export default function Landing({ auth, plans = [], meta = {} }) {
         }
     };
 
+    const demoForm = (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
+            <form onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                    <label htmlFor="demo-first-name" className="sr-only">First name</label>
+                    <input
+                        id="demo-first-name"
+                        type="text"
+                        required
+                        value={firstName}
+                        onChange={e => setFirstName(e.target.value)}
+                        placeholder="First name"
+                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
+                        disabled={loadingStage > 0}
+                    />
+                    <label htmlFor="demo-email" className="sr-only">Your email address</label>
+                    <input
+                        id="demo-email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        placeholder="Your email address"
+                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
+                        disabled={loadingStage > 0}
+                    />
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                    <label htmlFor="demo-url" className="sr-only">Your website URL</label>
+                    <input
+                        id="demo-url"
+                        type="text"
+                        required
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                        placeholder="Enter your website URL..."
+                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
+                        disabled={loadingStage > 0}
+                    />
+                    {/*
+                        This submit is the hero's primary action, so it carries the
+                        shared CTA treatment rather than a locally written orange that
+                        drifts from it. Disabled is a grey fill at 6.10:1 rather than
+                        the old opacity-50, which faded the whole button to 2.2:1 —
+                        and "Analyzing..." is the visitor's only signal that the
+                        20-second demo request is actually running.
+                    */}
+                    <button
+                        type="submit"
+                        disabled={loadingStage > 0}
+                        className={`${CTA_PRIMARY} ${CTA_SIZE_COMPACT} w-full whitespace-nowrap disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600 sm:w-auto`}
+                    >
+                        {loadingStage > 0 ? 'Analyzing...' : 'Build my ads'}
+                    </button>
+                </div>
+            </form>
+            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {loadingStage > 0 && (
+                <div className="mt-4">
+                    <div className="h-2.5 w-full rounded-full bg-gray-200">
+                        <div className="h-2.5 rounded-full bg-brand-dark transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
+                    </div>
+                    <p className="mt-2 animate-pulse text-center text-sm font-medium text-brand-darker">{getLoadingText()}</p>
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <>
             <Head>
@@ -191,205 +341,111 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     ]
                 })}</script>
             </Head>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
+            <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
                 <main>
-                    {/* Hero Section */}
-                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-brand-primary/10 to-white">
-                        <div className="mx-auto max-w-7xl lg:px-8">
-                            {demoResult ? (
+                    {demoResult ? (
+                        <div
+                            className="bg-white px-4 py-10 sm:px-6 lg:px-8"
+                            style={{ backgroundImage: `linear-gradient(to bottom, ${brandTint(10)}, #fff)` }}
+                        >
+                            <div className="mx-auto max-w-7xl">
                                 <DemoResultsPanel result={demoResult} />
-                            ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
-                                <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
-                                    <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
-                                        <p className="text-xs sm:text-sm font-semibold text-brand-dark uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
-                                        <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
-                                            {/*
-                                                The trailing space is deliberate and must stay inside a JSX
-                                                expression to survive. These are block spans so it is invisible,
-                                                but textContent concatenates them — without it the H1 reads
-                                                "Managementwith the Power of AI" to crawlers and screen readers.
-                                            */}
-                                            <span className="block whitespace-normal">{'Automated Google & Meta Ads Management '}</span>
-                                            <span className="block text-brand-dark whitespace-normal">with the Power of AI</span>
-                                        </h1>
-                                        <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
-                                            Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger.
-                                        </p>
-
-                                        <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                                            <form onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
-                                                <div className="flex flex-col sm:flex-row gap-3">
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={firstName}
-                                                        onChange={e => setFirstName(e.target.value)}
-                                                        placeholder="First name"
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
-                                                        disabled={loadingStage > 0}
-                                                    />
-                                                    <input
-                                                        type="email"
-                                                        required
-                                                        value={email}
-                                                        onChange={e => setEmail(e.target.value)}
-                                                        placeholder="Your email address"
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
-                                                        disabled={loadingStage > 0}
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col sm:flex-row gap-3">
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={url}
-                                                        onChange={e => setUrl(e.target.value)}
-                                                        placeholder="Enter your website URL..."
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
-                                                        disabled={loadingStage > 0}
-                                                    />
-                                                    <button
-                                                        type="submit"
-                                                        disabled={loadingStage > 0}
-                                                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-brand-dark hover:bg-brand-darker shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
-                                                    >
-                                                        {loadingStage > 0 ? "Analyzing..." : "Build My Ads"}
-                                                    </button>
-                                                </div>
-                                            </form>
-                                            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-                                            {loadingStage > 0 && (
-                                                <div className="mt-4">
-                                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                                        <div className="bg-brand-dark h-2.5 rounded-full transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
-                                                    </div>
-                                                    <p className="text-sm mt-2 text-center text-brand-darker font-medium animate-pulse">{getLoadingText()}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
-                                    </div>
-                                </div>
                             </div>
-                            )}
                         </div>
-                    </div>
+                    ) : (
+                        <Hero
+                            eyebrow="AI-powered ad campaign management"
+                            headline={
+                                /*
+                                    The trailing space is deliberate and must stay inside a JSX
+                                    expression to survive. These are block spans so it is invisible,
+                                    but textContent concatenates them — without it the H1 reads
+                                    "Managementwith the Power of AI" to crawlers and screen readers.
+                                */
+                                <>
+                                    <span className="block">{'Automated Google & Meta ads management '}</span>
+                                    <span className="block text-brand-darker">with the power of AI</span>
+                                </>
+                            }
+                            sub="Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger."
+                            secondaryCta={{ href: '/how-it-works', label: 'See how it works' }}
+                            note="No credit card required · Free to explore · Cancel anytime"
+                        >
+                            {demoForm}
+                        </Hero>
+                    )}
+
+                    <StatsStrip items={stats} />
 
                     {/* Social Proof */}
-                    <div className="bg-white py-12 border-b border-gray-200">
+                    <div className="border-b border-gray-200 bg-white py-12">
                         <div className="mx-auto max-w-7xl px-6 lg:px-8">
-                            <p className="text-center text-sm font-semibold text-gray-500 uppercase tracking-wider">Trusted by leading brands</p>
-                            <div className="mt-8 flex justify-center items-center gap-x-10 gap-y-4 flex-wrap">
-                                <a href="https://proveably.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 font-semibold hover:text-gray-600 transition-colors">Proveably</a>
-                                <a href="https://papsnap.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 font-semibold hover:text-gray-600 transition-colors">PapSnap</a>
-                                <a href="https://yourfirststore.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 font-semibold hover:text-gray-600 transition-colors">YourFirstStore</a>
-                                <a href="https://zonely.co" target="_blank" rel="noopener noreferrer" className="text-gray-400 font-semibold hover:text-gray-600 transition-colors">Zonely</a>
-                                <a href="https://firstdigital.co.nz" target="_blank" rel="noopener noreferrer" className="text-gray-400 font-semibold hover:text-gray-600 transition-colors">First Digital</a>
+                            <p className="text-center text-sm font-semibold uppercase tracking-wider text-gray-500">Trusted by leading brands</p>
+                            {/*
+                                gray-400 is 2.54:1 on white. These are the only names on the
+                                page a visitor is meant to recognise, so they are gray-600
+                                (7.56:1) rather than a decorative grey.
+                            */}
+                            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+                                <a href="https://proveably.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">Proveably</a>
+                                <a href="https://papsnap.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">PapSnap</a>
+                                <a href="https://yourfirststore.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">YourFirstStore</a>
+                                <a href="https://zonely.co" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">Zonely</a>
+                                <a href="https://firstdigital.co.nz" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">First Digital</a>
                             </div>
                         </div>
                     </div>
 
-                    {/* How It Works - Teaser */}
-                    <div className="bg-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl lg:text-center mb-14">
-                                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Up and running in 3 steps</h2>
-                                <p className="mt-4 text-lg leading-8 text-gray-600">
-                                    We handle the hard parts. You focus on your business.
-                                </p>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
-                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-brand-primary/20 -z-10"></div>
-                                {[
-                                    { icon: '👁️', title: '1. We read your website', desc: 'Just enter your URL. We pick up your colours, fonts, and brand voice automatically—no forms to fill in.' },
-                                    { icon: '🧠', title: '2. We find your competitors', desc: 'We look at who else is advertising in your space, check out their messaging, and figure out how to beat them.' },
-                                    { icon: '🚀', title: '3. Your ads run themselves', desc: 'We fix disapproved ads, shift budget to what\'s working, and keep testing new ideas—every day, on autopilot.' },
-                                ].map((step) => (
-                                    <div key={step.title} className="relative flex flex-col items-center text-center">
-                                        <div className="flex items-center justify-center h-24 w-24 rounded-full bg-brand-primary/10 border-4 border-white shadow-lg mb-6">
-                                            <span className="text-4xl">{step.icon}</span>
-                                        </div>
-                                        <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
-                                        <p className="text-gray-600 leading-relaxed">{step.desc}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-12 text-center">
-                                <Link href="/how-it-works" className="text-brand-dark font-semibold hover:text-brand-darker transition-colors">
-                                    Learn more about how it works →
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+                    <FeatureGrid
+                        title="Up and running in 3 steps"
+                        sub="We handle the hard parts. You focus on your business."
+                        items={steps}
+                        background="white"
+                        footer={
+                            <CtaLink href="/how-it-works" className="font-semibold text-brand-darker hover:underline">
+                                Learn more about how it works
+                            </CtaLink>
+                        }
+                    />
 
-                    {/* Agents Highlight */}
-                    <div className="bg-gradient-to-br from-brand-darker via-brand-darker to-purple-900 py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-brand-primary/50 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
-                            <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 AI PPC Campaign Manager</h2>
-                            <p className="mt-4 max-w-2xl mx-auto text-lg text-brand-primary/30">
-                                Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep.
-                            </p>
-                            <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-                                {[
-                                    { icon: '🔍', name: 'Competitor Discovery' },
-                                    { icon: '📊', name: 'Competitor Analysis' },
-                                    { icon: '🩹', name: 'Self-Optimising' },
-                                    { icon: '💰', name: 'Budget Intelligence' },
-                                    { icon: '🎨', name: 'Creative Intelligence' },
-                                    { icon: '👥', name: 'Audience Intelligence' },
-                                ].map((agent) => (
-                                    <div key={agent.name} className="bg-white/10 backdrop-blur-lg rounded-xl p-5 border border-white/20">
-                                        <span className="text-3xl">{agent.icon}</span>
-                                        <p className="mt-3 text-sm font-semibold text-white">{agent.name}</p>
-                                    </div>
-                                ))}
+                    <FeatureGrid
+                        eyebrow="Always working for you"
+                        title="Your 24/7 AI PPC campaign manager"
+                        sub="Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep."
+                        items={agents}
+                        footer={
+                            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+                                <CtaLink href="/register" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>Put these agents to work</CtaLink>
+                                <CtaLink href="/features" className={`${CTA_SECONDARY} ${CTA_SIZE}`}>See all features</CtaLink>
                             </div>
-                            <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-darker bg-white hover:bg-brand-primary/10 shadow-lg transition-colors">
-                                    Put These Agents to Work →
-                                </a>
-                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-white/10 transition-colors">
-                                    See All Features
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+                        }
+                    />
 
-                    {/* Pricing Teaser */}
-                    <div className="bg-gradient-to-b from-gray-50 to-white py-16 sm:py-24">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-16">
-                                <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Simple, honest pricing</h2>
-                                <p className="mt-4 text-xl text-gray-500">Agency-quality results. Starting at just ${lowestPrice}/month.</p>
-                            </div>
-                            <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-4xl mx-auto`}>
-                                {plans.map((plan) => (
-                                    <div key={plan.id} className={`rounded-lg p-8 text-center ${plan.is_popular ? 'border-2 border-brand-dark bg-brand-primary/10 shadow-lg relative' : 'border border-gray-200 bg-white'}`}>
-                                        {plan.badge_text && (
-                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-brand-dark text-white px-3 py-1 text-xs font-semibold rounded-full">{plan.badge_text}</div>
-                                        )}
-                                        <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
-                                        <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                        <div className="mt-4">{plan.price_cents > 0 ? (<><span className="text-4xl font-extrabold text-gray-900">${Math.round(plan.price_cents / 100)}</span><span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'yr' : 'mo'}</span></>) : !plan.is_free ? (<span className="text-4xl font-extrabold text-gray-900">Custom</span>) : (<><span className="text-4xl font-extrabold text-gray-900">$0</span><span className="text-xl font-medium">/mo</span></>)}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-12 text-center">
-                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors">
-                                    Compare Plans & Start Free Trial
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Pricing teaser */}
+                    <PricingTable
+                        title="Simple, honest pricing"
+                        sub={`Agency-quality results. Starting at just $${lowestPrice}/month.`}
+                        plans={plans.map((plan) => ({
+                            id: plan.id,
+                            name: plan.name,
+                            description: plan.description,
+                            badge: plan.badge_text,
+                            highlighted: plan.is_popular,
+                            price: <PlanPrice plan={plan} />,
+                        }))}
+                        footnote={
+                            <CtaLink href="/pricing" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
+                                Compare plans
+                            </CtaLink>
+                        }
+                    />
 
                     {/* Why It Works */}
                     <div className="bg-white py-16 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
                                 Automated Ad Management That Drives ROI
                             </h2>
                             <div className="mt-6 space-y-5 text-lg leading-relaxed text-gray-600">
@@ -418,12 +474,12 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     </div>
 
                     {/* FAQ */}
-                    <div className="bg-gray-50 py-16 sm:py-24 border-t border-gray-200">
+                    <div className="border-t border-gray-200 bg-gray-50 py-16 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">
+                            <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
                                 Common questions
                             </h2>
-                            <p className="mt-4 text-lg text-gray-600 text-center">
+                            <p className="mt-4 text-center text-lg text-gray-600">
                                 The things people ask before they sign up, answered properly.
                             </p>
                             <dl className="mt-12 space-y-10">
@@ -439,26 +495,13 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                         </div>
                     </div>
 
-                    {/* Final CTA */}
-                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
-                        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
-                                Ready to stop doing this the hard way?
-                            </h2>
-                            <p className="mt-6 text-xl text-brand-primary/20">
-                                Join hundreds of businesses who handed the heavy lifting to their AI team—and haven't looked back.
-                            </p>
-                            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
-                                    Get Started Free
-                                </a>
-                                <a href="/login" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
-                                    Sign In
-                                </a>
-                            </div>
-                            <p className="mt-8 text-brand-primary/20">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
-                        </div>
-                    </div>
+                    <CtaBand
+                        title="Ready to stop doing this the hard way?"
+                        body="Join hundreds of businesses who handed the heavy lifting to their AI team—and haven't looked back."
+                        primaryCta={{ href: '/register', label: 'Get started free' }}
+                        secondaryCta={{ href: '/login', label: 'Sign in' }}
+                        note="Free to explore · No credit card required · Live in minutes"
+                    />
                 </main>
 
                 <Footer />

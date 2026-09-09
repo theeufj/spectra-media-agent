@@ -122,7 +122,7 @@ export default function SystemHealth({ health }) {
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">System Health</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>System Health</h2>}
         >
             <Head title="System Health" />
 
@@ -194,7 +194,7 @@ export default function SystemHealth({ health }) {
                                     <StatusBadge status={healthData.cache.status} />
                                 </div>
                                 <p className="text-sm text-gray-500 mb-2">{healthData.cache.message}</p>
-                                <p className="text-sm text-gray-400">Driver: {healthData.cache.driver}</p>
+                                <p className="text-sm text-gray-500">Driver: {healthData.cache.driver}</p>
                             </div>
 
                             {/* Storage */}

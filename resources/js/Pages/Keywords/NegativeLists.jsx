@@ -22,7 +22,7 @@ function ListCard({ list, onEdit }) {
                 {list.keywords?.slice(0, 15).map((kw, i) => (
                     <span key={i} className="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100">{kw}</span>
                 ))}
-                {keywordCount > 15 && <span className="text-xs text-gray-400">+{keywordCount - 15} more</span>}
+                {keywordCount > 15 && <span className="text-xs text-gray-500">+{keywordCount - 15} more</span>}
             </div>
         </div>
     );
@@ -48,7 +48,7 @@ export default function NegativeLists({ lists = [] }) {
         <AuthenticatedLayout>
             <Head title="Negative Keyword Lists" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Negative Keyword Lists</h1>

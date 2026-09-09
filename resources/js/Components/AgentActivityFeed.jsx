@@ -47,10 +47,10 @@ function ActivityItem({ activity }) {
                 </div>
                 <p className="text-sm text-gray-900 mt-0.5">{activity.description}</p>
                 {activity.campaign && (
-                    <p className="text-xs text-gray-400 mt-0.5">{activity.campaign.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{activity.campaign.name}</p>
                 )}
             </div>
-            <span className="flex-shrink-0 text-xs text-gray-400">{timeAgo(activity.created_at)}</span>
+            <span className="flex-shrink-0 text-xs text-gray-500">{timeAgo(activity.created_at)}</span>
         </div>
     );
 }
@@ -126,7 +126,7 @@ export default function AgentActivityFeed({ initialActivities = [], campaignId =
                 <div className="text-center py-6 text-gray-500">
                     <span className="text-3xl block mb-2">🤖</span>
                     <p className="text-sm">No agent activity yet.</p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                         AI agents will appear here as they optimize your campaigns.
                     </p>
                 </div>

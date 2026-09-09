@@ -40,7 +40,7 @@ export default function Create() {
         <AuthenticatedLayout>
             <Head title="Create Proposal" />
 
-            <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl mx-auto sm:">
                 <Link
                     href={route('proposals.index')}
                     className="text-brand-dark hover:text-brand-darker text-sm font-medium inline-flex items-center mb-6"
@@ -54,7 +54,7 @@ export default function Create() {
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     <div className="bg-gradient-to-r from-brand-dark to-brand-darker px-6 py-5">
                         <h1 className="text-2xl font-bold text-white">Generate a Proposal</h1>
-                        <p className="text-brand-primary/30 mt-1">
+                        <p className="text-white/80 mt-1">
                             Our AI will create a professional advertising proposal with platform strategies, projected metrics, and sample ad concepts.
                         </p>
                     </div>
@@ -98,7 +98,7 @@ export default function Create() {
                                 className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                 placeholder="https://example.com"
                             />
-                            <p className="mt-1 text-xs text-gray-400">We'll analyze the website to personalize the proposal.</p>
+                            <p className="mt-1 text-xs text-gray-500">We'll analyze the website to personalize the proposal.</p>
                             {errors.website_url && <p className="mt-1 text-sm text-red-600">{errors.website_url}</p>}
                         </div>
 

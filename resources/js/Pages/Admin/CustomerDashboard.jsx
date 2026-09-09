@@ -67,7 +67,7 @@ export default function CustomerDashboard({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Customer Dashboard</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Customer Dashboard</h2>}
         >
             <Head title={`Dashboard - ${customer.business_name}`} />
 

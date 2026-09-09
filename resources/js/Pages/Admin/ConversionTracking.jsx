@@ -26,7 +26,7 @@ const CopyButton = ({ text }) => {
         setTimeout(() => setCopied(false), 1500);
     };
     return (
-        <button onClick={copy} className="ml-2 text-gray-400 hover:text-gray-600 transition-colors" title="Copy">
+        <button onClick={copy} className="ml-2 text-gray-500 hover:text-gray-600 transition-colors" title="Copy">
             {copied
                 ? <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                 : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -39,7 +39,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
     const provisioned = actions.filter(a => a.provisioned).length;
 
     return (
-        <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Conversion Tracking</h2>}>
+        <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>Conversion Tracking</h2>}>
             <Head title="Conversion Tracking — Admin" />
             <div className="flex">
                 <SideNav />
@@ -61,17 +61,17 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-blue-600">{signups_by_platform.google}</p>
                                     <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Google Ads</p>
-                                    <p className="text-xs text-gray-400">gclid captured</p>
+                                    <p className="text-xs text-gray-500">gclid captured</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-indigo-600">{signups_by_platform.facebook}</p>
                                     <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Facebook Ads</p>
-                                    <p className="text-xs text-gray-400">fbclid + CAPI fired</p>
+                                    <p className="text-xs text-gray-500">fbclid + CAPI fired</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-teal-600">{signups_by_platform.microsoft}</p>
                                     <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Microsoft Ads</p>
-                                    <p className="text-xs text-gray-400">msclid captured</p>
+                                    <p className="text-xs text-gray-500">msclid captured</p>
                                 </div>
                             </div>
                         </div>
@@ -114,7 +114,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                     <tr key={action.key} className="hover:bg-gray-50">
                                         <td className="px-6 py-4">
                                             <div className="text-sm font-medium text-gray-900">{action.name}</div>
-                                            <div className="text-xs text-gray-400 mt-0.5 font-mono">{action.key}</div>
+                                            <div className="text-xs text-gray-500 mt-0.5 font-mono">{action.key}</div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <Badge color={action.mode === 'client' ? 'blue' : 'gray'}>
@@ -134,7 +134,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                         <CopyButton text={action.resource_name} />
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-gray-400 italic">Not provisioned</span>
+                                                    <span className="text-xs text-gray-500 italic">Not provisioned</span>
                                                 )
                                             ) : (
                                                 action.send_to ? (
@@ -145,7 +145,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                         <CopyButton text={action.send_to} />
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-gray-400 italic">Not provisioned</span>
+                                                    <span className="text-xs text-gray-500 italic">Not provisioned</span>
                                                 )
                                             )}
                                         </td>
@@ -213,7 +213,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                             <p className="text-sm text-gray-500 mt-0.5">Last 50 fires logged by Spectra — newest first.</p>
                         </div>
                         {recent_events.length === 0 ? (
-                            <div className="px-6 py-8 text-center text-sm text-gray-400">
+                            <div className="px-6 py-8 text-center text-sm text-gray-500">
                                 No conversion events recorded yet. They appear here as users trigger them.
                             </div>
                         ) : (
@@ -234,7 +234,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                             <td className="px-6 py-3 text-sm font-medium text-gray-900 font-mono">{ev.event}</td>
                                             <td className="px-6 py-3 text-sm text-gray-700">
                                                 {ev.user ? (
-                                                    <span>{ev.user.name} <span className="text-gray-400 text-xs">({ev.user.email})</span></span>
+                                                    <span>{ev.user.name} <span className="text-gray-500 text-xs">({ev.user.email})</span></span>
                                                 ) : '—'}
                                             </td>
                                             <td className="px-6 py-3">
@@ -248,7 +248,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                     ? <Badge color="blue">Google</Badge>
                                                     : ev.fbclid
                                                         ? <Badge color="indigo">Facebook</Badge>
-                                                        : <span className="text-gray-400 text-xs">organic</span>
+                                                        : <span className="text-gray-500 text-xs">organic</span>
                                                 }
                                             </td>
                                             <td className="px-6 py-3 text-xs text-gray-500">

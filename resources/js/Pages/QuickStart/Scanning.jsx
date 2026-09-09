@@ -25,7 +25,7 @@ const Step = ({ state, label, detail }) => (
             {state === 'pending' && <span className="w-2.5 h-2.5 rounded-full bg-gray-300 inline-block" aria-label="pending" />}
         </span>
         <div>
-            <p className={`font-medium ${state === 'pending' ? 'text-gray-400' : 'text-gray-900'}`}>{label}</p>
+            <p className={`font-medium ${state === 'pending' ? 'text-gray-500' : 'text-gray-900'}`}>{label}</p>
             {detail && state !== 'pending' && <p className="text-sm text-gray-500">{detail}</p>}
         </div>
     </div>

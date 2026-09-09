@@ -30,6 +30,15 @@
 
 // Slot 1 is the brand flame-orange (#ff4d00, brand-primary) — the primary
 // series, and the only slot with a fixed meaning.
+//
+// Slots 1–4 are ALSO the four ad platforms, bound in `utils/platforms.js`
+// (google, facebook, microsoft, linkedin, in that order). Colour follows the
+// entity, so a chart that mixes platform series with anything else must give
+// the platforms their own slots and start the rest at 5 — otherwise Google is
+// orange in the spend chart and blue in the one beside it. This binding is why
+// the four vendor blues are gone: `#4285F4` (Google) beside `#1877F2`
+// (Facebook) were the two largest segments of the same stacked bar and
+// separable by neither a normal nor a CVD viewer.
 export const CATEGORICAL = {
     light: ['#ff4d00', '#2a78d6', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7', '#008300'],
     dark:  ['#ff4d00', '#3987e5', '#199e70', '#c98500', '#d55181', '#9085e9', '#008300'],

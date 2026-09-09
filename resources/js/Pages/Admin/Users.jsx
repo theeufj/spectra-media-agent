@@ -9,7 +9,7 @@ export default function Users({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Users</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Users</h2>}
         >
             <Head title="Admin - Users" />
 

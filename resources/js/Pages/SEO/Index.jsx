@@ -38,7 +38,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
         <AuthenticatedLayout>
             <Head title="SEO Tools" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-6xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">SEO Tools & Optimization</h1>
@@ -115,7 +115,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                     <div key={i} className="border border-gray-100 rounded-lg p-3">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">{rec.priority}</span>
-                                            <span className="text-xs text-gray-400">{rec.category}</span>
+                                            <span className="text-xs text-gray-500">{rec.category}</span>
                                         </div>
                                         <p className="text-sm font-medium text-gray-900">{rec.message || (typeof rec === 'string' ? rec : JSON.stringify(rec))}</p>
                                         {rec.action && (
@@ -181,7 +181,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                                 <td className="py-2">
                                                     {r.change > 0 && <span className="text-green-600">↑{r.change}</span>}
                                                     {r.change < 0 && <span className="text-red-600">↓{Math.abs(r.change)}</span>}
-                                                    {r.change === 0 && <span className="text-gray-400">—</span>}
+                                                    {r.change === 0 && <span className="text-gray-500">—</span>}
                                                 </td>
                                                 <td className="py-2 text-gray-500 truncate max-w-xs">{r.url}</td>
                                             </tr>

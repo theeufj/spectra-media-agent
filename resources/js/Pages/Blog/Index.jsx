@@ -66,7 +66,7 @@ export default function HelpIndex({ auth, articles = [] }) {
                                     }`}
                                 >
                                     {cat}
-                                    <span className={`ml-1.5 text-xs ${activeCategory === cat ? 'text-violet-200' : 'text-gray-400'}`}>
+                                    <span className={`ml-1.5 text-xs ${activeCategory === cat ? 'text-violet-200' : 'text-gray-500'}`}>
                                         {cat === 'All' ? articles.length : articles.filter(a => a.category === cat).length}
                                     </span>
                                 </button>
@@ -85,7 +85,7 @@ export default function HelpIndex({ auth, articles = [] }) {
                                         <span className={`text-xs font-semibold rounded-full px-3 py-1 ${CATEGORY_COLORS[article.category] ?? 'bg-gray-100 text-gray-600'}`}>
                                             {article.category}
                                         </span>
-                                        <span className="text-xs text-gray-400">{article.read_time}</span>
+                                        <span className="text-xs text-gray-500">{article.read_time}</span>
                                     </div>
                                     <h3 className="font-bold text-gray-900 group-hover:text-violet-700 transition-colors mb-2 leading-snug">
                                         {article.title}

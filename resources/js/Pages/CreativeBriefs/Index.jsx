@@ -56,7 +56,7 @@ function BriefCard({ brief, onAction, onDismiss }) {
                             {brief.campaign?.name ?? `Campaign #${brief.campaign_id}`}
                         </p>
                     </div>
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-gray-500 shrink-0">
                         {new Date(brief.created_at).toLocaleDateString()}
                     </span>
                 </div>
@@ -159,7 +159,7 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
         <AuthenticatedLayout>
             <Head title="Creative Briefs" />
 
-            <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
+            <div className="max-w-4xl mx-auto sm:">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Creative Briefs</h1>
                     <p className="mt-1 text-sm text-gray-500">
@@ -198,7 +198,7 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
                 </div>
 
                 {briefs.data.length === 0 ? (
-                    <div className="text-center py-16 text-gray-400">
+                    <div className="text-center py-16 text-gray-500">
                         <p className="text-lg font-medium">No briefs found</p>
                         <p className="text-sm mt-1">Briefs are generated automatically by your campaign agents.</p>
                     </div>

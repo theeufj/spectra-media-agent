@@ -34,7 +34,7 @@ function MetricBox({ label, value, sub }) {
         <div className="bg-gray-50 rounded-lg px-4 py-3">
             <p className="text-xs text-gray-500 mb-1">{label}</p>
             <p className="text-lg font-bold text-gray-900">{value ?? '—'}</p>
-            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+            {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
         </div>
     );
 }
@@ -55,9 +55,9 @@ function IdentitySection({ identity }) {
             badge={!identity.error && <GreenBadge label="Verified" />}>
             {identity.data && (
                 <div className="px-5 py-4 flex gap-8 flex-wrap">
-                    <div><p className="text-xs text-gray-400 mb-0.5">Name</p><p className="text-sm font-medium text-gray-900">{identity.data.name}</p></div>
-                    {identity.data.email && <div><p className="text-xs text-gray-400 mb-0.5">Email</p><p className="text-sm text-gray-700">{identity.data.email}</p></div>}
-                    <div><p className="text-xs text-gray-400 mb-0.5">User ID</p><p className="text-sm font-mono text-gray-500">{identity.data.id}</p></div>
+                    <div><p className="text-xs text-gray-500 mb-0.5">Name</p><p className="text-sm font-medium text-gray-900">{identity.data.name}</p></div>
+                    {identity.data.email && <div><p className="text-xs text-gray-500 mb-0.5">Email</p><p className="text-sm text-gray-700">{identity.data.email}</p></div>}
+                    <div><p className="text-xs text-gray-500 mb-0.5">User ID</p><p className="text-sm font-mono text-gray-500">{identity.data.id}</p></div>
                 </div>
             )}
         </SectionCard>
@@ -79,7 +79,7 @@ function AdAccountsSection({ adAccounts, adInsights }) {
                             <div key={i} className="flex items-center justify-between py-1.5">
                                 <div>
                                     <span className="text-sm font-medium text-gray-900">{a.name}</span>
-                                    <span className="text-xs text-gray-400 ml-2 font-mono">{a.id}</span>
+                                    <span className="text-xs text-gray-500 ml-2 font-mono">{a.id}</span>
                                 </div>
                                 <div className="w-2 h-2 rounded-full bg-green-400" />
                             </div>
@@ -91,7 +91,7 @@ function AdAccountsSection({ adAccounts, adInsights }) {
             <div className="px-5 py-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                     Live Performance Metrics — {adInsights?.period ?? 'Last 30 days'}
-                    {adInsights?.account_id && <span className="font-normal normal-case ml-1 text-gray-400">for {adInsights.account_id}</span>}
+                    {adInsights?.account_id && <span className="font-normal normal-case ml-1 text-gray-500">for {adInsights.account_id}</span>}
                 </p>
                 {adInsights?.error ? (
                     <p className="text-sm text-red-500">{adInsights.error}</p>
@@ -202,7 +202,7 @@ function BusinessSection({ businesses, businessAssets }) {
                         <div key={i} className="px-5 py-3 flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-900">{b.name}</p>
-                                <p className="text-xs text-gray-400 font-mono">ID: {b.id}</p>
+                                <p className="text-xs text-gray-500 font-mono">ID: {b.id}</p>
                             </div>
                             <div className="w-2 h-2 rounded-full bg-green-400" />
                         </div>
@@ -216,16 +216,16 @@ function BusinessSection({ businesses, businessAssets }) {
                         Pages linked to {businessAssets.business_name}
                     </p>
                     {businessAssets.pages?.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">No pages linked to this business.</p>
+                        <p className="text-xs text-gray-500 italic">No pages linked to this business.</p>
                     ) : (
                         <div className="space-y-1">
                             {businessAssets.pages?.map((p, i) => (
                                 <div key={i} className="flex items-center justify-between py-1">
                                     <div>
                                         <span className="text-sm text-gray-800">{p.name}</span>
-                                        <span className="text-xs text-gray-400 ml-2">{p.category}</span>
+                                        <span className="text-xs text-gray-500 ml-2">{p.category}</span>
                                     </div>
-                                    <span className="text-xs text-gray-400">{p.fans?.toLocaleString()} fans</span>
+                                    <span className="text-xs text-gray-500">{p.fans?.toLocaleString()} fans</span>
                                 </div>
                             ))}
                         </div>
@@ -253,11 +253,11 @@ function PagesSection({ managedPages, pagePosts }) {
                             <div key={i} className="flex items-center justify-between py-1.5">
                                 <div>
                                     <span className="text-sm font-medium text-gray-900">{p.name}</span>
-                                    <span className="text-xs text-gray-400 ml-2">{p.category}</span>
+                                    <span className="text-xs text-gray-500 ml-2">{p.category}</span>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs text-gray-500">{p.followers?.toLocaleString()} followers</p>
-                                    <p className="text-xs text-gray-400">{p.fans?.toLocaleString()} fans</p>
+                                    <p className="text-xs text-gray-500">{p.fans?.toLocaleString()} fans</p>
                                 </div>
                             </div>
                         ))}
@@ -283,16 +283,16 @@ function PagesSection({ managedPages, pagePosts }) {
                         <p className="text-sm text-red-500">{pagePosts.error}</p>
                     )
                 ) : pagePosts?.posts?.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">No recent posts found on this page.</p>
+                    <p className="text-xs text-gray-500 italic">No recent posts found on this page.</p>
                 ) : (
                     <div className="space-y-3">
                         {pagePosts?.posts?.map((post, i) => (
                             <div key={i} className="bg-gray-50 rounded-lg px-4 py-3">
                                 <p className="text-sm text-gray-800 leading-relaxed line-clamp-2">
-                                    {post.message || <span className="italic text-gray-400">No text content</span>}
+                                    {post.message || <span className="italic text-gray-500">No text content</span>}
                                 </p>
                                 <div className="flex items-center gap-4 mt-2">
-                                    <span className="text-xs text-gray-400">{new Date(post.created_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                    <span className="text-xs text-gray-500">{new Date(post.created_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                     <span className="text-xs text-gray-500">👍 {post.likes?.toLocaleString()}</span>
                                     <span className="text-xs text-gray-500">💬 {post.comments?.toLocaleString()}</span>
                                 </div>
@@ -346,9 +346,9 @@ function PermissionsSection({ grantedPermissions }) {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className={`text-xs font-semibold ${granted ? 'text-green-900' : 'text-gray-500'}`}>{meta.label}</p>
-                                    <p className="text-xs text-gray-400 truncate">{meta.desc}</p>
+                                    <p className="text-xs text-gray-500 truncate">{meta.desc}</p>
                                 </div>
-                                <span className={`text-xs font-bold flex-shrink-0 ${granted ? 'text-green-700' : 'text-gray-400'}`}>
+                                <span className={`text-xs font-bold flex-shrink-0 ${granted ? 'text-green-700' : 'text-gray-500'}`}>
                                     {granted ? 'granted' : 'not granted'}
                                 </span>
                             </div>
@@ -384,7 +384,7 @@ export default function FacebookApiVerify({
         <AuthenticatedLayout>
             <Head title="Live Facebook API Access Verification" />
 
-            <div className="max-w-2xl mx-auto px-4 py-10">
+            <div className="max-w-2xl mx-auto py-10">
                 {token_expired && (
                     <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex items-start gap-3">
                         <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

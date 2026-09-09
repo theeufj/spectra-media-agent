@@ -145,7 +145,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                     <div className="text-center py-8">
                         <div className="text-4xl mb-3">💬</div>
                         <p className="text-gray-600 font-medium mb-1">Ask me anything about your campaign</p>
-                        <p className="text-gray-400 text-sm mb-6">I have access to your performance data, strategies, and A/B tests.</p>
+                        <p className="text-gray-500 text-sm mb-6">I have access to your performance data, strategies, and A/B tests.</p>
                         <div className="space-y-2">
                             {SUGGESTED_QUESTIONS.map((q, i) => (
                                 <button
@@ -235,7 +235,7 @@ function MessageContent({ content }) {
                 </div>
             );
         } else if (line.startsWith('- ') || line.startsWith('• ')) {
-            elements.push(<div key={i} className="ml-3 before:content-['•'] before:mr-2 before:text-gray-400">{line.substring(2)}</div>);
+            elements.push(<div key={i} className="ml-3 before:content-['•'] before:mr-2 before:text-gray-500">{line.substring(2)}</div>);
         } else if (line.startsWith('## ')) {
             elements.push(<div key={i} className="font-bold text-base mt-2 mb-1">{line.substring(3)}</div>);
         } else if (line.startsWith('### ')) {

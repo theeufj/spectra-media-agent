@@ -57,7 +57,7 @@ export default function Research({ customer }) {
         <AuthenticatedLayout>
             <Head title="Keyword Research" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold text-gray-900">Keyword Research</h1>
                         <p className="mt-1 text-sm text-gray-500">AI-powered keyword discovery using Google Keyword Planner + Gemini.</p>

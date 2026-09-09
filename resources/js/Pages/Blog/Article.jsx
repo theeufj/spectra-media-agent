@@ -56,7 +56,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                     {/* Breadcrumb + header */}
                     <div className="bg-white border-b border-gray-100">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-                            <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+                            <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
                                 <Link href="/blog" className="hover:text-gray-600 transition-colors">Blog</Link>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -68,7 +68,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                 <span className={`text-xs font-semibold rounded-full px-3 py-1 ${CATEGORY_COLORS[article.category] ?? 'bg-gray-100 text-gray-600'}`}>
                                     {article.category}
                                 </span>
-                                <span className="text-sm text-gray-400">{article.read_time}</span>
+                                <span className="text-sm text-gray-500">{article.read_time}</span>
                             </div>
 
                             <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 leading-tight">
@@ -108,7 +108,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                 {/* Related articles */}
                                 {relatedArticles.length > 0 && (
                                     <div>
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
+                                        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">
                                             More articles
                                         </h3>
                                         <div className="space-y-3">
@@ -118,7 +118,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                                     href={`/blog/${related.slug}`}
                                                     className="group block bg-white rounded-xl border border-gray-100 p-4 hover:border-violet-200 hover:shadow-sm transition-all"
                                                 >
-                                                    <div className="text-xs text-gray-400 mb-1">{related.read_time}</div>
+                                                    <div className="text-xs text-gray-500 mb-1">{related.read_time}</div>
                                                     <div className="text-sm font-semibold text-gray-800 group-hover:text-violet-700 transition-colors leading-snug">
                                                         {related.title}
                                                     </div>
@@ -131,7 +131,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                 {/* Back link */}
                                 <Link
                                     href="/blog"
-                                    className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                                    className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-600 transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

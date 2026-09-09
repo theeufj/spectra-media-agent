@@ -145,7 +145,7 @@ export default function ExecutionDetail({ auth }) {
         <AuthenticatedLayout
             user={auth.user}
             header={
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between" contained={false}>
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
                         Execution Details
                     </h2>

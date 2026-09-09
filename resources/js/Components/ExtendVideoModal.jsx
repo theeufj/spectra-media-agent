@@ -45,7 +45,7 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                             +8s to finish the script · {extensionsRemaining}/{maxExtensions} extensions remaining
                         </p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-600 p-1">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -76,7 +76,7 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                         {/* Prompt */}
                         <div className="mb-2.5">
                             <label htmlFor="extend-prompt" className="block text-xs font-medium text-gray-700 mb-1">
-                                Any additional direction? <span className="text-gray-400 font-normal">(optional)</span>
+                                Any additional direction? <span className="text-gray-500 font-normal">(optional)</span>
                             </label>
                             <textarea
                                 id="extend-prompt"

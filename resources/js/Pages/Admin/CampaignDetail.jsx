@@ -119,7 +119,7 @@ export default function CampaignDetail({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Campaign Detail</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Campaign Detail</h2>}
         >
             <Head title={`Admin - ${campaign.name}`} />
 
@@ -323,7 +323,7 @@ export default function CampaignDetail({ auth }) {
                                                             <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">{strategy.image_collaterals_count || 0} images</span>
                                                             <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded">{strategy.video_collaterals_count || 0} videos</span>
                                                         </div>
-                                                        <svg className={`w-5 h-5 text-gray-400 transition-transform ${expandedStrategy === strategy.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className={`w-5 h-5 text-gray-500 transition-transform ${expandedStrategy === strategy.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                         </svg>
                                                     </div>
@@ -430,7 +430,7 @@ export default function CampaignDetail({ auth }) {
                                                                 {log.description && (
                                                                     <p className="mt-0.5 text-sm text-gray-600">{log.description}</p>
                                                                 )}
-                                                                <p className="mt-0.5 text-xs text-gray-400">
+                                                                <p className="mt-0.5 text-xs text-gray-500">
                                                                     {new Date(log.created_at).toLocaleString()}
                                                                 </p>
                                                             </div>

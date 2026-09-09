@@ -43,7 +43,7 @@ export default function Index({ auth, platforms }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-jet leading-tight">Platform Management</h2>}
+            header={<h2 className="font-semibold text-xl text-jet leading-tight" contained={false}>Platform Management</h2>}
         >
             <Head title="Platform Management" />
 

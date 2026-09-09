@@ -1,8 +1,18 @@
 import React, { useEffect } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
+import Hero from '@/Components/Marketing/Hero';
+import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
+import CtaBand from '@/Components/Marketing/CtaBand';
+import { BoltIcon, ChevronDownIcon, LockClosedIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import { trackConversion } from '@/utils/conversions';
+
+const trustSeals = [
+    { icon: LockClosedIcon, label: 'Secure Stripe payment' },
+    { icon: BoltIcon, label: 'Instant campaign deployment' },
+    { icon: ShieldCheckIcon, label: 'Data encrypted and private' },
+];
 
 export default function Pricing({ auth, plans = [] }) {
     const [openFAQ, setOpenFAQ] = React.useState(null);
@@ -46,39 +56,37 @@ export default function Pricing({ auth, plans = [] }) {
                     }))
                 })}</script>
             </Head>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
+            <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
                 <main>
-                    {/* Hero */}
-                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">Pricing</p>
-                            <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
-                                Simple, Transparent Pricing
-                            </h1>
-                            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-500">
-                                Try free with generous limits. Upgrade when you're ready to deploy live campaigns.
-                            </p>
-                        </div>
-                    </div>
+                    <Hero
+                        eyebrow="Pricing"
+                        headline="Simple, transparent pricing"
+                        sub="Try free with generous limits. Upgrade when you're ready to deploy live campaigns."
+                    />
 
                     {/* Comparison Table */}
                     <div className="bg-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-12">
+                            <div className="mb-12 text-center">
                                 <h2 className="text-3xl font-bold text-gray-900">Why Choose AI Over a Traditional Agency?</h2>
                             </div>
-                            <div className="max-w-4xl mx-auto overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+                            {/*
+                                overflow-x-auto, not overflow-hidden: three columns of
+                                whitespace-nowrap cells do not fit a phone, and hidden
+                                simply clipped the sitetospend column off the right edge.
+                            */}
+                            <div className="mx-auto max-w-4xl overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Traditional Agency</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-dark uppercase tracking-wider">sitetospend AI</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><span className="sr-only">Comparison</span></th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Traditional Agency</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-brand-dark">sitetospend AI</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody className="divide-y divide-gray-200 bg-white">
                                         {[
                                             ['Cost', '$2,500 - $5,000 / month', 'From $149 / month'],
                                             ['Setup Time', '2-4 Weeks', '< 5 Minutes'],
@@ -89,9 +97,9 @@ export default function Pricing({ auth, plans = [] }) {
                                             ['Rejected Ads', 'Wait for account manager', 'Fixed and resubmitted automatically'],
                                         ].map(([label, agency, ai]) => (
                                             <tr key={label}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{label}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agency}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-brand-dark">{ai}</td>
+                                                <th scope="row" className="whitespace-nowrap px-6 py-4 text-left text-sm font-medium text-gray-900">{label}</th>
+                                                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{agency}</td>
+                                                <td className="whitespace-nowrap px-6 py-4 text-sm font-bold text-brand-dark">{ai}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -100,104 +108,66 @@ export default function Pricing({ auth, plans = [] }) {
                         </div>
                     </div>
 
-                    {/* Pricing Cards */}
-                    <div className="bg-gradient-to-b from-gray-50 to-white py-16 sm:py-24">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-7xl mx-auto`}>
-                                {plans.map((plan) => (
-                                    <div
-                                        key={plan.id}
-                                        className={`rounded-lg p-8 flex flex-col relative ${
-                                            plan.is_popular
-                                                ? 'border-2 border-brand-dark bg-brand-primary/10 shadow-lg'
-                                                : 'border border-gray-200 bg-white'
-                                        }`}
-                                    >
-                                        {plan.badge_text && (
-                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-brand-dark text-white px-3 py-1 text-xs font-semibold rounded-full">
-                                                {plan.badge_text}
-                                            </div>
-                                        )}
-                                        <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
-                                        <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                        <div className="mt-4 text-gray-900">
-                                            {plan.price_cents > 0 ? (
-                                                <>
-                                                    <span className="text-4xl font-extrabold">${Math.round(plan.price_cents / 100)}</span>
-                                                    <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
-                                                </>
-                                            ) : !plan.is_free ? (
-                                                // Priced on application. "Contact us" states the next
-                                                // action; "Custom" only describes the pricing and leaves
-                                                // the reader to work out what to do about it.
-                                                <span className="text-3xl font-extrabold">Contact us</span>
-                                            ) : (
-                                                <>
-                                                    <span className="text-4xl font-extrabold">$0</span>
-                                                    <span className="text-xl font-medium">/mo</span>
-                                                </>
-                                            )}
-                                        </div>
-                                        <ul className="mt-8 space-y-4 flex-grow">
-                                            {(plan.features || []).map((item) => (
-                                                <li key={item} className="flex items-start">
-                                                    <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                                    <p className="text-gray-700">{item}</p>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        {plan.slug === 'starter' && (
-                                            <p className="mt-4 text-xs text-gray-400 text-center">
-                                                You pick your platform (Google or Facebook) when you sign up.
-                                            </p>
-                                        )}
-                                        <div className="mt-4">
-                                            <a
-                                                href={plan.cta_text === 'Contact Sales' ? 'mailto:hello@sitetospend.com?subject=Agency Plan Inquiry' : '/register'}
-                                                className={`block w-full text-center rounded-lg px-6 py-3 text-base font-medium ${
-                                                    plan.is_popular
-                                                        ? 'bg-brand-dark text-white hover:bg-brand-darker shadow-lg'
-                                                        : 'border-2 border-gray-300 text-gray-900 hover:border-gray-400'
-                                                }`}
-                                            >
-                                                {plan.cta_text || 'Get Started'}
-                                            </a>
-                                        </div>
-                                    </div>
+                    <PricingTable
+                        background="gray"
+                        plans={plans.map((plan) => ({
+                            id: plan.id,
+                            name: plan.name,
+                            description: plan.description,
+                            badge: plan.badge_text,
+                            highlighted: plan.is_popular,
+                            price: <PlanPrice plan={plan} />,
+                            features: plan.features || [],
+                            note: plan.slug === 'starter'
+                                ? 'You pick your platform (Google or Facebook) when you sign up.'
+                                : null,
+                            cta: {
+                                href: plan.cta_text === 'Contact Sales'
+                                    ? 'mailto:hello@sitetospend.com?subject=Agency Plan Inquiry'
+                                    : '/register',
+                                label: plan.cta_text || 'Get Started',
+                            },
+                        }))}
+                        footnote={
+                            <div className="flex flex-col items-center justify-center gap-4 text-sm text-gray-600 sm:flex-row sm:gap-8">
+                                {trustSeals.map((seal) => (
+                                    <span key={seal.label} className="flex items-center gap-2">
+                                        <seal.icon className="h-5 w-5 text-brand-dark" aria-hidden="true" />
+                                        {seal.label}
+                                    </span>
                                 ))}
                             </div>
-
-                            {/* Trust Seals */}
-                            <div className="mt-12 flex justify-center gap-8 text-sm text-gray-500">
-                                <div className="flex items-center gap-2"><span>🔒</span> Secure Stripe Payment</div>
-                                <div className="flex items-center gap-2"><span>⚡</span> Instant Campaign Deployment</div>
-                                <div className="flex items-center gap-2"><span>🛡️</span> Data Encrypted & Private</div>
-                            </div>
-                        </div>
-                    </div>
+                        }
+                    />
 
                     {/* FAQ */}
                     <div className="bg-white py-16 sm:py-24">
-                        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-12">
+                        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                            <div className="mb-12 text-center">
                                 <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Frequently Asked Questions</h2>
-                                <p className="mt-4 text-lg text-gray-500">Get answers to common questions about how sitetospend works.</p>
+                                <p className="mt-4 text-lg text-gray-600">Get answers to common questions about how sitetospend works.</p>
                             </div>
 
                             <div className="space-y-4">
                                 {faqs.map((faq, index) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg">
-                                        <button
-                                            onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
-                                            className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
-                                        >
-                                            <h3 className="text-lg font-bold text-gray-900">{faq.question}</h3>
-                                            <svg className={`h-6 w-6 text-brand-dark flex-shrink-0 transition-transform ${openFAQ === index ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                                            </svg>
-                                        </button>
+                                    <div key={faq.question} className="rounded-lg border border-gray-200">
+                                        <h3>
+                                            <button
+                                                type="button"
+                                                onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
+                                                aria-expanded={openFAQ === index}
+                                                aria-controls={`faq-answer-${index}`}
+                                                className="flex w-full items-center justify-between px-6 py-4 text-left text-lg font-bold text-gray-900 transition-colors hover:bg-gray-50"
+                                            >
+                                                {faq.question}
+                                                <ChevronDownIcon
+                                                    className={`h-6 w-6 flex-shrink-0 text-brand-dark transition-transform ${openFAQ === index ? 'rotate-180' : ''}`}
+                                                    aria-hidden="true"
+                                                />
+                                            </button>
+                                        </h3>
                                         {openFAQ === index && (
-                                            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                                            <div id={`faq-answer-${index}`} className="border-t border-gray-200 bg-gray-50 px-6 py-4">
                                                 <p className="text-gray-600">{faq.answer}</p>
                                             </div>
                                         )}
@@ -207,26 +177,13 @@ export default function Pricing({ auth, plans = [] }) {
                         </div>
                     </div>
 
-                    {/* CTA */}
-                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
-                        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
-                                Ready to transform your marketing?
-                            </h2>
-                            <p className="mt-6 text-xl text-brand-primary/20">
-                                Start creating smarter, faster campaigns with AI-powered optimization.
-                            </p>
-                            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
-                                    Get Started Free
-                                </a>
-                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
-                                    Explore Features
-                                </Link>
-                            </div>
-                            <p className="mt-8 text-brand-primary/20">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
-                        </div>
-                    </div>
+                    <CtaBand
+                        title="Ready to transform your marketing?"
+                        body="Start creating smarter, faster campaigns with AI-powered optimization."
+                        primaryCta={{ href: '/register', label: 'Get started free' }}
+                        secondaryCta={{ href: '/features', label: 'Explore features' }}
+                        note="Free to explore · No credit card required · Live in minutes"
+                    />
                 </main>
 
                 <Footer />

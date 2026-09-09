@@ -63,7 +63,7 @@ export default function Index({ keywords, stats, qsTrends }) {
         <AuthenticatedLayout>
             <Head title="Keywords" />
             <div className="py-8">
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-7xl sm:">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Keyword Portfolio</h1>
@@ -125,7 +125,7 @@ export default function Index({ keywords, stats, qsTrends }) {
                                         <td className="px-4 py-3">
                                             {kw.quality_score != null ? (
                                                 <span className={`text-sm font-bold ${kw.quality_score >= 7 ? 'text-green-600' : kw.quality_score >= 4 ? 'text-yellow-600' : 'text-red-600'}`}>{kw.quality_score}/10</span>
-                                            ) : <span className="text-xs text-gray-400">—</span>}
+                                            ) : <span className="text-xs text-gray-500">—</span>}
                                         </td>
                                         <td className="px-4 py-3 text-xs text-gray-500">{kw.source}</td>
                                         <td className="px-4 py-3 text-xs text-gray-500">{kw.campaign?.name ?? '—'}</td>

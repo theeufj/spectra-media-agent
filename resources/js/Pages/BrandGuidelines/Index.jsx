@@ -93,7 +93,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             <AuthenticatedLayout>
                 <Head title="Brand Guidelines" />
                 <div className="py-12">
-                    <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    <div className="max-w-7xl mx-auto sm:">
                         {flash?.success && (
                             <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
                                 <p className="text-sm font-medium">{flash.success}</p>
@@ -113,7 +113,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 <button
                                     onClick={handleReExtract}
                                     disabled={isExtracting}
-                                    className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                    className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                 >
                                     {isExtracting ? (
                                         <>
@@ -155,7 +155,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             <Head title="Brand Guidelines" />
             
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     {/* Flash Message */}
                     {flash?.success && (
                         <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
@@ -210,7 +210,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                     <>
                                         <button
                                             onClick={() => setIsEditing(true)}
-                                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150"
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -240,7 +240,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         <button
                                             onClick={handleReExtract}
                                             disabled={isExtracting}
-                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                         >
                                             {isExtracting ? (
                                                 <>
@@ -265,14 +265,14 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                     <>
                                         <button
                                             onClick={() => setIsEditing(false)}
-                                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             onClick={handleSubmit}
                                             disabled={processing}
-                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                         >
                                             {processing ? 'Saving...' : 'Save Changes'}
                                         </button>
@@ -348,7 +348,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={usp}
                                                                     onChange={(e) => updateArrayItem('unique_selling_propositions', index, e.target.value)}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -390,7 +390,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={item}
                                                                     onChange={(e) => updateArrayItem('do_not_use', index, e.target.value)}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -428,7 +428,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         type="text"
                                                         value={data.brand_voice.primary_tone}
                                                         onChange={(e) => setData('brand_voice', { ...data.brand_voice, primary_tone: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         placeholder="e.g., Professional yet approachable"
                                                     />
                                                 )}
@@ -443,7 +443,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         rows={4}
                                                         value={data.brand_voice.description}
                                                         onChange={(e) => setData('brand_voice', { ...data.brand_voice, description: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         placeholder="Detailed description of the brand voice..."
                                                     />
                                                 )}
@@ -469,7 +469,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                         newExamples[index] = e.target.value;
                                                                         setData('brand_voice', { ...data.brand_voice, examples: newExamples });
                                                                     }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -521,7 +521,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                         newTones[index] = e.target.value;
                                                                         setData('tone_attributes', newTones);
                                                                     }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -561,7 +561,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 type="text"
                                                                 value={data.brand_personality.archetype}
                                                                 onChange={(e) => setData('brand_personality', { ...data.brand_personality, archetype: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 placeholder="e.g., The Hero, The Sage"
                                                             />
                                                         )}
@@ -588,7 +588,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                                 newChars[index] = e.target.value;
                                                                                 setData('brand_personality', { ...data.brand_personality, characteristics: newChars });
                                                                             }}
-                                                                            className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm"
+                                                                            className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm text-sm"
                                                                         />
                                                                         <button
                                                                             type="button"
@@ -627,7 +627,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             rows={2}
                                                             value={data.brand_personality.if_brand_were_person}
                                                             onChange={(e) => setData('brand_personality', { ...data.brand_personality, if_brand_were_person: e.target.value })}
-                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         />
                                                     )}
                                                 </div>
@@ -683,7 +683,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 rows={3}
                                                                 value={data.color_palette.description}
                                                                 onChange={(e) => setData('color_palette', { ...data.color_palette, description: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
@@ -696,7 +696,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 rows={2}
                                                                 value={data.color_palette.usage_notes}
                                                                 onChange={(e) => setData('color_palette', { ...data.color_palette, usage_notes: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
@@ -716,7 +716,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 rows={2}
                                                                 value={data.typography.heading_style}
                                                                 onChange={(e) => setData('typography', { ...data.typography, heading_style: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
@@ -729,7 +729,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 rows={2}
                                                                 value={data.typography.body_style}
                                                                 onChange={(e) => setData('typography', { ...data.typography, body_style: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
@@ -748,7 +748,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 type="text"
                                                                 value={data.typography.fonts_detected?.join(', ')}
                                                                 onChange={(e) => setData('typography', { ...data.typography, fonts_detected: e.target.value.split(',').map(f => f.trim()) })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 placeholder="Arial, Helvetica, sans-serif"
                                                             />
                                                         )}
@@ -763,7 +763,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.typography.font_weights}
                                                                     onChange={(e) => setData('typography', { ...data.typography, font_weights: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -776,7 +776,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.typography.letter_spacing}
                                                                     onChange={(e) => setData('typography', { ...data.typography, letter_spacing: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -798,7 +798,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.visual_style.overall_aesthetic}
                                                                     onChange={(e) => setData('visual_style', { ...data.visual_style, overall_aesthetic: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -811,7 +811,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.visual_style.imagery_style}
                                                                     onChange={(e) => setData('visual_style', { ...data.visual_style, imagery_style: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -826,7 +826,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.visual_style.color_treatment}
                                                                     onChange={(e) => setData('visual_style', { ...data.visual_style, color_treatment: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -839,7 +839,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                     type="text"
                                                                     value={data.visual_style.layout_preference}
                                                                     onChange={(e) => setData('visual_style', { ...data.visual_style, layout_preference: e.target.value })}
-                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                             )}
                                                         </div>
@@ -853,7 +853,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                 rows={4}
                                                                 value={data.visual_style.description}
                                                                 onChange={(e) => setData('visual_style', { ...data.visual_style, description: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
@@ -888,7 +888,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                         newThemes[index] = e.target.value;
                                                                         setData('messaging_themes', newThemes);
                                                                     }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -931,7 +931,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         rows={2}
                                                         value={data.target_audience.primary}
                                                         onChange={(e) => setData('target_audience', { ...data.target_audience, primary: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         placeholder="Detailed description of primary target audience"
                                                     />
                                                 )}
@@ -946,7 +946,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         rows={3}
                                                         value={data.target_audience.demographics}
                                                         onChange={(e) => setData('target_audience', { ...data.target_audience, demographics: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         placeholder="Age, gender, location, income, job titles..."
                                                     />
                                                 )}
@@ -961,7 +961,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         rows={3}
                                                         value={data.target_audience.psychographics}
                                                         onChange={(e) => setData('target_audience', { ...data.target_audience, psychographics: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                         placeholder="Values, interests, lifestyle, attitudes..."
                                                     />
                                                 )}
@@ -987,7 +987,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                         newPoints[index] = e.target.value;
                                                                         setData('target_audience', { ...data.target_audience, pain_points: newPoints });
                                                                     }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
@@ -1027,7 +1027,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             type="text"
                                                             value={data.target_audience.language_level}
                                                             onChange={(e) => setData('target_audience', { ...data.target_audience, language_level: e.target.value })}
-                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             placeholder="e.g., professional, technical, casual"
                                                         />
                                                     )}
@@ -1041,7 +1041,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             type="text"
                                                             value={data.target_audience.familiarity_assumption}
                                                             onChange={(e) => setData('target_audience', { ...data.target_audience, familiarity_assumption: e.target.value })}
-                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                             placeholder="e.g., beginner, intermediate, expert"
                                                         />
                                                     )}
@@ -1144,7 +1144,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                                         newPoints[index] = e.target.value;
                                                                         setData('competitor_differentiation', newPoints);
                                                                     }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                    className="flex-1 border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"

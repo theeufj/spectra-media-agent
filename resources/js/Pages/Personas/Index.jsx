@@ -96,7 +96,7 @@ export default function Index({ personas, campaigns }) {
         <AuthenticatedLayout>
             <Head title="Audience Personas" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-5xl sm:">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>

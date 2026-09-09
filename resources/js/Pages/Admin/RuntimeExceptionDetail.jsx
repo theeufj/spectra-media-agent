@@ -27,7 +27,7 @@ export default function RuntimeExceptionDetail({ auth, exception: ex }) {
     };
 
     return (
-        <AuthenticatedLayout user={auth.user}>
+        <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title={`Exception: ${shortType(ex.type)}`} />
             <div className="flex">
                 <SideNav />
@@ -110,7 +110,7 @@ export default function RuntimeExceptionDetail({ auth, exception: ex }) {
                                     </div>
                                 )}
                                 {!ex.url && !ex.user && !ex.customer && (
-                                    <p className="text-sm text-gray-400 italic">No request context available (queue/console exception)</p>
+                                    <p className="text-sm text-gray-500 italic">No request context available (queue/console exception)</p>
                                 )}
                             </dl>
                         </div>

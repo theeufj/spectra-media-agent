@@ -144,7 +144,7 @@ export default function UsageDashboard({
                 out is what keeps it from becoming a fifth partial
                 reimplementation of them. */}
             <div className="mt-8 border-t border-gray-200 pt-4">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Deep dives</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Deep dives</p>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                     <Link href={route('admin.revenue.index')} className="text-brand-dark hover:underline">Revenue &amp; MRR →</Link>
                     <Link href={route('admin.ai-costs.index')} className="text-brand-dark hover:underline">AI cost breakdown →</Link>

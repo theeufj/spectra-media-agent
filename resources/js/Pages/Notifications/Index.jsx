@@ -169,7 +169,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
             <Head title="Notifications" />
 
             <div className="py-6">
-                <div className="mx-auto max-w-4xl sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-4xl sm:">
                     {localNotifications.length === 0 ? (
                         <div className="bg-white rounded-lg shadow-sm p-6 sm:p-12 text-center">
                             <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +207,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                             {notification.message || ''}
                                                         </p>
                                                         <div className="flex items-center mt-2 space-x-4">
-                                                            <span className="text-xs text-gray-400">
+                                                            <span className="text-xs text-gray-500">
                                                                 {formatTime(notification.created_at)}
                                                             </span>
                                                             {notification.action_text && notification.action_url && (
@@ -220,7 +220,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     <div className="flex items-center space-x-2 flex-shrink-0">
                                                         <button
                                                             onClick={() => markAsRead(notification.id)}
-                                                            className="p-1 text-gray-400 hover:text-brand-dark transition-colors"
+                                                            className="p-1 text-gray-500 hover:text-brand-dark transition-colors"
                                                             title="Mark as read"
                                                         >
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,7 +229,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                         </button>
                                                         <button
                                                             onClick={() => deleteNotification(notification.id)}
-                                                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                                            className="p-1 text-gray-500 hover:text-red-600 transition-colors"
                                                             title="Delete"
                                                         >
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,7 +271,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                             {notification.message || ''}
                                                         </p>
                                                         <div className="flex items-center mt-2 space-x-4">
-                                                            <span className="text-xs text-gray-400">
+                                                            <span className="text-xs text-gray-500">
                                                                 {formatTime(notification.created_at)}
                                                             </span>
                                                             {notification.action_text && notification.action_url && (
@@ -283,7 +283,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     </div>
                                                     <button
                                                         onClick={() => deleteNotification(notification.id)}
-                                                        className="p-1 text-gray-400 hover:text-red-600 transition-colors flex-shrink-0"
+                                                        className="p-1 text-gray-500 hover:text-red-600 transition-colors flex-shrink-0"
                                                         title="Delete"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +309,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     ? 'bg-brand-dark text-white'
                                                     : link.url
                                                     ? 'bg-white text-gray-700 hover:bg-gray-50 border'
-                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-gray-100 text-gray-500 cursor-not-allowed'
                                             }`}
                                             dangerouslySetInnerHTML={{ __html: link.label }}
                                         />

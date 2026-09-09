@@ -7,7 +7,7 @@ export default function Attribution({ campaign, pixelConfig, summary, channelBre
         <AuthenticatedLayout>
             <Head title={`Attribution — ${campaign.name}`} />
 
-            <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto sm:">
                 {/* Header */}
                 <div className="mb-8">
                     <Link

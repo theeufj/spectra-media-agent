@@ -170,7 +170,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     {/* Search Section */}
                     <div className="mb-8">
                         <form onSubmit={handleSearch} className="bg-white overflow-hidden shadow-sm rounded-xl p-6 border border-gray-100">
@@ -181,7 +181,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                 <div className="flex gap-2">
                                     <div className="flex-1 relative">
                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
                                         </div>
                                         <input
                                             id="search"
@@ -247,7 +247,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                                             </p>
                                                         </div>
                                                         <svg 
-                                                            className={`w-5 h-5 text-gray-400 transition-transform ${selectedResult === idx ? 'rotate-180' : ''}`}
+                                                            className={`w-5 h-5 text-gray-500 transition-transform ${selectedResult === idx ? 'rotate-180' : ''}`}
                                                             fill="currentColor" 
                                                             viewBox="0 0 20 20"
                                                         >
@@ -298,7 +298,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                             <button
                                                 onClick={() => handleDelete(kb.id)}
                                                 disabled={deleting === kb.id || loading}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                                                 title="Delete"
                                             >
                                                 {deleting === kb.id ? (
@@ -319,7 +319,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
 
                                         {/* URL Display */}
                                         {kb.url && (
-                                            <p className="text-xs text-gray-400 mb-3 truncate font-mono" title={kb.url}>
+                                            <p className="text-xs text-gray-500 mb-3 truncate font-mono" title={kb.url}>
                                                 {truncateUrl(kb.url)}
                                             </p>
                                         )}
@@ -346,7 +346,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                         )}
 
                                         {/* Metadata */}
-                                        <div className="text-xs text-gray-400">
+                                        <div className="text-xs text-gray-500">
                                             <p>Added {formatDate(kb.created_at)}</p>
                                         </div>
                                     </div>

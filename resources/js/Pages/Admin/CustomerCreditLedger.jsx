@@ -22,7 +22,7 @@ export default function CustomerCreditLedger({ auth }) {
     const title = customer.business_name || customer.name || `Customer #${customer.id}`;
 
     return (
-        <AuthenticatedLayout auth={auth}>
+        <AuthenticatedLayout auth={auth} contained={false}>
             <Head title={`Credit Ledger — ${title}`} />
             <div className="flex">
                 <SideNav />
@@ -105,11 +105,11 @@ export default function CustomerCreditLedger({ auth }) {
                                                             </span>
                                                             <span className="text-gray-600 truncate max-w-xs">{tx.description}</span>
                                                             {hasBreakdown && (
-                                                                <span className="ml-auto text-xs text-gray-400">{isOpen ? '▲ Hide' : '▼ Platforms'}</span>
+                                                                <span className="ml-auto text-xs text-gray-500">{isOpen ? '▲ Hide' : '▼ Platforms'}</span>
                                                             )}
                                                         </div>
                                                         {tx.stripe_charge_id && (
-                                                            <div className="text-xs text-gray-400 mt-0.5 font-mono">{tx.stripe_charge_id}</div>
+                                                            <div className="text-xs text-gray-500 mt-0.5 font-mono">{tx.stripe_charge_id}</div>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3 text-sm text-right font-medium text-green-700 whitespace-nowrap">

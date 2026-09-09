@@ -89,7 +89,7 @@ export default function ProgressStepper({
                                 
                                 {/* Step Description (optional) */}
                                 {step.description && (
-                                    <span className="mt-0.5 text-xs text-gray-400 text-center max-w-[80px] sm:max-w-[120px]">
+                                    <span className="mt-0.5 text-xs text-gray-500 text-center max-w-[80px] sm:max-w-[120px]">
                                         {step.description}
                                     </span>
                                 )}
@@ -117,7 +117,7 @@ export function CompactStepper({ steps, currentStep }) {
                                 ? 'bg-brand-dark text-white' 
                                 : index === currentStep
                                     ? 'bg-brand-primary/20 text-brand-dark ring-2 ring-brand-dark'
-                                    : 'bg-gray-100 text-gray-400'
+                                    : 'bg-gray-100 text-gray-500'
                             }
                         `}
                     >

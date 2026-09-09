@@ -168,7 +168,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             <Head title={`Deployment - ${campaign.name}`} />
             
             <div className="py-12">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="max-w-4xl mx-auto sm:">
                     {pollTimedOut && !allComplete && (
                         <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
                             This is taking longer than expected — we've stopped auto-refreshing.

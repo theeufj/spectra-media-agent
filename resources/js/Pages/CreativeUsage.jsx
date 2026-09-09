@@ -16,12 +16,12 @@ export default function CreativeUsage({ auth }) {
         <AuthenticatedLayout user={auth.user}>
             <Head title="Creative Usage" />
 
-            <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-4xl mx-auto sm:">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Creative Usage</h1>
                 <p className="text-gray-500 mb-8">
                     Track your monthly AI generation usage and purchase additional credits.
                     {!creativeUsage.is_unlimited && (
-                        <span className="ml-1 text-sm text-gray-400">
+                        <span className="ml-1 text-sm text-gray-500">
                             Resets at the start of each month.
                         </span>
                     )}
@@ -49,7 +49,7 @@ export default function CreativeUsage({ auth }) {
                             Unlimited
                         </span>
                     )}
-                    <span className="text-sm text-gray-400">
+                    <span className="text-sm text-gray-500">
                         Period: {creativeUsage.period}
                     </span>
                 </div>
@@ -195,7 +195,7 @@ function UsageBar({ label, icon, used, limit, bonus, remaining }) {
                     <span className={`text-lg font-bold ${isExhausted ? 'text-red-600' : 'text-gray-900'}`}>
                         {used}
                     </span>
-                    <span className="text-gray-400 text-sm"> / {total}</span>
+                    <span className="text-gray-500 text-sm"> / {total}</span>
                     {bonus > 0 && (
                         <span className="ml-2 text-xs text-brand-dark font-medium">
                             (+{bonus} bonus)
@@ -210,7 +210,7 @@ function UsageBar({ label, icon, used, limit, bonus, remaining }) {
                 />
             </div>
             <div className="flex justify-between mt-1.5">
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-500">
                     {remaining} remaining
                 </span>
                 {isExhausted && (

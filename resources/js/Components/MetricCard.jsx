@@ -1,5 +1,7 @@
+import Card from '@/Components/Card';
+
 /**
- * The stat tile used across the admin analytics pages.
+ * The stat tile. There is one of these; do not write a thirteenth.
  *
  * Three near-identical copies of this existed (ExecutionMetrics, AiCosts,
  * Revenue) and had already drifted apart in ways that mattered:
@@ -11,9 +13,20 @@
  *    flat period when the truth was "no comparable prior period"). Both now
  *    use `!= null`, so a null trend renders nothing.
  *
- * `variant` preserves the two layouts rather than picking a winner:
- *   'badge' — icon in a coloured tile on the left (AiCosts, Revenue)
- *   'plain' — larger value, icon floated right (ExecutionMetrics)
+ * Eleven MORE local tiles were written anyway, across six card treatments,
+ * three value sizes, two weights and three label treatments — so the Dashboard
+ * KPI row and the same four numbers one click away on Analytics → ROI did not
+ * look like the same product. `variant` is what lets those eleven collapse into
+ * this file instead of a twelfth copy:
+ *
+ *   'badge'   — icon in a coloured tile on the left (AiCosts, Revenue)
+ *   'plain'   — larger value, icon floated right (ExecutionMetrics)
+ *   'compact' — uppercase micro-label over the value, no icon. This is the
+ *               Dashboard KPI recipe, and the shape the eleven local tiles were
+ *               all reaching for.
+ *
+ * The surface comes from `Card` so a tile cannot drift away from every other
+ * panel on its page.
  */
 
 const BADGE_COLORS = {
@@ -45,19 +58,39 @@ export default function MetricCard({
     higherIsBetter = true,
     color = 'flame',
     variant = 'badge',
+    valueClassName = '',
+    className = '',
 }) {
     const hasTrend = trend != null;
     const up = hasTrend && trend >= 0;
     const good = up === higherIsBetter;
-    const trendColor = good ? 'text-green-600' : 'text-red-600';
+    // green-600 is 3.30:1 on white and the trend line is 12–14px, so it failed AA
+    // on the one number that tells you whether things are getting better.
+    // green-700 is 5.02:1 and sits at the same visual weight as red-600 (4.83:1).
+    const trendColor = good ? 'text-green-700' : 'text-red-600';
+
+    if (variant === 'compact') {
+        return (
+            <Card padding="p-5" className={className}>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">{title}</p>
+                <p className={`text-2xl font-bold mt-1 ${valueClassName || 'text-gray-900'}`}>{value}</p>
+                {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+                {hasTrend && (
+                    <p className={`text-xs mt-1 font-medium ${trendColor}`}>
+                        {up ? '↑' : '↓'} {Math.abs(trend)}% {trendLabel}
+                    </p>
+                )}
+            </Card>
+        );
+    }
 
     if (variant === 'plain') {
         return (
-            <div className="bg-white rounded-lg shadow p-6">
+            <Card className={className}>
                 <div className="flex items-center justify-between">
                     <div>
                         <p className="text-sm font-medium text-gray-600">{title}</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+                        <p className={`text-3xl font-bold mt-2 ${valueClassName || 'text-gray-900'}`}>{value}</p>
                         {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
                     </div>
                     {icon && <div className="text-brand-dark">{icon}</div>}
@@ -68,12 +101,12 @@ export default function MetricCard({
                         {Math.abs(trend)}% {trendLabel}
                     </div>
                 )}
-            </div>
+            </Card>
         );
     }
 
     return (
-        <div className="bg-white rounded-lg shadow p-6">
+        <Card className={className}>
             <div className="flex items-center">
                 {icon && (
                     <div className={`flex-shrink-0 p-3 rounded-lg ${BADGE_COLORS[color] ?? BADGE_COLORS.flame}`}>
@@ -82,8 +115,10 @@ export default function MetricCard({
                 )}
                 <div className={`flex-1 min-w-0 ${icon ? 'ml-4' : ''}`}>
                     <p className="text-sm font-medium text-gray-500 truncate">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+                    <p className={`text-2xl font-bold ${valueClassName || 'text-gray-900'}`}>{value}</p>
+                    {/* text-gray-500 is 2.54:1 on white — under half the AA floor for
+                        a 12px line. gray-500 is 4.83:1 and reads as the same tier. */}
+                    {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
                 </div>
                 {hasTrend && (
                     <div className={`text-sm font-semibold ml-2 ${trendColor}`}>
@@ -91,6 +126,6 @@ export default function MetricCard({
                     </div>
                 )}
             </div>
-        </div>
+        </Card>
     );
 }

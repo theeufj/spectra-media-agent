@@ -54,10 +54,15 @@ function Toast({ id, type = 'info', message, onDismiss, duration = 5000 }) {
                     <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${ICON_STYLES[type] || ICON_STYLES.info}`} />
                     <p className="flex-1 text-sm font-medium">{message}</p>
                     <button
+                        type="button"
                         onClick={() => setShow(false)}
-                        className="flex-shrink-0 rounded-md p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        // Icon-only, so without the label a screen reader announced
+                        // it as "button" — and the outline was stripped with nothing
+                        // put back, so it was also invisible to keyboard focus.
+                        aria-label="Dismiss notification"
+                        className="flex-shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
                     >
-                        <XMarkIcon className="h-4 w-4" />
+                        <XMarkIcon className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
             </div>

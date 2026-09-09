@@ -39,7 +39,7 @@ function StatCard({ label, value, sub }) {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
             <p className="text-sm text-gray-500">{label}</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
         </div>
     );
 }
@@ -359,7 +359,7 @@ function SelfHealingDetails({ details }) {
                         <p className="text-sm text-gray-700">{action.action_taken}</p>
                         {action.would_auto_fix && (
                             <p className="text-xs text-indigo-600 mt-2 flex items-center gap-1">
-                                <span className="inline-block w-4 h-4 bg-indigo-100 rounded-full text-center text-[10px] leading-4">🤖</span>
+                                <span className="inline-block w-4 h-4 bg-indigo-100 rounded-full text-center text-xs leading-4">🤖</span>
                                 {action.would_auto_fix}
                             </p>
                         )}
@@ -437,7 +437,7 @@ function AgentResultCard({ agentType, activities, campaigns }) {
                         </span>
                     )}
                 </div>
-                <svg className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-5 h-5 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
@@ -505,7 +505,7 @@ export default function SandboxResults({ customer, campaigns, agentResults, perf
             <Head title="Sandbox Results" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+                <div className="mx-auto max-w-7xl sm: space-y-6">
                     {/* Summary Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <StatCard label="Total Spend" value={`$${totals.cost?.toLocaleString() || 0}`} />
@@ -558,7 +558,7 @@ export default function SandboxResults({ customer, campaigns, agentResults, perf
                                         </span>
                                     </div>
                                     <p className="text-xs text-gray-500">{campaign.reason}</p>
-                                    <p className="text-xs text-gray-400 mt-1">${campaign.daily_budget}/day</p>
+                                    <p className="text-xs text-gray-500 mt-1">${campaign.daily_budget}/day</p>
                                 </div>
                             ))}
                         </div>

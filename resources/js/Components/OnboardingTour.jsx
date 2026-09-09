@@ -267,12 +267,12 @@ export default function OnboardingTour({ forceShow = false }) {
 
                 {/* Step counter */}
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-medium text-brand-dark uppercase tracking-wider">
+                    <span className="text-xs font-medium text-brand-dark uppercase tracking-wider">
                         Step {step + 1} of {TOUR_STEPS.length}
                     </span>
                     <button
                         onClick={finish}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-gray-500 hover:text-gray-600 transition-colors"
                         aria-label="Close tour"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

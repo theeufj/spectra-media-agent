@@ -101,7 +101,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
             <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
                 <div>
                     <h3 className="text-xl font-bold text-delft-blue">{strategy.platform}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">AI-generated strategy</p>
+                    <p className="text-xs text-gray-500 mt-0.5">AI-generated strategy</p>
                 </div>
                 {!isSignedOff && !isEditing && (
                     <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-dark hover:text-brand-darker hover:bg-brand-primary/10 px-3 py-1.5 rounded-lg transition">
@@ -225,11 +225,11 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-xl font-bold text-white">Building your strategy</h3>
-                            <p className="text-brand-primary/30 text-sm mt-1">for {campaignName}</p>
+                            <p className="text-white/80 text-sm mt-1">for {campaignName}</p>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-mono font-bold text-white">{formatTime(elapsedSeconds)}</div>
-                            <p className="text-brand-primary/30 text-xs">elapsed</p>
+                            <p className="text-white/80 text-xs">elapsed</p>
                         </div>
                     </div>
                     <div className="mt-4 h-2 bg-brand-darker/30 rounded-full overflow-hidden">
@@ -269,7 +269,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                     <span className="text-lg">{step.icon}</span>
                                     <span className={`text-sm font-medium ${
                                         isActive ? 'text-brand-darker' :
-                                        isComplete ? 'text-gray-500' : 'text-gray-400'
+                                        isComplete ? 'text-gray-500' : 'text-gray-500'
                                     }`}>
                                         {step.label}
                                     </span>
@@ -440,7 +440,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 would click Deploy and be told to confirm a budget with nowhere
                 to do it. */}
             {campaign.auto_generated_at && (
-                <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-7xl sm:">
                     {/* The prop, not the polled local state: confirming the
                         budget redirects back with fresh props, and the local
                         copy is only seeded once so it would still show as
@@ -453,7 +453,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 without the snippet the ads run blind, and the setup page was
                 previously only reachable from an email. */}
             {conversionTracking && (
-                <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-7xl sm:">
                     {conversionTracking.installed ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
                             <span aria-hidden="true">✓</span>
@@ -497,7 +497,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     {isPolling && (
                         <StrategyGenerationLoader
                             elapsedSeconds={elapsedSeconds}

@@ -91,7 +91,7 @@ export default function FacebookAdAccountModal({ show, onClose, customer: initia
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition"
+                        className="text-gray-500 hover:text-gray-600 transition"
                         aria-label="Close"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,14 +183,14 @@ export default function FacebookAdAccountModal({ show, onClose, customer: initia
                     </label>
                     <div className="flex gap-2">
                         <div className="relative flex-1">
-                            <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 text-sm pointer-events-none">act_</span>
+                            <span className="absolute inset-y-0 left-3 flex items-center text-gray-500 text-sm pointer-events-none">act_</span>
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 value={adAccountId}
                                 onChange={(e) => setAdAccountId(e.target.value.replace(/\D/g, ''))}
                                 placeholder="1991968421347247"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-brand-primary focus:border-brand-primary"
                                 disabled={processing || !bmConfigured}
                                 required
                             />
@@ -203,7 +203,7 @@ export default function FacebookAdAccountModal({ show, onClose, customer: initia
                             {processing ? 'Linking…' : isLinked ? 'Reassign' : 'Link Account'}
                         </button>
                     </div>
-                    <p className="mt-1.5 text-xs text-gray-400">
+                    <p className="mt-1.5 text-xs text-gray-500">
                         Digits only — the platform will verify it has System User access before saving.
                     </p>
                 </form>

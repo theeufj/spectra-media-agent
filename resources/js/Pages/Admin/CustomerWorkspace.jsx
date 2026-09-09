@@ -54,7 +54,7 @@ export default function CustomerWorkspace({ auth }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Admin - Customer Workspace</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight" contained={false}>Admin - Customer Workspace</h2>}
         >
             <Head title={`Workspace - ${customer.business_name || customer.name}`} />
 
@@ -100,7 +100,7 @@ export default function CustomerWorkspace({ auth }) {
                         <StatTile label="Products" value={knowledge.products_total} />
                     </div>
 
-                    <p className="text-xs text-gray-400 flex items-center gap-4">
+                    <p className="text-xs text-gray-500 flex items-center gap-4">
                         <span className="inline-flex items-center gap-1.5"><StatusDot status="green" /> has data</span>
                         <span className="inline-flex items-center gap-1.5"><StatusDot status="orange" /> partial</span>
                         <span className="inline-flex items-center gap-1.5"><StatusDot status="red" /> empty</span>
@@ -163,7 +163,7 @@ export default function CustomerWorkspace({ auth }) {
                                     <Field label="Messaging themes">
                                         <BulletList items={brandGuideline.messaging_themes} />
                                     </Field>
-                                    <p className="text-xs text-gray-400">
+                                    <p className="text-xs text-gray-500">
                                         Extracted {brandGuideline.extracted_at ? new Date(brandGuideline.extracted_at).toLocaleString() : '—'}
                                     </p>
                                 </div>
@@ -288,13 +288,13 @@ export default function CustomerWorkspace({ auth }) {
                         <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.harvested}>Harvested Website Assets</SectionTitle></h2>
                         <p className="text-xs text-gray-500 mb-4">Latest {harvestedAssets.length} of {knowledge.harvested_total} pulled from the customer's own site. These feed AI generation when no explicit seeds exist.</p>
                         {harvestedAssets.length === 0 ? (
-                            <p className="text-sm text-gray-400">Nothing harvested — the site scan hasn't produced usable imagery, so generated creatives fall back to pure AI renders.</p>
+                            <p className="text-sm text-gray-500">Nothing harvested — the site scan hasn't produced usable imagery, so generated creatives fall back to pure AI renders.</p>
                         ) : (
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                                 {harvestedAssets.map((asset) => (
                                     <button key={asset.id} onClick={() => setLightbox(asset.cloudfront_url)} className="relative group text-left">
                                         <img src={asset.cloudfront_url} alt={asset.classification} className="w-full h-24 object-cover rounded border border-gray-200" />
-                                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">{asset.classification}</span>
+                                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs">{asset.classification}</span>
                                     </button>
                                 ))}
                             </div>
@@ -327,7 +327,7 @@ export default function CustomerWorkspace({ auth }) {
                         <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.keywords}>Keyword Research</SectionTitle></h2>
                         <p className="text-xs text-gray-500 mb-4">Latest {keywords.length} of {knowledge.keywords_total} — this is what the money bids on.</p>
                         {keywords.length === 0 && negativeKeywordLists.length === 0 && (
-                            <p className="text-sm text-gray-400">No keyword research yet — strategies rely solely on the keywords inside their own bidding plans.</p>
+                            <p className="text-sm text-gray-500">No keyword research yet — strategies rely solely on the keywords inside their own bidding plans.</p>
                         )}
                         {keywords.length > 0 && (
                                 <div className="overflow-x-auto">
@@ -369,13 +369,13 @@ export default function CustomerWorkspace({ auth }) {
                     {/* Personas */}
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.personas}>Personas</SectionTitle></h2>
-                        {personas.length === 0 && <p className="text-sm text-gray-400">No personas generated.</p>}
+                        {personas.length === 0 && <p className="text-sm text-gray-500">No personas generated.</p>}
                         <div className="grid md:grid-cols-2 gap-4">
                                 {personas.map((persona) => (
                                     <div key={persona.id} className={`border rounded-lg p-4 ${persona.is_active === false ? 'opacity-50 border-gray-100' : 'border-gray-200'}`}>
                                         <div className="flex items-center justify-between mb-1">
                                             <p className="font-medium text-gray-900">{persona.name}</p>
-                                            <span className="text-xs text-gray-400">{persona.source}</span>
+                                            <span className="text-xs text-gray-500">{persona.source}</span>
                                         </div>
                                         <p className="text-sm text-gray-600 mb-2">{persona.description}</p>
                                         {persona.pain_points?.length > 0 && (
@@ -392,7 +392,7 @@ export default function CustomerWorkspace({ auth }) {
                     {/* Creative briefs */}
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.briefs}>Creative Briefs</SectionTitle></h2>
-                        {creativeBriefs.length === 0 && <p className="text-sm text-gray-400">No creative briefs.</p>}
+                        {creativeBriefs.length === 0 && <p className="text-sm text-gray-500">No creative briefs.</p>}
                         <div className="space-y-2">
                             {creativeBriefs.map((brief) => (
                                 <Collapsible key={brief.id} label={`${brief.platform || '—'} · ${brief.brief_type || 'brief'} · ${brief.status}${brief.created_by_agent ? ` · by ${brief.created_by_agent}` : ''}`}>
@@ -405,12 +405,12 @@ export default function CustomerWorkspace({ auth }) {
                     {/* Proposals */}
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.proposals}>Proposals</SectionTitle></h2>
-                        {proposals.length === 0 && <p className="text-sm text-gray-400">No proposals.</p>}
+                        {proposals.length === 0 && <p className="text-sm text-gray-500">No proposals.</p>}
                         <div className="divide-y divide-gray-100 text-sm">
                                 {proposals.map((proposal) => (
                                     <div key={proposal.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
                                         <div>
-                                            <p className="font-medium text-gray-900">{proposal.client_name} <span className="text-gray-400 font-normal">· {proposal.industry}</span></p>
+                                            <p className="font-medium text-gray-900">{proposal.client_name} <span className="text-gray-500 font-normal">· {proposal.industry}</span></p>
                                             <p className="text-xs text-gray-500">{proposal.goals}</p>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
@@ -426,7 +426,7 @@ export default function CustomerWorkspace({ auth }) {
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.products}>Products</SectionTitle></h2>
                         <p className="text-xs text-gray-500 mb-4">Latest {products.length} of {knowledge.products_total} from the product feed.</p>
-                        {products.length === 0 && <p className="text-sm text-gray-400">No product feed connected.</p>}
+                        {products.length === 0 && <p className="text-sm text-gray-500">No product feed connected.</p>}
                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                                 {products.map((product) => (
                                     <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden">
@@ -448,7 +448,7 @@ export default function CustomerWorkspace({ auth }) {
                             <div className="grid md:grid-cols-2 gap-6 text-sm">
                                 <div>
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">SEO audits</p>
-                                    {seoAudits.length === 0 ? <p className="text-gray-400">None run.</p> : seoAudits.map((audit) => (
+                                    {seoAudits.length === 0 ? <p className="text-gray-500">None run.</p> : seoAudits.map((audit) => (
                                         <p key={audit.id} className="py-1 flex justify-between gap-2">
                                             <span className="truncate text-gray-700">{audit.url}</span>
                                             <span className={`font-semibold ${audit.score >= 70 ? 'text-green-600' : 'text-yellow-700'}`}>{audit.score}/100</span>
@@ -457,7 +457,7 @@ export default function CustomerWorkspace({ auth }) {
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Landing page audits</p>
-                                    {landingPageAudits.length === 0 ? <p className="text-gray-400">None run.</p> : landingPageAudits.map((audit) => (
+                                    {landingPageAudits.length === 0 ? <p className="text-gray-500">None run.</p> : landingPageAudits.map((audit) => (
                                         <p key={audit.id} className="py-1 flex justify-between gap-2">
                                             <span className="truncate text-gray-700">{audit.url}</span>
                                             <span className="text-gray-600">{audit.cta_count} CTAs{audit.message_match_score != null ? ` · match ${audit.message_match_score}` : ''}</span>
@@ -511,12 +511,12 @@ const StatTile = ({ label, value, warn = false }) => (
 const Field = ({ label, children }) => (
     <div>
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-        <div className="text-gray-800">{children || <span className="text-gray-400">—</span>}</div>
+        <div className="text-gray-800">{children || <span className="text-gray-500">—</span>}</div>
     </div>
 );
 
 const ChipList = ({ items, tone = 'gray' }) => {
-    if (!items?.length) return <span className="text-gray-400">—</span>;
+    if (!items?.length) return <span className="text-gray-500">—</span>;
     const cls = tone === 'red' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700';
 
     return (
@@ -529,7 +529,7 @@ const ChipList = ({ items, tone = 'gray' }) => {
 };
 
 const BulletList = ({ items }) => {
-    if (!items?.length) return <span className="text-gray-400">—</span>;
+    if (!items?.length) return <span className="text-gray-500">—</span>;
 
     return (
         <ul className="list-disc list-inside space-y-0.5 text-gray-800">
@@ -545,7 +545,7 @@ const Collapsible = ({ label, children }) => {
         <div className="border border-gray-100 rounded">
             <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 <span>{label}</span>
-                <span className="text-gray-400">{open ? '−' : '+'}</span>
+                <span className="text-gray-500">{open ? '−' : '+'}</span>
             </button>
             {open && <div className="px-3 pb-3 text-sm text-gray-700">{children}</div>}
         </div>
@@ -556,11 +556,11 @@ const ImageThumb = ({ img, onOpen }) => (
     <button onClick={() => onOpen(img.cloudfront_url)} className="relative group text-left">
         <img src={img.cloudfront_url} alt="" className={`w-full h-24 object-cover rounded border border-gray-200 ${img.is_active ? '' : 'opacity-40'}`} />
         <div className="absolute top-1 left-1 flex flex-col gap-0.5">
-            {img.is_seed && <span className="px-1.5 py-0.5 rounded bg-purple-600 text-white text-[10px]">seed</span>}
-            {img.should_deploy === false && !img.is_seed && img.is_active && <span className="px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px]">off</span>}
-            {(img.refinement_depth ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-600 text-white text-[10px]">edit {img.refinement_depth}</span>}
+            {img.is_seed && <span className="px-1.5 py-0.5 rounded bg-purple-600 text-white text-xs">seed</span>}
+            {img.should_deploy === false && !img.is_seed && img.is_active && <span className="px-1.5 py-0.5 rounded bg-gray-700 text-white text-xs">off</span>}
+            {(img.refinement_depth ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-600 text-white text-xs">edit {img.refinement_depth}</span>}
         </div>
-        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">{img.source || 'ai'}</span>
+        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs">{img.source || 'ai'}</span>
     </button>
 );
 
@@ -592,8 +592,8 @@ const MediaGrid = ({ images = [], videos = [], onOpen }) => {
                             <StatusChip value={vid.status} />
                             {vid.cloudfront_url
                                 ? <a href={vid.cloudfront_url} target="_blank" rel="noreferrer" className="text-brand-dark hover:underline">Watch video</a>
-                                : <span className="text-gray-400">no file yet</span>}
-                            {vid.youtube_video_id && <span className="text-xs text-gray-400">YT: {vid.youtube_video_id}</span>}
+                                : <span className="text-gray-500">no file yet</span>}
+                            {vid.youtube_video_id && <span className="text-xs text-gray-500">YT: {vid.youtube_video_id}</span>}
                         </li>
                     ))}
                 </ul>

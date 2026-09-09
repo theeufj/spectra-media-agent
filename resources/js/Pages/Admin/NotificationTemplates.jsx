@@ -32,7 +32,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Admin - Email Templates</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>Admin - Email Templates</h2>}
         >
             <Head title="Admin - Email Templates" />
 
@@ -63,7 +63,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                             <div className="lg:col-span-1 bg-white shadow rounded-lg overflow-hidden max-h-[75vh] overflow-y-auto">
                                 {Object.entries(grouped).map(([category, items]) => (
                                     <div key={category}>
-                                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 sticky top-0">
+                                        <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0">
                                             {category}
                                         </div>
                                         {items.map((t) => (
@@ -78,14 +78,14 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                                                     <span className="text-sm font-medium text-gray-800">{t.label}</span>
                                                     <span className="flex items-center gap-1">
                                                         {t.customized && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">edited</span>
+                                                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">edited</span>
                                                         )}
                                                         {!t.enabled && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">off</span>
+                                                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700">off</span>
                                                         )}
                                                     </span>
                                                 </div>
-                                                <div className="text-xs text-gray-400 mt-0.5">{RECIPIENT_LABELS[t.recipients]}</div>
+                                                <div className="text-xs text-gray-500 mt-0.5">{RECIPIENT_LABELS[t.recipients]}</div>
                                             </button>
                                         ))}
                                     </div>
@@ -206,7 +206,7 @@ function TemplateEditor({ template, recipientOptions }) {
                         placeholder={defaultBody ? `Default: ${defaultBody}` : 'Uses the built-in default copy when left blank.'}
                         className="w-full rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Leave blank to keep the built-in default copy.</p>
+                    <p className="text-xs text-gray-500 mt-1">Leave blank to keep the built-in default copy.</p>
                 </div>
 
                 {/* Preview */}

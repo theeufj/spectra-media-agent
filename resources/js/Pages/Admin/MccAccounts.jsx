@@ -58,7 +58,7 @@ function AccountForm({ account, onClose, isEdit }) {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            OAuth Refresh Token {isEdit && <span className="text-gray-400">(leave blank to keep current)</span>}
+                            OAuth Refresh Token {isEdit && <span className="text-gray-500">(leave blank to keep current)</span>}
                         </label>
                         <textarea
                             value={data.refresh_token}
@@ -151,7 +151,7 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                <h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>
                     Admin - MCC Accounts
                 </h2>
             }
@@ -200,7 +200,7 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
                                 {/* Account list */}
                                 {accounts.length === 0 && !usingEnvFallback ? (
                                     <div className="text-center py-12">
-                                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                         </svg>
                                         <h3 className="mt-2 text-sm font-medium text-gray-900">No MCC Accounts</h3>

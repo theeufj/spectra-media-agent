@@ -26,7 +26,7 @@ function ApiSection({ title, icon, description, data, renderRow }) {
                     {data.error}
                 </div>
             ) : data.accounts?.length === 0 ? (
-                <div className="px-5 py-4 text-sm text-gray-400 italic">No accessible accounts found for this Google login.</div>
+                <div className="px-5 py-4 text-sm text-gray-500 italic">No accessible accounts found for this Google login.</div>
             ) : (
                 <div className="divide-y divide-gray-50">
                     {data.accounts?.map((item, i) => (
@@ -73,7 +73,7 @@ export default function GoogleApiVerify({ account_name, googleAds, tagManager, a
         <AuthenticatedLayout>
             <Head title="Live API Access Verification" />
 
-            <div className="max-w-2xl mx-auto px-4 py-10">
+            <div className="max-w-2xl mx-auto py-10">
                 {/* Header */}
                 <div className="mb-8">
                     <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-4 ${allOk ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -96,7 +96,7 @@ export default function GoogleApiVerify({ account_name, googleAds, tagManager, a
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-900">Customer ID: {item.id}</p>
-                                    <p className="text-xs text-gray-400 font-mono">{item.resource_name}</p>
+                                    <p className="text-xs text-gray-500 font-mono">{item.resource_name}</p>
                                 </div>
                                 <div className="w-2 h-2 rounded-full bg-green-400" />
                             </div>
@@ -112,7 +112,7 @@ export default function GoogleApiVerify({ account_name, googleAds, tagManager, a
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                                    <p className="text-xs text-gray-400">Account ID: {item.id}</p>
+                                    <p className="text-xs text-gray-500">Account ID: {item.id}</p>
                                 </div>
                                 <div className="w-2 h-2 rounded-full bg-green-400" />
                             </div>
@@ -128,7 +128,7 @@ export default function GoogleApiVerify({ account_name, googleAds, tagManager, a
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                                    <p className="text-xs text-gray-400">{item.region && `Region: ${item.region} · `}Resource: {item.resource}</p>
+                                    <p className="text-xs text-gray-500">{item.region && `Region: ${item.region} · `}Resource: {item.resource}</p>
                                 </div>
                                 <div className="w-2 h-2 rounded-full bg-green-400" />
                             </div>

@@ -3,7 +3,7 @@ import { Head, router, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 function ScoreBadge({ score }) {
-    if (score === null || score === undefined) return <span className="text-xs text-gray-400">—</span>;
+    if (score === null || score === undefined) return <span className="text-xs text-gray-500">—</span>;
     const color = score >= 70 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
     return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${color}`}>{score}/100</span>;
 }
@@ -13,7 +13,7 @@ function UpgradePrompt() {
         <div className="bg-gradient-to-br from-brand-primary/10 to-orange-50 rounded-lg border border-brand-primary/30 p-6 text-center mb-6">
             <h3 className="text-lg font-semibold text-gray-900">Audit Limit Reached</h3>
             <p className="text-sm text-gray-600 mt-1">You've used all 3 free CRO audits. Upgrade to unlock unlimited audits.</p>
-            <p className="text-xs text-gray-400 mt-3">Available on Growth ($249/mo) and Agency plans</p>
+            <p className="text-xs text-gray-500 mt-3">Available on Growth ($249/mo) and Agency plans</p>
             <a href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
                 View Plans
             </a>
@@ -39,7 +39,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
         <AuthenticatedLayout>
             <Head title="Landing Page CRO Audits" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-6xl sm:">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
@@ -97,11 +97,11 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">URL</th>
-                                            <th className="px-6 py-3 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                                            <th className="px-6 py-3 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">Issues</th>
-                                            <th className="px-6 py-3 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">CTAs</th>
-                                            <th className="px-6 py-3 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">CTAs</th>
+                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -120,7 +120,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                                                     <span className="text-sm text-gray-600">{audit.cta_count ?? 0}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className="text-xs text-gray-400">{new Date(audit.created_at).toLocaleDateString()}</span>
+                                                    <span className="text-xs text-gray-500">{new Date(audit.created_at).toLocaleDateString()}</span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -131,14 +131,14 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                             <div className="px-6 py-12 text-center">
                                 <svg className="mx-auto h-10 w-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                                 <p className="mt-3 text-sm text-gray-500">No CRO audits yet. Enter a URL above to get started.</p>
-                                <p className="mt-1 text-xs text-gray-400">Audits also run automatically when you crawl pages via the Knowledge Base.</p>
+                                <p className="mt-1 text-xs text-gray-500">Audits also run automatically when you crawl pages via the Knowledge Base.</p>
                             </div>
                         )}
 
                         {/* Pagination */}
                         {audits.last_page > 1 && (
                             <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
-                                <span className="text-xs text-gray-400">Page {audits.current_page} of {audits.last_page}</span>
+                                <span className="text-xs text-gray-500">Page {audits.current_page} of {audits.last_page}</span>
                                 <div className="flex gap-2">
                                     {audits.prev_page_url && (
                                         <Link href={audits.prev_page_url} className="px-3 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50">Previous</Link>

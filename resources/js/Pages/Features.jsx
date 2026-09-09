@@ -70,7 +70,7 @@ export default function Features({ auth }) {
                                         <div key={platform} className="flex flex-col items-center text-center grayscale">
                                             <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gray-100">
                                                 <span className="absolute -top-1 -right-1 inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming Soon</span>
-                                                <svg className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                <svg className="h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                             </div>
                                             <p className="mt-4 font-semibold text-gray-900">{platform}</p>
                                         </div>
@@ -86,7 +86,7 @@ export default function Features({ auth }) {
                             <div className="mx-auto max-w-2xl lg:text-center mb-12">
                                 <p className="text-brand-primary/50 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
                                 <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
-                                <p className="mt-4 text-lg text-brand-primary/30">
+                                <p className="mt-4 text-lg text-white/80">
                                     Six AI specialists, each focused on a different part of your advertising, running around the clock.
                                 </p>
                             </div>
@@ -107,7 +107,7 @@ export default function Features({ auth }) {
                                             </div>
                                             <h3 className="text-lg font-bold text-white">{agent.name}</h3>
                                         </div>
-                                        <p className="text-brand-primary/30 text-sm leading-relaxed">{agent.desc}</p>
+                                        <p className="text-white/80 text-sm leading-relaxed">{agent.desc}</p>
                                         <div className="mt-4 pt-4 border-t border-white/10">
                                             <span className={`text-xs text-${agent.color}-300`}>Runs: {agent.freq}</span>
                                         </div>
@@ -169,7 +169,7 @@ export default function Features({ auth }) {
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 See All Features in Action
                             </h2>
-                            <p className="mt-6 text-xl text-brand-primary/20">
+                            <p className="mt-6 text-xl text-white/80">
                                 Sign up free and explore everything sitetospend has to offer—no credit card required.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">

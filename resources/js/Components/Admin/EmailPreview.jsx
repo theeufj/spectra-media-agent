@@ -84,7 +84,7 @@ export default function EmailPreview({ step, draft }) {
                 {error ? (
                     <p className="py-8 text-sm text-red-600">{error}</p>
                 ) : html === null ? (
-                    <p className="py-8 text-sm text-gray-400">Rendering…</p>
+                    <p className="py-8 text-sm text-gray-500">Rendering…</p>
                 ) : (
                     <iframe
                         title="Email preview"

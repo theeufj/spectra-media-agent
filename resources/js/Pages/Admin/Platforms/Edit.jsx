@@ -23,7 +23,7 @@ export default function Edit({ auth, platform }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-jet leading-tight">Edit Platform: {platform.name}</h2>}
+            header={<h2 className="font-semibold text-xl text-jet leading-tight" contained={false}>Edit Platform: {platform.name}</h2>}
         >
             <Head title={`Edit ${platform.name}`} />
 

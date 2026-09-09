@@ -72,7 +72,7 @@ export default function DeploymentDisabledModal({ show, onClose }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-blue-600 to-brand-dark text-base font-medium text-white hover:from-blue-700 hover:to-brand-darker focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm transition-all"
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-blue-600 to-brand-dark text-base font-medium text-white hover:from-blue-700 hover:to-brand-darker focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:w-auto sm:text-sm transition-all"
                         >
                             Got It
                         </button>

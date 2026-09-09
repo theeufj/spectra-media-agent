@@ -96,7 +96,7 @@ function ApiGroup({ group, grantedScopes }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                             ) : (
-                                <svg className="w-2.5 h-2.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <svg className="w-2.5 h-2.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             )}
@@ -118,7 +118,7 @@ export default function GoogleApiSuccess({ account_name, account_id, scopes, con
         <AuthenticatedLayout>
             <Head title="Google APIs Connected" />
 
-            <div className="max-w-2xl mx-auto px-4 py-10">
+            <div className="max-w-2xl mx-auto py-10">
                 {/* Hero status */}
                 <div className={`rounded-2xl px-6 py-8 text-center mb-8 ${allGranted ? 'bg-green-600' : 'bg-amber-500'}`}>
                     <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">

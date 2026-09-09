@@ -24,7 +24,7 @@ function KpiCard({ label, value, sub, color }) {
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
             <p className={`text-2xl font-bold mt-1 ${color || 'text-gray-900'}`}>{value}</p>
-            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
         </div>
     );
 }
@@ -69,7 +69,7 @@ function DailyChart({ data }) {
                                 <div className="bg-green-400 rounded-t" style={{ height: revH, width: 6 }} title={`Revenue: $${day.revenue}`} />
                             </div>
                             {i % Math.ceil(data.length / 10) === 0 && (
-                                <span className="text-[10px] text-gray-400 mt-1 rotate-[-45deg] origin-top-left whitespace-nowrap">{day.date.split('-').slice(1).join('/')}</span>
+                                <span className="text-xs text-gray-500 mt-1 rotate-[-45deg] origin-top-left whitespace-nowrap">{day.date.split('-').slice(1).join('/')}</span>
                             )}
                         </div>
                     );
@@ -232,7 +232,7 @@ export default function Dashboard({ auth }) {
             <Head title="Performance Dashboard" />
 
             <div className="py-6 sm:py-10">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:">
                     <SetupProgressNav />
 
                     {trackingStatus?.provisioned && !trackingStatus?.installed && (
@@ -362,7 +362,7 @@ export default function Dashboard({ auth }) {
                                             {Object.keys(displayPlatformData).length === 0 && !selectedCampaign && (
                                                 <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
                                                     <p className="text-gray-500 mb-2">No performance data found for the last {selectedDays} days.</p>
-                                                    <p className="text-sm text-gray-400">Data will appear once your campaigns start running.</p>
+                                                    <p className="text-sm text-gray-500">Data will appear once your campaigns start running.</p>
                                                 </div>
                                             )}
                                         </>
