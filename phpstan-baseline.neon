@@ -799,12 +799,6 @@ parameters:
 			path: app/Jobs/GenerateImage.php
 
 		-
-			message: '#^Strict comparison using \=\=\= between string and false will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Jobs/GenerateImage.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\:\:\$total_cost\.$#'
 			identifier: property.notFound
 			count: 1

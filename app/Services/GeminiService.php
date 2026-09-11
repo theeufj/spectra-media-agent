@@ -719,7 +719,7 @@ class GeminiService
     /**
      * Generates an image based on a prompt using a specified Gemini image generation model.
      */
-    public function generateImage(string $prompt, ?string $model = null, string $imageSize = '1K', array $context = []): ?array
+    public function generateImage(string $prompt, ?string $model = null, string $imageSize = '1K', array $context = [], string $aspectRatio = '1:1'): ?array
     {
         // config('ai.models.image') is the source of truth (env-overridable);
         // most callers pass nothing, and the old hardcoded default meant the
@@ -735,9 +735,11 @@ class GeminiService
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
                 // aspect_ratio must be explicit: 2.5 defaulted to square, but
-                // gemini-3.1-flash-image returns 1408x768 without it — and the
-                // whole collateral pipeline assumes 1:1 unless told otherwise.
-                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => '1:1'],
+                // gemini-3.1-flash-image returns 1408x768 without it. It is a
+                // parameter rather than a constant because the alternative —
+                // generating one square and centre-cropping it to landscape —
+                // discards 23.8% of the height off each edge.
+                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => $aspectRatio],
             ],
         ];
 
@@ -749,7 +751,7 @@ class GeminiService
     /**
      * Refines an existing image based on a new prompt and context images.
      */
-    public function refineImage(string $prompt, array $contextImages, ?string $model = null, string $imageSize = '1K', array $context = []): ?array
+    public function refineImage(string $prompt, array $contextImages, ?string $model = null, string $imageSize = '1K', array $context = [], string $aspectRatio = '1:1'): ?array
     {
         $model ??= config('ai.models.image');
         $parts = [['text' => $prompt]];
@@ -763,7 +765,7 @@ class GeminiService
             'contents' => [['role' => 'user', 'parts' => $parts]],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => '1:1'],
+                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => $aspectRatio],
                 'candidateCount' => 1,
             ],
         ];

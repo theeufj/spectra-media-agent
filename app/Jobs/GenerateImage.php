@@ -186,80 +186,55 @@ class GenerateImage implements ShouldQueue
                 $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext, $adText))->getPrompt();
                 Log::info('Image generation prompt:', ['prompt' => $imagePrompt]);
 
-                // Retry logic with exponential backoff
-                $maxRetries = 3;
-                $imageData = null;
+                // Each format is generated at its own aspect ratio.
+                //
+                // These used to be three centre-crops of a single square, and
+                // cover() discards 23.8% of the height off the top AND the
+                // bottom to reach 1200x628 — 47.7% of the picture. Measured,
+                // not estimated: a band drawn across the top 11.7% of a
+                // 1024x1024 source does not survive the landscape crop at all.
+                // It decapitated the headline and sliced the CTA card off the
+                // bottom of every landscape creative.
+                //
+                // A photograph survives that treatment. Artwork with type set
+                // into it does not, and the prompt asks for artwork with type
+                // set into it. Generated natively per aspect, the only trim
+                // left is the difference between the model's ratio and the
+                // exact pixel size: none for square, 8.3% for MREC, ~3.5% for
+                // 16:9 down to 1200x628.
+                $adFormats = [
+                    'square' => ['size' => [1024, 1024], 'aspect' => '1:1'],
+                    'landscape' => ['size' => [1200, 628], 'aspect' => '16:9'],
+                    'mrec' => ['size' => [300, 250], 'aspect' => '1:1'],
+                ];
 
-                for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
-                    if ($attempt > 1) {
-                        $waitTime = pow(2, $attempt - 1);
-                        Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
-                        sleep($waitTime);
+                $bases = [];
+                foreach (array_unique(array_column($adFormats, 'aspect')) as $aspect) {
+                    $generated = $this->generateAtAspect(
+                        $imagePrompt,
+                        $aspect,
+                        $seedContextImages,
+                        $creativeContext,
+                        $geminiService
+                    );
+
+                    if ($generated) {
+                        $bases[$aspect] = $generated;
                     }
-
-                    // Seeded generation stays on Gemini (reference-image
-                    // support). Fresh generation goes to the configured
-                    // provider — Grok via OpenRouter by default, chosen in the
-                    // 2026-08-24 shootout — with Gemini as automatic fallback.
-                    $imageData = null;
-                    $usedProvider = 'gemini';
-
-                    if (! empty($seedContextImages)) {
-                        // Say so out loud: auto-seeding from harvested assets
-                        // routes this customer onto Gemini even though
-                        // ai.image_provider says grok, and that used to leave
-                        // no trace in the logs or the cost table.
-                        Log::info('Generating image on Gemini with '.count($seedContextImages).' seed image(s) as reference', [
-                            'configured_provider' => config('ai.image_provider'),
-                            'reason' => 'reference images require Gemini',
-                        ]);
-                        $imageData = $geminiService->refineImage($imagePrompt, $seedContextImages, context: $creativeContext);
-                    } else {
-                        if (config('ai.image_provider') === 'grok') {
-                            $imageData = app(\App\Services\OpenRouterService::class)
-                                ->generateImage($imagePrompt, $creativeContext);
-
-                            if ($imageData) {
-                                $usedProvider = 'grok';
-                            } else {
-                                Log::warning('Grok image generation failed — falling back to Gemini.', [
-                                    'strategy_id' => $this->strategy->id,
-                                    'attempt' => $attempt,
-                                ]);
-                            }
-                        }
-
-                        $imageData ??= $geminiService->generateImage($imagePrompt, context: $creativeContext);
-                    }
-
-                    if ($imageData && isset($imageData['data']) && isset($imageData['mimeType'])) {
-                        Log::info("Successfully generated image on attempt {$attempt} via {$usedProvider}");
-                        break;
-                    }
-
-                    Log::warning("Failed to generate image data on attempt {$attempt}/{$maxRetries}");
                 }
 
-                if (! $imageData || ! isset($imageData['data']) || ! isset($imageData['mimeType'])) {
-                    Log::error("Failed to generate image after {$maxRetries} attempts for prompt index ".($index + 1));
+                if ($bases === []) {
+                    Log::error('Failed to generate any image for prompt index '.($index + 1));
 
                     continue;
                 }
 
-                $decodedImage = base64_decode($imageData['data']);
-                if ($decodedImage === false) {
-                    Log::warning('Failed to decode a base64 image candidate on attempt '.($index + 1));
-
-                    continue;
-                }
-
-                // Generate all ad sizes from the same raw image data
+                // Identical for every format — computed once per prompt.
                 $customer = $this->campaign->customer;
                 $user = $customer->users()->first();
                 $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active')
                     || $customer->subscription_status === 'active';
 
-                // Precompute tagline once (same for all sizes)
                 $brandName = $customer->name ?? '';
                 $tagline = null;
                 if ($isSubscribed && $brandGuidelines) {
@@ -273,16 +248,23 @@ class GenerateImage implements ShouldQueue
                     }
                 }
 
-                // Three sizes: square (social), landscape (display/link), MREC (display network)
-                $adSizes = [
-                    'square' => [1024, 1024],
-                    'landscape' => [1200, 628],
-                    'mrec' => [300, 250],
-                ];
+                foreach ($adFormats as $format => $spec) {
+                    [$targetW, $targetH] = $spec['size'];
 
-                $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
+                    // One aspect failing while the other succeeded still
+                    // yields a usable ad — cropped, as it was before, but
+                    // present rather than missing.
+                    $imageData = $bases[$spec['aspect']] ?? reset($bases);
 
-                foreach ($adSizes as $format => [$targetW, $targetH]) {
+                    $decodedImage = base64_decode($imageData['data'], true);
+                    if ($decodedImage === false) {
+                        Log::warning("Failed to decode the generated image for format {$format}");
+
+                        continue;
+                    }
+
+                    $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
+
                     try {
                         $img = Image::read($decodedImage);
                         $img->cover($targetW, $targetH);
@@ -370,6 +352,100 @@ class GenerateImage implements ShouldQueue
             Log::error("Error in GenerateImage job for Strategy ID {$this->strategy->id}: ".$e->getMessage());
             $this->fail($e);
         }
+    }
+
+    /**
+     * OpenRouter takes pixel dimensions where Gemini takes a ratio.
+     */
+    private const GROK_SIZES = [
+        '1:1' => '1024x1024',
+        '16:9' => '1344x768',
+    ];
+
+    /**
+     * One generated image at a given aspect ratio, with retries.
+     *
+     * Seeded generation stays on Gemini, which is the only provider here with
+     * reference-image support. Fresh generation goes to the configured
+     * provider — Grok via OpenRouter by default, chosen in the 2026-08-24
+     * shootout — with Gemini as the automatic fallback.
+     *
+     * @param  list<array{mime_type: string, data: string}>  $seedContextImages
+     * @param  array<string, mixed>  $creativeContext
+     * @return array{data: string, mimeType: string}|null
+     */
+    private function generateAtAspect(
+        string $imagePrompt,
+        string $aspect,
+        array $seedContextImages,
+        array $creativeContext,
+        GeminiService $geminiService,
+    ): ?array {
+        $maxRetries = 3;
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            if ($attempt > 1) {
+                $waitTime = pow(2, $attempt - 1);
+                Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
+                sleep($waitTime);
+            }
+
+            $imageData = null;
+            $usedProvider = 'gemini';
+
+            if (! empty($seedContextImages)) {
+                // Say so out loud: auto-seeding from harvested assets routes
+                // this customer onto Gemini even though ai.image_provider says
+                // grok, and that used to leave no trace in the logs or in the
+                // cost table.
+                Log::info('Generating image on Gemini with '.count($seedContextImages).' seed image(s) as reference', [
+                    'configured_provider' => config('ai.image_provider'),
+                    'reason' => 'reference images require Gemini',
+                    'aspect_ratio' => $aspect,
+                ]);
+
+                $imageData = $geminiService->refineImage(
+                    $imagePrompt,
+                    $seedContextImages,
+                    context: $creativeContext,
+                    aspectRatio: $aspect
+                );
+            } else {
+                if (config('ai.image_provider') === 'grok') {
+                    $imageData = app(\App\Services\OpenRouterService::class)->generateImage(
+                        $imagePrompt,
+                        $creativeContext,
+                        self::GROK_SIZES[$aspect] ?? self::GROK_SIZES['1:1']
+                    );
+
+                    if ($imageData) {
+                        $usedProvider = 'grok';
+                    } else {
+                        Log::warning('Grok image generation failed — falling back to Gemini.', [
+                            'strategy_id' => $this->strategy->id,
+                            'attempt' => $attempt,
+                            'aspect_ratio' => $aspect,
+                        ]);
+                    }
+                }
+
+                $imageData ??= $geminiService->generateImage(
+                    $imagePrompt,
+                    context: $creativeContext,
+                    aspectRatio: $aspect
+                );
+            }
+
+            if ($imageData && isset($imageData['data'], $imageData['mimeType'])) {
+                Log::info("Successfully generated {$aspect} image on attempt {$attempt} via {$usedProvider}");
+
+                return $imageData;
+            }
+
+            Log::warning("Failed to generate {$aspect} image data on attempt {$attempt}/{$maxRetries}");
+        }
+
+        return null;
     }
 
     /**

@@ -26,7 +26,7 @@ class OpenRouterService
      * Generate one image. Returns ['data' => base64, 'mimeType' => ...] to
      * match GeminiService::generateImage(), or null.
      */
-    public function generateImage(string $prompt, array $context = []): ?array
+    public function generateImage(string $prompt, array $context = [], string $size = '1024x1024'): ?array
     {
         if (! $this->isConfigured()) {
             return null;
@@ -40,7 +40,10 @@ class OpenRouterService
                 ->post(self::BASE.'/images/generations', [
                     'model' => $model,
                     'prompt' => $prompt,
-                    'size' => '1024x1024',
+                    // Requested at the target aspect rather than always square:
+                    // centre-cropping a square to 1200x628 loses 23.8% of the
+                    // height off each edge, which removes the headline.
+                    'size' => $size,
                 ]);
 
             if ($response->failed()) {

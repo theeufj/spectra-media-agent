@@ -132,10 +132,20 @@ class AdminMonitorService
     }
 
     /**
+     * Vocabulary belonging to a media plan or a design system rather than to a
+     * picture. Every one of these has been observed rendered into artwork as
+     * words, or as the fake interface it describes.
+     */
+    private const DESIGNER_BRIEF_WORDS = [
+        'responsive display', 'performance max', 'mrec', 'image extension',
+        'dashboard', 'infographic', 'screenshot', 'ui element', 'callout',
+    ];
+
+    /**
      * Reviews an image generation prompt for quality and safety.
      *
      * @param  string  $prompt  The image prompt to review.
-     * @return array An array containing the validation results.
+     * @return array{is_valid: bool, feedback: list<string>, warnings: list<string>}
      */
     public function reviewImagePrompt(string $prompt): array
     {
@@ -150,6 +160,14 @@ class AdminMonitorService
         }
 
         // Rule 2: Check for non-descriptive or negative keywords
+        //
+        // The length escape hatch makes this reachable only for short prompts,
+        // and GenerateImage already returns early on a short "N/A" strategy
+        // before it ever calls this — so in practice Rule 2 has never rejected
+        // a live prompt (real strategies run 290-470 characters). It is kept
+        // for the short-prompt case rather than widened: every strategy
+        // written before the imagery contract was fixed would trip a broader
+        // rule, and is_valid false makes the job throw.
         $negativeKeywords = Config::get('platform_rules.negative_keywords', []);
         foreach ($negativeKeywords as $word) {
             if (stripos($trimmedPrompt, $word) !== false) {
@@ -172,17 +190,52 @@ class AdminMonitorService
             }
         }
 
-        // Add more sophisticated checks here in the future (e.g., using a safety-check API)
+        /*
+         * Rule 4: drift detection, reported rather than enforced.
+         *
+         * `imagery_strategy` is written by the strategy agent and handed
+         * almost verbatim to an image model. When it arrives as a designer's
+         * brief — hex codes, ad-format names, instructions to draw an
+         * interface — what comes back has garbled labels and invented facts
+         * set in type on the artwork.
+         *
+         * These are warnings and not validation failures deliberately.
+         * is_valid false makes GenerateImage throw, and every strategy written
+         * before the imagery contract was fixed contains all three of these;
+         * enforcing here would convert a quality problem into a generation
+         * outage for existing campaigns. The point is to see the drift on the
+         * day it comes back, which nothing previously did.
+         */
+        $warnings = [];
+
+        if (preg_match('/#[0-9A-Fa-f]{6}\b/', $trimmedPrompt, $hex)) {
+            $warnings[] = "Contains the hex colour {$hex[0]}. An image model cannot sample a hex value, and may render the characters instead.";
+        }
+
+        foreach (self::DESIGNER_BRIEF_WORDS as $word) {
+            if (stripos($trimmedPrompt, $word) !== false) {
+                $warnings[] = "Reads as a designer's brief rather than a scene: '{$word}'.";
+            }
+        }
+
+        if ($warnings !== []) {
+            Log::warning('AdminMonitorService: imagery strategy reads as a design brief rather than a scene.', [
+                'prompt' => $trimmedPrompt,
+                'warnings' => $warnings,
+            ]);
+        }
 
         Log::info('Image prompt review completed.', [
             'prompt' => $prompt,
             'is_valid' => $isValid,
             'feedback' => $feedback,
+            'warnings' => $warnings,
         ]);
 
         return [
             'is_valid' => $isValid,
             'feedback' => $feedback,
+            'warnings' => $warnings,
         ];
     }
 

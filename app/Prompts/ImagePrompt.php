@@ -71,7 +71,7 @@ class ImagePrompt
                "Set one short headline from inside those markers, shortening if it helps the layout. Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
                "**COMPOSITION:**\n".
                "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
-               "- Keep the headline and any subject clear of the outer 15% on every side — this artwork is also cropped to landscape and to a small rectangle, and anything near an edge is lost\n".
+               "- Keep the headline and any subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
                "- Brand palette for backgrounds, panels and accents; generous negative space\n".
                "- Photorealistic subject matter integrated into the layout, not pasted onto it\n\n".
                "**HARD RULES:**\n".

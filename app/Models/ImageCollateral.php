@@ -92,6 +92,16 @@ class ImageCollateral extends Model
      * Check if a new image can be generated for the given campaign.
      * Free / unsubscribed users: max 4 images per campaign.
      */
+    /**
+     * Images per campaign on the free plan.
+     *
+     * Named because the limit is now enforced in two places — the controller
+     * refuses the request up front, the job keeps its check as a backstop —
+     * and a bare 4 in both is how two copies of a rule drift apart. It is also
+     * quoted to the user, who is owed the actual number.
+     */
+    public const FREE_TIER_LIMIT_PER_CAMPAIGN = 4;
+
     public static function canGenerateForCampaign(Campaign $campaign): bool
     {
         $user = $campaign->customer?->users()?->first();
@@ -105,6 +115,6 @@ class ImageCollateral extends Model
             return true;
         }
 
-        return static::where('campaign_id', $campaign->id)->count() < 4;
+        return static::where('campaign_id', $campaign->id)->count() < self::FREE_TIER_LIMIT_PER_CAMPAIGN;
     }
 }

@@ -44,6 +44,33 @@ class ImageCollateralController extends Controller
             ]);
         }
 
+        /*
+         * The per-campaign free-tier cap, checked here rather than only inside
+         * the job.
+         *
+         * There are two independent limits and this was the invisible one.
+         * GenerateImage opens by testing canGenerateForCampaign() and
+         * return()s when it fails, so the job completed successfully having
+         * produced nothing: no image, no exception, no failed_jobs row, an
+         * empty queue. The page had told the user "generation has been
+         * queued", so it span for five minutes and then reported that
+         * generation was "taking longer than expected" — a campaign at its
+         * limit is refused in about one second.
+         *
+         * And the quota was spent on it. recordUsage() ran below on a request
+         * the job was always going to decline, so a month's generation was
+         * consumed for an image that was never made.
+         */
+        if (! ImageCollateral::canGenerateForCampaign($campaign)) {
+            Log::info("Image generation refused — campaign limit reached for Campaign ID: {$campaign->id}");
+
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'This campaign has reached its limit of '.ImageCollateral::FREE_TIER_LIMIT_PER_CAMPAIGN
+                    .' images on the free plan. Subscribe to generate more, or start a new campaign.',
+            ]);
+        }
+
         // Dispatch the job to handle the image generation in the background.
         GenerateImage::dispatch($campaign, $strategy);
 
