@@ -81,6 +81,118 @@ class BrandGuideline extends Model
     /**
      * Get formatted color palette for prompts
      */
+    /**
+     * The palette written for an image model rather than for a designer.
+     *
+     * getFormattedColorPalette() emits raw hex — "#16365C, #111827" — which is
+     * the wrong currency twice over. An image model cannot honour a hex code
+     * (it has no way to sample an exact value), and every character of it is a
+     * glyph sitting in a prompt that the model may decide to draw. The stored
+     * `description` compounds it: the one on file for a real estate customer
+     * reads "reserve #C4A470 for refined accents and premium feature
+     * callouts", which is design-system vocabulary an image model happily
+     * renders as a fake UI full of labels.
+     *
+     * So this names the colours in plain English and says nothing about where
+     * to use them. "Deep navy and near-black" is a direction a model can act
+     * on; "#16365C for high-contrast statistic banners" is not.
+     */
+    public function getImageColorDirection(): string
+    {
+        $palette = $this->color_palette ?? [];
+
+        $names = collect(array_merge(
+            $palette['primary_colors'] ?? [],
+            $palette['secondary_colors'] ?? [],
+        ))
+            ->map(fn ($hex) => self::nameColour((string) $hex))
+            ->filter()
+            ->unique()
+            ->take(4)
+            ->implode(', ');
+
+        return $names === '' ? '' : "**Palette:** {$names}\n";
+    }
+
+    /**
+     * A plain-English name for a hex colour, from its hue and lightness.
+     *
+     * Deliberately coarse. The point is a word an image model has strong
+     * associations for — "deep navy", "warm gold" — not colorimetric accuracy.
+     */
+    public static function nameColour(string $hex): ?string
+    {
+        if (! preg_match('/^#?([0-9a-f]{6})$/i', trim($hex), $m)) {
+            return null;
+        }
+
+        [$r, $g, $b] = array_map(fn ($pair) => hexdec($pair) / 255, str_split($m[1], 2));
+
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $lightness = ($max + $min) / 2;
+        $delta = $max - $min;
+        $saturation = $delta == 0.0 ? 0.0 : $delta / (1 - abs(2 * $lightness - 1));
+
+        if ($lightness < 0.14) {
+            return 'near-black';
+        }
+        if ($lightness > 0.94) {
+            return 'white';
+        }
+
+        if ($saturation < 0.12) {
+            return match (true) {
+                $lightness < 0.3 => 'charcoal',
+                $lightness < 0.55 => 'slate grey',
+                $lightness < 0.8 => 'light grey',
+                default => 'off-white',
+            };
+        }
+
+        $hue = match (true) {
+            $max === $r => fmod(((($g - $b) / $delta) + 6), 6),
+            $max === $g => (($b - $r) / $delta) + 2,
+            default => (($r - $g) / $delta) + 4,
+        } * 60;
+
+        $family = match (true) {
+            $hue < 15 || $hue >= 345 => 'red',
+            // The warm band splits on saturation, not hue alone: #C4A470 and
+            // #FF4D00 are 19 degrees apart and nobody would call them the same
+            // colour. A muted warm mid-tone is gold; a vivid one is orange.
+            $hue < 50 => match (true) {
+                $lightness < 0.35 => 'brown',
+                $saturation < 0.6 => 'warm gold',
+                default => 'orange',
+            },
+            $hue < 70 => 'yellow',
+            $hue < 160 => 'green',
+            $hue < 200 => 'teal',
+            // Desaturated blues are the slate greys every dark UI palette is
+            // built from — calling them "blue" loses what they actually read as.
+            $hue < 255 => match (true) {
+                $saturation < 0.25 => 'slate blue',
+                $lightness < 0.35 => 'navy',
+                default => 'blue',
+            },
+            $hue < 290 => 'purple',
+            default => 'magenta',
+        };
+
+        // These already carry their own qualifier.
+        if (in_array($family, ['warm gold', 'brown', 'orange', 'slate blue'], true)) {
+            return $family;
+        }
+
+        return match (true) {
+            $family === 'navy' => 'deep navy',
+            $lightness < 0.32 => "deep {$family}",
+            $lightness > 0.72 => "pale {$family}",
+            default => $family,
+        };
+    }
+
     public function getFormattedColorPalette(): string
     {
         $palette = $this->color_palette;

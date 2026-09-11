@@ -116,6 +116,33 @@ The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
 Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
 
+**Imagery Strategy:**
+"imagery_strategy" is fed almost verbatim to an image-generation model. Write it as a
+description of a PICTURE, not as a brief for a human designer. That distinction is the
+whole job:
+
+- Describe the SUBJECT and the SCENE: who or what is in frame, where, doing what, in what
+  light and mood. If a strategy cannot name a subject, it is not an imagery strategy.
+- Write plain visual English. NO hex codes (an image model cannot honour "#1e3a5f" — say
+  "deep navy"), NO ad-format names ("Responsive Display Ads", "MREC", "carousel"), NO
+  marketing abstractions ("authoritative visual hierarchy", "trust badges", "social
+  proof"), and NO instructions about text, headlines, logos or calls-to-action — those are
+  composed separately from the approved ad copy.
+- Never ask for a screenshot, dashboard, app window, chart or any interface with readable
+  labels. Image models garble small text, and a fake UI full of invented words is the most
+  common way a generated ad becomes unusable. A device in shot is fine; its screen must be
+  describable as simple shapes and colour.
+- Say what to avoid in positive terms. "Eschewing generic stock photography" tells the
+  model to draw stock photography; "a specific, lived-in room with real clutter" does not.
+- One or two sentences. A long strategy produces a crowded, garbled image.
+
+Good: "A letting agent in her thirties standing in the bright front room of a terraced
+house, phone in hand, warm afternoon light through a bay window, deep navy and warm gold
+in the furnishings."
+Bad: "For Responsive Display Ads, utilize deep navy (#1E3A5F) backgrounds to establish an
+authoritative visual hierarchy, paired with crisp white typography and warm gold trust
+badges, highlighting clean platform interfaces."
+
 **Targeting Configuration:**
 You MUST include a "targeting" object for each strategy that defines the audience targeting.
 The "targeting" object should have the following keys:
@@ -180,7 +207,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     {
       "platform": "Facebook Ads",
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
-      "imagery_strategy": "Use bright, eye-catching images of people enjoying the product...",
+      "imagery_strategy": "Two friends laughing over coffee at a sunlit kitchen table, the product open between them, shot from across the table in soft morning light.",
       "video_strategy": "Create short, engaging video clips...",
       "generate_video": true,
       "bidding_strategy": {
@@ -211,7 +238,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     {
       "platform": "Google Ads (SEM)",
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
-      "imagery_strategy": "For Responsive Display Ads, use high-contrast infographics...",
+      "imagery_strategy": "A tradesperson in a van at the kerbside checking a phone before a job, early light, tools visible behind the seat, warm and unstaged.",
       "video_strategy": "For Search campaigns: N/A — text ads only.",
       "generate_video": false,
       "bidding_strategy": {

@@ -18,6 +18,20 @@ class CreativePromptSettingTest extends TestCase
 {
     use DatabaseTransactions;
 
+    /**
+     * A marker for "the built-in default is the template in force".
+     *
+     * This was the literal heading 'DESIGN REQUIREMENTS', which made a test
+     * about override precedence fail the moment the template's prose was
+     * reworded — and the template is prose whose whole job is to be tuned.
+     * Taking the opening line from the default itself asserts the same thing
+     * without pinning a single word of it.
+     */
+    private static function defaultOpening(): string
+    {
+        return strtok(ImagePrompt::defaultTemplate(), "\n");
+    }
+
     private function admin(): User
     {
         $role = Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin']));
@@ -32,7 +46,7 @@ class CreativePromptSettingTest extends TestCase
         $prompt = (new ImagePrompt('Show boots in workshop light.'))->getPrompt();
 
         $this->assertStringContainsString('Show boots in workshop light.', $prompt);
-        $this->assertStringContainsString('DESIGN REQUIREMENTS', $prompt);
+        $this->assertStringContainsString(self::defaultOpening(), $prompt);
         $this->assertStringNotContainsString('{{creative_strategy}}', $prompt);
     }
 
@@ -44,7 +58,7 @@ class CreativePromptSettingTest extends TestCase
 
         $this->assertStringContainsString('Cinematic photography only.', $prompt);
         $this->assertStringContainsString('Show boots.', $prompt);
-        $this->assertStringNotContainsString('DESIGN REQUIREMENTS', $prompt);
+        $this->assertStringNotContainsString(self::defaultOpening(), $prompt);
     }
 
     public function test_admin_can_save_and_reset_the_template_from_settings(): void
