@@ -41,7 +41,11 @@ describe('attribution pages', () => {
     it('renders the shared report under the analytics header', () => {
         const { getByText } = render(<AnalyticsAttribution {...shared} />);
 
-        expect(getByText('← Back to Analytics')).toBeInTheDocument();
+        // The back link used to say Analytics and point at analytics.index,
+        // which redirects to the dashboard. Both now say dashboard.
+        const back = getByText('← Back to dashboard');
+        expect(back).toBeInTheDocument();
+        expect(back.getAttribute('href')).toContain('dashboard');
         expect(getByText('Total Conversions')).toBeInTheDocument();
         expect(getByText('Channel Attribution by Model')).toBeInTheDocument();
         expect(getByText('Side-by-Side Model Comparison')).toBeInTheDocument();

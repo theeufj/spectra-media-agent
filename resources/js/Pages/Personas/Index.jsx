@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { UsersIcon, SparklesIcon } from '@heroicons/react/24/outline';
 
 function PersonaCard({ persona, onToggle, onDelete }) {
     const tone = persona.tone_adjustments || {};
@@ -68,8 +69,10 @@ export default function Index({ personas, campaigns }) {
         pain_points: [''], tone_adjustments: { formality: 'balanced', urgency: 'medium', emotion: 'balanced' },
     });
 
+    // Called both as a form onSubmit and straight from the empty-state button,
+    // which has no event to cancel.
     const handleGenerate = (e) => {
-        e.preventDefault();
+        e?.preventDefault?.();
         generateForm.post(route('personas.generate'), { preserveScroll: true });
     };
 
@@ -96,7 +99,7 @@ export default function Index({ personas, campaigns }) {
         <AuthenticatedLayout>
             <Head title="Audience Personas" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>
@@ -206,8 +209,42 @@ export default function Index({ personas, campaigns }) {
 
                     {/* Persona Cards */}
                     {personas.length === 0 ? (
-                        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-                            <p className="text-gray-500">No personas yet. Generate some with AI or create manually.</p>
+                        /*
+                         * Said "Generate some with AI or create manually" and
+                         * then offered neither — both controls are above it,
+                         * one of them inside a panel the empty state does not
+                         * point at. An empty state that names an action should
+                         * be the thing you click. It also now says what a
+                         * persona is for, because the page's own subtitle is
+                         * the only other place that explains it and a first-time
+                         * visitor is reading this box, not the subtitle.
+                         */
+                        <div className="rounded-lg border border-gray-200 bg-white px-6 py-12 text-center">
+                            <UsersIcon className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
+                            <h2 className="mt-4 text-sm font-medium text-gray-900">No personas yet</h2>
+                            <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
+                                A persona is who a set of ads is written for — their pain points and the
+                                tone that lands with them. Campaigns use them to vary ad copy instead of
+                                showing everyone the same words.
+                            </p>
+                            <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={handleGenerate}
+                                    disabled={generateForm.processing}
+                                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
+                                >
+                                    <SparklesIcon className="h-4 w-4" aria-hidden="true" />
+                                    {generateForm.processing ? 'Generating…' : 'Generate 4 with AI'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreate(true)}
+                                    className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                                >
+                                    Write one myself
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

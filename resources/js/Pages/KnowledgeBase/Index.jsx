@@ -19,6 +19,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
 
     // Extract data from paginated response
     const knowledgeBases = paginatedData?.data || [];
+    const hasSources = knowledgeBases.length > 0;
     const pagination = {
         current_page: paginatedData?.current_page || 1,
         last_page: paginatedData?.last_page || 1,
@@ -170,9 +171,17 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
-                    {/* Search Section */}
-                    <div className="mb-8">
+                <div className="max-w-7xl mx-auto">
+                    {/*
+                        Search Section.
+                        
+                        A new account saw "Search Your Knowledge Base" above a
+                        box saying the knowledge base is empty — the page's first
+                        and largest control searched nothing, and the one action
+                        that mattered sat below the fold under it. Hidden until
+                        there is something to find.
+                    */}
+                    <div className={`mb-8 ${hasSources ? '' : 'hidden'}`}>
                         <form onSubmit={handleSearch} className="bg-white overflow-hidden shadow-sm rounded-xl p-6 border border-gray-100">
                             <div>
                                 <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
@@ -407,7 +416,9 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No sources yet</h3>
                                 <p className="text-sm text-gray-500 mb-8 max-w-sm mx-auto">
-                                    Add a website, PDF, or text document to start building your knowledge base.
+                                    Whatever you add here is what the AI knows about your business when it
+                                    writes your ads — your site, a product PDF, a page of notes. The more it
+                                    has, the less generic the copy.
                                 </p>
                                 <Link
                                     href={route('knowledge-base.create')}

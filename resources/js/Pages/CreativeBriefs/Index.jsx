@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { LightBulbIcon } from '@heroicons/react/24/outline';
 
 const decodePaginationLabel = (html) =>
     html
@@ -155,6 +156,20 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
         router.post(route('creative-briefs.dismiss', id), {}, { preserveScroll: true });
     }
 
+    /*
+     * An account that has never had a brief showed five tabs reading 0, 0, 0, 0
+     * and an "All" tab, above the words "No briefs found". Five ways to filter
+     * nothing, and "found" reads as a search that failed — as if the briefs
+     * exist and the filter is wrong.
+     *
+     * The two states are different and now say different things: nothing has
+     * ever arrived (hide the filter, explain where briefs come from), versus
+     * this particular tab is empty (keep the filter, offer the one that isn't).
+     */
+    const totalBriefs = ['pending', 'in_review', 'actioned', 'dismissed']
+        .reduce((sum, key) => sum + (counts[key] ?? 0), 0);
+    const neverHadAny = totalBriefs === 0;
+
     return (
         <AuthenticatedLayout>
             <Head title="Creative Briefs" />
@@ -173,8 +188,8 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
                     </div>
                 )}
 
-                {/* Status tabs */}
-                <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
+                {/* Status tabs — pointless before the first brief exists. */}
+                <div className={`flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto ${neverHadAny ? 'hidden' : ''}`}>
                     {tabs.map(tab => (
                         <button
                             key={tab.key}
@@ -198,9 +213,34 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
                 </div>
 
                 {briefs.data.length === 0 ? (
-                    <div className="text-center py-16 text-gray-500">
-                        <p className="text-lg font-medium">No briefs found</p>
-                        <p className="text-sm mt-1">Briefs are generated automatically by your campaign agents.</p>
+                    <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center">
+                        <LightBulbIcon className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
+                        {neverHadAny ? (
+                            <>
+                                <h2 className="mt-4 text-sm font-medium text-gray-900">No briefs yet</h2>
+                                <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
+                                    When a campaign has been running long enough to show which creative is
+                                    working, the agents write up what to try next and it lands here. Nothing
+                                    to do in the meantime — this fills itself in.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <h2 className="mt-4 text-sm font-medium text-gray-900">
+                                    Nothing {tabs.find(t => t.key === activeStatus)?.label.toLowerCase() ?? 'here'}
+                                </h2>
+                                <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
+                                    You have {totalBriefs} brief{totalBriefs === 1 ? '' : 's'} under the other tabs.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => switchTab('all')}
+                                    className="mt-6 inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                                >
+                                    Show all briefs
+                                </button>
+                            </>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4">

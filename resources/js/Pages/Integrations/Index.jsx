@@ -87,8 +87,18 @@ function ConnectForm({ provider, onClose }) {
 export default function Index({ integrations = [], conversionStats, availableProviders = [] }) {
     const currency = useCurrency();
     const [connectingProvider, setConnectingProvider] = useState(null);
-    const connectedIds = integrations.filter(i => i.status !== 'disconnected').map(i => i.provider);
+    const connected = integrations.filter(i => i.status !== 'disconnected');
+    const connectedIds = connected.map(i => i.provider);
     const unconnected = availableProviders.filter(p => !connectedIds.includes(p.id));
+
+    /*
+     * Before a CRM is connected there is nothing to count, and the page opened
+     * with four cards reading 0, 0, 0 and $0.00 plus a "View Conversions" link
+     * to an empty table. Four zeros read as a broken integration rather than an
+     * absent one. The stats appear with the first connection; until then the
+     * page is just the thing you came to do.
+     */
+    const hasAnything = connected.length > 0 || (conversionStats?.total ?? 0) > 0;
 
     return (
         <AuthenticatedLayout>
@@ -100,26 +110,38 @@ export default function Index({ integrations = [], conversionStats, availablePro
                             <h1 className="text-2xl font-bold text-gray-900">CRM Integrations</h1>
                             <p className="mt-1 text-sm text-gray-500">Connect your CRM to sync offline conversions back to ad platforms.</p>
                         </div>
-                        <a href={route('integrations.conversions')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">View Conversions</a>
+                        {hasAnything && (
+                            <a href={route('integrations.conversions')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">View Conversions</a>
+                        )}
                     </div>
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <StatCard label="Total Conversions" value={conversionStats?.total || 0} />
-                        <StatCard label="Pending Upload" value={conversionStats?.pending || 0} />
-                        <StatCard label="Uploaded" value={conversionStats?.uploaded || 0} />
-                        <StatCard label="Total Value" value={money(conversionStats?.total_value || 0, currency)} />
-                    </div>
+                    {/* Stats — only once there is something to count. */}
+                    {hasAnything && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <StatCard label="Total Conversions" value={count(conversionStats?.total || 0)} />
+                            <StatCard label="Pending Upload" value={count(conversionStats?.pending || 0)} />
+                            <StatCard label="Uploaded" value={count(conversionStats?.uploaded || 0)} />
+                            <StatCard label="Total Value" value={money(conversionStats?.total_value || 0, currency)} />
+                        </div>
+                    )}
+
+                    {!hasAnything && (
+                        <p className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                            When a lead from your ads becomes a real sale in your CRM, connecting it here
+                            sends that back to Google and Facebook — so they optimise towards the clicks
+                            that actually make you money, not just the ones that fill in a form.
+                        </p>
+                    )}
 
                     {/* Connect Form */}
                     {connectingProvider && <ConnectForm provider={connectingProvider} onClose={() => setConnectingProvider(null)} />}
 
                     {/* Connected Integrations */}
-                    {integrations.filter(i => i.status !== 'disconnected').length > 0 && (
+                    {connected.length > 0 && (
                         <div className="mb-6">
                             <h2 className="text-sm font-semibold text-gray-700 mb-3">Connected</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {integrations.filter(i => i.status !== 'disconnected').map(i => <IntegrationCard key={i.id} integration={i} />)}
+                                {connected.map(i => <IntegrationCard key={i.id} integration={i} />)}
                             </div>
                         </div>
                     )}
