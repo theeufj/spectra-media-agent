@@ -827,8 +827,20 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 |--------------------------------------------------------------------------
 | Google API OAuth (for API verification / screen recording)
 |--------------------------------------------------------------------------
+|
+| Admin-only, and it has to be.
+|
+| This is the flow Spectra walks Google through when submitting the app for API
+| verification. It requests the `adwords` scope and writes a per-user Connection
+| row holding the resulting tokens — which is a per-customer OAuth flow, the one
+| thing the management-account rule in CLAUDE.md forbids outright. It sat behind
+| `auth` alone under a /settings/ path, so any signed-in customer could reach it
+| and hand us Google Ads access we must not hold.
+|
+| Nothing in the product links here; it is reached by typing the URL, which is
+| what an admin doing a verification recording does.
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/settings/google-api', [App\Http\Controllers\GoogleApiOAuthController::class, 'show'])->name('google-api.show');
     Route::get('/settings/google-api/connect', [App\Http\Controllers\GoogleApiOAuthController::class, 'redirect'])->name('google-api.redirect');
     Route::get('/settings/google-api/callback', [App\Http\Controllers\GoogleApiOAuthController::class, 'callback'])->name('google-api.callback');
@@ -841,8 +853,13 @@ Route::middleware('auth')->group(function () {
 |--------------------------------------------------------------------------
 | Facebook API OAuth (for API verification / screen recording)
 |--------------------------------------------------------------------------
+|
+| Admin-only, for the same reason as the Google group above: it asks for
+| `ads_management` and `business_management` and stores the token on a per-user
+| Connection row, which is the per-customer OAuth pattern the management-account
+| rule forbids. This one also exposes a POST that creates a real test campaign.
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/settings/facebook-api', [App\Http\Controllers\FacebookApiOAuthController::class, 'show'])->name('facebook-api.show');
     Route::get('/settings/facebook-api/connect', [App\Http\Controllers\FacebookApiOAuthController::class, 'redirect'])->name('facebook-api.redirect');
     Route::get('/settings/facebook-api/callback', [App\Http\Controllers\FacebookApiOAuthController::class, 'callback'])->name('facebook-api.callback');

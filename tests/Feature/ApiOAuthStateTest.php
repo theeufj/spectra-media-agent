@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Connection;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -32,9 +33,23 @@ class ApiOAuthStateTest extends TestCase
         ]);
     }
 
+    /**
+     * Both connect flows are admin-only — they request `adwords` /
+     * `ads_management` and write a per-user token, which no customer may do.
+     * What these tests are about is the state round-trip, not who may start it,
+     * so they simply act as someone allowed through the door.
+     */
+    private function admin(): User
+    {
+        $user = User::factory()->create();
+        $user->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+
+        return $user;
+    }
+
     public function test_the_google_connect_redirect_issues_a_state_parameter(): void
     {
-        $response = $this->actingAs(User::factory()->create())
+        $response = $this->actingAs($this->admin())
             ->get(route('google-api.redirect'));
 
         $response->assertRedirect();
@@ -48,7 +63,7 @@ class ApiOAuthStateTest extends TestCase
 
     public function test_the_facebook_connect_redirect_issues_a_state_parameter(): void
     {
-        $response = $this->actingAs(User::factory()->create())
+        $response = $this->actingAs($this->admin())
             ->get(route('facebook-api.redirect'));
 
         $response->assertRedirect();
@@ -62,7 +77,11 @@ class ApiOAuthStateTest extends TestCase
 
     public function test_a_google_callback_the_user_never_started_binds_nothing(): void
     {
-        $user = User::factory()->create();
+        // An admin, deliberately. A plain user is now refused by the route's
+        // own middleware, and a test that passes because of that would keep
+        // passing with the state check deleted — which is the thing it exists
+        // to hold.
+        $user = $this->admin();
 
         // No `state` in the session: this request did not come from our own
         // redirect. Socialite refuses before it will exchange the code, so
@@ -77,7 +96,7 @@ class ApiOAuthStateTest extends TestCase
 
     public function test_a_facebook_callback_the_user_never_started_binds_nothing(): void
     {
-        $user = User::factory()->create();
+        $user = $this->admin();
 
         $this->actingAs($user)->get(route('facebook-api.callback', [
             'code' => 'attacker-minted-code',
