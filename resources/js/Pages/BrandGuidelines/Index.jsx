@@ -168,25 +168,6 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         baselineUpdatedAt={extractionBaseline.current}
                         onSettled={() => setIsExtracting(false)}
                     />
-                    {/* Sign-off: the first launch is gated on this confirmation,
-                        so the ask is explicit rather than buried in a toolbar. */}
-                    {!brandGuideline.user_verified && canEdit && (
-                        <div className="mb-6 rounded-lg border-2 border-brand-primary bg-white p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm">
-                            <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900">This is the brand profile your ads will be written from</p>
-                                <p className="text-sm text-gray-600 mt-0.5">
-                                    Look it over and fix anything we got wrong — then confirm it to move on to your first campaign.
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => router.post(route('brand-guidelines.verify', brandGuideline.id), { continue: true })}
-                                className="flex-shrink-0 px-6 py-3 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold"
-                            >
-                                Confirm & continue →
-                            </button>
-                        </div>
-                    )}
-                    {/* Header */}
                     {/*
                         Lead with the doubt, not the answer.
 
@@ -220,6 +201,29 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         </div>
                     )}
 
+                    {/* Sign-off: the first launch is gated on this confirmation,
+                        so the ask is explicit rather than buried in a toolbar. */}
+                    {!brandGuideline.user_verified && canEdit && (
+                        <div className="mb-6 rounded-lg border-2 border-brand-primary bg-white p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900">This is the brand profile your ads will be written from</p>
+                                <p className="text-sm text-gray-600 mt-0.5">
+                                    {/* Asking for a confident yes directly under a panel doubting
+                                        the source read as though we had not noticed. */}
+                                    {brandGuideline.extraction_warning
+                                        ? 'Check the address above first. If it is right, correct anything we got wrong here and confirm.'
+                                        : 'Look it over and fix anything we got wrong — then confirm it to move on to your first campaign.'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => router.post(route('brand-guidelines.verify', brandGuideline.id), { continue: true })}
+                                className="flex-shrink-0 px-6 py-3 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold"
+                            >
+                                Confirm & continue →
+                            </button>
+                        </div>
+                    )}
+                    {/* Header */}
                     <div className="mb-8">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                             <div className="min-w-0">
@@ -275,7 +279,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         )}
                                         <a
                                             href={route('brand-guidelines.export-pdf')}
-                                            className="inline-flex items-center px-4 py-2 bg-purple-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-purple-700 focus:bg-purple-700 active:bg-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150"
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -357,9 +361,18 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         <div className="space-y-6">
                                             <h2 className="text-2xl font-bold text-gray-900">Overview</h2>
                                             
-                                            {/* Quality Score */}
+                                            {/*
+                                                How much readable text the site gave us.
+
+                                                This announced "Excellent extraction quality!" at 94
+                                                for a parked domain, directly under a banner saying
+                                                the page may not be the customer's — the page
+                                                arguing with itself, with the reassuring half in
+                                                larger type. It says what it measures now, and
+                                                defers to the warning when there is one.
+                                            */}
                                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                                <h3 className="text-sm font-semibold text-blue-900 mb-2">Quality Score</h3>
+                                                <h3 className="text-sm font-semibold text-blue-900 mb-2">How much we could read</h3>
                                                 <div className="flex items-center">
                                                     <div className="flex-1 bg-gray-200 rounded-full h-4 mr-4">
                                                         <div
@@ -367,12 +380,16 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             style={{ width: `${brandGuideline.extraction_quality_score}%` }}
                                                         ></div>
                                                     </div>
-                                                    <span className="text-2xl font-bold text-blue-900">{brandGuideline.extraction_quality_score}</span>
+                                                    <span className="text-2xl font-bold text-blue-900">{brandGuideline.extraction_quality_score}%</span>
                                                 </div>
                                                 <p className="text-xs text-blue-700 mt-2">
-                                                    {brandGuideline.extraction_quality_score >= 80 && 'Excellent extraction quality!'}
-                                                    {brandGuideline.extraction_quality_score >= 60 && brandGuideline.extraction_quality_score < 80 && 'Good extraction quality. Consider reviewing and refining.'}
-                                                    {brandGuideline.extraction_quality_score < 60 && 'Low extraction quality. Manual review recommended.'}
+                                                    {brandGuideline.extraction_warning
+                                                        ? 'This measures how much usable text the page gave us, not whether it was the right page — see the note above.'
+                                                        : <>
+                                                            {brandGuideline.extraction_quality_score >= 80 && 'Your site gave us plenty to work with.'}
+                                                            {brandGuideline.extraction_quality_score >= 60 && brandGuideline.extraction_quality_score < 80 && 'Enough to work with, though more detail on your site would sharpen the ads.'}
+                                                            {brandGuideline.extraction_quality_score < 60 && 'Not much to go on — worth reading the sections below closely.'}
+                                                        </>}
                                                 </p>
                                             </div>
 
