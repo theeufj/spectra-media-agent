@@ -38,6 +38,33 @@ const CAMPAIGN_STATUS_STYLES = {
     ended: 'bg-gray-100 text-gray-600',
 };
 
+/**
+ * The badge must not contradict the rows underneath it.
+ *
+ * `campaigns.status` is one of three status fields and it loses arguments: it
+ * syncs from `platform_status`, and the hourly policy-check job writes the
+ * column back, so a campaign whose strategies are live on Google can sit at
+ * 'draft' until something re-syncs it. The row rendered "Draft" directly above
+ * a deployed strategy offering "Review creative".
+ *
+ * This does not fix that — the two writers still disagree, and that is a
+ * server-side problem worth its own change. What it does is stop the page
+ * stating something it can see is false: when a strategy has been deployed, the
+ * badge says so rather than repeating a column that has fallen behind.
+ */
+function badgeFor(campaign) {
+    const deployed = (campaign.strategies ?? []).some(hasDeployed);
+
+    if (deployed && (campaign.status === 'draft' || campaign.status === 'pending_admin_deployment')) {
+        return { label: 'Live', style: CAMPAIGN_STATUS_STYLES.active };
+    }
+
+    return {
+        label: CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status,
+        style: CAMPAIGN_STATUS_STYLES[campaign.status] ?? 'bg-gray-100 text-gray-800',
+    };
+}
+
 export default function Index({ auth, campaigns = [] }) {
     const currency = useCurrency();
     /*
@@ -118,10 +145,8 @@ export default function Index({ auth, campaigns = [] }) {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 ml-8 sm:ml-0">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                                CAMPAIGN_STATUS_STYLES[campaign.status] ?? 'bg-gray-100 text-gray-800'
-                                            }`}>
-                                                {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badgeFor(campaign).style}`}>
+                                                {badgeFor(campaign).label}
                                             </span>
                                             <span className="text-sm font-semibold text-brand-dark px-3 py-1 rounded" style={{ backgroundColor: brandTint(10) }}>{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
                                         </div>

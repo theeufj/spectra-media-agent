@@ -569,7 +569,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             </button>
                             <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
-                                className="px-2 py-2 bg-green-700 text-white rounded-r-lg hover:bg-green-800 transition border-l border-green-500"
+                                className="px-2 py-2 bg-brand-dark text-white rounded-r-lg hover:bg-brand-darker transition border-l border-white/30"
                                 aria-label="Deploy individual platform"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -749,7 +749,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             className="mt-4 px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
                                             {generatingAdCopy && (
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
@@ -873,7 +873,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 className="px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingImage && (
-                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                     </svg>
@@ -881,7 +881,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 {generatingImage ? 'Generating...' : '✨ Generate Image'}
                                             </button>
 
-                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-blue-400 hover:text-blue-600 cursor-pointer transition flex items-center gap-2 ${uploadingImages ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-brand-dark hover:text-brand-darker cursor-pointer transition flex items-center gap-2 ${uploadingImages ? 'opacity-50 pointer-events-none' : ''}`}>
                                                 {uploadingImages ? (
                                                     <>
                                                         <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -934,7 +934,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     <button
                                                         onClick={handleHarvest}
                                                         disabled={harvestingInProgress}
-                                                        className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 font-medium transition"
+                                                        className="text-xs px-3 py-1.5 bg-brand-dark text-white rounded-md hover:bg-brand-darker disabled:opacity-50 font-medium transition"
                                                     >
                                                         {harvestingInProgress ? 'Harvesting...' : harvestedAssetCount > 0 ? '🔄 Re-harvest' : '🌐 Harvest from Website'}
                                                     </button>
@@ -1120,7 +1120,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         href={image.cloudfront_url}
                                                                         download
                                                                         onClick={(e) => e.stopPropagation()}
-                                                                        className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                                                                        className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                     >
                                                                         Download
                                                                     </a>
@@ -1171,7 +1171,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingVideo && (
-                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                     </svg>

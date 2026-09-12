@@ -28,10 +28,19 @@ const GRID_COLUMNS = {
  * page said "Contact us". One of them was always going to be missed.
  */
 export function PlanPrice({ plan }) {
+    /*
+     * Explicitly US$, everywhere.
+     *
+     * A bare "$99" sat on the same page as a "US$999" setup fee, under a browser
+     * title reading "from A$250/mo" — three conventions for the same kind of
+     * number, on the page where a customer decides what this costs. Most
+     * customers here are Australian, so a bare dollar sign is the one that is
+     * actually ambiguous to them. Plans are billed in USD; the price now says so.
+     */
     if (plan.price_cents > 0) {
         return (
             <>
-                <span className="text-4xl font-extrabold">${Math.round(plan.price_cents / 100)}</span>
+                <span className="text-4xl font-extrabold">US${Math.round(plan.price_cents / 100)}</span>
                 <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
             </>
         );
@@ -43,7 +52,7 @@ export function PlanPrice({ plan }) {
 
     return (
         <>
-            <span className="text-4xl font-extrabold">$0</span>
+            <span className="text-4xl font-extrabold">US$0</span>
             <span className="text-xl font-medium">/mo</span>
         </>
     );
