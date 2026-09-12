@@ -84,7 +84,11 @@ class CampaignController extends Controller
 
         // Compute selectable platforms: intersection of system-enabled, plan-allowed, and customer-configured
         $enabledPlatforms = \App\Models\EnabledPlatform::getEnabledPlatformNames();
-        $allowedPlatforms = $request->user()->allowedPlatforms();
+        // The account's plan, not the logged-in teammate's. Read from the user
+        // it also short-circuited to all four platforms for anyone holding the
+        // global admin role, so an admin opening a customer's wizard saw
+        // platforms that customer cannot deploy to.
+        $allowedPlatforms = $customer->allowedPlatforms();
         $configuredPlatforms = $customer->configuredPlatforms();
 
         $selectablePlatforms = array_values(array_intersect(
@@ -196,9 +200,7 @@ class CampaignController extends Controller
         // website, which is the whole point of letting it be free. Loosening
         // this without another ceiling in front of GenerateStrategy would let
         // one account run up a bill unattended.
-        $user = $request->user();
-        $plan = $user->resolveCurrentPlan();
-        if (($plan?->slug ?? 'free') === 'free') {
+        if ($customer->resolvePlan()->slug === 'free') {
             $existingCount = $customer->campaigns()->count();
             if ($existingCount >= 1) {
                 return redirect()->back()->with('flash', [

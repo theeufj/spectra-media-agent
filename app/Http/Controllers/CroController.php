@@ -18,8 +18,8 @@ class CroController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $plan = $user->resolveCurrentPlan();
-        $slug = $plan?->slug ?? 'free';
+        // The audit allowance belongs to the account being viewed.
+        $slug = $customer->resolvePlan()->slug;
 
         $isUnlimited = in_array($slug, ['growth', 'agency']);
         $maxAudits = $isUnlimited ? null : 3;
@@ -68,10 +68,7 @@ class CroController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $plan = $user->resolveCurrentPlan();
-        $slug = $plan?->slug ?? 'free';
-
-        $isUnlimited = in_array($slug, ['growth', 'agency']);
+        $isUnlimited = in_array($customer->resolvePlan()->slug, ['growth', 'agency']);
 
         if (! $isUnlimited && ($customer->cro_audits_used ?? 0) >= 3) {
             return redirect()->back()->withErrors([

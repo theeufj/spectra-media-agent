@@ -253,12 +253,6 @@ parameters:
 			path: app/Http/Controllers/CampaignController.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>messages" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -281,12 +275,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: app/Http/Controllers/CreativeBoostController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Http/Controllers/CroController.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between 1\|10 and null will always evaluate to true\.$#'
@@ -703,12 +691,6 @@ parameters:
 			path: app/Jobs/GenerateAdCopy.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$subscription_status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateImage.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$s3_path\.$#'
 			identifier: property.notFound
 			count: 2
@@ -731,12 +713,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Jobs/MonitorCampaignStatus.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Jobs/OptimizeCampaigns.php
 
 		-
 			message: '#^Relation ''adSpendCredit'' is not found in App\\Models\\Customer model\.$#'
@@ -1360,12 +1336,6 @@ parameters:
 			message: '#^Call to an undefined method Spatie\\Browsershot\\Browsershot\:\:waitUntilDOMContentLoaded\(\)\.$#'
 			identifier: method.notFound
 			count: 2
-			path: app/Services/BrandGuidelineExtractorService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: app/Services/BrandGuidelineExtractorService.php
 
 		-
@@ -2543,3 +2513,4 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 5
 			path: tests/Unit/GeminiServiceTest.php
+

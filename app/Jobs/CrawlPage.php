@@ -137,19 +137,18 @@ class CrawlPage implements ShouldQueue
      */
     protected function canRunCROAudit(Customer $customer): bool
     {
-        // Get first user associated with customer to check subscription
-        $user = $customer->users()->first();
-
-        if (! $user) {
-            return false;
-        }
-
-        // Pro users have unlimited audits
-        if ($user->subscribed('default') || $user->subscription_status === 'active') {
+        /*
+           Read a subscription off users()->first() and returned false outright
+           when the customer had nobody attached — so an account mid-onboarding,
+           before anyone is on the pivot, could run no audits at all. The
+           entitlement is the account's, and it has one whether or not a person
+           is currently attached to it.
+        */
+        if ($customer->isOnPaidPlan()) {
             return true;
         }
 
-        // Free users limited to 3 CRO audits
+        // Free accounts get three.
         return $customer->cro_audits_used < 3;
     }
 

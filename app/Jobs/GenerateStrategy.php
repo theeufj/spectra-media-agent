@@ -137,10 +137,12 @@ class GenerateStrategy implements ShouldQueue
                 }));
                 Log::info("Using campaign-selected platforms for campaign {$this->campaign->id}: ".implode(', ', $enabledPlatforms));
             } else {
-                // Legacy fallback: filter by user's plan-allowed platforms
-                $user = $this->campaign->customer->users()->first();
-                if ($user) {
-                    $allowed = $user->allowedPlatforms();
+                // Fall back to the account's plan-allowed platforms. Its own
+                // comment called this a legacy fallback and it took
+                // users()->first() — not even the owner.
+                $customer = $this->campaign->customer;
+                if ($customer) {
+                    $allowed = $customer->allowedPlatforms();
                     $enabledPlatforms = array_values(array_filter($enabledPlatforms, function ($p) use ($allowed) {
                         return in_array(strtolower($p), $allowed, true);
                     }));

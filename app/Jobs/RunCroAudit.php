@@ -58,9 +58,9 @@ class RunCroAudit implements ShouldQueue
                 'score' => $audit->overall_score,
             ]);
 
-            // Send completion email
-            $user = $customer->users()->first();
-            if ($user) {
+            // Everyone on the account, not whoever the query returned first —
+            // the same fan-out the rest of the product does.
+            foreach ($customer->users as $user) {
                 Mail::to($user)->send(new CROAuditComplete($user, $audit, count($audit->issues ?? [])));
             }
         } catch (\Throwable $e) {

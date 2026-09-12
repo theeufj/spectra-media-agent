@@ -231,9 +231,10 @@ class GenerateImage implements ShouldQueue
 
                 // Identical for every format — computed once per prompt.
                 $customer = $this->campaign->customer;
-                $user = $customer->users()->first();
-                $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active')
-                    || $customer->subscription_status === 'active';
+                // Asked whether some person on the account was paying. A paid
+                // setup-only customer has no subscription and is still entitled,
+                // which that got wrong; isOnPaidPlan() covers both.
+                $isSubscribed = $customer->isOnPaidPlan();
 
                 $brandName = $customer->name ?? '';
                 $tagline = null;

@@ -52,8 +52,9 @@ class OptimizeCampaigns implements ShouldQueue
                 return true; // never optimized — always run
             }
 
-            $user = $campaign->customer?->users()?->first();
-            $slug = $user?->resolveCurrentPlan()?->slug ?? 'free';
+            // How often an account is re-optimised is a property of its plan,
+            // not of whichever of its people the query happened to return.
+            $slug = $campaign->customer?->resolvePlan()->slug ?? 'free';
 
             $cooldown = in_array($slug, ['growth', 'agency'], true)
                 ? now()->subHours(24)

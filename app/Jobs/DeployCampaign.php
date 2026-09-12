@@ -212,34 +212,36 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             ? $this->campaign->strategies->where('id', $this->strategyId)
             : $this->campaign->strategies->whereNotNull('signed_off_at');
 
-        // Filter strategies to only platforms the user's plan allows
-        $user = $this->campaign->customer->users()->wherePivot('role', 'owner')->first()
-            ?? $this->campaign->customer->users()->first();
-        if ($user) {
-            $allowed = $user->allowedPlatforms();
-            [$strategies, $planFiltered] = $strategies->partition(function ($strategy) use ($allowed) {
-                $platformStr = strtolower($strategy->platform);
-                foreach ($allowed as $allow) {
-                    if (str_contains($platformStr, $allow)) {
-                        return true;
-                    }
+        /*
+           Filter strategies to the platforms this account's plan allows.
+           Was read off a user picked from the customer — the owner if one
+           existed, otherwise whoever came first — so on an account with several
+           people the platforms a campaign deployed to depended on row order.
+           The plan belongs to the business, so the business answers.
+        */
+        $allowed = $this->campaign->customer->allowedPlatforms();
+        [$strategies, $planFiltered] = $strategies->partition(function ($strategy) use ($allowed) {
+            $platformStr = strtolower($strategy->platform);
+            foreach ($allowed as $allow) {
+                if (str_contains($platformStr, $allow)) {
+                    return true;
                 }
-
-                return false;
-            });
-
-            // A dropped strategy must reach a terminal state the status page
-            // can display — leaving it at null read as "pending" and kept the
-            // page polling forever with no explanation.
-            foreach ($planFiltered as $skipped) {
-                $skipped->update([
-                    'deployment_status' => 'skipped_plan',
-                    'deployment_error' => "{$skipped->platform} isn't included in your current plan, so this strategy was not deployed. Upgrade your plan to run it.",
-                ]);
             }
 
-            Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
+            return false;
+        });
+
+        // A dropped strategy must reach a terminal state the status page
+        // can display — leaving it at null read as "pending" and kept the
+        // page polling forever with no explanation.
+        foreach ($planFiltered as $skipped) {
+            $skipped->update([
+                'deployment_status' => 'skipped_plan',
+                'deployment_error' => "{$skipped->platform} isn't included in your current plan, so this strategy was not deployed. Upgrade your plan to run it.",
+            ]);
         }
+
+        Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
 
         // Nothing left to deploy is a failure the user must hear about, not a
         // success with zero platforms. Falling through used to email

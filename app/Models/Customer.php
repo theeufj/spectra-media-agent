@@ -6,6 +6,7 @@ use App\Models\Concerns\HasEncryptedAttributes;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -32,6 +33,8 @@ class Customer extends Model
         'website',
         'tenant_key',
         'service_type',
+        'plan_id',
+        'starter_platform',
         'setup_fee_paid_at',
         'handover_at',
         'early_exit_assessed_at',
@@ -260,6 +263,76 @@ class Customer extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withPivot('role');
+    }
+
+    /**
+     * The plan this account is on.
+     *
+     * A customer is a business; several people can work on it; the plan belongs
+     * to the business. Before this column, entitlements were read off whichever
+     * user a given job happened to pick — and the codebase held four different
+     * ways of picking, three of which did not even prefer an owner. Two
+     * teammates on different plans meant the platforms a campaign deployed to
+     * depended on database row order.
+     *
+     * @return BelongsTo<Plan, $this>
+     */
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
+    /**
+     * The plan to judge this account by, never null.
+     *
+     * An account with no plan set is on free, which is also where
+     * User::resolveCurrentPlan() landed people, so nothing is newly gated by
+     * this being absent.
+     */
+    public function resolvePlan(): Plan
+    {
+        // Never throws. firstOrFail() here made the absence of a seed row into a
+        // fatal on every entitlement check — including in production, where the
+        // free row existing is a convention rather than a constraint. An unsaved
+        // Plan carrying the slug says the same thing ("this account is on free
+        // limits") without depending on the table.
+        return $this->plan
+            ?? Plan::where('slug', 'free')->first()
+            ?? new Plan(['slug' => 'free', 'name' => 'Free']);
+    }
+
+    /**
+     * Which ad platforms this account may deploy to.
+     *
+     * Moved off User, where it also short-circuited to all four platforms for
+     * anyone holding the global admin role. That is right for an admin browsing
+     * the console and wrong for a job acting on an account: an admin happening
+     * to be attached to a customer silently lifted that customer's plan limits.
+     * Entitlement is the account's, so it is answered here and the acting
+     * user's role has nothing to do with it.
+     *
+     * @return list<string>
+     */
+    public function allowedPlatforms(): array
+    {
+        return match ($this->resolvePlan()->slug) {
+            'free' => ['google'],
+            'starter' => [$this->starter_platform ?? 'google'],
+            default => ['google', 'facebook', 'microsoft', 'linkedin'],
+        };
+    }
+
+    /**
+     * Is this account on something other than free?
+     *
+     * Replaces `$user->subscribed('default') || $user->subscription_status ===
+     * 'active'`, which asked whether a *person* was paying. A paid setup-only
+     * customer has no subscription and is still entitled to deploy, which that
+     * check got wrong.
+     */
+    public function isOnPaidPlan(): bool
+    {
+        return $this->resolvePlan()->slug !== 'free' || $this->isPaidSetupOnly();
     }
 
     /**

@@ -27,14 +27,10 @@ class BrandGuidelineExtractorService
      */
     protected function canExtractGuidelines(Customer $customer): bool
     {
-        $user = $customer->users()->first();
-
-        if (! $user) {
-            return false;
-        }
-
-        $plan = $user->resolveCurrentPlan();
-        $slug = $plan?->slug ?? 'free';
+        // Was users()->first()->resolveCurrentPlan(), and false when nobody
+        // was attached — brand extraction runs during onboarding, which is
+        // exactly when that is true.
+        $slug = $customer->resolvePlan()->slug;
 
         // Growth / Agency — unlimited
         if (in_array($slug, ['growth', 'agency'], true)) {

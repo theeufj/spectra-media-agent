@@ -33,11 +33,18 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                     <Hero
                         eyebrow="Pricing"
                         headline="Simple, transparent pricing"
-                        // "Generous limits" against a free plan allowing one campaign,
-                        // one brand extraction and four images — and showing zero
-                        // videos and zero refinements in-app. The promise and the
-                        // product contradicted each other at the moment of signup.
-                        sub="Free covers one campaign, your brand extracted from your site, and four AI images — enough to see what it produces. Upgrade when you're ready to run live."
+                        /*
+                            Twice wrong before this. "Try free with generous limits"
+                            oversold it; my replacement described a free tier's
+                            contents, which is worse, because there is no free tier —
+                            FreeTierTest pins that the `free` row is an internal
+                            limits profile that is never listed and never deploys.
+                            Both sentences promised something the product refuses.
+
+                            What is actually true: you can build the whole thing and
+                            look at it. Putting it live is what you pay for.
+                        */
+                        sub="Build a campaign and see the ads we'd run before you pay anything. A plan is what puts them live."
                     />
 
                     {/* Comparison Table */}

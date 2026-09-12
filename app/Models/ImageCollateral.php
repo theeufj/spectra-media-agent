@@ -104,14 +104,16 @@ class ImageCollateral extends Model
 
     public static function canGenerateForCampaign(Campaign $campaign): bool
     {
-        $user = $campaign->customer?->users()?->first();
+        $customer = $campaign->customer;
 
-        if (! $user) {
+        if (! $customer) {
             return false;
         }
 
-        // Subscribed users have no limit
-        if ($user->subscribed('default') || $user->subscription_status === 'active') {
+        // Paid accounts have no per-campaign limit. Was read off whichever user
+        // the customer returned first, so on a shared account the limit applied
+        // or not depending on row order.
+        if ($customer->isOnPaidPlan()) {
             return true;
         }
 
