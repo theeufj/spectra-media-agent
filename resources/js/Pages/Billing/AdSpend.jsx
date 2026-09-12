@@ -5,6 +5,9 @@ import { useToast } from '@/Components/Toast';
 import { Head, router } from '@inertiajs/react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { brandTint } from '@/Components/Marketing/Hero';
+import { money, dateTime } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_KEY);
@@ -119,6 +122,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
 
 // Main Component
 const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
+    const currency = useCurrency();
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [retrying, setRetrying] = useState(false);
     const toast = useToast();
@@ -145,12 +149,14 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
         setRetrying(false);
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-        }).format(Number(amount) || 0);
-    };
+    /*
+     * Hardcoded en-US/USD on the page where a customer reads their own ad-spend
+     * balance, the daily budget being drawn against it, and every transaction.
+     * Nine of the seventeen production customers are on AUD and were being shown
+     * their own money in US dollars — on the billing page, which is the one
+     * screen where a wrong currency symbol is not cosmetic.
+     */
+    const formatCurrency = (amount) => money(amount, currency);
 
     // The stored sign is not consistent across types — deduct() writes a
     // negative amount, the legacy 'debit' rows are positive, and an adjustment
@@ -159,15 +165,8 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
     const isOutgoing = (transaction) =>
         transaction.type === 'debit' || Number(transaction.amount) < 0;
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    // Was pinned to en-US, so an Australian customer read 9/3/2026 as September.
+    const formatDate = (dateString) => dateTime(dateString);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -201,7 +200,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
             <Head title="Ad Spend Billing" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm: space-y-6">
+                <div className="max-w-7xl mx-auto space-y-6">
                     
                     {/* Payment Failed Alert */}
                     {paymentFailed && (
@@ -336,28 +335,28 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">How Ad Spend Billing Works</h3>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>
                                         <span className="text-brand-dark font-bold">1</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Initial Charge</h4>
                                     <p className="text-sm text-gray-500 mt-1">7 days of estimated spend charged upfront</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>
                                         <span className="text-brand-dark font-bold">2</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Daily Billing</h4>
                                     <p className="text-sm text-gray-500 mt-1">Actual spend deducted each morning at 6 AM</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>
                                         <span className="text-brand-dark font-bold">3</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Auto Top-Up</h4>
                                     <p className="text-sm text-gray-500 mt-1">Balance auto-replenished when low</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>
                                         <span className="text-brand-dark font-bold">4</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Full Transparency</h4>

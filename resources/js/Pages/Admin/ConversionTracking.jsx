@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import SideNav from './SideNav';
+import { money } from '@/utils/format';
 
 const Badge = ({ children, color = 'gray' }) => {
     const colors = {
@@ -41,9 +42,9 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
     return (
         <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800" contained={false}>Conversion Tracking</h2>}>
             <Head title="Conversion Tracking — Admin" />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8 space-y-8">
+                <div className="min-w-0 flex-1 p-8 space-y-8">
 
                     {/* Summary bar */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -122,7 +123,8 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                             </Badge>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-700">
-                                            {action.value ? `$${action.value} ${action.currency}` : '—'}
+                                            {/* Was `$${value} ${currency}` — "$50 AUD". */}
+                                            {action.value ? money(action.value, action.currency) : '—'}
                                         </td>
                                         <td className="px-6 py-4">
                                             {action.mode === 'server' ? (
