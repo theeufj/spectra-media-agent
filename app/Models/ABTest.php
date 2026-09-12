@@ -49,11 +49,19 @@ class ABTest extends Model
 
     const TYPE_AUDIENCE = 'audience';
 
+    /** @return BelongsTo<Strategy, $this> */
     public function strategy(): BelongsTo
     {
         return $this->belongsTo(Strategy::class);
     }
 
+    /**
+     * Annotated because without it $test->campaign types as a bare Model, so
+     * every ->customer behind it was an undefined-property error frozen in the
+     * baseline rather than a real relation.
+     *
+     * @return BelongsTo<Campaign, $this>
+     */
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);

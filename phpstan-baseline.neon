@@ -643,12 +643,6 @@ parameters:
 			path: app/Jobs/DeployCampaign.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Jobs/EvaluateABTests.php
-
-		-
 			message: '#^If condition is always false\.$#'
 			identifier: if.alwaysFalse
 			count: 1
@@ -1055,42 +1049,6 @@ parameters:
 			identifier: function.impossibleType
 			count: 2
 			path: app/Services/AdminMonitorService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$facebook_ads_campaign_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$google_ads_campaign_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Parameter \#2 \$campaign of method App\\Services\\Agents\\ABTestingAgent\:\:refreshFacebookVariantMetrics\(\) expects App\\Models\\Campaign, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Parameter \#2 \$campaign of method App\\Services\\Agents\\ABTestingAgent\:\:refreshGoogleVariantMetrics\(\) expects App\\Models\\Campaign, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CampaignHourlyPerformance\:\:\$avg_hourly_spend\.$#'
@@ -1739,12 +1697,6 @@ parameters:
 			identifier: nullCoalesce.property
 			count: 1
 			path: app/Services/MicrosoftAds/BaseMicrosoftAdsService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/NotificationService.php
 
 		-
 			message: '#^Relation ''roles'' is not found in App\\Models\\User model\.$#'

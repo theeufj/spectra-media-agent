@@ -36,7 +36,7 @@ class NotificationService
     }
 
     /**
-     * The person to tell about something that happened to a customer.
+     * Everyone to tell about something that happened to a customer.
      *
      * Every helper below reached for `$customer->user` — a singular relation
      * that does not exist. Ownership is the `customers` pivot on User, and the
@@ -44,36 +44,73 @@ class NotificationService
      * of these threw the moment it was called, which is why not one of them had
      * a caller and why a client was never told their strategy or their creative
      * was ready.
+     *
+     * Replacing it with a single owner lookup fixed the throw and introduced a
+     * quieter version of the same problem. An account is routinely held by
+     * several people — sitetospend's own has four, two carrying the `owner`
+     * pivot role and two `admin` — and `first()` picks whichever the database
+     * returns first among them. Three of the four would never learn that a
+     * deployment failed, and which one did was not decided by anything.
+     *
+     * Fanning out is also what the rest of the product does: DeployCampaign,
+     * ReconcileStuckDeployments, GenerateExecutiveReport and
+     * AdSpendBillingService::notifyInApp() all loop `$customer->users`. These
+     * six were the exception, not the convention.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, User>
      */
-    private function ownerOf(?Customer $customer): ?User
+    private function recipientsFor(?Customer $customer): \Illuminate\Database\Eloquent\Collection
     {
         if (! $customer) {
-            return null;
+            /** @var \Illuminate\Database\Eloquent\Collection<int, User> $none */
+            $none = User::query()->whereRaw('1 = 0')->get();
+
+            return $none;
         }
 
-        return $customer->users()->wherePivot('role', 'owner')->first()
-            ?? $customer->users()->first();
+        return $customer->users()->get();
+    }
+
+    /**
+     * Send one notification to every person on the account.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
+     */
+    private function notifyAll(
+        ?Customer $customer,
+        string $type,
+        string $title,
+        string $message,
+        ?string $actionUrl = null,
+        ?string $actionText = null,
+        ?array $data = null,
+    ): \Illuminate\Support\Collection {
+        return $this->recipientsFor($customer)->map(fn (User $user) => $this->notify(
+            $user,
+            $type,
+            $title,
+            $message,
+            $actionUrl,
+            $actionText,
+            $customer,
+            $data,
+        ))->values();
     }
 
     /**
      * Notify about a strategy ready for review.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
-    public function notifyStrategyReady(Campaign $campaign, Strategy $strategy): ?Notification
+    public function notifyStrategyReady(Campaign $campaign, Strategy $strategy): \Illuminate\Support\Collection
     {
-        $user = $this->ownerOf($campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+        return $this->notifyAll(
+            $campaign->customer,
             Notification::TYPE_STRATEGY_READY,
             'Strategy Ready for Review',
             "Campaign \"{$campaign->name}\" has a new strategy ready for your review.",
             route('campaigns.show', ['campaign' => $campaign->id]),
             'Review Strategy',
-            $campaign->customer,
             [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
@@ -83,23 +120,18 @@ class NotificationService
 
     /**
      * Notify about collateral ready for deployment.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
-    public function notifyCollateralReady(Campaign $campaign, Strategy $strategy): ?Notification
+    public function notifyCollateralReady(Campaign $campaign, Strategy $strategy): \Illuminate\Support\Collection
     {
-        $user = $this->ownerOf($campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+        return $this->notifyAll(
+            $campaign->customer,
             Notification::TYPE_COLLATERAL_READY,
             'Collateral Ready',
             "Campaign \"{$campaign->name}\" has collateral ready to deploy.",
             route('campaigns.collateral.show', ['campaign' => $campaign->id, 'strategy' => $strategy->id]),
             'View Collateral',
-            $campaign->customer,
             [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
@@ -109,23 +141,18 @@ class NotificationService
 
     /**
      * Notify about deployment started.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
-    public function notifyDeploymentStarted(Campaign $campaign, Strategy $strategy): ?Notification
+    public function notifyDeploymentStarted(Campaign $campaign, Strategy $strategy): \Illuminate\Support\Collection
     {
-        $user = $this->ownerOf($campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+        return $this->notifyAll(
+            $campaign->customer,
             Notification::TYPE_DEPLOYMENT_STARTED,
             'Deployment Started',
             "Campaign \"{$campaign->name}\" is being deployed to ad platforms.",
             route('campaigns.deployment-status', $campaign),
             'View Progress',
-            $campaign->customer,
             [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
@@ -135,23 +162,18 @@ class NotificationService
 
     /**
      * Notify about deployment completed.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
-    public function notifyDeploymentCompleted(Campaign $campaign, Strategy $strategy): ?Notification
+    public function notifyDeploymentCompleted(Campaign $campaign, Strategy $strategy): \Illuminate\Support\Collection
     {
-        $user = $this->ownerOf($campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+        return $this->notifyAll(
+            $campaign->customer,
             Notification::TYPE_DEPLOYMENT_COMPLETED,
             'Deployment Complete',
             "Campaign \"{$campaign->name}\" has been successfully deployed!",
             route('campaigns.show', $campaign),
             'View Campaign',
-            $campaign->customer,
             [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
@@ -161,23 +183,18 @@ class NotificationService
 
     /**
      * Notify about deployment failure.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
-    public function notifyDeploymentFailed(Campaign $campaign, Strategy $strategy, string $error): ?Notification
+    public function notifyDeploymentFailed(Campaign $campaign, Strategy $strategy, string $error): \Illuminate\Support\Collection
     {
-        $user = $this->ownerOf($campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+        return $this->notifyAll(
+            $campaign->customer,
             Notification::TYPE_DEPLOYMENT_FAILED,
             'Deployment Failed',
             "Campaign \"{$campaign->name}\" deployment failed: {$error}",
             route('campaigns.deployment-status', $campaign),
             'View Details',
-            $campaign->customer,
             [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
@@ -239,28 +256,23 @@ class NotificationService
 
     /**
      * Notify about A/B test reaching significance.
+     *
+     * @return \Illuminate\Support\Collection<int, Notification>
      */
     public function notifyABTestComplete(
         \App\Models\ABTest $test,
         array $winner,
         float $confidence,
         float $liftPct
-    ): ?Notification {
-        $user = $this->ownerOf($test->campaign->customer);
-
-        if (! $user) {
-            return null;
-        }
-
-        return $this->notify(
-            $user,
+    ): \Illuminate\Support\Collection {
+        return $this->notifyAll(
+            $test->campaign->customer,
             Notification::TYPE_AB_TEST_COMPLETE,
             'A/B Test Winner Found',
             "Your {$test->test_type} test reached ".round($confidence * 100, 1).'% confidence. '.
             "\"{$winner['label']}\" won with a ".round($liftPct, 1).'% lift in CTR.',
             route('campaigns.show', $test->campaign_id),
             'View Results',
-            $test->campaign->customer,
             [
                 'test_id' => $test->id,
                 'test_type' => $test->test_type,
