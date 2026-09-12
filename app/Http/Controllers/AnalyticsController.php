@@ -16,44 +16,6 @@ class AnalyticsController extends Controller
         protected AttributionService $attribution,
     ) {}
 
-    public function index(Request $request)
-    {
-        $customer = $this->getActiveCustomer($request);
-        if (! $customer) {
-            return redirect()->route('dashboard');
-        }
-        $days = (int) $request->get('days', 30);
-
-        $summary = $this->analytics->getSummary($customer, $days);
-        $timeSeries = $this->analytics->getDailyTimeSeries($customer, $days);
-        $funnel = $this->analytics->getFunnelAnalysis($customer, $days);
-
-        return Inertia::render('Analytics/Index', [
-            'summary' => $summary,
-            'timeSeries' => $timeSeries,
-            'funnel' => $funnel,
-            'days' => $days,
-        ]);
-    }
-
-    public function crossPlatform(Request $request)
-    {
-        $customer = $this->getActiveCustomer($request);
-        if (! $customer) {
-            return redirect()->route('dashboard');
-        }
-        $days = (int) $request->get('days', 30);
-
-        $comparison = $this->analytics->getPlatformComparison($customer, $days);
-        $timeSeries = $this->analytics->getDailyTimeSeries($customer, $days);
-
-        return Inertia::render('Analytics/CrossPlatform', [
-            'comparison' => $comparison,
-            'timeSeries' => $timeSeries,
-            'days' => $days,
-        ]);
-    }
-
     public function attribution(Request $request)
     {
         $customer = $this->getActiveCustomer($request);

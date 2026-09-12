@@ -53,9 +53,17 @@ class ReportController extends Controller
             GenerateExecutiveReport::dispatch($customer->id, 'weekly');
         }
 
+        /*
+         * Say where it will appear, not only that it was sent.
+         *
+         * This promised "you'll receive it by email shortly", which is the one
+         * outcome the customer cannot see from this page — and when the period
+         * already has a report, generation is idempotent, so pressing the
+         * button again looked like nothing happened at all.
+         */
         return back()->with('flash', [
             'type' => 'success',
-            'message' => ucfirst($period).' report is being generated. You\'ll receive it by email shortly.',
+            'message' => 'Putting together your '.$period.' report. It will appear in the list here in a few minutes, and land in your inbox.',
         ]);
     }
 

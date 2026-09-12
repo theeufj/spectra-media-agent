@@ -1,64 +1,110 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { money as formatMoney, count as formatCount, date as formatDate } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
+import { useMemo, useState } from 'react';
+import {
+    ArrowDownTrayIcon,
+    ArrowPathIcon,
+    DocumentTextIcon,
+    SparklesIcon,
+} from '@heroicons/react/24/outline';
+import { brandTint } from '@/Components/Marketing/Hero';
 
-function MetricBadge({ label, value, prefix = '' }) {
-    if (value === null || value === undefined) return null;
+/*
+ * Reports listing.
+ *
+ * The job on this page is comparing the same four measures across a run of
+ * periods — "was last week better than the one before?" — and it was rendered
+ * as a stack of full-width cards with the numbers as inline prose
+ * ("$592.8 spend  330 clicks  30 conversions  $19.76 CPA"). Nothing lined up,
+ * so the comparison the page exists for had to be done by reading. Twelve
+ * periods filled about four screens.
+ *
+ * A table, because that is what this is: one row per period, numbers
+ * right-aligned in fixed columns, tabular figures so the digits sit under each
+ * other. Cards remain below `sm`, where columns cannot fit.
+ *
+ * The duplicate rows this page used to show were not a display bug — both
+ * generator jobs appended to the history cache without checking whether the
+ * period was already in it. Fixed in App\Jobs\Concerns\RecordsReportHistory.
+ */
+
+const count = (n) => (n === null || n === undefined ? '—' : formatCount(n));
+
+const PERIOD = {
+    monthly: { label: 'Monthly', className: 'bg-violet-100 text-violet-800' },
+    weekly: { label: 'Weekly', className: 'bg-sky-100 text-sky-800' },
+};
+
+function formatGenerated(value) {
+    if (! value) return '';
+    const d = new Date(value);
+
+    return Number.isNaN(d.valueOf())
+        ? ''
+        : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function PeriodBadge({ period }) {
+    const { label, className } = PERIOD[period] ?? PERIOD.weekly;
+
     return (
-        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-            <span className="font-medium text-gray-700">{prefix}{typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value}</span>
-            {label}
-        </span>
+        <span className={`inline-flex rounded px-2 py-0.5 text-xs font-semibold ${className}`}>{label}</span>
     );
 }
 
-function ReportCard({ report, onDownload }) {
-    const periodLabel = report.period === 'monthly' ? 'Monthly Report' : 'Weekly Report';
-    const dateRange = `${report.start} — ${report.end}`;
-    const generatedAt = new Date(report.generated_at).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
+function PdfButton({ report, onDownload, className = '' }) {
+    if (! report.pdf_path) {
+        return <span className="text-xs text-gray-400">No PDF</span>;
+    }
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-sm transition-shadow">
-            <div className="flex items-start justify-between">
-                <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                            report.period === 'monthly'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-blue-100 text-blue-700'
-                        }`}>
-                            {periodLabel}
-                        </span>
-                        <span className="text-xs text-gray-500">{generatedAt}</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">{dateRange}</p>
-                    <div className="flex flex-wrap gap-4">
-                        <MetricBadge label="spend" value={report.summary?.total_cost} prefix="$" />
-                        <MetricBadge label="clicks" value={report.summary?.total_clicks} />
-                        <MetricBadge label="conversions" value={report.summary?.total_conversions} />
-                        <MetricBadge label="CPA" value={report.summary?.blended_cpa} prefix="$" />
-                    </div>
-                </div>
-                {report.pdf_path && (
-                    <button
-                        onClick={() => onDownload(report)}
-                        className="flex-shrink-0 ml-4 inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-darker bg-brand-primary/10 rounded-lg hover:bg-brand-primary/20 transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        PDF
-                    </button>
-                )}
-            </div>
-        </div>
+        <button
+            type="button"
+            onClick={() => onDownload(report)}
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-brand-darker transition-colors hover:bg-brand-tint-20 ${className}`}
+            style={{ backgroundColor: brandTint(10) }}
+        >
+            <ArrowDownTrayIcon className="h-4 w-4" aria-hidden="true" />
+            PDF
+            <span className="sr-only">
+                {' '}
+                for the {report.period} report covering {formatDate(report.start)} to {formatDate(report.end)}
+            </span>
+        </button>
     );
 }
 
-export default function Index({ reports = [], customer, canWhiteLabel }) {
+/**
+ * One row per period, newest kept.
+ *
+ * RecordsReportHistory stops new duplicates being written, but the listing is a
+ * cache entry with a 365-day TTL — every customer who already has doubled
+ * history keeps it until their entry expires or every period is regenerated.
+ * Collapsing here means they see the fix now rather than next year, and it also
+ * keeps React from being handed two rows with the same key.
+ */
+function dedupeByPeriod(reports) {
+    const seen = new Map();
+
+    for (const report of reports) {
+        const key = `${report.period}-${report.start}`;
+        if (! seen.has(key)) seen.set(key, report);
+    }
+
+    return [...seen.values()];
+}
+
+export default function Index({ reports = [], canWhiteLabel }) {
+    const currency = useCurrency();
+
+    // Was a module-level helper hardcoding '$'. A report is the customer's own
+    // spend, so it follows the customer's currency like every other figure.
+    const money = (n) => (n === null || n === undefined ? '—' : formatMoney(n, currency));
+
     const [generating, setGenerating] = useState(false);
+    const rows = useMemo(() => dedupeByPeriod(reports), [reports]);
 
     const handleGenerate = (period) => {
         setGenerating(true);
@@ -78,87 +124,173 @@ export default function Index({ reports = [], customer, canWhiteLabel }) {
             <Head title="Reports" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+                {/* `max-w-5xl sm:` — that trailing `sm:` was a truncated utility. */}
+                <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+                    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Performance Reports</h1>
-                            <p className="mt-1 text-sm text-gray-500">
-                                Auto-generated weekly and monthly reports with AI-powered insights.
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Performance reports</h1>
+                            <p className="mt-1 text-sm text-gray-600">
+                                Generated every Monday and on the 1st of each month, with the AI's read on what changed.
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
+                                type="button"
                                 onClick={() => handleGenerate('weekly')}
                                 disabled={generating}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Generate Weekly
+                                <ArrowPathIcon className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} aria-hidden="true" />
+                                Weekly
                             </button>
                             <button
+                                type="button"
                                 onClick={() => handleGenerate('monthly')}
                                 disabled={generating}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors disabled:opacity-50"
+                                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Generate Monthly
+                                <DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
+                                Monthly
                             </button>
                         </div>
                     </div>
 
-                    {/* White-label notice */}
                     {canWhiteLabel && (
-                        <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <div className="flex items-center gap-2">
-                                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                                </svg>
-                                <span className="text-sm font-medium text-purple-800">Agency Plan — White-label reports available.</span>
-                                <a href={route('reports.settings')} className="ml-auto text-sm font-medium text-purple-700 hover:text-purple-900 underline">
-                                    Configure Branding →
-                                </a>
-                            </div>
+                        <div
+                            className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border p-4"
+                            style={{ backgroundColor: brandTint(8), borderColor: brandTint(30) }}
+                        >
+                            <SparklesIcon className="h-5 w-5 shrink-0 text-brand-darker" aria-hidden="true" />
+                            <span className="text-sm font-medium text-gray-900">
+                                Agency plan — reports can carry your own branding.
+                            </span>
+                            <a
+                                href={route('reports.settings')}
+                                className="text-sm font-medium text-brand-darker hover:underline sm:ml-auto"
+                            >
+                                Configure branding →
+                            </a>
                         </div>
                     )}
 
-                    {/* Report List */}
-                    {reports.length > 0 ? (
-                        <div className="space-y-3">
-                            {reports.map((report, index) => (
-                                <ReportCard key={index} report={report} onDownload={handleDownload} />
-                            ))}
-                        </div>
+                    {rows.length > 0 ? (
+                        <>
+                            {/* Table from sm up: the numbers only compare when they line up. */}
+                            <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white sm:block">
+                                <table className="w-full text-sm">
+                                    <caption className="sr-only">
+                                        Performance reports, newest first
+                                    </caption>
+                                    <thead>
+                                        <tr className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                                            <th scope="col" className="px-4 py-2.5 text-left font-medium">Period</th>
+                                            <th scope="col" className="px-4 py-2.5 text-right font-medium">Spend</th>
+                                            <th scope="col" className="px-4 py-2.5 text-right font-medium">Clicks</th>
+                                            <th scope="col" className="px-4 py-2.5 text-right font-medium">Conv.</th>
+                                            <th scope="col" className="px-4 py-2.5 text-right font-medium">CPA</th>
+                                            <th scope="col" className="px-4 py-2.5 text-right font-medium">
+                                                <span className="sr-only">Download</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {rows.map((report) => {
+                                            const quiet = ! report.summary?.total_clicks;
+
+                                            return (
+                                                <tr key={`${report.period}-${report.start}`} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <PeriodBadge period={report.period} />
+                                                            <span className="font-medium text-gray-900">
+                                                                {formatDate(report.start)} — {formatDate(report.end)}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-500">
+                                                            generated {formatGenerated(report.generated_at)}
+                                                            {/*
+                                                                A period with no clicks is not the
+                                                                same as a period that performed
+                                                                badly, and rendering them
+                                                                identically hid a fortnight of
+                                                                stopped campaigns in this account.
+                                                            */}
+                                                            {quiet && ' · no activity'}
+                                                        </span>
+                                                    </td>
+                                                    <td className={`px-4 py-3 text-right tabular-nums ${quiet ? 'text-gray-400' : 'font-medium text-gray-900'}`}>
+                                                        {money(report.summary?.total_cost)}
+                                                    </td>
+                                                    <td className={`px-4 py-3 text-right tabular-nums ${quiet ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                        {count(report.summary?.total_clicks)}
+                                                    </td>
+                                                    <td className={`px-4 py-3 text-right tabular-nums ${quiet ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                        {count(report.summary?.total_conversions)}
+                                                    </td>
+                                                    <td className={`px-4 py-3 text-right tabular-nums ${quiet ? 'text-gray-400' : 'text-gray-700'}`}>
+                                                        {report.summary?.total_conversions ? money(report.summary?.blended_cpa) : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <PdfButton report={report} onDownload={handleDownload} />
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Below sm, one card per period. */}
+                            <ul className="space-y-3 sm:hidden">
+                                {rows.map((report) => (
+                                    <li
+                                        key={`${report.period}-${report.start}`}
+                                        className="rounded-xl border border-gray-200 bg-white p-4"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <PeriodBadge period={report.period} />
+                                            <span className="text-sm font-medium text-gray-900">
+                                                {formatDate(report.start)} — {formatDate(report.end)}
+                                            </span>
+                                        </div>
+                                        <dl className="mt-3 grid grid-cols-4 gap-2 text-center">
+                                            {[
+                                                ['Spend', money(report.summary?.total_cost)],
+                                                ['Clicks', count(report.summary?.total_clicks)],
+                                                ['Conv.', count(report.summary?.total_conversions)],
+                                                ['CPA', report.summary?.total_conversions ? money(report.summary?.blended_cpa) : '—'],
+                                            ].map(([label, value]) => (
+                                                <div key={label}>
+                                                    <dt className="text-xs text-gray-500">{label}</dt>
+                                                    <dd className="text-sm font-medium tabular-nums text-gray-900">{value}</dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                        <div className="mt-3">
+                                            <PdfButton report={report} onDownload={handleDownload} className="w-full justify-center" />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
                     ) : (
-                        <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
-                            <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <h3 className="mt-4 text-sm font-medium text-gray-900">No reports yet</h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                                Reports are generated automatically every week. You can also generate one now.
+                        <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
+                            <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
+                            <h2 className="mt-4 text-sm font-medium text-gray-900">No reports yet</h2>
+                            <p className="mx-auto mt-1 max-w-sm text-sm text-gray-600">
+                                One is generated for you every Monday. You can also make one now from whatever data
+                                has come in so far.
                             </p>
-                            <div className="mt-6">
-                                <button
-                                    onClick={() => handleGenerate('weekly')}
-                                    disabled={generating}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors disabled:opacity-50"
-                                >
-                                    Generate First Report
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleGenerate('weekly')}
+                                disabled={generating}
+                                className="mt-6 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
+                            >
+                                Generate the first one
+                            </button>
                         </div>
                     )}
-
-                    {/* Info footer */}
-                    <div className="mt-8 text-center text-xs text-gray-500">
-                        Weekly reports are automatically generated every Monday at 7:00 AM.
-                        Monthly reports are generated on the 1st of each month.
-                    </div>
                 </div>
             </div>
         </AuthenticatedLayout>

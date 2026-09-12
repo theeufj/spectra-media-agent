@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\RoiDashboardController;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
@@ -10,13 +9,15 @@ use App\Models\GoogleAdsPerformanceData;
 use App\Models\User;
 use App\Services\CrossChannelBudgetAllocator;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
  * Per-campaign performance aggregates cost one query per campaign per platform.
+ *
+ * (The ROI dashboard was a fourth, and its controller has since been deleted
+ * as unreachable — /analytics/roi is a closure redirecting to the dashboard.)
  *
  * Three places built the same figures the same way — a SUM per platform inside
  * a loop over campaigns — so a forty-campaign account spent 160 round trips
@@ -139,36 +140,6 @@ class PerformanceAggregateQueryCostTest extends TestCase
             $this->assertEquals(5, $row['conversions']);
             $this->assertEquals(5, $row['roas']);
         }
-    }
-
-    public function test_the_roi_breakdown_matches_the_dashboard_and_is_grouped(): void
-    {
-        [, , $campaigns] = $this->accountWithCampaigns(4);
-
-        $controller = new class extends RoiDashboardController
-        {
-            /**
-             * @param  Collection<int, Campaign>  $campaigns
-             */
-            public function exposeBreakdown($campaigns, Carbon $since): array
-            {
-                return $this->buildCampaignBreakdown($campaigns, $since);
-            }
-        };
-
-        $breakdown = [];
-
-        $queries = $this->record(function () use ($controller, $campaigns, &$breakdown) {
-            $breakdown = $controller->exposeBreakdown($campaigns, Carbon::now()->subDays(30));
-        });
-
-        $this->assertCount(4, $breakdown);
-        $this->assertEquals(50, $breakdown[0]['cost']);
-        $this->assertEquals(250, $breakdown[0]['revenue']);
-
-        // One grouped read per platform table for the whole list.
-        $this->assertSame(1, $this->countReads($queries, 'google_ads_performance_data'));
-        $this->assertSame(1, $this->countReads($queries, 'facebook_ads_performance_data'));
     }
 
     public function test_the_rebalance_snapshot_is_one_aggregate_per_platform(): void
