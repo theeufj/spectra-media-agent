@@ -88,6 +88,8 @@ class Strategy extends Model
      * A Strategy belongs to a Campaign.
      * This defines the inverse of the one-to-many relationship.
      * In Go, this might be a pointer back to the parent Campaign struct: `Campaign *Campaign`.
+     *
+     * @return BelongsTo<Campaign, $this>
      */
     public function campaign(): BelongsTo
     {

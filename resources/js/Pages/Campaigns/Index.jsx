@@ -39,6 +39,20 @@ const CAMPAIGN_STATUS_STYLES = {
 };
 
 /**
+ * Is this strategy actually serving?
+ *
+ * Narrower than hasDeployed on purpose. That one answers "was a deployment
+ * attempted, is there something to look at", which is the right question for
+ * showing a status link — it is true for 'failed', 'skipped_plan' and
+ * 'deploy_unverified' too. Using it to label a campaign Live would call a
+ * campaign whose only strategy failed to deploy live, which is the same class
+ * of lie the badge change was fixing.
+ */
+const isServing = (strategy) =>
+    Boolean(strategy?.deployed_at)
+    || ['deployed', 'verified', 'active'].includes(strategy?.deployment_status);
+
+/**
  * The badge must not contradict the rows underneath it.
  *
  * `campaigns.status` is one of three status fields and it loses arguments: it
@@ -53,7 +67,7 @@ const CAMPAIGN_STATUS_STYLES = {
  * badge says so rather than repeating a column that has fallen behind.
  */
 function badgeFor(campaign) {
-    const deployed = (campaign.strategies ?? []).some(hasDeployed);
+    const deployed = (campaign.strategies ?? []).some(isServing);
 
     if (deployed && (campaign.status === 'draft' || campaign.status === 'pending_admin_deployment')) {
         return { label: 'Live', style: CAMPAIGN_STATUS_STYLES.active };

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Strategy;
+use App\Services\Campaigns\SettleDeployedCampaign;
 use App\Services\Deployment\DeploymentVerifier;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -81,6 +82,27 @@ class ReconcileStuckDeployments implements ShouldQueue
                         'deployed_at' => $strategy->deployed_at ?? $strategy->updated_at,
                         'deployment_error' => null,
                     ]);
+
+                    /*
+                     * And finish the other half of the deployment.
+                     *
+                     * This marked the strategy live and left the campaign at
+                     * 'draft', because the lifecycle write lived at the bottom
+                     * of DeployCampaign::handle() — the very lines a worker
+                     * restart skipped, which is how the strategy got stuck in
+                     * the first place. Every campaign reconciled here was
+                     * therefore serving ads while the whole optimisation side
+                     * of the product, which filters on `status = active`,
+                     * skipped it; billing, which also matches platform_status,
+                     * did not.
+                     *
+                     * We have just asked the platform and been told the objects
+                     * exist, so this is a completed deployment, not a guess.
+                     */
+                    if ($liveCampaign = $strategy->campaign) {
+                        app(SettleDeployedCampaign::class)->settle($liveCampaign);
+                    }
+
                     Log::info("ReconcileStuckDeployments: strategy {$strategy->id} ({$strategy->platform}) verified live — marked deployed");
                 } else {
                     // Not proven live. Mark failed so it stops looking in-flight and

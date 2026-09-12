@@ -212,17 +212,14 @@ class OneTimeSetupTest extends TestCase
             }
         };
 
-        $job = new class($campaign->fresh('customer'), $stub) extends \App\Jobs\DeployCampaign
+        // The pause used to live inside DeployCampaign and this test reached
+        // into it through a subclass. It is SettleDeployedCampaign's now —
+        // because the deploy job was not the only thing that finishes a
+        // deployment, and the one that finishes it late was skipping this
+        // entirely and leaving a setup-only customer's ads running.
+        $settler = new class($stub) extends \App\Services\Campaigns\SettleDeployedCampaign
         {
-            public function __construct($campaign, private $stub)
-            {
-                parent::__construct($campaign);
-            }
-
-            public function exposePause(): void
-            {
-                $this->pauseForSetupOnly();
-            }
+            public function __construct(private $stub) {}
 
             protected function campaignStatusService(\App\Models\Customer $customer): \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus
             {
@@ -230,10 +227,17 @@ class OneTimeSetupTest extends TestCase
             }
         };
 
-        $job->exposePause();
+        $moved = $settler->settle($campaign->fresh('customer'));
 
         $this->assertCount(1, $calls);
         $this->assertSame(['1112223333', 'customers/1112223333/campaigns/987654321', 'PAUSED'], $calls[0]);
+
+        $this->assertTrue($moved);
+        $this->assertSame(
+            \App\Enums\CampaignStatus::Paused,
+            $campaign->fresh()->status,
+            'a setup-only campaign must never be settled to active — the receipt email promises it arrives paused',
+        );
     }
 
     public function test_recurring_management_never_sees_setup_only_customers(): void

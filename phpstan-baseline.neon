@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/ActivateCampaigns.php
-
-		-
 			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -35,12 +29,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: app/Console/Commands/ProvisionConversionActions.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/RepairPMaxAssets.php
 
 		-
 			message: '#^Parameter \#1 \$strategyId of job class App\\Jobs\\UploadPMaxVideoAssets constructor expects int in App\\Jobs\\UploadPMaxVideoAssets\:\:dispatch\(\), string given\.$#'
@@ -499,18 +487,6 @@ parameters:
 			path: app/Http/Controllers/SandboxController.php
 
 		-
-			message: '#^Parameter \#1 \$campaign of job class App\\Jobs\\GenerateAdCopy constructor expects App\\Models\\Campaign in App\\Jobs\\GenerateAdCopy\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/StrategyController.php
-
-		-
-			message: '#^Parameter \#1 \$campaign of job class App\\Jobs\\GenerateImage constructor expects App\\Models\\Campaign in App\\Jobs\\GenerateImage\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/StrategyController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
 			identifier: property.notFound
 			count: 1
@@ -805,12 +781,6 @@ parameters:
 			path: app/Jobs/ReconcileAdSpend.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/ReconcileStuckDeployments.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\ImageCollateral\:\:\$campaign\.$#'
 			identifier: property.notFound
 			count: 1
@@ -923,18 +893,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: app/Jobs/UploadOfflineConversions.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/UploadPMaxVideoAssets.php
-
-		-
-			message: '#^Parameter \#2 \$campaign of method App\\Jobs\\UploadPMaxVideoAssets\:\:resolveAssetGroupResource\(\) expects App\\Models\\Campaign\|null, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/UploadPMaxVideoAssets.php
 
 		-
 			message: '#^Parameter \#1 \$string of function strtolower expects string, array given\.$#'

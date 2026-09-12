@@ -75,6 +75,55 @@ class DeploymentStateIntegrityTest extends TestCase
         $this->assertNotNull($strategy->fresh()->deployed_at);
     }
 
+    public function test_a_reconciled_deployment_also_brings_the_campaign_out_of_draft(): void
+    {
+        $strategy = $this->stuckStrategy();
+
+        $this->assertSame(CampaignStatus::Draft, $strategy->campaign->status, 'precondition');
+
+        $this->runReconcilerWithVerdict(true);
+
+        /*
+         * The strategy half of this was already right; the campaign half was
+         * never written, because the lifecycle update lived at the bottom of
+         * DeployCampaign::handle() — the lines the dead worker skipped, which is
+         * why the strategy was stuck in the first place.
+         *
+         * A campaign left at draft here is not a cosmetic mismatch. The whole
+         * optimisation side selects `status = active` (performance fetch,
+         * health checks, self-healing, budget allocation, cannibalisation) while
+         * billing also matches platform_status — so it was charged for daily and
+         * examined by nothing, with no performance data fetched to show in a
+         * report.
+         */
+        $this->assertSame(CampaignStatus::Active, $strategy->campaign->fresh()->status);
+    }
+
+    public function test_a_reconciled_setup_only_campaign_is_paused_rather_than_activated(): void
+    {
+        $strategy = $this->stuckStrategy();
+        $strategy->campaign->customer->forceFill(['service_type' => 'setup_only'])->save();
+
+        $this->runReconcilerWithVerdict(true);
+
+        // "Everything arrives paused" is a promise in the receipt email, and a
+        // late-completing deployment must not be the one path that breaks it by
+        // switching a one-time-setup customer's ads on against their own card.
+        $this->assertSame(CampaignStatus::Paused, $strategy->campaign->fresh()->status);
+    }
+
+    public function test_a_deployment_that_could_not_be_verified_leaves_the_campaign_alone(): void
+    {
+        $strategy = $this->stuckStrategy();
+
+        $this->runReconcilerWithVerdict(false);
+
+        // Not proven live, so nothing is asserted about it. Marking this active
+        // would hand a campaign that may never have deployed to the agents that
+        // spend against it.
+        $this->assertSame(CampaignStatus::Draft, $strategy->campaign->fresh()->status);
+    }
+
     public function test_stuck_deployment_that_cannot_be_verified_is_marked_failed(): void
     {
         $strategy = $this->stuckStrategy();
