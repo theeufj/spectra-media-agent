@@ -59,7 +59,7 @@ class SetupProgressController extends Controller
             }
 
             // --- 2. First campaign -------------------------------------------
-            $campaigns = $customer->campaigns()->get(['id', 'status', 'auto_generated_at', 'budget_confirmed_at']);
+            $campaigns = $customer->campaigns()->get(['id', 'uuid', 'status', 'auto_generated_at', 'budget_confirmed_at']);
             $firstCampaign = $campaigns->sortBy('id')->first();
             $hasCampaign = $campaigns->isNotEmpty();
 
@@ -116,7 +116,7 @@ class SetupProgressController extends Controller
                     'completed' => $hasCampaign,
                     'status' => $hasCampaign ? 'completed' : 'pending',
                     'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign->id)
+                        ? route('campaigns.show', $firstCampaign)
                         : route('campaigns.wizard'),
                     'action_text' => $hasCampaign ? 'Review Campaign' : 'Create Campaign',
                 ],
@@ -127,7 +127,7 @@ class SetupProgressController extends Controller
                     'completed' => $budgetConfirmed,
                     'status' => $budgetConfirmed ? 'completed' : 'pending',
                     'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign->id)
+                        ? route('campaigns.show', $firstCampaign)
                         : route('campaigns.wizard'),
                     'action_text' => 'Review Budget',
                 ],
@@ -139,7 +139,7 @@ class SetupProgressController extends Controller
                         : 'Two minutes on your website so we can count the leads and sales your ads bring.',
                     'completed' => (bool) $customer->gtm_installed,
                     'status' => $customer->gtm_installed ? 'completed' : 'pending',
-                    'action_url' => route('customers.gtm.setup', $customer->id),
+                    'action_url' => route('customers.gtm.setup', $customer),
                     'action_text' => $customer->gtm_installed ? 'View Tracking' : 'Install Snippet',
                 ],
                 $customer->service_type === 'setup_only' ? [
@@ -171,7 +171,7 @@ class SetupProgressController extends Controller
                     'completed' => $hasDeployed,
                     'status' => $hasDeployed ? 'completed' : ($deployPending ? 'in_progress' : 'pending'),
                     'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign->id)
+                        ? route('campaigns.show', $firstCampaign)
                         : route('campaigns.wizard'),
                     'action_text' => 'Deploy',
                 ],

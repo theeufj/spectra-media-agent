@@ -66,7 +66,7 @@ class SearchController extends Controller
                 'id' => $c->id,
                 'title' => $c->name.($c->trashed() ? ' (deleted)' : ''),
                 'subtitle' => $c->website ?: 'No website',
-                'url' => route('admin.customers.show', $c->id),
+                'url' => route('admin.customers.show', $c),
             ])
             ->all();
     }
@@ -119,7 +119,7 @@ class SearchController extends Controller
                 'title' => $c->name,
                 // status is cast to CampaignStatus, so ->value is always there.
                 'subtitle' => $c->customer->name.' — '.$c->status->value,
-                'url' => route('admin.campaigns.show', $c->id),
+                'url' => route('admin.campaigns.show', $c),
             ])
             ->all();
     }

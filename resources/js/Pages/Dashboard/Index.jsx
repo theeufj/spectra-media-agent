@@ -321,8 +321,8 @@ export default function Dashboard({ auth }) {
             days: selectedDays,
         };
         Promise.all([
-            axios.get(route('api.campaigns.performance', { campaign: selectedCampaign.id, ...params })),
-            axios.get(route('api.campaigns.roi', { campaign: selectedCampaign.id, days: selectedDays })),
+            axios.get(route('api.campaigns.performance', { campaign: selectedCampaign.uuid, ...params })),
+            axios.get(route('api.campaigns.roi', { campaign: selectedCampaign.uuid, days: selectedDays })),
         ]).then(([perfRes, roiRes]) => {
             setPerformanceData(perfRes.data);
             setCampaignRoi(roiRes.data);

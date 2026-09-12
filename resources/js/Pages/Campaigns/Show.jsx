@@ -49,7 +49,7 @@ const CollateralSummaryCard = ({ campaign }) => {
                             {campaign.strategies?.filter(s => s.signed_off_at).map(strategy => (
                                 <Link
                                     key={strategy.id}
-                                    href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
+                                    href={route('campaigns.collateral.show', { campaign: campaign.uuid, strategy: strategy.uuid })}
                                     className="inline-flex items-center px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition text-sm"
                                 >
                                     <span className="mr-2">{strategy.platform}</span>
@@ -87,7 +87,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
 
     const handleUpdate = (e) => {
         e.preventDefault();
-        put(route('strategies.update', strategy.id), {
+        put(route('strategies.update', strategy.uuid), {
             onSuccess: () => setIsEditing(false),
         });
     };
@@ -168,7 +168,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     <div className="p-2 text-center bg-green-100 text-green-800 rounded-lg">
                         Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                         <Link
-                            href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.id })}
+                            href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.uuid })}
                             className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                         >
                             View Collateral
@@ -340,7 +340,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
     // `timeout` (took too long), and `disconnected` (the endpoint itself has
     // been failing), so the page can say which.
     const { phase: watchPhase, data: watchData } = useJobWatch(
-        route('api.campaigns.show', { campaign: campaigns.id }),
+        route('api.campaigns.show', { campaign: campaigns.uuid }),
         {
             enabled: isPolling,
             interval: 10000,
@@ -385,7 +385,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             message: `Are you sure you want to sign off on the ${strategy.platform} strategy? This will lock it and you won't be able to edit it anymore.`,
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
-                post(route('campaigns.strategies.sign-off', { campaign: campaigns.id, strategy: strategy.id }), {
+                post(route('campaigns.strategies.sign-off', { campaign: campaigns.uuid, strategy: strategy.uuid }), {
                     preserveScroll: true,
                     onSuccess: (page) => {
                         // Update local state with fresh data from server
@@ -405,7 +405,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             message: 'Are you sure you want to sign off on all strategies? This will lock them and start generating collateral for all platforms.',
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
-                post(route('campaigns.sign-off-all', { campaign: campaigns.id }), {
+                post(route('campaigns.sign-off-all', { campaign: campaigns.uuid }), {
                     preserveScroll: true,
                     onSuccess: (page) => {
                         setShowGenerationModal(true);
@@ -431,7 +431,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 : 'This will delete all current strategies and generate new ones using AI. Are you sure?',
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
-                router.post(route('campaigns.regenerate-strategies', { campaign: campaigns.id }), { force: force ? 1 : 0 }, {
+                router.post(route('campaigns.regenerate-strategies', { campaign: campaigns.uuid }), { force: force ? 1 : 0 }, {
                     preserveScroll: true,
                     onSuccess: () => {
                         // Re-arming the watch resets its phase, and pollingError
@@ -468,7 +468,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             {campaign.strategies?.some(s => s.deployed_at || s.deployment_status) && (
                 <div className="mx-auto max-w-7xl mb-6">
                     <Link
-                        href={route('campaigns.deployment-status', { campaign: campaign.id })}
+                        href={route('campaigns.deployment-status', { campaign: campaign.uuid })}
                         className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                     >
                         View deployment status

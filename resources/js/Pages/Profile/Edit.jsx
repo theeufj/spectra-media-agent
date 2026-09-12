@@ -536,7 +536,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                                 const form = new FormData(e.target);
                                                 const email = form.get('email');
                                                 const role = form.get('role');
-                                                router.post(route('invitations.store', customer.id), { email, role });
+                                                router.post(route('invitations.store', customer.uuid), { email, role });
                                             }} className="mt-4 flex items-center gap-4">
                                                 <div className="flex-1">
                                                     <InputLabel htmlFor="email" value="Email" className="sr-only" />

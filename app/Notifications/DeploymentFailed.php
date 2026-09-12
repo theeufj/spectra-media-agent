@@ -34,7 +34,7 @@ class DeploymentFailed extends Notification implements ShouldQueue
             ->greeting('Hi '.$notifiable->name.',')
             ->line("Your campaign \"{$this->campaign->name}\" failed to deploy.")
             ->line('Error: '.$this->error)
-            ->action('View Details', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+            ->action('View Details', $this->tenantUrl(route('campaigns.show', $this->campaign, false)))
             ->line('Our team has been notified. You can also try redeploying from the campaign page.')
             ->salutation($this->teamSalutation());
     }
@@ -46,7 +46,7 @@ class DeploymentFailed extends Notification implements ShouldQueue
         return [
             'title' => "Deployment failed: {$this->campaign->name}",
             'message' => $this->error,
-            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)),
+            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign, false)),
             'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,

@@ -123,7 +123,7 @@ function Readiness({ readiness }) {
                                 <tr key={a.id} className="align-top hover:bg-gray-50">
                                     <td className="px-4 py-3 text-sm">
                                         <Link
-                                            href={route('admin.customers.show', a.id)}
+                                            href={route('admin.customers.show', a.uuid)}
                                             className="font-medium text-brand-dark hover:underline"
                                         >
                                             {a.name}

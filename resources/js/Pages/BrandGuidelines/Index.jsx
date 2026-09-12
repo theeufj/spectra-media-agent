@@ -193,7 +193,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 read the site again.
                             </p>
                             <a
-                                href={route('customers.edit', customer.id)}
+                                href={route('customers.edit', customer.uuid)}
                                 className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker"
                             >
                                 Change my website address

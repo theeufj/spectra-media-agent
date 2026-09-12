@@ -374,7 +374,7 @@ class CampaignController extends Controller
             'conversionTracking' => [
                 'container_id' => $customer->gtm_container_id,
                 'installed' => (bool) $customer->gtm_installed,
-                'setup_url' => route('customers.gtm.setup', $customer->id, false),
+                'setup_url' => route('customers.gtm.setup', $customer, false),
             ],
         ]);
     }

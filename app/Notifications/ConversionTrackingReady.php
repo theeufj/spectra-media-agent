@@ -24,7 +24,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $setupUrl = $this->tenantUrl(route('customers.gtm.setup', $this->customer->id, false));
+        $setupUrl = $this->tenantUrl(route('customers.gtm.setup', $this->customer, false));
 
         return $this->brandedMail()
             ->subject('Action required: install your conversion tracking snippet')

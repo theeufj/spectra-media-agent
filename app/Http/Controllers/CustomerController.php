@@ -121,12 +121,11 @@ class CustomerController extends Controller
      */
     public function edit(Customer $customer)
     {
-        $user = Auth::user();
-
-        // Check if user has access to this customer
-        if (! $user->can('update', $customer)) {
-            return redirect()->back()->with('error', 'You do not have permission to edit this customer.');
-        }
+        // Was a hand-rolled can() that redirected back with a flash. CLAUDE.md
+        // asks for $this->authorize() so the refusal is structural and uniform;
+        // redirecting "back" also sent an unauthorised request to whatever page
+        // happened to be in the Referer, which is not a defined destination.
+        $this->authorize('update', $customer);
 
         return Inertia::render('Customers/Edit', [
             'customer' => $customer,

@@ -239,14 +239,14 @@ export default function Index({ auth, campaigns = [] }) {
                                                                             <div className="flex items-center gap-2">
                                                                                 {hasDeployed(strategy) && (
                                                                                     <Link
-                                                                                        href={route('campaigns.deployment-status', { campaign: campaign.id })}
+                                                                                        href={route('campaigns.deployment-status', { campaign: campaign.uuid })}
                                                                                         className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
                                                                                     >
                                                                                         Deployment status
                                                                                     </Link>
                                                                                 )}
                                                                                 <Link
-                                                                                    href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
+                                                                                    href={route('campaigns.collateral.show', { campaign: campaign.uuid, strategy: strategy.uuid })}
                                                                                     className="px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker text-sm font-medium"
                                                                                 >
                                                                                     {hasDeployed(strategy) ? 'Review creative' : 'Review & deploy'}

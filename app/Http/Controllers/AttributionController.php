@@ -62,7 +62,7 @@ class AttributionController extends Controller
             : 0;
 
         return Inertia::render('Campaigns/Attribution', [
-            'campaign' => $campaign->only('id', 'name'),
+            'campaign' => $campaign->only('id', 'uuid', 'name'),
             'pixelConfig' => [
                 'customer_id' => $campaign->customer_id,
                 'signing_secret' => $campaign->customer->tracking_signing_secret,

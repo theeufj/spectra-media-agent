@@ -233,21 +233,21 @@ class DeploymentController extends Controller
 
             \Illuminate\Support\Facades\Mail::raw(
                 "Campaign pending deployment — admin action required\n\n"
-                ."Customer: {$customer->business_name} (ID: {$customer->id})\n"
+                ."Customer: {$customer->name} (ID: {$customer->id})\n"
                 ."Campaign: {$campaign->name} (ID: {$campaign->id})\n"
                 ."Budget: \${$campaign->daily_budget}/day\n"
                 ."Strategies: {$signedOffCount} signed off\n\n"
                 .$reason."\n\n"
-                .url(route('admin.customers.show', $customer->id)),
+                .url(route('admin.customers.show', $customer)),
                 fn ($m) => $m->to(config('app.admin_email'))
-                    ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->business_name}")
+                    ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->name}")
             );
 
             // Also raise the in-product admin alert — a raw email with no
             // follow-up was the entire SLA machinery behind "within 24 hours".
             \App\Notifications\CriticalAgentAlert::deliver(
                 'pending_admin_deployment',
-                "Deploy \"{$campaign->name}\" for {$customer->business_name}",
+                "Deploy \"{$campaign->name}\" for {$customer->name}",
                 $reason,
                 ['campaign_id' => $campaign->id, 'customer_id' => $customer->id],
                 \App\Models\NotificationTemplate::RECIPIENTS_ADMINS,

@@ -48,7 +48,7 @@ class CampaignStatusUpdated extends Notification
             ->greeting('Hi '.$notifiable->name.',')
             ->line('The status of your campaign "'.$this->campaign->name.'" has changed.')
             ->line('New Status: '.$this->campaign->primary_status)
-            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign, false)))
             ->salutation($this->teamSalutation());
     }
 
@@ -98,7 +98,7 @@ class CampaignStatusUpdated extends Notification
         return [
             'title' => $title,
             'message' => $message,
-            'action_url' => url('/campaigns/'.$this->campaign->id.'/strategies'),
+            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign, false)),
             'action_text' => 'Open campaign',
             'campaign_id' => $this->campaign->id,
             'status' => $this->campaign->primary_status,

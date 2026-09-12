@@ -26,7 +26,7 @@ class ReportController extends Controller
 
         return Inertia::render('Reports/Index', [
             'reports' => $history,
-            'customer' => $customer->only('id', 'name', 'report_branding'),
+            'customer' => $customer->only('id', 'uuid', 'name', 'report_branding'),
             'canWhiteLabel' => $this->canWhiteLabel($request),
         ]);
     }
@@ -121,7 +121,7 @@ class ReportController extends Controller
         }
 
         return Inertia::render('Reports/Settings', [
-            'customer' => $customer->only('id', 'name', 'report_branding'),
+            'customer' => $customer->only('id', 'uuid', 'name', 'report_branding'),
             'canWhiteLabel' => $this->canWhiteLabel($request),
         ]);
     }

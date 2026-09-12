@@ -33,7 +33,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 ->greeting('Hi '.$notifiable->name.',')
                 ->line("We ran into an issue deploying your campaign \"{$this->campaign->name}\" and our team has been notified.")
                 ->line("We'll be in touch shortly to get this resolved.")
-                ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+                ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign, false)))
                 ->salutation($this->teamSalutation());
         }
 
@@ -96,7 +96,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 : ($this->failureCount > 0
                     ? "{$this->successCount} platform(s) live, {$this->failureCount} had an issue."
                     : 'Your ads are running.'),
-            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)),
+            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign, false)),
             'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,

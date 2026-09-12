@@ -596,7 +596,7 @@ export default function SandboxResults({ customer, campaigns, agentResults, perf
                         </a>
                         <div className="flex gap-3">
                             <button
-                                onClick={() => router.delete(route('sandbox.destroy', customer.id))}
+                                onClick={() => router.delete(route('sandbox.destroy', customer.uuid))}
                                 className="px-4 py-2 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition"
                             >
                                 Delete Sandbox

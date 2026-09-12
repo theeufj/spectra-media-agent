@@ -12,14 +12,14 @@ function InboxCell({ user }) {
 
     const save = (e) => {
         e.preventDefault();
-        post(route('admin.users.inbox.assign', user.id), {
+        post(route('admin.users.inbox.assign', user.uuid), {
             preserveScroll: true,
             onSuccess: () => setEditing(false),
         });
     };
 
     const remove = () => {
-        destroy(route('admin.users.inbox.remove', user.id), { preserveScroll: true });
+        destroy(route('admin.users.inbox.remove', user.uuid), { preserveScroll: true });
     };
 
     if (user.email_inbox && !editing) {

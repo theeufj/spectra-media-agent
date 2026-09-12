@@ -189,7 +189,7 @@ class CustomerBillingController extends Controller
         $totalDebits = AdSpendTransaction::totalDebited($credit->getKey());
 
         return Inertia::render('Admin/CustomerCreditLedger', [
-            'customer' => $customer->only('id', 'name', 'business_name'),
+            'customer' => $customer->only('id', 'uuid', 'name'),
             'credit' => [
                 'current_balance' => (float) $credit->current_balance,
                 'status' => $credit->status,

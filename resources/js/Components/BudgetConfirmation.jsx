@@ -24,7 +24,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('campaigns.confirm-budget', { campaign: campaign.id }), { preserveScroll: true });
+        post(route('campaigns.confirm-budget', { campaign: campaign.uuid }), { preserveScroll: true });
     };
 
     if (confirmed) {

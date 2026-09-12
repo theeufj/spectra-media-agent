@@ -54,7 +54,7 @@ class KeywordController extends Controller
         }
 
         return Inertia::render('Keywords/Research', [
-            'customer' => $customer->only('id', 'name', 'industry', 'website_url'),
+            'customer' => $customer->only('id', 'uuid', 'name', 'industry', 'website_url'),
         ]);
     }
 

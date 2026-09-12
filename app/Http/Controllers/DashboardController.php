@@ -87,7 +87,7 @@ class DashboardController extends Controller
             'trackingStatus' => [
                 'provisioned' => (bool) $activeCustomer->gtm_container_id,
                 'installed' => (bool) $activeCustomer->gtm_installed,
-                'setup_url' => route('customers.gtm.setup', $activeCustomer->id),
+                'setup_url' => route('customers.gtm.setup', $activeCustomer),
             ],
         ]);
     }

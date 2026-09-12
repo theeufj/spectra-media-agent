@@ -102,7 +102,7 @@ function HandOffPanel({ customer }) {
         setError(null);
 
         try {
-            await fetchJson(route('customers.gtm.handoff', { customer: customer.id }), {
+            await fetchJson(route('customers.gtm.handoff', { customer: customer.uuid }), {
                 method: 'POST',
                 json: { email },
             });
@@ -189,7 +189,7 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
 
     const handleProvision = () => {
         setProcessing(true);
-        router.post(route('customers.gtm.provision', customer.id), {}, {
+        router.post(route('customers.gtm.provision', customer.uuid), {}, {
             onFinish: () => setProcessing(false),
         });
     };
@@ -197,14 +197,14 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
     const handleVerify = () => {
         setProcessing(true);
         setErrorMessage(null);
-        router.post(route('customers.gtm.verify', customer.id), {}, {
+        router.post(route('customers.gtm.verify', customer.uuid), {}, {
             onFinish: () => setProcessing(false),
         });
     };
 
     const handleRescan = () => {
         setProcessing(true);
-        router.post(route('customers.gtm.rescan', customer.id), {}, {
+        router.post(route('customers.gtm.rescan', customer.uuid), {}, {
             onFinish: () => setProcessing(false),
         });
     };

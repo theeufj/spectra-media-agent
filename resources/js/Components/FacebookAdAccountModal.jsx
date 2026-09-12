@@ -41,7 +41,7 @@ export default function FacebookAdAccountModal({ show, onClose, customer: initia
         setSuccessMessage(null);
         setErrorMessage(null);
         router.post(
-            route('customers.facebook.assign', customer.id),
+            route('customers.facebook.assign', customer.uuid),
             { ad_account_id: adAccountId.replace(/^act_/, '') },
             {
                 preserveScroll: true,
@@ -61,7 +61,7 @@ export default function FacebookAdAccountModal({ show, onClose, customer: initia
         setSuccessMessage(null);
         setErrorMessage(null);
         router.post(
-            route('customers.facebook.verify', customer.id),
+            route('customers.facebook.verify', customer.uuid),
             {},
             {
                 preserveScroll: true,

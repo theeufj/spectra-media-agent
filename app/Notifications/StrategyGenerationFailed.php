@@ -38,7 +38,7 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We were unable to generate a strategy for your campaign \"{$this->campaign->name}\".")
             ->line('Reason: '.$this->error)
-            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign, false)))
             ->line('Please check your knowledge base content and try again.')
             ->salutation($this->teamSalutation());
     }
@@ -56,7 +56,7 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
         return [
             'title' => 'We could not build a strategy for '.$this->campaign->name,
             'message' => $this->error,
-            'action_url' => url('/campaigns/'.$this->campaign->id.'/strategies'),
+            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign, false)),
             'action_text' => 'Open campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,

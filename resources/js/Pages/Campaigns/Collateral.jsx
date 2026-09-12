@@ -109,7 +109,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     // usePolling skips overlapping requests, cleans up on unmount, and counts
     // consecutive failures so the page can say it lost contact.
     const { data: polled, failureStreak } = usePolling(
-        isPolling ? route('api.collateral.show', { strategy: currentStrategy.id }) : null,
+        isPolling ? route('api.collateral.show', { strategy: currentStrategy.uuid }) : null,
         { interval: 3000 }
     );
 
@@ -206,7 +206,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingAdCopy(true);
                 setIsPolling(true);
-                router.post(route('campaigns.ad-copy.store', { campaign: campaign.id, strategy: strategyId }), { platform: platform }, {
+                router.post(route('campaigns.ad-copy.store', { campaign: campaign.uuid, strategy: strategyId }), { platform: platform }, {
                     onError: (errors) => {
                         setGeneratingAdCopy(false);
                         setIsPolling(false);
@@ -228,7 +228,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingImage(true);
                 setIsPolling(true);
-                router.post(route('campaigns.collateral.image.store', { campaign: campaign.id, strategy: strategyId }), {}, {
+                router.post(route('campaigns.collateral.image.store', { campaign: campaign.uuid, strategy: strategyId }), {}, {
                     onError: (errors) => {
                         setGeneratingImage(false);
                         setIsPolling(false);
@@ -250,7 +250,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingVideo(true);
                 setIsPolling(true);
-                router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), { platform }, {
+                router.post(route('campaigns.collateral.video.store', { campaign: campaign.uuid, strategy: strategyId }), { platform }, {
                     onError: (errors) => {
                         setGeneratingVideo(false);
                         setIsPolling(false);
@@ -310,7 +310,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             formData.append('images[]', file);
         });
 
-        router.post(route('campaigns.collateral.image.upload', { campaign: campaign.id, strategy: strategyId }), formData, {
+        router.post(route('campaigns.collateral.image.upload', { campaign: campaign.uuid, strategy: strategyId }), formData, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -333,7 +333,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         const formData = new FormData();
         formData.append('video', file);
 
-        router.post(route('campaigns.collateral.video.upload', { campaign: campaign.id, strategy: strategyId }), formData, {
+        router.post(route('campaigns.collateral.video.upload', { campaign: campaign.uuid, strategy: strategyId }), formData, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -427,7 +427,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         // took the user's money for a deploy that was then rejected.
         if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
             toast.warning('Please confirm your daily budget first — taking you there now.');
-            router.visit(route('campaigns.show', campaign.id));
+            router.visit(route('campaigns.show', campaign.uuid));
             return;
         }
 
@@ -682,7 +682,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                     return (
                                         <Link
                                             key={strategyItem.id}
-                                            href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategyItem.id })}
+                                            href={route('campaigns.collateral.show', { campaign: campaign.uuid, strategy: strategyItem.uuid })}
                                             onClick={() => handleTabChange(strategyItem.platform)}
                                             className={`
                                                 ${activeTab === strategyItem.platform

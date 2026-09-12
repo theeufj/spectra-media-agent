@@ -153,7 +153,9 @@ class BrandGuidelineController extends Controller
                 ->first();
 
             if ($autoCampaign && $autoCampaign->strategies()->exists()) {
-                return redirect()->route('campaigns.show', $autoCampaign->id)
+                // Pass the model, not its id: the route key is the uuid now, and an id
+                // here produced a URL that resolved but leaked the count.
+                return redirect()->route('campaigns.show', $autoCampaign)
                     ->with('success', 'Brand profile confirmed — here\'s the first campaign we built from it.');
             }
 

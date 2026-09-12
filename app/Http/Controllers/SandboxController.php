@@ -38,7 +38,7 @@ class SandboxController extends Controller
 
         RunSandboxSimulation::dispatch($customer);
 
-        return redirect()->route('sandbox.results', $customer->id)
+        return redirect()->route('sandbox.results', $customer)
             ->with('success', 'Sandbox created! Agents are now analyzing your campaigns...');
     }
 
