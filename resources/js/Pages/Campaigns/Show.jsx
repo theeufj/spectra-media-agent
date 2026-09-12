@@ -169,7 +169,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                         Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                         <Link
                             href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.id })}
-                            className="ml-4 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                            className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                         >
                             View Collateral
                         </Link>
@@ -627,7 +627,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                                     Force Regenerate
                                 </button>
                             )}
-                            <PrimaryButton onClick={handleSignOffAll} disabled={processing || allStrategiesSignedOff} className="bg-green-600 hover:bg-green-700">
+                            <PrimaryButton onClick={handleSignOffAll} disabled={processing || allStrategiesSignedOff}>
                                 {allStrategiesSignedOff ? 'All Strategies Signed Off' : 'Sign Off All Strategies'}
                             </PrimaryButton>
                         </div>

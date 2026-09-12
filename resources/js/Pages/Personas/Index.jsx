@@ -105,33 +105,47 @@ export default function Index({ personas, campaigns }) {
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>
                             <p className="mt-1 text-sm text-gray-500">AI-generated audience segments to tailor ad copy and targeting.</p>
                         </div>
-                        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
-                            {showCreate ? 'Cancel' : '+ Create Persona'}
-                        </button>
+                        {personas.length > 0 && (
+                            <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
+                                {showCreate ? 'Cancel' : '+ Create Persona'}
+                            </button>
+                        )}
                     </div>
 
-                    {/* AI Generate Panel */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-5 mb-6">
-                        <h3 className="text-sm font-semibold text-purple-900 mb-3">Generate with AI</h3>
-                        <form onSubmit={handleGenerate} className="flex items-end gap-4">
-                            <div className="flex-1">
-                                <label className="block text-xs text-purple-700 mb-1">Campaign (optional)</label>
-                                <select value={generateForm.data.campaign_id} onChange={e => generateForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-purple-200 text-sm">
-                                    <option value="">All campaigns</option>
-                                    {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs text-purple-700 mb-1">Count</label>
-                                <select value={generateForm.data.count} onChange={e => generateForm.setData('count', parseInt(e.target.value))} className="rounded-lg border-purple-200 text-sm">
-                                    {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                            </div>
-                            <button type="submit" disabled={generateForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
-                                {generateForm.processing ? 'Generating...' : 'Generate Personas'}
-                            </button>
-                        </form>
-                    </div>
+                    {/*
+                        Generate more.
+                        
+                        Only once some exist: on an empty account this panel put a
+                        third "generate" control on a screen that already had one in
+                        the header and one in the empty state, and its purple was a
+                        fifth button colour with no meaning behind it. The campaign
+                        and count pickers are for tuning a second batch, which is not
+                        a decision anybody has on their first visit — the empty state
+                        just generates four.
+                    */}
+                    {personas.length > 0 && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Generate more with AI</h3>
+                            <form onSubmit={handleGenerate} className="flex items-end gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-gray-600 mb-1">Campaign (optional)</label>
+                                    <select value={generateForm.data.campaign_id} onChange={e => generateForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
+                                        <option value="">All campaigns</option>
+                                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-600 mb-1">Count</label>
+                                    <select value={generateForm.data.count} onChange={e => generateForm.setData('count', parseInt(e.target.value))} className="rounded-lg border-gray-300 text-sm">
+                                        {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+                                    </select>
+                                </div>
+                                <button type="submit" disabled={generateForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
+                                    {generateForm.processing ? 'Generating…' : 'Generate'}
+                                </button>
+                            </form>
+                        </div>
+                    )}
 
                     {/* Manual Create Form */}
                     {showCreate && (

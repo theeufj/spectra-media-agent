@@ -47,9 +47,9 @@ function UpgradePrompt() {
             <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ backgroundColor: brandTint(20) }}>
                 <LockIcon />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Strategy War Room</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Activity &amp; competitors</h3>
             <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-                Your command center for live agent activity, campaign health monitoring,
+                Live agent activity, campaign health monitoring,
                 AI optimization recommendations, and cross-platform performance — all in one view.
             </p>
             <Link
@@ -723,13 +723,20 @@ export default function WarRoom({
 }) {
     return (
         <AuthenticatedLayout>
-            <Head title="War Room" />
+            <Head title="Activity & competitors" />
             <div className="py-6">
                 <div className="mx-auto max-w-7xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Strategy War Room</h1>
-                            <p className="text-sm text-gray-500 mt-0.5">Live agent activity, health monitoring &amp; optimization command center</p>
+                            {/*
+                                Was "Strategy War Room" over "…optimization command
+                                center". Two military metaphors and no statement of
+                                what is on the page, which is: what the agents did,
+                                what they want to do next, and how the account reads
+                                against the competitors being watched.
+                            */}
+                            <h1 className="text-2xl font-bold text-gray-900">Activity &amp; competitors</h1>
+                            <p className="text-sm text-gray-500 mt-0.5">What the agents have been doing, what they want to change next, and how you compare to the sites you're watching.</p>
                         </div>
                         {canAccessWarRoom && abTests.length > 0 && (
                             <div className="flex items-center gap-2">
@@ -808,7 +815,7 @@ export default function WarRoom({
                                 </div>
                             )}
 
-                            {/* Competitor War Room — full width */}
+                            {/* Competitor watch list — full width */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">

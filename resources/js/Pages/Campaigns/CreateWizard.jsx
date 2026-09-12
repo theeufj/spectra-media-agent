@@ -25,7 +25,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Promoting a residential property listing to generate qualified buyer enquiries and inspection bookings.',
             goals: 'Drive enquiry form submissions, phone calls, and inspection bookings from serious buyers in the local area.',
-            primary_kpi: 'Cost per Enquiry under $80, minimum 5 enquiries per week',
+            primary_kpi: 'Enquiries for under $80 each, at least 5 a week',
             target_market: 'Home buyers actively searching for properties in the local suburb and surrounding areas, aged 25-60, with household income suitable for the property price range.',
             exclusions: 'Renters, property investors seeking commercial property, real estate students, competitors.',
         }
@@ -39,7 +39,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Generating appraisal requests and listing opportunities from homeowners considering selling.',
             goals: 'Drive free appraisal requests, grow listing pipeline, build brand recognition among homeowners in target suburbs.',
-            primary_kpi: 'Cost per Appraisal Request under $120',
+            primary_kpi: 'Appraisal requests for under $120 each',
             target_market: 'Homeowners in target suburbs aged 35-65 who may be considering selling in the next 6-12 months.',
             exclusions: 'Renters, first home buyers, commercial property owners.',
         }
@@ -52,7 +52,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Launching a new product/service to the market and need to generate awareness and initial sales.',
             goals: 'Generate awareness, drive traffic to product page, achieve initial sales targets.',
-            primary_kpi: '4x ROAS or $25 CPA',
+            primary_kpi: 'At least $4 of sales for every $1 spent',
         }
     },
     {
@@ -63,7 +63,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Running a seasonal promotion to boost sales and clear inventory.',
             goals: 'Maximize conversions during the promotional period, increase average order value.',
-            primary_kpi: '5x ROAS',
+            primary_kpi: 'At least $5 of sales for every $1 spent',
         }
     },
     {
@@ -74,7 +74,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Building brand awareness and recognition in our target market.',
             goals: 'Reach new audiences, increase brand recall, grow social following.',
-            primary_kpi: 'Reach 100,000 people, CPM under $10',
+            primary_kpi: 'Reach 100,000 people for under $10 per thousand views',
         }
     },
     {
@@ -85,7 +85,7 @@ const CAMPAIGN_TEMPLATES = [
         prefill: {
             reason: 'Generating qualified leads for our sales team.',
             goals: 'Capture contact information, qualify leads, nurture toward conversion.',
-            primary_kpi: '$15 Cost per Lead',
+            primary_kpi: 'Leads for under $15 each',
         }
     },
     {
@@ -731,17 +731,51 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 <InputError message={errors.total_budget} className="mt-2" />
                             </div>
                             
+                            {/*
+                                Was labelled "Primary KPI / Target" and placeheld
+                                "4x ROAS or $25 CPA" — four pieces of trade jargon
+                                in a required field, on a wizard aimed at people who
+                                run a business rather than a media desk. Someone who
+                                does not know what ROAS stands for cannot get past
+                                this step, and it is the step that decides what every
+                                agent afterwards optimises towards.
+
+                                Same field, same free text, but asked in words and
+                                with the two shapes an answer usually takes offered
+                                as one click. The jargon is kept in brackets rather
+                                than deleted: customers who already work this way
+                                should still recognise their own field.
+                            */}
                             <div>
-                                <InputLabel htmlFor="primary_kpi" value="Primary KPI / Target" />
-                                <HelpText text="How will you measure success?" />
-                                <TextInput 
-                                    id="primary_kpi" 
-                                    className="mt-2 block w-full" 
-                                    value={data.primary_kpi} 
-                                    onChange={(e) => setData('primary_kpi', e.target.value)} 
-                                    placeholder="4x ROAS or $25 CPA"
-                                    required 
+                                <InputLabel htmlFor="primary_kpi" value="What would make this campaign worth it?" />
+                                <HelpText text="The one number you'd judge it on. The agents optimise towards whatever you put here." />
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {[
+                                        { label: 'Leads under a set cost', fill: 'Leads for under $50 each' },
+                                        { label: 'Sales worth more than the spend', fill: 'At least $4 of sales for every $1 spent' },
+                                        { label: 'A number of enquiries a week', fill: 'At least 10 enquiries a week' },
+                                    ].map((option) => (
+                                        <button
+                                            key={option.label}
+                                            type="button"
+                                            onClick={() => setData('primary_kpi', option.fill)}
+                                            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-brand-dark hover:bg-brand-tint-10 hover:text-brand-darker"
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <TextInput
+                                    id="primary_kpi"
+                                    className="mt-2 block w-full"
+                                    value={data.primary_kpi}
+                                    onChange={(e) => setData('primary_kpi', e.target.value)}
+                                    placeholder="Leads for under $50 each"
+                                    required
                                 />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Edit the wording freely — "$50 CPA" or "4x ROAS" works just as well if that's how you think about it.
+                                </p>
                                 <InputError message={errors.primary_kpi} className="mt-2" />
                             </div>
                             
@@ -1204,12 +1238,20 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                             Continue →
                                         </PrimaryButton>
                                     ) : (
-                                        <PrimaryButton 
+                                        /*
+                                         * Overrode PrimaryButton's brand fill with
+                                         * green. Green is the app's status colour
+                                         * (healthy, live, approved); using it for
+                                         * actions too meant a green button could be
+                                         * either "this is fine" or "do the thing".
+                                         * PrimaryButton already carries the right
+                                         * treatment including its contrast fix.
+                                         */
+                                        <PrimaryButton
                                             type="submit"
                                             disabled={processing}
-                                            className="bg-green-600 hover:bg-green-700"
                                         >
-                                            {processing ? 'Creating...' : '🚀 Generate Strategy'}
+                                            {processing ? 'Creating…' : 'Generate strategy'}
                                         </PrimaryButton>
                                     )}
                                 </div>

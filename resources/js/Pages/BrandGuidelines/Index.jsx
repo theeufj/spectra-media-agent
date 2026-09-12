@@ -93,7 +93,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             <AuthenticatedLayout>
                 <Head title="Brand Guidelines" />
                 <div className="py-12">
-                    <div className="max-w-7xl mx-auto sm:">
+                    <div className="max-w-7xl mx-auto">
                         {flash?.success && (
                             <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
                                 <p className="text-sm font-medium">{flash.success}</p>
@@ -113,7 +113,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 <button
                                     onClick={handleReExtract}
                                     disabled={isExtracting}
-                                    className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                    className="inline-flex items-center px-4 py-2 bg-brand-dark border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-brand-darker focus:bg-brand-darker active:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                 >
                                     {isExtracting ? (
                                         <>
@@ -155,7 +155,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             <Head title="Brand Guidelines" />
             
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     {/* Flash Message */}
                     {flash?.success && (
                         <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
@@ -220,7 +220,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         {!brandGuideline.user_verified && (
                                             <button
                                                 onClick={handleVerify}
-                                                className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                                className="inline-flex items-center px-4 py-2 bg-brand-dark border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-brand-darker focus:bg-brand-darker active:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150"
                                             >
                                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -240,7 +240,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         <button
                                             onClick={handleReExtract}
                                             disabled={isExtracting}
-                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                            className="inline-flex items-center px-4 py-2 bg-brand-dark border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-brand-darker focus:bg-brand-darker active:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                         >
                                             {isExtracting ? (
                                                 <>
@@ -272,7 +272,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         <button
                                             onClick={handleSubmit}
                                             disabled={processing}
-                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                                            className="inline-flex items-center px-4 py-2 bg-brand-dark border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-brand-darker focus:bg-brand-darker active:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                         >
                                             {processing ? 'Saving...' : 'Save Changes'}
                                         </button>

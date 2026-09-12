@@ -129,7 +129,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 disabled:opacity-50"
+                            className="px-6 py-2 bg-brand-dark text-white text-sm font-medium rounded-full hover:bg-brand-darker disabled:opacity-50"
                         >
                             {processing ? 'Sending…' : 'Send'}
                         </button>
@@ -402,7 +402,7 @@ function SettingsPane({ inbox }) {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker disabled:opacity-50 transition-colors"
                             >
                                 {saving ? 'Saving…' : 'Save'}
                             </button>
@@ -544,7 +544,7 @@ export default function InboxIndex({ inbox, threads }) {
                     <div className="px-3 py-3 flex items-center gap-2">
                         <button
                             onClick={() => { setReplyTo(null); setCompose(true); }}
-                            className="flex-1 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 transition-colors"
+                            className="flex-1 flex items-center gap-2 px-4 py-2 bg-brand-dark text-white text-sm font-medium rounded-full hover:bg-brand-darker transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

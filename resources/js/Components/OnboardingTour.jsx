@@ -42,7 +42,7 @@ const TOUR_STEPS = [
     {
         target: '[data-tour="strategy"]',
         title: 'Strategy',
-        body: 'The War Room gives you a real-time strategic command center. Proposals help you plan new initiatives.',
+        body: 'Activity & competitors shows what the agents have been doing on your account and how you read against the sites you are watching. Proposals is where you plan something new.',
         placement: 'bottom',
     },
     {

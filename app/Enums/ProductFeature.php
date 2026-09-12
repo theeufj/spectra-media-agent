@@ -56,7 +56,7 @@ enum ProductFeature: string
             self::AnalyticsCrossPlatform => 'Cross-platform analytics',
             self::Attribution => 'Attribution',
             self::Roi => 'ROI dashboard',
-            self::WarRoom => 'War room',
+            self::WarRoom => 'Activity & competitors',
             self::Seo => 'SEO',
             self::Cro => 'CRO audits',
             self::Reports => 'Reports',

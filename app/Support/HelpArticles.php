@@ -288,8 +288,8 @@ HTML,
 <p>Using the gap analysis, the AI generates a specific counter-strategy: which angles to lead with in your ads, which competitor weaknesses to highlight, and what messaging will differentiate you in search results. This feeds directly into your campaign's ad copy refresh cycle.</p>
 <p>The result isn't generic advice — it's specific recommendations based on what your actual competitors are saying right now.</p>
 
-<h2>The War Room</h2>
-<p>All competitor intelligence is stored in your sitetospend.com War Room — a continuously updated view of your competitive landscape. You can see each competitor's messaging, your gap analysis, and the counter-strategy generated. This is also available to your team if you use the multi-user features.</p>
+<h2>Activity &amp; competitors</h2>
+<p>All competitor intelligence is stored on your sitetospend.com Activity &amp; competitors page — a continuously updated view of your competitive landscape. You can see each competitor's messaging, your gap analysis, and the counter-strategy generated. This is also available to your team if you use the multi-user features.</p>
 <p>Because this runs weekly, your competitive intelligence is never more than 7 days old — unlike the one-off analysis most businesses do and then forget.</p>
 HTML,
         ];
@@ -355,7 +355,7 @@ HTML,
 <h2>What to expect in the first 30 days</h2>
 <p>Week 1 is the data collection phase. Google's Smart Bidding is in learning mode — performance may fluctuate while it calibrates. This is normal and expected.</p>
 <p>By the end of week 2, bidding typically stabilises and you'll start seeing the agents make meaningful improvements — new ad variations, extension additions, time-of-day adjustments.</p>
-<p>By month 1, you'll have competitor intelligence in your War Room, A/B test results, and a campaign that's meaningfully better than it was on day one — all without any action from you.</p>
+<p>By month 1, you'll have competitor intelligence on your Activity &amp; competitors page, A/B test results, and a campaign that's meaningfully better than it was on day one — all without any action from you.</p>
 
 <h2>Getting help</h2>
 <p>Every action the agents take is logged in your Activity Feed with a clear explanation of what happened and why. If you have questions about any action, or want to understand a particular optimisation, you can submit a support ticket directly from the activity log.</p>

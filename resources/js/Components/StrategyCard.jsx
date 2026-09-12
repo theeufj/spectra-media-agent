@@ -105,7 +105,7 @@ const StrategyCard = ({ strategy, campaignId }) => {
                     Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                     <Link
                         href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.id })}
-                        className="ml-4 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                     >
                         View Collateral
                     </Link>

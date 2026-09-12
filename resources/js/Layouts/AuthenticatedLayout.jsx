@@ -275,7 +275,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         </span>
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
-                                        <Dropdown.Link href={route('strategy.war-room')}>War Room</Dropdown.Link>
+                                        <Dropdown.Link href={route('strategy.war-room')}>Activity &amp; competitors</Dropdown.Link>
                                         <Dropdown.Link href={route('proposals.index')}>Proposals</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
@@ -670,7 +670,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         active={route().current('strategy.war-room')}
                                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                                     >
-                                        War Room
+                                        Activity &amp; competitors
                                     </MobileNavLink>
                                     <MobileNavLink
                                         href={route('proposals.index')}

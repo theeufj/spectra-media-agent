@@ -67,13 +67,13 @@ export default function SitemapProcessingModal({ show, onClose }) {
                                     <div className="mt-7 flex items-center gap-3">
                                         <Link
                                             href={route('knowledge-base.index')}
-                                            className="inline-flex justify-center items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-delft-blue focus-visible:ring-offset-2 transition"
+                                            className="inline-flex justify-center items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-dark focus-visible:ring-offset-2 transition"
                                         >
                                             View Knowledge Base
                                         </Link>
                                         <button
                                             type="button"
-                                            className="inline-flex justify-center items-center rounded-lg border border-transparent bg-gradient-to-r from-delft-blue to-air-superiority-blue px-5 py-2.5 text-sm font-medium text-white hover:from-delft-blue/90 hover:to-air-superiority-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-delft-blue focus-visible:ring-offset-2 transition shadow-sm"
+                                            className="inline-flex justify-center items-center rounded-lg border border-transparent bg-brand-dark px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-darker focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-dark focus-visible:ring-offset-2 transition shadow-sm"
                                             onClick={onClose}
                                         >
                                             Got it, thanks!

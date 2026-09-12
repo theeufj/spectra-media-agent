@@ -116,9 +116,9 @@ function BriefCard({ brief, onAction, onDismiss }) {
                     <div className="mt-4 flex gap-2">
                         <button
                             onClick={() => onAction(brief.id)}
-                            className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition"
+                            className="px-3 py-1.5 text-xs font-medium bg-brand-dark text-white rounded hover:bg-brand-darker transition"
                         >
-                            Mark Actioned
+                            Mark actioned
                         </button>
                         <button
                             onClick={() => onDismiss(brief.id)}

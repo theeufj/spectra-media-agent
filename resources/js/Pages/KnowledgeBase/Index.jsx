@@ -147,13 +147,21 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
             header={
                 <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-gray-800">Knowledge Base</h2>
-                    <Link
-                        href={route('knowledge-base.create')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 shadow-sm transition"
-                    >
-                        <PlusIcon className="h-4 w-4" />
-                        Add Source
-                    </Link>
+                    {/*
+                        Navy gradient on a page whose siblings all use the brand
+                        orange — one of five primary-button treatments across the
+                        app, none of which meant anything different. Also hidden
+                        while empty, where the empty state already offers it.
+                    */}
+                    {hasSources && (
+                        <Link
+                            href={route('knowledge-base.create')}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker shadow-sm transition"
+                        >
+                            <PlusIcon className="h-4 w-4" />
+                            Add Source
+                        </Link>
+                    )}
                 </div>
             }
         >
@@ -204,7 +212,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                     <button
                                         type="submit"
                                         disabled={searching || !searchQuery.trim()}
-                                        className="px-5 py-2.5 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition"
+                                        className="px-5 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition"
                                     >
                                         {searching ? (
                                             <span className="flex items-center gap-2">
@@ -387,7 +395,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                                 href={`/knowledge-base?page=${page}`}
                                                 className={`w-9 h-9 flex items-center justify-center text-sm rounded-lg transition ${
                                                     pagination.current_page === page
-                                                        ? 'bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white shadow-sm font-medium'
+                                                        ? 'bg-brand-dark text-white shadow-sm font-medium'
                                                         : 'text-gray-600 bg-white border border-gray-200 hover:bg-gray-50'
                                                 }`}
                                             >
@@ -422,10 +430,10 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                 </p>
                                 <Link
                                     href={route('knowledge-base.create')}
-                                    className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 shadow-sm transition"
+                                    className="inline-flex min-h-[44px] items-center gap-1.5 px-5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker shadow-sm transition"
                                 >
                                     <PlusIcon className="h-4 w-4" />
-                                    Add Your First Source
+                                    Add your first source
                                 </Link>
                             </div>
                         </div>

@@ -84,7 +84,7 @@ export default function Create({ auth }) {
             <Head title="Create Knowledge Base" />
 
             <div className="py-8 sm:py-12">
-                <div className="max-w-3xl mx-auto sm:">
+                <div className="max-w-3xl mx-auto">
                     {/* Back Navigation */}
                     <Link
                         href={route('knowledge-base.index')}
@@ -114,7 +114,7 @@ export default function Create({ auth }) {
                         >
                             <div className={`flex items-center justify-center w-12 h-12 rounded-xl transition-colors ${
                                 uploadMode === 'sitemap'
-                                    ? 'bg-gradient-to-br from-delft-blue to-air-superiority-blue text-white'
+                                    ? 'bg-brand-dark text-white'
                                     : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
                             }`}>
                                 <GlobeAltIcon className="h-6 w-6" />
@@ -142,7 +142,7 @@ export default function Create({ auth }) {
                         >
                             <div className={`flex items-center justify-center w-12 h-12 rounded-xl transition-colors ${
                                 uploadMode === 'file'
-                                    ? 'bg-gradient-to-br from-delft-blue to-air-superiority-blue text-white'
+                                    ? 'bg-brand-dark text-white'
                                     : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
                             }`}>
                                 <DocumentArrowUpIcon className="h-6 w-6" />
@@ -207,7 +207,7 @@ export default function Create({ auth }) {
                                             <button
                                                 type="submit"
                                                 disabled={processing}
-                                                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-delft-blue to-air-superiority-blue px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-delft-blue/90 hover:to-air-superiority-blue/90 focus:outline-none focus:ring-2 focus:ring-delft-blue focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                                className="inline-flex items-center gap-2 rounded-lg bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-dark focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                             >
                                                 {processing ? (
                                                     <>
@@ -304,7 +304,7 @@ export default function Create({ auth }) {
                                             <button
                                                 type="submit"
                                                 disabled={processing || !data.document}
-                                                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-delft-blue to-air-superiority-blue px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-delft-blue/90 hover:to-air-superiority-blue/90 focus:outline-none focus:ring-2 focus:ring-delft-blue focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                                className="inline-flex items-center gap-2 rounded-lg bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-dark focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                             >
                                                 {processing ? (
                                                     <>

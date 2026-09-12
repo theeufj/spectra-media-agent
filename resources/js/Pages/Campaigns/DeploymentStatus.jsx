@@ -168,7 +168,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             <Head title={`Deployment - ${campaign.name}`} />
             
             <div className="py-12">
-                <div className="max-w-4xl mx-auto sm:">
+                <div className="max-w-4xl mx-auto">
                     {pollTimedOut && !allComplete && (
                         <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
                             This is taking longer than expected — we've stopped auto-refreshing.
@@ -288,9 +288,9 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             <div className="flex gap-4">
                                 <Link
                                     href="/dashboard"
-                                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                    className="inline-flex min-h-[44px] items-center px-4 bg-brand-dark text-white rounded-lg hover:bg-brand-darker"
                                 >
-                                    View Dashboard →
+                                    View dashboard →
                                 </Link>
                                 <Link
                                     href="/campaigns/wizard"

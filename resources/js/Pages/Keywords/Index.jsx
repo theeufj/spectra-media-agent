@@ -97,7 +97,7 @@ export default function Index({ keywords, stats, qsTrends }) {
                                 <option value="activate">Activate</option>
                                 <option value="remove">Remove</option>
                             </select>
-                            <button onClick={handleBulk} disabled={!bulkAction} className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50">Apply</button>
+                            <button onClick={handleBulk} disabled={!bulkAction} className="px-3 py-1 text-sm bg-brand-dark text-white rounded-lg disabled:opacity-50">Apply</button>
                         </div>
                     )}
 
