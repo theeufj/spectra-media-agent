@@ -67,8 +67,40 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
         >
             <Head title="Profile" />
 
-            <div className="py-12">
-                <div className="mx-auto max-w-7xl space-y-6 sm:">
+            {/*
+                Nine unrelated concerns were stacked in one unlabelled column —
+                your name, your password, the site tour, two OAuth grants, a
+                full create-a-customer form, that customer's integrations and
+                user list, and account deletion — 3,535px with no way to tell
+                where one ended and the next began, and no way to jump.
+                Grouped under headings, with a sticky index beside them.
+            */}
+            <div className="py-8 sm:py-12">
+                <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 sm:px-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:px-8">
+                    <nav aria-label="Settings sections" className="hidden lg:block">
+                        <ul className="sticky top-24 space-y-1 text-sm">
+                            {[
+                                ['account', 'Account'],
+                                ['connections', 'Connections'],
+                                ['customers', 'Customer accounts'],
+                                ['danger', 'Danger zone'],
+                            ].map(([id, label]) => (
+                                <li key={id}>
+                                    <a
+                                        href={`#${id}`}
+                                        className="block rounded-lg px-3 py-2 font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                                    >
+                                        {label}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </nav>
+
+                    <div className="min-w-0 space-y-6">
+                        <h2 id="account" className="scroll-mt-24 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            Account
+                        </h2>
                     <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <UpdateProfileInformationForm
                             mustVerifyEmail={mustVerifyEmail}
@@ -140,7 +172,32 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                     </div>
 
                     {/* Google API connection */}
-                    <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                    <h2 id="connections" className="scroll-mt-24 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            Connections
+                        </h2>
+
+                        <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                        {/*
+                            Admin only.
+
+                            /settings/google-api exists for Google's own OAuth
+                            app review — its route group is commented "for API
+                            verification / screen recording" — and it asks for
+                            six granular scopes under the heading "Required for
+                            API access verification", which describes our
+                            obligation to Google rather than anything the
+                            customer gets. It also sits behind `auth` alone,
+                            and CLAUDE.md's architecture rule is explicit that
+                            there are no per-customer OAuth flows: one platform
+                            credential serves every customer. Linking it from a
+                            customer's own profile invited exactly the flow the
+                            architecture forbids.
+
+                            The route is deliberately left reachable so the
+                            review process is not broken; it is simply no longer
+                            offered to customers.
+                        */}
+                        {auth.user?.isAdmin && (
                         <section className="max-w-xl">
                             <header className="flex items-start justify-between">
                                 <div>
@@ -183,6 +240,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                 )}
                             </div>
                         </section>
+                        )}
                     </div>
 
                     {/* Facebook API connection */}
@@ -229,7 +287,11 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                         </section>
                     </div>
 
-                                        <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                                        <h2 id="customers" className="scroll-mt-24 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            Customer accounts
+                        </h2>
+
+                        <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <section>
                             <header>
                                 <h2 className="text-lg font-medium text-gray-900">Create New Customer Account</h2>
@@ -496,8 +558,13 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                         </div>
                     ))}
 
-                    <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
-                        <DeleteUserForm className="max-w-xl" />
+                    <h2 id="danger" className="scroll-mt-24 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                            Danger zone
+                        </h2>
+
+                        <div className="rounded-lg border border-red-200 bg-white p-4 shadow-sm sm:p-8">
+                            <DeleteUserForm className="max-w-xl" />
+                        </div>
                     </div>
                 </div>
             </div>

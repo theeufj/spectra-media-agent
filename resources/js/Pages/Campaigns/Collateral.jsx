@@ -549,12 +549,21 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             user={auth.user}
             header={
                 <div className="flex justify-between items-center">
-                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">Collateral for {campaign.name} - {currentStrategy.name}</h2>
+                    {/* currentStrategy.name is frequently empty, which rendered
+                        "Collateral for Spring Lead Gen -" with a trailing dash
+                        and nothing after it. Fall back to the platform, which
+                        is what the reader actually wants to know. */}
+                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">
+                        Collateral for {campaign.name}
+                        {(currentStrategy.name || currentStrategy.platform)
+                            ? ` — ${currentStrategy.name || currentStrategy.platform}`
+                            : ''}
+                    </h2>
                     <div className="relative" ref={deployDropdownRef}>
                         <div className="flex">
                             <button
                                 onClick={handleDeploy}
-                                className="px-4 py-2 bg-green-600 text-white rounded-l-lg hover:bg-green-700 transition font-medium"
+                                className="px-4 py-2 bg-brand-dark text-white rounded-l-lg hover:bg-brand-darker transition font-medium"
                             >
                                 Deploy All
                             </button>
@@ -737,7 +746,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <button
                                             onClick={() => handleGenerateAdCopy(strategyItem.id, strategyItem.platform)}
                                             disabled={generatingAdCopy}
-                                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                            className="mt-4 px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
                                             {generatingAdCopy && (
                                                 <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -861,7 +870,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             <button
                                                 onClick={() => handleGenerateImage(strategyItem.id)}
                                                 disabled={generatingImage || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.image_generations.remaining <= 0)}
-                                                className="px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                                className="px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingImage && (
                                                     <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
+import { fetchJson } from '@/utils/http';
 
 function CopyBlock({ label, code }) {
     const [copied, setCopied] = useState(false);
@@ -80,6 +81,90 @@ function ExistingTagsInfo() {
     );
 }
 
+/**
+ * Send the instructions to whoever actually manages the website.
+ *
+ * The snippet step is the one thing on the critical path that a small business
+ * owner usually cannot do themselves, and the page offered them no way out of
+ * it — no developer hand-off, no "we'll do it", nothing. A customer who cannot
+ * complete this never gets conversion data, which means the product can never
+ * show them what it earned.
+ */
+function HandOffPanel({ customer }) {
+    const [email, setEmail] = useState('');
+    const [state, setState] = useState('idle');
+    const [error, setError] = useState(null);
+
+    const send = async () => {
+        if (!email || state === 'sending') return;
+
+        setState('sending');
+        setError(null);
+
+        try {
+            await fetchJson(route('customers.gtm.handoff', { customer: customer.id }), {
+                method: 'POST',
+                json: { email },
+            });
+            setState('sent');
+        } catch {
+            setState('idle');
+            setError('We could not send that. Check the address and try again.');
+        }
+    };
+
+    if (state === 'sent') {
+        return (
+            <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                <p className="text-sm text-green-900">
+                    Sent to <strong>{email}</strong>. They will get the snippets, your container ID and
+                    step-by-step instructions. This page will show "installed" once it is live.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <label htmlFor="gtm-handoff-email" className="block text-sm font-medium text-gray-900">
+                Don't manage your own website?
+            </label>
+            <p className="mt-1 text-xs text-gray-600">
+                We'll email everything below to whoever does — your web developer, agency, or whoever
+                built the site.
+            </p>
+
+            <div className="mt-3 flex flex-wrap items-start gap-2">
+                <input
+                    id="gtm-handoff-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            send();
+                        }
+                    }}
+                    placeholder="their@email.com"
+                    className="w-64 rounded-md border-gray-300 text-sm shadow-sm focus:border-brand-primary focus:ring-brand-primary"
+                />
+                <button
+                    type="button"
+                    onClick={send}
+                    disabled={!email || state === 'sending'}
+                    className="rounded-md bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
+                >
+                    {state === 'sending' ? 'Sending…' : 'Send instructions'}
+                </button>
+            </div>
+
+            {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+        </div>
+    );
+}
+
 export default function GTMSetupPage({ auth, customer: initialCustomer, snippet: initialSnippet, existingTags }) {
     const { flash } = usePage().props;
     const [customer, setCustomer] = useState(initialCustomer);
@@ -136,7 +221,7 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
             <Head title="Tracking Setup" />
 
             <div className="py-12">
-                <div className="max-w-3xl mx-auto sm: space-y-6">
+                <div className="max-w-3xl mx-auto space-y-6">
 
                     {successMessage && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
@@ -236,8 +321,30 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">
                                 Step 2 — Add the snippet to your website
                             </h3>
+
+                            {/*
+                                What it is, before what to do with it.
+                                This step gates every number the product
+                                produces — conversions, cost per enquiry, the
+                                forecast's accuracy — and it previously opened
+                                with raw markup and no explanation of why a
+                                customer should care.
+                            */}
+                            <p className="text-sm text-gray-700 mb-3">
+                                This is how we know which clicks turned into real enquiries and sales.
+                                Without it your ads still run, but we cannot tell you what they earned —
+                                and the agents have nothing to optimise toward.
+                            </p>
+
+                            {/*
+                                The hand-off. Most owner-operators do not edit
+                                their own site, and this page previously offered
+                                them nowhere to go.
+                            */}
+                            <HandOffPanel customer={customer} />
+
                             <p className="text-sm text-gray-600 mb-5">
-                                Paste these two snippets into your website. The first goes in the{' '}
+                                Editing the site yourself? Paste these two snippets in. The first goes in the{' '}
                                 <code className="text-xs bg-gray-100 px-1 rounded">&lt;head&gt;</code>, the
                                 second immediately after the opening{' '}
                                 <code className="text-xs bg-gray-100 px-1 rounded">&lt;body&gt;</code> tag.

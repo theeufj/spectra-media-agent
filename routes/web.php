@@ -446,6 +446,12 @@ Route::middleware(['auth', 'can:update,customer'])->group(function () {
     // Re-scan website for any GTM detection
     Route::post('/customers/{customer}/gtm/rescan', [App\Http\Controllers\GTMSetupController::class, 'rescan'])->name('customers.gtm.rescan');
 
+    // Email the snippet to whoever manages the customer's website. Throttled:
+    // it sends mail to an address typed into the page.
+    Route::post('/customers/{customer}/gtm/handoff', [App\Http\Controllers\GTMSetupController::class, 'handoff'])
+        ->middleware('throttle:5,1')
+        ->name('customers.gtm.handoff');
+
     // JSON: current GTM status
     Route::get('/customers/{customer}/gtm/status', [App\Http\Controllers\GTMSetupController::class, 'getStatus'])->name('customers.gtm.status');
 });

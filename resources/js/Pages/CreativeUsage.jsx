@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function CreativeUsage({ auth }) {
     const { creativeUsage, boostConfig, purchases, flash } = usePage().props;
@@ -16,7 +17,7 @@ export default function CreativeUsage({ auth }) {
         <AuthenticatedLayout user={auth.user}>
             <Head title="Creative Usage" />
 
-            <div className="max-w-4xl mx-auto sm:">
+            <div className="max-w-4xl mx-auto">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Creative Usage</h1>
                 <p className="text-gray-500 mb-8">
                     Track your monthly AI generation usage and purchase additional credits.
@@ -91,7 +92,13 @@ export default function CreativeUsage({ auth }) {
 
                 {/* Creative Boost Pack */}
                 {!creativeUsage.is_unlimited && (
-                    <div className="mb-8 bg-gradient-to-r from-brand-primary/10 to-amber-50 rounded-xl border border-brand-primary/30 p-6">
+                    <div
+                        className="mb-8 rounded-xl border p-6"
+                        style={{
+                            backgroundImage: `linear-gradient(to right, ${brandTint(10)}, #fffbeb)`,
+                            borderColor: brandTint(30),
+                        }}
+                    >
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -179,11 +186,41 @@ export default function CreativeUsage({ auth }) {
 function UsageBar({ label, icon, used, limit, bonus, remaining }) {
     const total = limit + bonus;
     const percentage = total > 0 ? Math.min((used / total) * 100, 100) : 0;
-    const isExhausted = remaining <= 0;
+
+    /*
+     * An allowance of zero is not an allowance you have used up.
+     *
+     * This rendered "0 / 0 — 0 remaining — Limit reached" in red for features
+     * the free plan never included, which tells a customer they have exhausted
+     * something they never had. It is the difference between "you are out" and
+     * "this is a paid feature", and the first reads as the product being
+     * broken.
+     */
+    const notIncluded = total === 0;
+    const isExhausted = !notIncluded && remaining <= 0;
 
     let barColor = 'bg-green-500';
     if (percentage >= 80) barColor = 'bg-red-500';
     else if (percentage >= 50) barColor = 'bg-yellow-500';
+
+    if (notIncluded) {
+        return (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <span>{icon}</span> {label}
+                    </h3>
+                    <span className="text-sm font-medium text-gray-500">Not on your plan</span>
+                </div>
+                <p className="mt-1.5 text-sm text-gray-600">
+                    Available on Growth.{' '}
+                    <Link href={route('subscription.pricing')} className="font-medium text-brand-dark underline">
+                        See plans
+                    </Link>
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 p-5">

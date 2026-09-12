@@ -736,6 +736,19 @@ function DashboardUsageBar({ label, used, limit, bonus }) {
     if (pct >= 80) color = 'bg-red-500';
     else if (pct >= 50) color = 'bg-yellow-500';
 
+    // "0 / 0" is not a quota, it is a feature the plan does not include.
+    if (total === 0) {
+        return (
+            <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                    <span className="text-sm text-gray-500">Not on your plan</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2.5" />
+            </div>
+        );
+    }
+
     return (
         <div>
             <div className="flex justify-between mb-1">

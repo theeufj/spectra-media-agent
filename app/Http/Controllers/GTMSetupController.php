@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\TrackingSnippetHandoff;
 use App\Models\Customer;
 use App\Services\GTM\GTMContainerService;
 use App\Services\GTM\GTMDetectionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
 class GTMSetupController extends Controller
@@ -105,6 +107,45 @@ class GTMSetupController extends Controller
             'error' => 'Snippet not detected yet. Make sure you\'ve added both the <head> and <body> snippets, then try again.',
             'customer' => $customer->fresh(),
         ]);
+    }
+
+    /**
+     * Email the snippet to whoever manages the customer's website.
+     *
+     * The install step is the one thing on the critical path an owner-operator
+     * usually cannot do, and this page gave them nowhere to go. Without it
+     * there are no conversions, so nothing downstream — cost per enquiry,
+     * the forecast's accuracy, the optimisation agents — has anything to work
+     * with.
+     */
+    public function handoff(Request $request, Customer $customer, GTMContainerService $gtmService)
+    {
+        $this->authorize('update', $customer);
+
+        $validated = $request->validate([
+            'email' => 'required|email|max:255',
+        ]);
+
+        if (! $customer->gtm_container_id) {
+            return response()->json([
+                'message' => 'There is no container to send yet — set up tracking first.',
+            ], 422);
+        }
+
+        $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
+
+        Mail::to($validated['email'])->queue(new TrackingSnippetHandoff(
+            $customer,
+            $snippet,
+            $request->user()->name ?: $customer->name,
+        ));
+
+        Log::info('GTM snippet handed off', [
+            'customer_id' => $customer->id,
+            'sent_to' => $validated['email'],
+        ]);
+
+        return response()->json(['sent' => true]);
     }
 
     /**
