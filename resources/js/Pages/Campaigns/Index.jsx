@@ -40,7 +40,16 @@ const CAMPAIGN_STATUS_STYLES = {
 
 export default function Index({ auth, campaigns = [] }) {
     const currency = useCurrency();
-    const [expandedCampaign, setExpandedCampaign] = React.useState(null);
+    /*
+     * The first campaign opens by default.
+     *
+     * Everything a customer came here to do — the budget, the strategies,
+     * "Review & deploy", deployment status — sat behind a chevron, so the page
+     * opened as a list of names with no visible action. Most accounts have one
+     * campaign; showing it costs nothing and removes a click from the only path
+     * that matters.
+     */
+    const [expandedCampaign, setExpandedCampaign] = React.useState(campaigns[0]?.id ?? null);
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     const handleDelete = (campaignId) => {

@@ -58,7 +58,7 @@ function UpgradePrompt() {
             >
                 Upgrade to Growth Plan
             </Link>
-            <p className="text-xs text-gray-500 mt-3">Available on Growth ($249/mo) and Agency plans</p>
+            <p className="text-xs text-gray-500 mt-3">Available on Growth (US$249/mo) and Agency plans</p>
         </div>
     );
 }

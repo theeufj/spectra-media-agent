@@ -6,7 +6,16 @@ import { Head, router, useForm } from '@inertiajs/react';
 function PlatformCard({ name, color, data, pct }) {
     const currency = useCurrency();
     const roas = data.roas || 0;
-    const roasColor = roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-600';
+    /*
+     * No data is not a bad result.
+     *
+     * Every platform showed "ROAS 0x" in alarm red on an account that had
+     * simply never served an ad. Red is for a return that is genuinely poor,
+     * not for the absence of one.
+     */
+    const hasRoas = Number(data.roas) > 0;
+    const roasColor = !hasRoas ? 'text-gray-400'
+        : roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-600';
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -15,7 +24,7 @@ function PlatformCard({ name, color, data, pct }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <div><p className="text-xs text-gray-500">Spend</p><p className="text-sm font-semibold">{money(data.spend ?? 0, currency)}</p></div>
-                <div><p className="text-xs text-gray-500">ROAS</p><p className={`text-sm font-semibold ${roasColor}`}>{roas}x</p></div>
+                <div><p className="text-xs text-gray-500">Return on ad spend</p><p className={`text-sm font-semibold ${roasColor}`}>{hasRoas ? `${roas}x` : '—'}</p></div>
                 <div><p className="text-xs text-gray-500">Conversions</p><p className="text-sm font-semibold">{data.conversions || 0}</p></div>
                 <div><p className="text-xs text-gray-500">CPA</p><p className="text-sm font-semibold">{data.cpa ? money(data.cpa, currency) : '—'}</p></div>
             </div>
@@ -141,7 +150,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Total Monthly Budget</label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                                    <span className="absolute left-3 top-2.5 text-gray-500">{currency}</span>
                                     <input type="number" step="0.01" value={data.total_monthly_budget} onChange={e => setData('total_monthly_budget', e.target.value)} className="w-full pl-7 rounded-lg border-gray-300 text-sm" />
                                 </div>
                             </div>
@@ -149,7 +158,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Strategy</label>
                                 <select value={data.strategy} onChange={e => setData('strategy', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
                                     <option value="performance">Performance-Based</option>
-                                    <option value="roas_target">ROAS Target</option>
+                                    <option value="roas_target">Target return on ad spend</option>
                                     <option value="equal">Equal Split</option>
                                     <option value="manual">Manual</option>
                                 </select>

@@ -109,6 +109,36 @@ describe('SetupProgressNav', () => {
         expect(getByText('First campaign').closest('a')).toHaveAttribute('aria-current', 'step');
     });
 
+    it('does not tick a later step while an earlier one has failed', async () => {
+        // The strip showed "Scan your website" in warning red and "Deploy your
+        // ads" ticked green at the same time — contradictory to anyone reading
+        // left to right. The steps are a dependency chain.
+        fetchJson.mockResolvedValue(payload([
+            step('site_scan', 'Site scan', 'failed'),
+            step('first_campaign', 'First campaign', 'pending'),
+            step('deployed', 'Deploy your ads', 'completed'),
+        ]));
+
+        const { getByText } = render(<SetupProgressNav />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        const deployed = getByText('Deploy your ads').closest('a');
+        expect(deployed.className).not.toMatch(/bg-green-100/);
+        expect(deployed.className).toMatch(/text-gray-400/);
+    });
+
+    it('still ticks completed steps when nothing has failed', async () => {
+        fetchJson.mockResolvedValue(payload([
+            step('site_scan', 'Site scan', 'completed'),
+            step('first_campaign', 'First campaign', 'pending'),
+        ]));
+
+        const { getByText } = render(<SetupProgressNav />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(getByText('Site scan').closest('a').className).toMatch(/bg-green-100/);
+    });
+
     it('disappears once setup is complete', async () => {
         fetchJson.mockResolvedValue(payload(
             [step('site_scan', 'Site scan', 'completed')],

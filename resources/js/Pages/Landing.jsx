@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import DemoResultsPanel from '@/Components/DemoResultsPanel';
@@ -8,6 +8,8 @@ import StatsStrip from '@/Components/Marketing/StatsStrip';
 import FeatureGrid from '@/Components/Marketing/FeatureGrid';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
 import CtaBand from '@/Components/Marketing/CtaBand';
+import FaqAccordion from '@/Components/Marketing/FaqAccordion';
+import SetupOnlyOffer from '@/Components/Marketing/SetupOnlyOffer';
 import {
     BanknotesIcon,
     ChartBarIcon,
@@ -19,55 +21,6 @@ import {
     WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 import { trackConversion } from '@/utils/conversions';
-
-/*
- * The home page previously carried a FAQPage schema whose questions appeared
- * nowhere on the page. Google's structured data policy requires the answer text
- * to be visible to the visitor, so the markup was both ineligible for rich
- * results and no help to anyone reading the page. One array now feeds the JSON-LD
- * and the rendered section, which keeps them from drifting apart again.
- */
-const faqs = [
-    {
-        question: 'How does sitetospend work?',
-        answer: 'You enter your website address and nothing else. Our vision AI reads the site to pick up your colours, fonts, tone of voice and what you actually sell, then researches who else is bidding on your keywords and how they position themselves. From there it builds the campaign structure, writes the ad copy, sets the initial bids and pushes everything live in your own ad accounts. Six agents keep working on the campaigns from that point on.',
-    },
-    {
-        question: 'Which ad platforms does sitetospend support?',
-        answer: 'Google Ads, Meta across Facebook and Instagram, Microsoft Ads on Bing, and LinkedIn Ads, all managed from a single dashboard. You connect accounts you already own rather than handing budget to a reseller, so your spend history, your conversion data and your audience lists stay with you if you ever decide to leave.',
-    },
-    {
-        question: 'Do I need a credit card to start?',
-        answer: 'No. You can connect your site and see the brand extraction, the competitor research and the full campaign we would build for you before paying anything at all. A card is only required at the point you decide to push those campaigns live and start spending on ads.',
-    },
-    {
-        question: 'Will I still own my ad accounts and data?',
-        answer: 'Yes. Everything is built inside your own Google Ads and Meta accounts, under your billing, with your name on it. There is no lock-in contract and no thirty-day notice period to serve. If you cancel, the campaigns, keyword research and conversion tracking we built stay exactly where they are, running or paused as you prefer.',
-    },
-    {
-        question: 'How is this different from hiring an agency?',
-        answer: 'A traditional agency charges a monthly retainer plus a percentage of whatever you spend, and in practice a junior account manager reviews your campaigns perhaps once a week. Our agents check performance every day, act on what they find within hours rather than at the next reporting cycle, and charge a flat fee that does not climb as your ad budget grows.',
-    },
-    {
-        question: 'What happens when an ad gets disapproved?',
-        answer: 'The self-optimising agent spots the disapproval, works out which advertising policy was triggered, rewrites the offending headline or description and resubmits it for review. Most disapprovals are cleared before you would have noticed them, which matters more than it sounds: a disapproved ad serves nobody and quietly costs you every impression it should have won.',
-    },
-    {
-        question: 'How quickly will I see results?',
-        answer: 'Campaigns are usually live within minutes of connecting your website. Meaningful optimisation needs data to work with, so expect the first week to be largely about learning which searches and audiences respond, and the second to be where budget starts shifting decisively toward the keywords and creatives that actually convert.',
-    },
-    {
-        question: 'Do I need to know anything about Google Ads?',
-        answer: 'Not a thing. The dashboard is written in plain language rather than platform jargon, and every change an agent makes is logged alongside the reason it made it. If you want to understand the detail it is all there to read; if you would rather never open it, the campaigns carry on without you.',
-    },
-];
-
-// Fallback only — LandingController is the source of truth. Kept in sync so a
-// render without the meta prop does not silently serve different copy.
-const DEFAULT_META = {
-    title: 'AI Google & Meta Ads Automation Software | sitetospend',
-    description: 'Automate your Google and Meta PPC campaigns with AI. Let intelligent agents handle keyword research, bidding, budgets, and tracking to maximize your ROI.',
-};
 
 /*
  * Line icons, not emoji. The flagship used 👁️ 🧠 🚀 🔍 📊 🩹 💰 🎨 👥 where the
@@ -136,8 +89,12 @@ const stats = [
     { value: 'Minutes', label: 'from URL to live campaign', detail: 'an agency takes two to four weeks' },
 ];
 
-export default function Landing({ auth, plans = [], meta = {} }) {
-    const pageMeta = { ...DEFAULT_META, ...meta };
+/*
+ * No <Head> here. LandingController owns every tag; app.blade.php prints them.
+ * The <title> and <meta description> written here were duplicates of the
+ * server's, not replacements for them — Inertia only swaps tags it owns.
+ */
+export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999 }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
 
@@ -275,72 +232,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
 
     return (
         <>
-            <Head>
-                {/*
-                    Title and description come from LandingController so the server
-                    HTML and the client-side head cannot disagree. They used to be
-                    written twice — once here and once in the controller — and the
-                    copy here was the one crawlers ended up with: 63 characters of
-                    title after Inertia appended the app name, and a 175-character
-                    description. Both were truncated in search results.
-
-                    Open Graph and Twitter tags are rendered server-side in
-                    app.blade.php, because the crawlers that read them do not run
-                    JavaScript. Repeating them here only created a second copy to
-                    keep in sync.
-                */}
-                <title>{pageMeta.title}</title>
-                <meta name="description" content={pageMeta.description} />
-                <script type="application/ld+json">{JSON.stringify({
-                    "@context": "https://schema.org",
-                    "@graph": [
-                        {
-                            "@type": "Organization",
-                            "name": "sitetospend",
-                            "url": "https://sitetospend.com",
-                            "logo": "https://sitetospend.com/og-image.png",
-                            "description": "AI-powered digital advertising platform with autonomous agents that manage and optimize ad campaigns across Google, Facebook, Microsoft, and LinkedIn.",
-                            "sameAs": [
-                                "https://www.linkedin.com/company/sitetospend"
-                            ]
-                        },
-                        {
-                            "@type": "SoftwareApplication",
-                            "name": "sitetospend",
-                            "applicationCategory": "BusinessApplication",
-                            "operatingSystem": "Web",
-                            "url": "https://sitetospend.com",
-                            "description": "Autonomous AI agents that create, manage, and optimize digital ad campaigns across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn Ads.",
-                            "offers": {
-                                "@type": "AggregateOffer",
-                                "lowPrice": lowestPrice,
-                                "highPrice": "249",
-                                "priceCurrency": "USD",
-                                "offerCount": paidPlans.length
-                            },
-                            "featureList": [
-                                "AI Competitor Discovery",
-                                "Self-Optimising Campaigns",
-                                "Budget Intelligence",
-                                "Creative A/B Testing",
-                                "Audience Intelligence",
-                                "Vision AI Brand Extraction"
-                            ]
-                        },
-                        {
-                            "@type": "FAQPage",
-                            "mainEntity": faqs.map((faq) => ({
-                                "@type": "Question",
-                                "name": faq.question,
-                                "acceptedAnswer": {
-                                    "@type": "Answer",
-                                    "text": faq.answer
-                                }
-                            }))
-                        }
-                    ]
-                })}</script>
-            </Head>
+            <PageTitle />
             <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
@@ -369,7 +261,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                     <span className="block text-brand-darker">with the power of AI</span>
                                 </>
                             }
-                            sub="Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger."
+                            sub="Stop paying agency retainer fees. Our AI finds your competitors, fixes broken ads and moves budget to what's working — every day, without you lifting a finger."
                             secondaryCta={{ href: '/how-it-works', label: 'See how it works' }}
                             note="No credit card required · Free to explore · Cancel anytime"
                         >
@@ -380,7 +272,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     <StatsStrip items={stats} />
 
                     {/* Social Proof */}
-                    <div className="border-b border-gray-200 bg-white py-12">
+                    <div className="border-b border-gray-200 bg-white py-10 sm:py-12">
                         <div className="mx-auto max-w-7xl px-6 lg:px-8">
                             <p className="text-center text-sm font-semibold uppercase tracking-wider text-gray-500">Trusted by leading brands</p>
                             {/*
@@ -388,23 +280,23 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                 page a visitor is meant to recognise, so they are gray-600
                                 (7.56:1) rather than a decorative grey.
                             */}
-                            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-                                <a href="https://proveably.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">Proveably</a>
-                                <a href="https://papsnap.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">PapSnap</a>
-                                <a href="https://yourfirststore.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">YourFirstStore</a>
-                                <a href="https://zonely.co" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">Zonely</a>
-                                <a href="https://firstdigital.co.nz" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 transition-colors hover:text-gray-900">First Digital</a>
+                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-1 sm:mt-6">
+                                <a href="https://proveably.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">Proveably</a>
+                                <a href="https://papsnap.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">PapSnap</a>
+                                <a href="https://yourfirststore.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">YourFirstStore</a>
+                                <a href="https://zonely.co" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">Zonely</a>
+                                <a href="https://firstdigital.co.nz" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">First Digital</a>
                             </div>
                         </div>
                     </div>
 
                     <FeatureGrid
                         title="Up and running in 3 steps"
-                        sub="We handle the hard parts. You focus on your business."
+                        sub="We handle the hard parts."
                         items={steps}
                         background="white"
                         footer={
-                            <CtaLink href="/how-it-works" className="font-semibold text-brand-darker hover:underline">
+                            <CtaLink href="/how-it-works" className="inline-flex min-h-[44px] items-center font-semibold text-brand-darker hover:underline">
                                 Learn more about how it works
                             </CtaLink>
                         }
@@ -413,7 +305,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     <FeatureGrid
                         eyebrow="Always working for you"
                         title="Your 24/7 AI PPC campaign manager"
-                        sub="Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep."
+                        sub="Six specialists, each focused on a different part of your advertising, running around the clock."
                         items={agents}
                         footer={
                             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -426,7 +318,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     {/* Pricing teaser */}
                     <PricingTable
                         title="Simple, honest pricing"
-                        sub={`Agency-quality results. Starting at just $${lowestPrice}/month.`}
+                        sub={`Agency-quality results. Starting at just US$${lowestPrice}/month.`}
                         plans={plans.map((plan) => ({
                             id: plan.id,
                             name: plan.name,
@@ -436,37 +328,38 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                             price: <PlanPrice plan={plan} />,
                         }))}
                         footnote={
-                            <CtaLink href="/pricing" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
-                                Compare plans
-                            </CtaLink>
+                            <div className="mx-auto max-w-3xl space-y-8">
+                                <CtaLink href="/pricing" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
+                                    Compare plans
+                                </CtaLink>
+                                {/*
+                                    Directly under the monthly plans, because
+                                    "US$999 once" only means anything next to the
+                                    figure it is an alternative to.
+                                */}
+                                <SetupOnlyOffer priceUsd={setupFeeUsd} />
+                            </div>
                         }
                     />
 
                     {/* Why It Works */}
-                    <div className="bg-white py-16 sm:py-24">
+                    <div className="bg-white py-12 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
                                 Automated Ad Management That Drives ROI
                             </h2>
-                            <div className="mt-6 space-y-5 text-lg leading-relaxed text-gray-600">
+                            <div className="mt-5 space-y-4 text-base leading-relaxed text-gray-600 sm:mt-6 sm:text-lg">
                                 <p>
-                                    Most small advertisers lose money in the gaps rather than the strategy. A headline gets
-                                    disapproved on a Friday and nobody notices until Monday. A keyword that converted well in
-                                    March quietly stops working in June. Budget sits in an ad group that has not produced a
-                                    lead in weeks, because moving it means opening the account and nobody has the time.
+                                    Small advertisers lose money in the gaps, not the strategy. A headline gets disapproved on
+                                    a Friday and nobody notices until Monday. A keyword that converted in March quietly stops
+                                    working in June. Budget sits in an ad group that has not produced a lead in weeks.
                                 </p>
                                 <p>
-                                    Those gaps are exactly what an agency retainer is meant to cover, and exactly what a
-                                    retainer is worst at covering — a person reviewing your account once a week will always be
-                                    six days behind the auction. Our agents work the other way round. They look at every
-                                    campaign, ad group, keyword and creative every single day, and when something needs
-                                    changing they change it rather than adding it to a report you will read next month.
-                                </p>
-                                <p>
-                                    The result is not magic, it is attention. Disapprovals get fixed within hours. Budget moves
-                                    toward the searches that convert while the intent is still there. Losing creative gets
-                                    replaced before it has drained a week of spend. That is most of what good ad management
-                                    actually is, and it turns out to be something software does more reliably than a calendar
+                                    Gaps are what a retainer is meant to cover and what it is worst at covering: someone
+                                    reviewing your account weekly is always six days behind the auction. Our agents read every
+                                    campaign, keyword and creative daily and change what needs changing, so disapprovals are
+                                    fixed within hours and budget moves while the intent is still there. That is most of what
+                                    good ad management is — attention, which software gives more reliably than a calendar
                                     reminder.
                                 </p>
                             </div>
@@ -474,30 +367,32 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     </div>
 
                     {/* FAQ */}
-                    <div className="border-t border-gray-200 bg-gray-50 py-16 sm:py-24">
+                    <div className="border-t border-gray-200 bg-gray-50 py-12 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                             <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
                                 Common questions
                             </h2>
-                            <p className="mt-4 text-center text-lg text-gray-600">
-                                The things people ask before they sign up, answered properly.
+                            <p className="mx-auto mt-3 max-w-xl text-center text-base text-gray-600 sm:text-lg">
+                                The things people ask before they sign up.
                             </p>
-                            <dl className="mt-12 space-y-10">
-                                {faqs.map((faq) => (
-                                    <div key={faq.question}>
-                                        <dt>
-                                            <h3 className="text-xl font-semibold text-gray-900">{faq.question}</h3>
-                                        </dt>
-                                        <dd className="mt-3 text-base leading-relaxed text-gray-600">{faq.answer}</dd>
-                                    </div>
-                                ))}
-                            </dl>
+                            {/*
+                                Collapsed. Rendered open, these eight answers ran
+                                to 2,585px on a 390px phone — three full screens
+                                of prose between the pricing table and the
+                                closing CTA, which is the last place a visitor
+                                who has just seen the price should have to scroll
+                                through. FaqAccordion keeps every answer in the
+                                DOM, so nothing is lost to a crawler.
+                            */}
+                            <div className="mt-8 sm:mt-12">
+                                <FaqAccordion items={faqs} />
+                            </div>
                         </div>
                     </div>
 
                     <CtaBand
                         title="Ready to stop doing this the hard way?"
-                        body="Join hundreds of businesses who handed the heavy lifting to their AI team—and haven't looked back."
+                        body="Join hundreds of businesses who handed the heavy lifting to their AI team."
                         primaryCta={{ href: '/register', label: 'Get started free' }}
                         secondaryCta={{ href: '/login', label: 'Sign in' }}
                         note="Free to explore · No credit card required · Live in minutes"

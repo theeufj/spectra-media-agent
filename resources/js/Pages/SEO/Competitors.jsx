@@ -1,11 +1,12 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function UpgradePrompt() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <div className="mx-auto w-12 h-12 bg-brand-primary/20 rounded-full flex items-center justify-center mb-4">
+            <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: brandTint(20) }}>
                 <svg className="w-6 h-6 text-brand-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
@@ -21,7 +22,7 @@ function UpgradePrompt() {
                 >
                     Upgrade to Growth Plan
                 </Link>
-                <p className="text-xs text-gray-500">Available on Growth ($249/mo) and Agency plans</p>
+                <p className="text-xs text-gray-500">Available on Growth (US$249/mo) and Agency plans</p>
             </div>
         </div>
     );
@@ -317,7 +318,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
         <AuthenticatedLayout>
             <Head title="SEO Competitors" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                     <div className="flex items-center justify-between mb-1">
                         <h1 className="text-2xl font-bold text-gray-900">Competitor Analysis</h1>

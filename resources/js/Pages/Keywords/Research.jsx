@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function ClusterCard({ cluster }) {
     const intentColors = { transactional: 'bg-green-100 text-green-700', commercial: 'bg-blue-100 text-blue-700', informational: 'bg-gray-100 text-gray-600', navigational: 'bg-purple-100 text-purple-700' };
@@ -10,7 +11,7 @@ function ClusterCard({ cluster }) {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</h4>
-                {cluster.recommended_ad_group && <span className="text-xs px-2 py-0.5 rounded bg-brand-primary/20 text-brand-darker">Ad Group ✓</span>}
+                {cluster.recommended_ad_group && <span className="text-xs px-2 py-0.5 rounded text-brand-darker" style={{ backgroundColor: brandTint(20) }}>Ad Group ✓</span>}
             </div>
             <div className="flex gap-2 mb-3">
                 <span className={`text-xs px-2 py-0.5 rounded ${intentColors[cluster.intent] || 'bg-gray-100 text-gray-600'}`}>{cluster.intent}</span>
@@ -57,10 +58,10 @@ export default function Research({ customer }) {
         <AuthenticatedLayout>
             <Head title="Keyword Research" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold text-gray-900">Keyword Research</h1>
-                        <p className="mt-1 text-sm text-gray-500">AI-powered keyword discovery using Google Keyword Planner + Gemini.</p>
+                        <p className="mt-1 text-sm text-gray-500">We find the terms people actually search for in your market, using Google’s own search data.</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
@@ -98,7 +99,7 @@ export default function Research({ customer }) {
                             {/* Keywords Table */}
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-gray-900">{results.keywords?.length || 0} Keywords Found</h2>
-                                <button onClick={handleAddAll} className="px-4 py-2 text-sm font-medium text-brand-darker bg-brand-primary/10 rounded-lg hover:bg-brand-primary/20">
+                                <button onClick={handleAddAll} className="px-4 py-2 text-sm font-medium text-brand-darker bg-brand-tint-10 rounded-lg hover:bg-brand-tint-20">
                                     Add All to Portfolio
                                 </button>
                             </div>

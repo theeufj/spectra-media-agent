@@ -42,6 +42,18 @@ export default function SetupProgressNav() {
     const currentKey = current_step?.key
         ?? steps.find(s => !s.completed)?.key;
 
+    /*
+     * A later step cannot read as done while an earlier one has failed.
+     *
+     * The strip showed "Scan your website" in warning red and "Deploy your
+     * ads" ticked green at the same time, which is contradictory to anyone
+     * reading it left to right: how are ads live if the scan never finished?
+     * The steps are a dependency chain, so anything after the first failure is
+     * shown as blocked by it.
+     */
+    const firstFailureIndex = steps.findIndex(s => s.status === 'failed');
+    const isBlocked = (index) => firstFailureIndex !== -1 && index > firstFailureIndex;
+
     return (
         <div
             className="border rounded-lg p-4 mb-4"
@@ -68,21 +80,21 @@ export default function SetupProgressNav() {
 
             {/* Steps */}
             <div className="flex flex-col sm:flex-row gap-2">
-                {steps.map((step) => (
+                {steps.map((step, index) => (
                     <Link
                         key={step.key}
                         href={step.action_url}
                         className={`
                             sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
                             transition-all duration-200
-                            ${stepClasses(step, step.key === currentKey)}
+                            ${stepClasses(step, step.key === currentKey, isBlocked(index))}
                         `}
                         // "Which one am I on" was carried only by a background
                         // colour, so a screen reader heard five equal links.
                         aria-current={step.key === currentKey ? 'step' : undefined}
                         title={step.description}
                     >
-                        <span className="flex-shrink-0">{stepMarker(step)}</span>
+                        <span className="flex-shrink-0">{stepMarker(step, isBlocked(index))}</span>
                         <div className="min-w-0">
                             <p className="font-medium truncate">{step.title}</p>
                         </div>
@@ -101,7 +113,9 @@ export default function SetupProgressNav() {
     );
 }
 
-function stepClasses(step, isCurrent) {
+function stepClasses(step, isCurrent, blocked = false) {
+    // Blocked reads before complete: a tick behind a failed step is a lie.
+    if (blocked) return 'bg-gray-50 text-gray-400 hover:bg-gray-100';
     if (step.completed) return 'bg-green-100 text-green-700 hover:bg-green-200';
     if (step.status === 'failed') return 'bg-red-50 text-red-700 hover:bg-red-100 ring-2 ring-red-200';
     if (step.status === 'in_progress') return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
@@ -115,7 +129,8 @@ function stepClasses(step, isCurrent) {
     return 'bg-white text-gray-500 hover:bg-gray-50';
 }
 
-function stepMarker(step) {
+function stepMarker(step, blocked = false) {
+    if (blocked) return '·';
     if (step.completed) return '✓';
     if (step.status === 'failed') return '⚠️';
     if (step.status === 'in_progress') {

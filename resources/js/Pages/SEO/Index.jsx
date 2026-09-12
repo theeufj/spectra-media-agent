@@ -1,13 +1,21 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function ScoreRing({ score }) {
-    const color = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
+    /*
+     * An em dash in alarm red reads as a failing score rather than "not run
+     * yet". The audit has never been run on a new account, so the first thing
+     * the page said was that something was wrong.
+     */
+    const hasScore = score !== null && score !== undefined;
+    const color = !hasScore ? 'text-gray-400'
+        : score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
     return (
         <div className="flex flex-col items-center">
-            <span className={`text-4xl font-bold ${color}`}>{score ?? '—'}</span>
-            <span className="text-xs text-gray-500 mt-1">SEO Score</span>
+            <span className={`text-4xl font-bold ${color}`}>{hasScore ? score : '—'}</span>
+            <span className="text-xs text-gray-500 mt-1">{hasScore ? 'SEO score' : 'Not audited yet'}</span>
         </div>
     );
 }
@@ -38,7 +46,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
         <AuthenticatedLayout>
             <Head title="SEO Tools" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">SEO Tools & Optimization</h1>
@@ -140,7 +148,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             </div>
                             <div className="flex flex-wrap gap-1.5 mb-3">
                                 {latestAudit.content_analysis.detected_keywords.slice(0, 15).map((kw, i) => (
-                                    <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-brand-primary/10 text-brand-darker">{kw}</span>
+                                    <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium text-brand-darker" style={{ backgroundColor: brandTint(10) }}>{kw}</span>
                                 ))}
                             </div>
                             {(latestAudit.content_analysis.keywords_missing_from_title?.length > 0 || latestAudit.content_analysis.keywords_missing_from_description?.length > 0) && (

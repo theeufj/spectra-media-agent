@@ -159,11 +159,11 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
         <AuthenticatedLayout>
             <Head title="Creative Briefs" />
 
-            <div className="max-w-4xl mx-auto sm:">
+            <div className="max-w-4xl mx-auto">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">Creative Briefs</h1>
                     <p className="mt-1 text-sm text-gray-500">
-                        AI-generated creative briefs from your campaign agents. Review and action each one before your creative team works on it.
+                        AI-generated creative briefs from your campaign agents. Review each one before we turn it into ads.
                     </p>
                 </div>
 

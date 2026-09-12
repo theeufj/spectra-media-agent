@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { count } from '@/utils/format';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 function QSTrendChart({ data }) {
@@ -83,7 +83,7 @@ export default function Index({ keywords, stats, qsTrends }) {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                         <StatCard label="Total Keywords" value={stats.total} color="blue" />
                         <StatCard label="Active" value={stats.active} color="green" />
-                        <StatCard label="Low QS (<5)" value={stats.low_qs} color="red" />
+                        <StatCard label="Low quality score" value={stats.low_qs} color="red" />
                         <QSTrendChart data={qsTrends} />
                     </div>
 
@@ -133,7 +133,24 @@ export default function Index({ keywords, stats, qsTrends }) {
                                     </tr>
                                 ))}
                                 {(!keywords.data || keywords.data.length === 0) && (
-                                    <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-500">No keywords yet. Start by researching keywords.</td></tr>
+                                    <tr>
+                                        {/* The action belongs in the empty state.
+                                            This said "Start by researching keywords"
+                                            while the only button sat in the far
+                                            top-right corner. */}
+                                        <td colSpan={7} className="px-4 py-12 text-center">
+                                            <p className="text-sm font-medium text-gray-900">No keywords yet</p>
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                We pick these automatically when a campaign deploys. You can also look now.
+                                            </p>
+                                            <Link
+                                                href={route('keywords.research')}
+                                                className="mt-4 inline-block rounded-lg bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:bg-brand-darker"
+                                            >
+                                                Research keywords
+                                            </Link>
+                                        </td>
+                                    </tr>
                                 )}
                             </tbody>
                         </table>

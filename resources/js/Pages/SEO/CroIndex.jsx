@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function ScoreBadge({ score }) {
     if (score === null || score === undefined) return <span className="text-xs text-gray-500">—</span>;
@@ -10,10 +11,16 @@ function ScoreBadge({ score }) {
 
 function UpgradePrompt() {
     return (
-        <div className="bg-gradient-to-br from-brand-primary/10 to-orange-50 rounded-lg border border-brand-primary/30 p-6 text-center mb-6">
+        <div
+            className="rounded-lg border p-6 text-center mb-6"
+            style={{
+                backgroundImage: `linear-gradient(to bottom right, ${brandTint(10)}, #fff7ed)`,
+                borderColor: brandTint(30),
+            }}
+        >
             <h3 className="text-lg font-semibold text-gray-900">Audit Limit Reached</h3>
             <p className="text-sm text-gray-600 mt-1">You've used all 3 free CRO audits. Upgrade to unlock unlimited audits.</p>
-            <p className="text-xs text-gray-500 mt-3">Available on Growth ($249/mo) and Agency plans</p>
+            <p className="text-xs text-gray-500 mt-3">Available on Growth (US$249/mo) and Agency plans</p>
             <a href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
                 View Plans
             </a>
@@ -39,7 +46,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
         <AuthenticatedLayout>
             <Head title="Landing Page CRO Audits" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
