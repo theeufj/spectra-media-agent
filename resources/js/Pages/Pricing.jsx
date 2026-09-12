@@ -62,8 +62,17 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 bg-white">
                                         {[
-                                            // "From $149" matched no plan on this page; the cheapest paid one is US$99.
-                                            ['Cost', 'US$2,500 - US$5,000 / month', 'From US$99 / month'],
+                                            /*
+                                                US$149 is Starter, the cheapest paid plan, read
+                                                from production. I briefly changed this to US$99
+                                                on the strength of the local dev seed, which has
+                                                a stale Starter price — and the plan cards below
+                                                render price_cents from the live database, so the
+                                                page would have contradicted itself one section
+                                                apart. Check `plans` in sitetospend_prod, not the
+                                                dev database, before touching this figure.
+                                            */
+                                            ['Cost', 'US$2,500 - US$5,000 / month', 'From US$149 / month'],
                                             ['Setup Time', '2-4 Weeks', '< 5 Minutes'],
                                             ['Brand Matching', 'Manual PDF creation (billed extra)', 'Reads your website automatically'],
                                             ['Ad Creative', 'Limited revisions, extra cost', 'AI writes and generates images for you'],

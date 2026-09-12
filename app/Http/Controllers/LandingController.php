@@ -190,9 +190,9 @@ class LandingController extends Controller
             'faqs' => $faqs,
             'setupFeeUsd' => $this->setupFeeUsd(),
             'meta' => $this->meta(
-                // Was "from A$250/mo" while the cards on the page charge US$99
+                // Was "from A$250/mo" while the cards on the page charge US$149
                 // and US$249 — the title advertised a price the page contradicts.
-                'Pricing — Google Ads Management from US$99/mo | sitetospend',
+                'Pricing — Google Ads Management from US$149/mo | sitetospend',
                 'Flat monthly pricing for automated Google and Meta ads management. No percentage of ad spend, no lock-in contract. See plans and start free.',
                 null,
                 null,
