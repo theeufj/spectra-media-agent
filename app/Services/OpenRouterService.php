@@ -74,6 +74,97 @@ class OpenRouterService
     }
 
     /**
+     * Text generation, for when the Gemini chain is gone.
+     *
+     * Returns ['text' => string] to match GeminiService::generateContent(), so
+     * a caller cannot tell which vendor answered.
+     *
+     * This exists because Google moved the project from postpay to prepay
+     * without telling anyone: the balance ran dry and every text call returned
+     * 403 BILLING_DISABLED for more than a day — strategy, brand extraction,
+     * creative, the copilot and the public demo, all at once. Two vendors on
+     * separate balances turns that into a cost problem rather than an outage.
+     *
+     * @param  array<string, mixed>  $config  Gemini-shaped generation config
+     * @param  array<string, mixed>  $context
+     * @return array{text: string}|null
+     */
+    public function generateText(
+        string $prompt,
+        array $config = [],
+        ?string $systemInstruction = null,
+        array $context = [],
+    ): ?array {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        $model = config('ai.models.text_grok');
+
+        $messages = [];
+        if ($systemInstruction) {
+            $messages[] = ['role' => 'system', 'content' => $systemInstruction];
+        }
+        $messages[] = ['role' => 'user', 'content' => $prompt];
+
+        $payload = [
+            'model' => $model,
+            'messages' => $messages,
+        ];
+
+        // Gemini takes responseMimeType; OpenRouter takes response_format. The
+        // caller asked for JSON either way.
+        if (($config['responseMimeType'] ?? null) === 'application/json') {
+            $payload['response_format'] = ['type' => 'json_object'];
+        }
+
+        foreach (['temperature' => 'temperature', 'topP' => 'top_p', 'maxOutputTokens' => 'max_tokens'] as $from => $to) {
+            if (isset($config[$from])) {
+                $payload[$to] = $config[$from];
+            }
+        }
+
+        try {
+            $started = hrtime(true);
+
+            $response = Http::withToken(config('services.openrouter.api_key'))
+                ->timeout(120)
+                ->post(self::BASE.'/chat/completions', $payload);
+
+            if ($response->failed()) {
+                Log::error('OpenRouterService: text generation failed', [
+                    'model' => $model,
+                    'status' => $response->status(),
+                    'body' => substr($response->body(), 0, 300),
+                ]);
+
+                return null;
+            }
+
+            $text = $response->json('choices.0.message.content');
+
+            if (! is_string($text) || trim($text) === '') {
+                Log::error('OpenRouterService: text response carried no content', [
+                    'model' => $model,
+                    'finish_reason' => $response->json('choices.0.finish_reason'),
+                ]);
+
+                return null;
+            }
+
+            $usage = $response->json('usage') ?? [];
+            $this->recordTokenCost($model, 'generateText', $usage, (int) ((hrtime(true) - $started) / 1e6), $context);
+
+            return ['text' => $text];
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('OpenRouterService: text generation exception: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
      * Start an async video generation. Returns the job id or null.
      */
     public function startVideoGeneration(string $prompt, int $durationSeconds, array $parameters = [], array $context = []): ?string
@@ -198,6 +289,51 @@ class OpenRouterService
             Log::warning('OpenRouterService: credit check failed: '.$e->getMessage());
 
             return null;
+        }
+    }
+
+    /**
+     * Token-priced cost, from the rates in config/ai.php.
+     *
+     * recordCost() below takes a flat figure, which is right for an image and
+     * wrong for text. A model missing from the pricing table records its spend
+     * as zero, which is how twelve of them went unnoticed — so an absent rate
+     * is logged rather than silently costing nothing.
+     *
+     * @param  array<string, mixed>  $usage
+     * @param  array<string, mixed>  $context
+     */
+    private function recordTokenCost(string $model, string $operation, array $usage, int $durationMs, array $context): void
+    {
+        $rates = config('ai.pricing.'.$model);
+
+        if (! is_array($rates)) {
+            Log::warning('OpenRouterService: no pricing for model, recording zero cost', ['model' => $model]);
+        }
+
+        $inputTokens = (int) ($usage['prompt_tokens'] ?? 0);
+        $outputTokens = (int) ($usage['completion_tokens'] ?? 0);
+
+        $cost = (($inputTokens / 1_000_000) * (float) ($rates['input'] ?? 0))
+            + (($outputTokens / 1_000_000) * (float) ($rates['output'] ?? 0));
+
+        try {
+            AiCost::create([
+                'campaign_id' => $context['campaign_id'] ?? null,
+                'customer_id' => $context['customer_id'] ?? null,
+                'service' => 'OpenRouter',
+                'operation' => $operation,
+                'model' => $model,
+                'input_tokens' => $inputTokens,
+                'output_tokens' => $outputTokens,
+                'cached_tokens' => 0,
+                'cost' => $cost,
+                'duration_ms' => $durationMs,
+                'task_type' => $context['task_type'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('OpenRouterService: could not record cost: '.$e->getMessage());
         }
     }
 

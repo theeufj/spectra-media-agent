@@ -42,6 +42,11 @@ class GeminiOutageVisibilityTest extends TestCase
 
     private function billingDisabled(): void
     {
+        // No second vendor: these cases are about what happens when everything
+        // is gone, and a real OPENROUTER_API_KEY in the environment would
+        // otherwise change the answer depending on whose machine runs them.
+        config(['services.openrouter.api_key' => null]);
+
         Http::fake([
             '*generativelanguage*' => Http::response([
                 'error' => ['code' => 403, 'status' => 'PERMISSION_DENIED', 'message' => 'This API method requires billing to be enabled.'],
@@ -128,6 +133,45 @@ class GeminiOutageVisibilityTest extends TestCase
         });
 
         $this->assertSame(1, $outages, 'a sustained outage should report once per window, not once per call');
+    }
+
+    public function test_grok_answers_when_the_whole_gemini_chain_is_gone(): void
+    {
+        config(['services.openrouter.api_key' => 'test-openrouter-key']);
+        Cache::put('gcp_vertex_access_token', 'test-token', 600);
+
+        Http::fake([
+            'openrouter.ai/*' => Http::response([
+                'choices' => [['message' => ['content' => '{"headlines":["Real copy"]}']]],
+                'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 20],
+            ], 200),
+            // Everything Google returns the billing 403.
+            '*' => Http::response([
+                'error' => ['code' => 403, 'status' => 'PERMISSION_DENIED', 'message' => 'This API method requires billing to be enabled.'],
+            ], 403),
+        ]);
+        Exceptions::fake();
+
+        $result = app(GeminiService::class)->generateContent('gemini-test-primary', 'anything', [], null, false, false, 1);
+
+        // The caller cannot tell which vendor answered, which is the point.
+        $this->assertSame('{"headlines":["Real copy"]}', $result['text'] ?? null);
+
+        // And it is not an outage — the product worked.
+        Exceptions::assertNotReported(GeminiUnavailable::class);
+    }
+
+    public function test_an_outage_is_only_declared_once_grok_has_failed_too(): void
+    {
+        // Without OpenRouter configured there is no second vendor, so the
+        // billing 403 is still a total outage.
+        config(['services.openrouter.api_key' => null]);
+        $this->billingDisabled();
+        Exceptions::fake();
+
+        app(GeminiService::class)->generateContent('gemini-test-primary', 'anything', [], null, false, false, 1);
+
+        Exceptions::assertReported(GeminiUnavailable::class);
     }
 
     public function test_a_successful_call_reports_nothing(): void

@@ -93,6 +93,17 @@ return [
          * after the 2026-08-24 shootout. Gemini/Veo remain as fallbacks and
          * for reference-image work.
          */
+        /*
+         * Text of last resort, through OpenRouter.
+         *
+         * Google moved this project from postpay to prepay without notice, so
+         * the whole Gemini chain returns 403 BILLING_DISABLED the moment the
+         * balance runs dry — which took strategy, brand extraction, creative,
+         * the copilot and the public demo down together, for a day, silently.
+         * A second vendor on a separate balance means one lapse is a cost
+         * problem rather than an outage.
+         */
+        'text_grok' => env('AI_MODEL_TEXT_GROK', 'x-ai/grok-4-fast'),
         'image_grok' => env('AI_MODEL_IMAGE_GROK', 'x-ai/grok-imagine-image-2.0'),
         'video_grok' => env('AI_MODEL_VIDEO_GROK', 'x-ai/grok-imagine-video-1.5'),
 
@@ -195,6 +206,10 @@ return [
         // images via openrouter_image_cost, video via video_cost_per_second.
         // Both are recorded as cost_override at dispatch; the zero entries
         // here exist so token-based cost tracking knows they are covered.
+        // Per million tokens, OpenRouter's published rate. A model priced at
+        // zero here has its spend recorded as zero, which is how twelve of them
+        // went unnoticed.
+        'x-ai/grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
         'x-ai/grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'x-ai/grok-imagine-video-1.5' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
     ],

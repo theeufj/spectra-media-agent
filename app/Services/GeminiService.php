@@ -50,6 +50,43 @@ class GeminiService
     private ?string $lastFailure = null;
 
     /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $context
+     * @return array{text: string}|null
+     */
+    private function generateViaOpenRouter(
+        string $prompt,
+        array $config,
+        ?string $systemInstruction,
+        array $context,
+        string $failedModel,
+    ): ?array {
+        $openRouter = app(OpenRouterService::class);
+
+        if (! $openRouter->isConfigured()) {
+            return null;
+        }
+
+        $result = $openRouter->generateText(
+            $prompt,
+            $config,
+            $systemInstruction,
+            array_merge($context, ['task_type' => ($context['task_type'] ?? 'text').':gemini_fallback']),
+        );
+
+        if ($result !== null) {
+            // Worth a line at warning: the product is working, but on the
+            // backup, and somebody should know before the invoice says so.
+            Log::warning('GeminiService: served by OpenRouter after Gemini failed', [
+                'failed_model' => $failedModel,
+                'fallback_model' => config('ai.models.text_grok'),
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
      * How long one outage stays quiet after it has been reported once.
      *
      * A billing lapse fails every call, and the demo alone makes several per
@@ -223,6 +260,24 @@ class GeminiService
                     hrtime(true)
                 );
             }
+        }
+
+        /*
+           Last resort: a different vendor, on a different balance.
+
+           Google moved this project from postpay to prepay without telling
+           anyone. When the balance ran dry every text call returned 403
+           BILLING_DISABLED — both models, for more than a day — and strategy
+           generation, brand extraction, creative, the copilot and the public
+           demo all stopped together. One prepaid balance is a single point of
+           failure for the entire product.
+
+           Only after Gemini's own chain is exhausted, so nothing changes while
+           it is healthy, and the answer is shaped identically: a caller cannot
+           tell which vendor replied.
+        */
+        if ($result === null) {
+            $result = $this->generateViaOpenRouter($prompt, $config, $systemInstruction, $context, $model);
         }
 
         if ($result === null) {
