@@ -1,5 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, Link } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 const STATUS_STYLES = {
     generating: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Generating...' },
@@ -8,11 +11,12 @@ const STATUS_STYLES = {
 };
 
 export default function Index({ proposals }) {
+    const currency = useCurrency();
     return (
         <AuthenticatedLayout>
             <Head title="Proposals" />
 
-            <div className="max-w-7xl mx-auto sm:">
+            <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Proposals</h1>
@@ -74,14 +78,14 @@ export default function Index({ proposals }) {
                                             </span>
                                             {proposal.budget && (
                                                 <span className="text-sm font-semibold text-gray-700">
-                                                    ${Number(proposal.budget).toLocaleString()}/mo
+                                                    {money(proposal.budget, currency, { maximumFractionDigits: 0 })}/mo
                                                 </span>
                                             )}
                                         </div>
                                         {proposal.platforms && (
                                             <div className="flex flex-wrap gap-1.5 mb-3">
                                                 {proposal.platforms.map((p) => (
-                                                    <span key={p} className="inline-block bg-brand-primary/10 text-brand-darker text-xs px-2 py-0.5 rounded">
+                                                    <span key={p} className="inline-block text-brand-darker text-xs px-2 py-0.5 rounded" style={{ backgroundColor: brandTint(10) }}>
                                                         {p}
                                                     </span>
                                                 ))}

@@ -195,12 +195,12 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Monthly Projected Revenue</p>
-                                    <p className="text-xl font-bold text-green-700">${projections.monthly_projected_revenue?.toLocaleString()}</p>
+                                    <p className="text-xl font-bold text-green-700">{money(projections.monthly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Monthly Projected Profit</p>
                                     <p className={`text-xl font-bold ${projections.monthly_projected_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                        ${projections.monthly_projected_profit?.toLocaleString()}
+                                        {money(projections.monthly_projected_profit ?? 0, currency, { maximumFractionDigits: 0 })}
                                     </p>
                                 </div>
                                 <div>
@@ -213,11 +213,11 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Quarterly Projected Spend</p>
-                                    <p className="text-xl font-bold text-indigo-900">${projections.quarterly_projected_spend?.toLocaleString()}</p>
+                                    <p className="text-xl font-bold text-indigo-900">{money(projections.quarterly_projected_spend ?? 0, currency, { maximumFractionDigits: 0 })}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Quarterly Projected Revenue</p>
-                                    <p className="text-xl font-bold text-green-700">${projections.quarterly_projected_revenue?.toLocaleString()}</p>
+                                    <p className="text-xl font-bold text-green-700">{money(projections.quarterly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
                         </div>
@@ -246,8 +246,8 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
                                         {campaignBreakdown.map((c) => (
                                             <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
                                                 <td className="py-3 px-4 font-medium text-gray-900">{c.name}</td>
-                                                <td className="py-3 px-4 text-right">${c.cost.toLocaleString()}</td>
-                                                <td className="py-3 px-4 text-right">${c.revenue.toLocaleString()}</td>
+                                                <td className="py-3 px-4 text-right">{money(c.cost, currency, { maximumFractionDigits: 0 })}</td>
+                                                <td className="py-3 px-4 text-right">{money(c.revenue, currency, { maximumFractionDigits: 0 })}</td>
                                                 <td className="py-3 px-4 text-right">{c.conversions}</td>
                                                 <td className="py-3 px-4 text-right">
                                                     <span className={c.roas >= 2 ? 'text-green-600 font-semibold' : c.roas >= 1 ? 'text-yellow-600' : 'text-red-600 font-semibold'}>

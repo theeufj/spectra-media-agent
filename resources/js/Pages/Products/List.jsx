@@ -1,7 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head } from '@inertiajs/react';
 
 export default function List({ products = [], filter }) {
+    const currency = useCurrency();
     const statusColors = {
         approved: 'bg-green-100 text-green-700',
         disapproved: 'bg-red-100 text-red-700',
@@ -20,7 +23,7 @@ export default function List({ products = [], filter }) {
         <AuthenticatedLayout>
             <Head title="Products" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Products</h1>
@@ -32,7 +35,7 @@ export default function List({ products = [], filter }) {
                     {/* Filters */}
                     <div className="flex gap-2 mb-4">
                         {filters.map(f => (
-                            <a key={f.value} href={route('products.list', f.value ? { status: f.value } : {})} className={`text-xs px-3 py-1.5 rounded-lg ${(filter || '') === f.value ? 'bg-brand-primary/20 text-brand-darker font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</a>
+                            <a key={f.value} href={route('products.list', f.value ? { status: f.value } : {})} className={`text-xs px-3 py-1.5 rounded-lg ${(filter || '') === f.value ? 'bg-brand-tint-20 text-brand-darker font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</a>
                         ))}
                     </div>
 
@@ -63,14 +66,14 @@ export default function List({ products = [], filter }) {
                                             </td>
                                             <td className="px-4 py-3 text-right text-sm">
                                                 {p.sale_price ? (
-                                                    <div><span className="line-through text-gray-500">${parseFloat(p.price).toFixed(2)}</span> <span className="text-red-600">${parseFloat(p.sale_price).toFixed(2)}</span></div>
+                                                    <div><span className="line-through text-gray-500">{money(p.price, currency)}</span> <span className="text-red-600">{money(p.sale_price, currency)}</span></div>
                                                 ) : (
-                                                    <span className="text-gray-900">{p.price ? `$${parseFloat(p.price).toFixed(2)}` : '—'}</span>
+                                                    <span className="text-gray-900">{p.price ? money(p.price, currency) : '—'}</span>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded ${p.availability === 'in_stock' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{(p.availability || '').replace('_', ' ')}</span></td>
                                             <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded ${statusColors[p.status] || 'bg-gray-100 text-gray-500'}`}>{p.status}</span></td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-600">{p.clicks?.toLocaleString() || 0}</td>
+                                            <td className="px-4 py-3 text-right text-sm text-gray-600">{count(p.clicks ?? 0)}</td>
                                             <td className="px-4 py-3 text-right text-sm text-gray-600">{p.conversions || 0}</td>
                                         </tr>
                                     ))}

@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count, dateTime } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { fetchJson } from '@/utils/http';
@@ -65,6 +67,7 @@ function IdentitySection({ identity }) {
 }
 
 function AdAccountsSection({ adAccounts, adInsights }) {
+    const currency = useCurrency();
     const hasInsights = adInsights && !adInsights.error;
     return (
         <SectionCard title="Ad Accounts — Performance Data" icon={AdsIcon}
@@ -97,10 +100,10 @@ function AdAccountsSection({ adAccounts, adInsights }) {
                     <p className="text-sm text-red-500">{adInsights.error}</p>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <MetricBox label="Impressions" value={hasInsights ? Number(adInsights.impressions).toLocaleString() : '—'} />
-                        <MetricBox label="Clicks" value={hasInsights ? Number(adInsights.clicks).toLocaleString() : '—'} />
-                        <MetricBox label="Spend" value={hasInsights ? `$${Number(adInsights.spend).toFixed(2)}` : '—'} />
-                        <MetricBox label="Reach" value={hasInsights ? Number(adInsights.reach).toLocaleString() : '—'} />
+                        <MetricBox label="Impressions" value={hasInsights ? count(adInsights.impressions) : '—'} />
+                        <MetricBox label="Clicks" value={hasInsights ? count(adInsights.clicks) : '—'} />
+                        <MetricBox label="Spend" value={hasInsights ? money(adInsights.spend, currency) : '—'} />
+                        <MetricBox label="Reach" value={hasInsights ? count(adInsights.reach) : '—'} />
                     </div>
                 )}
             </div>
@@ -225,7 +228,7 @@ function BusinessSection({ businesses, businessAssets }) {
                                         <span className="text-sm text-gray-800">{p.name}</span>
                                         <span className="text-xs text-gray-500 ml-2">{p.category}</span>
                                     </div>
-                                    <span className="text-xs text-gray-500">{p.fans?.toLocaleString()} fans</span>
+                                    <span className="text-xs text-gray-500">{count(p.fans ?? 0)} fans</span>
                                 </div>
                             ))}
                         </div>
@@ -256,8 +259,8 @@ function PagesSection({ managedPages, pagePosts }) {
                                     <span className="text-xs text-gray-500 ml-2">{p.category}</span>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs text-gray-500">{p.followers?.toLocaleString()} followers</p>
-                                    <p className="text-xs text-gray-500">{p.fans?.toLocaleString()} fans</p>
+                                    <p className="text-xs text-gray-500">{count(p.followers ?? 0)} followers</p>
+                                    <p className="text-xs text-gray-500">{count(p.fans ?? 0)} fans</p>
                                 </div>
                             </div>
                         ))}
@@ -293,8 +296,8 @@ function PagesSection({ managedPages, pagePosts }) {
                                 </p>
                                 <div className="flex items-center gap-4 mt-2">
                                     <span className="text-xs text-gray-500">{new Date(post.created_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                                    <span className="text-xs text-gray-500">👍 {post.likes?.toLocaleString()}</span>
-                                    <span className="text-xs text-gray-500">💬 {post.comments?.toLocaleString()}</span>
+                                    <span className="text-xs text-gray-500">👍 {count(post.likes ?? 0)}</span>
+                                    <span className="text-xs text-gray-500">💬 {count(post.comments ?? 0)}</span>
                                 </div>
                             </div>
                         ))}
@@ -402,7 +405,7 @@ export default function FacebookApiVerify({
                 <div className="mb-8">
                     <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-4 ${allOk ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${allOk ? 'bg-green-500' : 'bg-amber-500'}`} />
-                        Live API calls · {new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        Live API calls · {dateTime(new Date())}
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">Live API Access Verification</h1>
                     <p className="text-sm text-gray-500">

@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router } from '@inertiajs/react';
 
 const PLATFORM_COLORS = {
@@ -9,6 +11,7 @@ const PLATFORM_COLORS = {
 };
 
 function PlatformBar({ platform, metric, maxValue }) {
+    const currency = useCurrency();
     const width = maxValue > 0 ? (platform[metric] / maxValue * 100) : 0;
     const color = PLATFORM_COLORS[platform.platform] || 'bg-gray-400';
     return (
@@ -18,13 +21,14 @@ function PlatformBar({ platform, metric, maxValue }) {
                 <div className={`${color} h-4 rounded-full`} style={{ width: `${Math.max(width, 1)}%` }} />
             </div>
             <span className="text-xs font-medium text-gray-900 w-20 text-right">
-                {metric === 'cost' ? `$${platform[metric]?.toLocaleString()}` : metric === 'roas' ? `${platform[metric]}x` : platform[metric]?.toLocaleString()}
+                {metric === 'cost' ? money(platform[metric] ?? 0, currency, { maximumFractionDigits: 0 }) : metric === 'roas' ? `${platform[metric]}x` : count(platform[metric] ?? 0)}
             </span>
         </div>
     );
 }
 
 export default function CrossPlatform({ comparison = [], timeSeries = [], days = 30 }) {
+    const currency = useCurrency();
     const changeDays = (d) => {
         router.get(route('analytics.cross-platform'), { days: d }, { preserveState: true });
     };
@@ -36,7 +40,7 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
         <AuthenticatedLayout>
             <Head title="Cross-Platform Analytics" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <a href={route('analytics.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to Analytics</a>
@@ -125,9 +129,9 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                                                         {p.platform}
                                                     </span>
                                                 </td>
-                                                <td className="py-2.5">{p.impressions?.toLocaleString()}</td>
-                                                <td className="py-2.5">{p.clicks?.toLocaleString()}</td>
-                                                <td className="py-2.5">${p.cost?.toLocaleString()}</td>
+                                                <td className="py-2.5">{count(p.impressions ?? 0)}</td>
+                                                <td className="py-2.5">{count(p.clicks ?? 0)}</td>
+                                                <td className="py-2.5">{money(p.cost ?? 0, currency, { maximumFractionDigits: 0 })}</td>
                                                 <td className="py-2.5">{p.conversions}</td>
                                                 <td className="py-2.5">{p.roas}x</td>
                                                 <td className="py-2.5">{p.conversion_share}%</td>

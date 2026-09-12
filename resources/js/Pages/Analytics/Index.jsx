@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router } from '@inertiajs/react';
 
 function MetricCard({ label, value, subValue, color }) {
@@ -17,11 +19,22 @@ function FunnelBar({ stage, maxValue }) {
         <div className="flex items-center gap-4">
             <span className="text-sm font-medium text-gray-700 w-28">{stage.name}</span>
             <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                {/*
+                  * The label sits at the right-hand end of the bar, so that end is
+                  * what its white text has to pass against. `to-brand-primary/70`
+                  * never compiled, which left --tw-gradient-to at its transparent
+                  * default and put white text on the gray-200 track — 1.4:1.
+                  * Ending on brand-dark keeps the fade and gives the label 4.96:1.
+                  */}
                 <div
-                    className="bg-gradient-to-r from-brand-primary to-brand-primary/70 h-6 rounded-full flex items-center justify-end pr-2"
-                    style={{ width: `${Math.max(width, 2)}%` }}
+                    className="h-6 rounded-full flex items-center justify-end pr-2"
+                    style={{
+                        width: `${Math.max(width, 2)}%`,
+                        backgroundImage:
+                            'linear-gradient(to right, var(--color-brand-primary), var(--color-brand-dark))',
+                    }}
                 >
-                    <span className="text-xs text-white font-medium">{stage.value.toLocaleString()}</span>
+                    <span className="text-xs text-white font-medium">{count(stage.value)}</span>
                 </div>
             </div>
             <span className="text-xs text-gray-500 w-14 text-right">{stage.rate}%</span>
@@ -30,6 +43,7 @@ function FunnelBar({ stage, maxValue }) {
 }
 
 export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
+    const currency = useCurrency();
     const totals = summary?.totals || {};
 
     const changeDays = (d) => {
@@ -40,7 +54,7 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
         <AuthenticatedLayout>
             <Head title="Analytics" />
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm:">
+                <div className="mx-auto max-w-7xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Advanced Analytics</h1>
@@ -66,12 +80,12 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
 
                     {/* KPI Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
-                        <MetricCard label="Impressions" value={totals.impressions?.toLocaleString() ?? 0} />
-                        <MetricCard label="Clicks" value={totals.clicks?.toLocaleString() ?? 0} />
+                        <MetricCard label="Impressions" value={count(totals.impressions ?? 0)} />
+                        <MetricCard label="Clicks" value={count(totals.clicks ?? 0)} />
                         <MetricCard label="CTR" value={`${totals.ctr ?? 0}%`} />
-                        <MetricCard label="Cost" value={`$${(totals.cost ?? 0).toLocaleString()}`} />
+                        <MetricCard label="Cost" value={money(totals.cost ?? 0, currency, { maximumFractionDigits: 0 })} />
                         <MetricCard label="CPC" value={`$${totals.cpc ?? 0}`} />
-                        <MetricCard label="Conversions" value={totals.conversions?.toLocaleString() ?? 0} color="text-green-600" />
+                        <MetricCard label="Conversions" value={count(totals.conversions ?? 0)} color="text-green-600" />
                         <MetricCard label="CPA" value={`$${totals.cpa ?? 0}`} />
                         <MetricCard label="ROAS" value={`${totals.roas ?? 0}x`} color="text-blue-600" />
                     </div>
@@ -121,9 +135,9 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
                                         {timeSeries.slice(-14).reverse().map((row, i) => (
                                             <tr key={i} className="border-b border-gray-100">
                                                 <td className="py-2 text-gray-900">{row.date}</td>
-                                                <td className="py-2">{row.total?.impressions?.toLocaleString() ?? 0}</td>
-                                                <td className="py-2">{row.total?.clicks?.toLocaleString() ?? 0}</td>
-                                                <td className="py-2">${row.total?.cost?.toLocaleString() ?? 0}</td>
+                                                <td className="py-2">{count(row.total?.impressions ?? 0)}</td>
+                                                <td className="py-2">{count(row.total?.clicks ?? 0)}</td>
+                                                <td className="py-2">{money(row.total?.cost ?? 0, currency, { maximumFractionDigits: 0 })}</td>
                                                 <td className="py-2">{row.total?.conversions ?? 0}</td>
                                             </tr>
                                         ))}

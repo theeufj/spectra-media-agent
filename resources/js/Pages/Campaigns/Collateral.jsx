@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import RefineImageModal from '@/Components/RefineImageModal';
 import ExtendVideoModal from '@/Components/ExtendVideoModal';
 import SubscriptionRequiredModal from '@/Components/SubscriptionRequiredModal';
@@ -13,6 +15,7 @@ import { useToast } from '@/Components/Toast';
 import { usePolling } from '@/hooks/usePolling';
 
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
+    const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
@@ -444,8 +447,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         // Only say "payment successful" when a charge actually occurred; otherwise the
         // existing credit already covered the campaign and nothing was charged.
         const message = charged > 0
-            ? `Charged $${charged.toFixed(2)}. Your ad spend credit is now $${balance.toFixed(2)}. Ready to deploy?`
-            : `You already have $${balance.toFixed(2)} in ad spend credit — no additional charge needed. Ready to deploy?`;
+            ? `Charged ${money(charged, currency)}. Your ad spend credit is now ${money(balance, currency)}. Ready to deploy?`
+            : `You already have ${money(balance, currency)} in ad spend credit — no additional charge needed. Ready to deploy?`;
         setConfirmModal({
             show: true,
             title: 'Deploy Collateral',
@@ -589,7 +592,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
 
                     {/* Runtime collateral generation failure banner */}
                     {collateralError && (
@@ -750,7 +753,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         navigator.clipboard.writeText(copyText);
                                                                         toast.success('Ad copy copied to clipboard!');
                                                                     }}
-                                                                    className="px-3 py-1 text-xs font-medium text-brand-dark bg-brand-primary/10 rounded-md hover:bg-brand-primary/20"
+                                                                    className="px-3 py-1 text-xs font-medium text-brand-dark bg-brand-tint-10 rounded-md hover:bg-brand-tint-20"
                                                                 >
                                                                     📋 Copy All
                                                                 </button>
@@ -922,7 +925,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     <div className="flex flex-wrap gap-1 mt-1.5">
                                                                         <button
                                                                             onClick={() => handleUseHarvestedAsset(asset.id, 'original')}
-                                                                            className="text-xs px-2 py-0.5 bg-brand-primary/10 text-brand-darker rounded hover:bg-brand-primary/20 font-medium"
+                                                                            className="text-xs px-2 py-0.5 bg-brand-tint-10 text-brand-darker rounded hover:bg-brand-tint-20 font-medium"
                                                                         >
                                                                             Use Original
                                                                         </button>

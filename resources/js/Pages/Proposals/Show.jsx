@@ -1,12 +1,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function GeneratingState() {
     return (
         <div className="bg-white rounded-lg shadow-md p-16 text-center">
             <div className="relative w-20 h-20 mx-auto mb-6">
-                <div className="absolute inset-0 rounded-full border-4 border-brand-primary/30 animate-ping opacity-25" />
+                <div className="absolute inset-0 rounded-full border-4 animate-ping opacity-25" style={{ borderColor: brandTint(30) }} />
                 <div className="relative w-20 h-20 rounded-full border-4 border-brand-primary border-t-transparent animate-spin" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Generating Your Proposal</h2>
@@ -15,7 +18,11 @@ function GeneratingState() {
             </p>
             <div className="mt-8 flex justify-center gap-3">
                 {['Analyzing website', 'Researching industry', 'Building strategies', 'Generating PDF'].map((step, i) => (
-                    <span key={step} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-brand-primary/10 text-brand-dark animate-pulse" style={{ animationDelay: `${i * 0.5}s` }}>
+                    <span
+                        key={step}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-brand-dark animate-pulse"
+                        style={{ animationDelay: `${i * 0.5}s`, backgroundColor: brandTint(10) }}
+                    >
                         {step}
                     </span>
                 ))}
@@ -43,13 +50,14 @@ function FailedState({ error }) {
 }
 
 function ProposalPreview({ proposal, data }) {
+    const currency = useCurrency();
     return (
         <div className="space-y-8">
             {/* Header actions */}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">{proposal.client_name}</h1>
-                    <p className="text-gray-500">{proposal.industry || 'Digital Advertising'} &middot; ${Number(proposal.budget).toLocaleString()}/mo</p>
+                    <p className="text-gray-500">{proposal.industry || 'Digital Advertising'} &middot; {money(proposal.budget, currency, { maximumFractionDigits: 0 })}/mo</p>
                 </div>
                 <a
                     href={route('proposals.export-pdf', proposal.id)}
@@ -93,7 +101,7 @@ function ProposalPreview({ proposal, data }) {
                         <h2 className="text-lg font-semibold text-white">{strategy.platform}</h2>
                         {strategy.budget_allocation && (
                             <span className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                ${Number(strategy.budget_allocation).toLocaleString()}/mo
+                                {money(strategy.budget_allocation, currency, { maximumFractionDigits: 0 })}/mo
                             </span>
                         )}
                     </div>
@@ -216,10 +224,10 @@ function ProposalPreview({ proposal, data }) {
                         <table className="w-full">
                             <tbody>
                                 {Object.entries(data.investment_summary).map(([key, val], idx, arr) => (
-                                    <tr key={key} className={`${idx === arr.length - 1 ? 'bg-brand-primary/10 font-bold' : ''} border-b border-gray-100`}>
+                                    <tr key={key} className={`${idx === arr.length - 1 ? 'bg-brand-tint-10 font-bold' : ''} border-b border-gray-100`}>
                                         <td className="py-3 text-gray-700 capitalize">{key.replace(/_/g, ' ')}</td>
                                         <td className="py-3 text-right text-gray-900 font-semibold">
-                                            {typeof val === 'number' ? `$${val.toLocaleString()}` : val}
+                                            {typeof val === 'number' ? money(val, currency, { maximumFractionDigits: 0 }) : val}
                                         </td>
                                     </tr>
                                 ))}
@@ -254,6 +262,7 @@ function ProposalPreview({ proposal, data }) {
 }
 
 export default function Show({ proposal }) {
+    const currency = useCurrency();
     const [currentData, setCurrentData] = useState(proposal.proposal_data);
     const [currentStatus, setCurrentStatus] = useState(proposal.status);
 
@@ -284,7 +293,7 @@ export default function Show({ proposal }) {
         <AuthenticatedLayout>
             <Head title={`Proposal — ${proposal.client_name}`} />
 
-            <div className="max-w-5xl mx-auto sm:">
+            <div className="max-w-5xl mx-auto">
                 <Link
                     href={route('proposals.index')}
                     className="text-brand-dark hover:text-brand-darker text-sm font-medium inline-flex items-center mb-6"

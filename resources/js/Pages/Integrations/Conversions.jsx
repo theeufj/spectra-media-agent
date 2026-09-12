@@ -1,7 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router } from '@inertiajs/react';
 
 export default function Conversions({ conversions = [] }) {
+    const currency = useCurrency();
     const statusColors = {
         pending: 'bg-yellow-100 text-yellow-700',
         uploaded_google: 'bg-blue-100 text-blue-700',
@@ -16,7 +19,7 @@ export default function Conversions({ conversions = [] }) {
         <AuthenticatedLayout>
             <Head title="Offline Conversions" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Offline Conversions</h1>
@@ -47,7 +50,7 @@ export default function Conversions({ conversions = [] }) {
                                         <tr key={c.id} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 text-sm text-gray-600">{new Date(c.conversion_time).toLocaleDateString()}</td>
                                             <td className="px-4 py-3 text-sm font-medium text-gray-900">{c.conversion_name}</td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-900">{c.conversion_value ? `$${parseFloat(c.conversion_value).toLocaleString(undefined, {minimumFractionDigits: 2})}` : '—'}</td>
+                                            <td className="px-4 py-3 text-right text-sm text-gray-900">{c.conversion_value ? money(c.conversion_value, currency) : '—'}</td>
                                             <td className="px-4 py-3">
                                                 <div className="flex gap-1">
                                                     {c.gclid && <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">G</span>}

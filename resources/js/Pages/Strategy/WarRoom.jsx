@@ -1,6 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count, percent, dateTime } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 /* ─── Icons ─── */
 const HeartIcon = () => (
@@ -41,7 +44,7 @@ const HEALTH_COLORS = {
 function UpgradePrompt() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center max-w-lg mx-auto mt-12">
-            <div className="mx-auto w-14 h-14 bg-brand-primary/20 rounded-full flex items-center justify-center mb-5">
+            <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ backgroundColor: brandTint(20) }}>
                 <LockIcon />
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Strategy War Room</h3>
@@ -76,6 +79,15 @@ function HealthPanel({ health }) {
                         <p className="text-xs capitalize">{status}</p>
                     </div>
                 </div>
+                {/*
+                    "All systems operational" used to render whenever the issue
+                    and warning lists were empty — including when the status was
+                    `unknown`, which is what an account with no health check yet
+                    reports. The panel therefore said "Unknown" on the left and
+                    "All systems operational" on the right at the same time. An
+                    empty list is not a clean bill of health; it is an absence of
+                    findings, and those are different claims.
+                */}
                 <div className="flex items-center gap-4 text-xs">
                     {issues.length > 0 && (
                         <span className="flex items-center gap-1">
@@ -90,7 +102,11 @@ function HealthPanel({ health }) {
                         </span>
                     )}
                     {issues.length === 0 && warnings.length === 0 && (
-                        <span className="text-green-700">All systems operational</span>
+                        <span>
+                            {status === 'unknown'
+                                ? 'Not checked yet'
+                                : 'All systems operational'}
+                        </span>
                     )}
                 </div>
             </div>
@@ -140,7 +156,7 @@ function ActivityFeed({ activities }) {
                             </div>
                             <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{a.description}</p>
                             <span className="text-xs text-gray-500 mt-1 block">
-                                {new Date(a.created_at).toLocaleString()}
+                                {dateTime(a.created_at)}
                             </span>
                         </div>
                     </div>
@@ -172,7 +188,7 @@ function OptimizationQueue({ recommendations }) {
     }
 
     return (
-        <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
             {recommendations.map((r) => (
                 <div key={r.id} className="bg-white rounded-lg border border-gray-100 p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -205,20 +221,27 @@ function OptimizationQueue({ recommendations }) {
 
 /* ─── Performance Snapshot ─── */
 function PerformanceSnapshot({ performance }) {
-    if (!performance?.totals) {
+    const currency = useCurrency();
+    const t = performance?.totals;
+
+    // `totals` is present but all-zero for an account whose campaigns have not
+    // served yet, so the guard below never fired and the panel rendered six
+    // tiles reading 0, 0, $0.00, 0, 0%, 0x. Six zeros look like a measurement;
+    // they are the absence of one.
+    const hasData = t && ['impressions', 'clicks', 'cost', 'conversions'].some((k) => Number(t[k]) > 0);
+
+    if (! hasData) {
         return (
-            <div className="text-center py-8 text-gray-500 text-sm">
-                No performance data yet. Metrics will appear once your campaigns are running.
+            <div className="rounded-lg border border-dashed border-gray-300 py-8 text-center text-sm text-gray-600">
+                Nothing to report for the last 7 days — these fill in once your campaigns start serving.
             </div>
         );
     }
-
-    const t = performance.totals;
     const metrics = [
-        { label: 'Impressions', value: (t.impressions || 0).toLocaleString() },
-        { label: 'Clicks', value: (t.clicks || 0).toLocaleString() },
-        { label: 'Spend', value: `$${(t.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-        { label: 'Conversions', value: (t.conversions || 0).toLocaleString(undefined, { maximumFractionDigits: 1 }) },
+        { label: 'Impressions', value: count(t.impressions || 0) },
+        { label: 'Clicks', value: count(t.clicks || 0) },
+        { label: 'Spend', value: money(t.cost || 0, currency) },
+        { label: 'Conversions', value: count(t.conversions || 0, { maximumFractionDigits: 1 }) },
         { label: 'CTR', value: `${t.ctr || 0}%` },
         { label: 'ROAS', value: `${t.roas || 0}x` },
     ];
@@ -243,9 +266,9 @@ function PerformanceSnapshot({ performance }) {
                             return (
                                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
                                     <div
-                                        className="w-full bg-brand-primary/30 rounded-t hover:bg-brand-primary/70 transition"
+                                        className="w-full bg-brand-tint-30 rounded-t hover:bg-brand-primary transition"
                                         style={{ height: `${Math.max(pct, 4)}%` }}
-                                        title={`${d.date}: $${(d.cost || 0).toFixed(2)}`}
+                                        title={`${d.date}: ${money(d.cost || 0, currency)}`}
                                     />
                                     <span className="text-xs text-gray-500">{d.date.slice(5)}</span>
                                 </div>
@@ -259,33 +282,83 @@ function PerformanceSnapshot({ performance }) {
 }
 
 /* ─── Alerts Bar ─── */
+/**
+ * Repeated alerts, collapsed to one row each.
+ *
+ * On the production data this account holds 220 notifications titled "Platform
+ * Health Alert", all carrying the same sentence, arriving at exactly four a day
+ * for two months — a scheduled check that writes a fresh notification every run
+ * whether or not anything changed. Rendered one per row, the ten most recent
+ * filled half the page and said one thing ten times, which also buried the
+ * alerts that were not repeats.
+ *
+ * Grouping is a display fix, not a cure: the generator is still producing four
+ * identical records a day and that is worth stopping at the source.
+ */
+function groupAlerts(alerts) {
+    const groups = new Map();
+
+    for (const alert of alerts) {
+        const key = `${alert.title}|${alert.message}`;
+        const existing = groups.get(key);
+
+        if (existing) {
+            existing.count += 1;
+            // The list arrives newest-first, so the first one seen is the latest.
+            existing.oldest = alert.created_at;
+        } else {
+            groups.set(key, { ...alert, count: 1, oldest: alert.created_at });
+        }
+    }
+
+    return [...groups.values()];
+}
+
 function AlertsBar({ alerts }) {
-    if (alerts.length === 0) return null;
+    const groups = useMemo(() => groupAlerts(alerts), [alerts]);
+
+    if (groups.length === 0) return null;
 
     return (
-        <div className="space-y-2">
-            {alerts.map((a) => (
-                <div key={a.id} className="flex items-center justify-between bg-white rounded-lg border border-gray-100 px-4 py-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
+        <ul className="space-y-2">
+            {groups.map((a) => (
+                <li
+                    key={`${a.title}-${a.message}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-4 py-2.5"
+                >
+                    <div className="flex min-w-0 items-center gap-3">
                         <BellIcon />
                         <div className="min-w-0">
-                            <p className="text-xs font-medium text-gray-900 truncate">{a.title}</p>
-                            <p className="text-xs text-gray-500 truncate">{a.message}</p>
+                            <p className="flex items-center gap-2 text-xs font-medium text-gray-900">
+                                <span className="truncate">{a.title}</span>
+                                {a.count > 1 && (
+                                    <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+                                        ×{a.count}
+                                    </span>
+                                )}
+                            </p>
+                            <p className="truncate text-xs text-gray-500">{a.message}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                         {a.action_url && (
-                            <Link href={a.action_url} className="text-xs text-brand-dark hover:underline font-medium">
+                            <Link
+                                href={a.action_url}
+                                className="inline-flex min-h-[44px] items-center text-xs font-medium text-brand-darker hover:underline"
+                            >
                                 View
                             </Link>
                         )}
-                        <span className="text-xs text-gray-500 whitespace-nowrap">
+                        <span className="whitespace-nowrap text-xs text-gray-500">
                             {new Date(a.created_at).toLocaleDateString()}
+                            {a.count > 1 && (
+                                <span className="text-gray-400"> · since {new Date(a.oldest).toLocaleDateString()}</span>
+                            )}
                         </span>
                     </div>
-                </div>
+                </li>
             ))}
-        </div>
+        </ul>
     );
 }
 
@@ -337,7 +410,7 @@ function CompetitiveIntelPanel({ strategy, updatedAt }) {
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Attack Keywords</p>
                     <div className="flex flex-wrap gap-1">
                         {strategy.keyword_strategy.attack_keywords.slice(0, 6).map((kw, i) => (
-                            <span key={i} className="text-xs px-2 py-0.5 bg-red-50 text-red-700 rounded">{kw}</span>
+                            <span key={i} className="rounded px-2 py-0.5 text-xs font-medium text-brand-darker" style={{ backgroundColor: brandTint(12) }}>{kw}</span>
                         ))}
                     </div>
                 </div>
@@ -373,19 +446,29 @@ function CompetitorPinPanel({ competitors }) {
             {/* Input */}
             {competitors.length < 3 && (
                 <form onSubmit={handleSubmit} className="flex gap-2">
+                    <label htmlFor="competitor-url" className="sr-only">Competitor website</label>
                     <input
+                        id="competitor-url"
                         type="url"
                         value={data.url}
                         onChange={(e) => setData('url', e.target.value)}
                         placeholder="https://competitor.com"
-                        className="flex-1 text-xs rounded-lg border border-gray-200 px-3 py-2 focus:border-brand-primary/70 focus:ring-brand-primary/70"
+                        className="h-11 flex-1 rounded-lg border border-gray-200 px-3 text-xs focus:border-brand-dark focus:ring-brand-dark"
                     />
+                    {/*
+                        disabled:opacity-50 composites the white label down to
+                        about 2.2:1 on brand-dark — the same trap PrimaryButton
+                        documents. This button is disabled until a URL is typed,
+                        so that washed-out slab was its resting state, and it
+                        read as broken rather than as waiting. A real grey fill
+                        keeps the label legible while still looking inert.
+                    */}
                     <button
                         type="submit"
                         disabled={processing || !data.url}
-                        className="text-xs px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker disabled:opacity-50 font-medium transition"
+                        className="h-11 rounded-lg bg-brand-dark px-4 text-xs font-medium text-white transition hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                     >
-                        {processing ? 'Adding...' : 'Add'}
+                        {processing ? 'Adding…' : 'Add'}
                     </button>
                 </form>
             )}
@@ -439,7 +522,7 @@ function CompetitorPinPanel({ competitors }) {
                                         </div>
                                     )}
                                     {c.impression_share != null && (
-                                        <p className="text-xs text-gray-500">Impression share: <span className="font-medium text-gray-700">{(c.impression_share * 100).toFixed(1)}%</span></p>
+                                        <p className="text-xs text-gray-500">Impression share: <span className="font-medium text-gray-700">{percent(c.impression_share * 100)}</span></p>
                                     )}
                                     {c.last_analyzed_at && (
                                         <p className="text-xs text-gray-500 mt-0.5">Last analyzed: {new Date(c.last_analyzed_at).toLocaleDateString()}</p>
@@ -477,7 +560,13 @@ function GapDashboard({ gapAnalysis, gapAnalysisAt }) {
         <div className="space-y-3">
             {/* Summary */}
             {gapAnalysis.summary && (
-                <div className="bg-gradient-to-r from-brand-primary/10 to-orange-50 rounded-lg p-3 border border-brand-primary/20">
+                <div
+                    className="rounded-lg p-3 border"
+                    style={{
+                        backgroundImage: `linear-gradient(to right, ${brandTint(10)}, #fff7ed)`,
+                        borderColor: brandTint(20),
+                    }}
+                >
                     <p className="text-xs text-gray-700">{gapAnalysis.summary}</p>
                 </div>
             )}
@@ -636,7 +725,7 @@ export default function WarRoom({
         <AuthenticatedLayout>
             <Head title="War Room" />
             <div className="py-6">
-                <div className="mx-auto max-w-7xl sm:">
+                <div className="mx-auto max-w-7xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Strategy War Room</h1>
@@ -659,14 +748,30 @@ export default function WarRoom({
 
                             {/* Two column grid: Activity + Recommendations/Performance */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Left: Agent Activity Feed */}
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <BoltIcon />
-                                        <h2 className="text-sm font-semibold text-gray-900">Agent Activity</h2>
-                                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{activities.length}</span>
+                                {/*
+                                    Left held one 480px feed while the right
+                                    stacked three panels, so the column ran
+                                    roughly 400px short and the page had a large
+                                    empty gutter down its left side. Competitive
+                                    Intel moves across to balance them.
+                                */}
+                                <div className="space-y-6">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <BoltIcon />
+                                            <h2 className="text-sm font-semibold text-gray-900">Agent Activity</h2>
+                                            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{activities.length}</span>
+                                        </div>
+                                        <ActivityFeed activities={activities} />
                                     </div>
-                                    <ActivityFeed activities={activities} />
+
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                            <h2 className="text-sm font-semibold text-gray-900">Competitive Intel</h2>
+                                        </div>
+                                        <CompetitiveIntelPanel strategy={competitiveStrategy} updatedAt={strategyUpdatedAt} />
+                                    </div>
                                 </div>
 
                                 {/* Right: Optimization Queue + Performance */}
@@ -688,13 +793,6 @@ export default function WarRoom({
                                         <PerformanceSnapshot performance={performance} />
                                     </div>
 
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                                            <h2 className="text-sm font-semibold text-gray-900">Competitive Intel</h2>
-                                        </div>
-                                        <CompetitiveIntelPanel strategy={competitiveStrategy} updatedAt={strategyUpdatedAt} />
-                                    </div>
                                 </div>
                             </div>
 

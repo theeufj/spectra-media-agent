@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { count } from '@/utils/format';
 
 const matchTypeColors = {
     BROAD: 'bg-blue-100 text-blue-700',
@@ -107,7 +108,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
     const formatVolume = (v) => {
         if (v == null) return null;
         if (v >= 1000) return `${(v / 1000).toFixed(1)}K/mo`;
-        return `${v.toLocaleString()}/mo`;
+        return `${count(v)}/mo`;
     };
 
     return (

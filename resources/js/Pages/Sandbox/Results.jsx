@@ -1,5 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useState, useEffect } from 'react';
 
 const statusColors = {
@@ -45,14 +47,15 @@ function StatCard({ label, value, sub }) {
 }
 
 function PlatformRow({ name, data }) {
+    const currency = useCurrency();
     return (
         <tr className="border-b border-gray-100">
             <td className="py-3 px-4 font-medium text-gray-900">{platformLabels[name] || name}</td>
-            <td className="py-3 px-4 text-right">{data.impressions?.toLocaleString()}</td>
-            <td className="py-3 px-4 text-right">{data.clicks?.toLocaleString()}</td>
-            <td className="py-3 px-4 text-right">${data.cost?.toLocaleString()}</td>
-            <td className="py-3 px-4 text-right">{data.conversions?.toLocaleString()}</td>
-            <td className="py-3 px-4 text-right">${data.revenue?.toLocaleString()}</td>
+            <td className="py-3 px-4 text-right">{count(data.impressions ?? 0)}</td>
+            <td className="py-3 px-4 text-right">{count(data.clicks ?? 0)}</td>
+            <td className="py-3 px-4 text-right">{money(data.cost ?? 0, currency, { maximumFractionDigits: 0 })}</td>
+            <td className="py-3 px-4 text-right">{count(data.conversions ?? 0)}</td>
+            <td className="py-3 px-4 text-right">{money(data.revenue ?? 0, currency, { maximumFractionDigits: 0 })}</td>
             <td className="py-3 px-4 text-right font-semibold">
                 <span className={data.roas >= 2 ? 'text-green-600' : data.roas >= 1 ? 'text-yellow-600' : 'text-red-600'}>
                     {data.roas}x
@@ -469,6 +472,7 @@ function AgentResultCard({ agentType, activities, campaigns }) {
 }
 
 export default function SandboxResults({ customer, campaigns, agentResults, performanceSummary, simulationComplete }) {
+    const currency = useCurrency();
     const [polling, setPolling] = useState(!simulationComplete);
 
     // Poll for results while simulation is running
@@ -505,15 +509,15 @@ export default function SandboxResults({ customer, campaigns, agentResults, perf
             <Head title="Sandbox Results" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm: space-y-6">
+                <div className="mx-auto max-w-7xl space-y-6">
                     {/* Summary Stats */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <StatCard label="Total Spend" value={`$${totals.cost?.toLocaleString() || 0}`} />
-                        <StatCard label="Revenue" value={`$${totals.revenue?.toLocaleString() || 0}`} />
+                        <StatCard label="Total Spend" value={money(totals.cost ?? 0, currency, { maximumFractionDigits: 0 })} />
+                        <StatCard label="Revenue" value={money(totals.revenue ?? 0, currency, { maximumFractionDigits: 0 })} />
                         <StatCard label="ROAS" value={`${totals.roas || 0}x`} />
-                        <StatCard label="Conversions" value={totals.conversions?.toLocaleString() || 0} />
-                        <StatCard label="Clicks" value={totals.clicks?.toLocaleString() || 0} />
-                        <StatCard label="Impressions" value={totals.impressions?.toLocaleString() || 0} />
+                        <StatCard label="Conversions" value={count(totals.conversions ?? 0)} />
+                        <StatCard label="Clicks" value={count(totals.clicks ?? 0)} />
+                        <StatCard label="Impressions" value={count(totals.impressions ?? 0)} />
                     </div>
 
                     {/* Platform Breakdown */}

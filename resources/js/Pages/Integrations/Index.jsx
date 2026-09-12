@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -34,7 +36,7 @@ function IntegrationCard({ integration }) {
             <div className="flex gap-2">
                 {integration.status !== 'disconnected' && (
                     <>
-                        <button onClick={() => router.post(route('integrations.sync', integration.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Sync Now</button>
+                        <button onClick={() => router.post(route('integrations.sync', integration.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-tint-10 text-brand-darker rounded-lg hover:bg-brand-tint-20 font-medium">Sync Now</button>
                         <button onClick={() => { if (confirm('Disconnect this integration?')) router.post(route('integrations.disconnect', integration.id), {}, {preserveScroll: true}); }} className="text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg">Disconnect</button>
                     </>
                 )}
@@ -83,6 +85,7 @@ function ConnectForm({ provider, onClose }) {
 }
 
 export default function Index({ integrations = [], conversionStats, availableProviders = [] }) {
+    const currency = useCurrency();
     const [connectingProvider, setConnectingProvider] = useState(null);
     const connectedIds = integrations.filter(i => i.status !== 'disconnected').map(i => i.provider);
     const unconnected = availableProviders.filter(p => !connectedIds.includes(p.id));
@@ -91,7 +94,7 @@ export default function Index({ integrations = [], conversionStats, availablePro
         <AuthenticatedLayout>
             <Head title="Integrations" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">CRM Integrations</h1>
@@ -105,7 +108,7 @@ export default function Index({ integrations = [], conversionStats, availablePro
                         <StatCard label="Total Conversions" value={conversionStats?.total || 0} />
                         <StatCard label="Pending Upload" value={conversionStats?.pending || 0} />
                         <StatCard label="Uploaded" value={conversionStats?.uploaded || 0} />
-                        <StatCard label="Total Value" value={`$${parseFloat(conversionStats?.total_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`} />
+                        <StatCard label="Total Value" value={money(conversionStats?.total_value || 0, currency)} />
                     </div>
 
                     {/* Connect Form */}
@@ -130,7 +133,7 @@ export default function Index({ integrations = [], conversionStats, availablePro
                                     <div key={p.id} className="bg-white rounded-lg border border-gray-200 border-dashed p-5">
                                         <h3 className="text-sm font-semibold text-gray-900">{p.name}</h3>
                                         <p className="text-xs text-gray-500 mt-1 mb-3">{p.description}</p>
-                                        <button onClick={() => setConnectingProvider(p)} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Connect</button>
+                                        <button onClick={() => setConnectingProvider(p)} className="text-xs px-3 py-1.5 bg-brand-tint-10 text-brand-darker rounded-lg hover:bg-brand-tint-20 font-medium">Connect</button>
                                     </div>
                                 ))}
                             </div>

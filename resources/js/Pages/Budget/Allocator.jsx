@@ -1,7 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count, percent } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router, useForm } from '@inertiajs/react';
 
 function PlatformCard({ name, color, data, pct }) {
+    const currency = useCurrency();
     const roas = data.roas || 0;
     const roasColor = roas >= 3 ? 'text-green-600' : roas >= 1.5 ? 'text-yellow-600' : 'text-red-600';
     return (
@@ -11,12 +14,12 @@ function PlatformCard({ name, color, data, pct }) {
                 <span className={`text-xs px-2 py-0.5 rounded ${color}`}>{pct}%</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-gray-500">Spend</p><p className="text-sm font-semibold">${data.spend?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}</p></div>
+                <div><p className="text-xs text-gray-500">Spend</p><p className="text-sm font-semibold">{money(data.spend ?? 0, currency)}</p></div>
                 <div><p className="text-xs text-gray-500">ROAS</p><p className={`text-sm font-semibold ${roasColor}`}>{roas}x</p></div>
                 <div><p className="text-xs text-gray-500">Conversions</p><p className="text-sm font-semibold">{data.conversions || 0}</p></div>
-                <div><p className="text-xs text-gray-500">CPA</p><p className="text-sm font-semibold">${data.cpa?.toFixed(2) || '—'}</p></div>
+                <div><p className="text-xs text-gray-500">CPA</p><p className="text-sm font-semibold">{data.cpa ? money(data.cpa, currency) : '—'}</p></div>
             </div>
-            <div className="mt-3"><p className="text-xs text-gray-500">{data.campaigns} campaign{data.campaigns !== 1 ? 's' : ''} · {data.clicks?.toLocaleString() || 0} clicks</p></div>
+            <div className="mt-3"><p className="text-xs text-gray-500">{data.campaigns} campaign{data.campaigns !== 1 ? 's' : ''} · {count(data.clicks ?? 0)} clicks</p></div>
         </div>
     );
 }
@@ -64,7 +67,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
         <AuthenticatedLayout>
             <Head title="Budget Allocator" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Cross-Channel Budget Allocator</h1>
@@ -156,7 +159,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                         <div className="mt-6">
                             <div className="flex items-center justify-between mb-2">
                                 <label className="text-sm font-medium text-gray-700">Platform Split</label>
-                                <span className={`text-xs ${Math.abs(totalPct - 100) > 0.5 ? 'text-red-500' : 'text-green-600'}`}>{totalPct.toFixed(1)}%</span>
+                                <span className={`text-xs ${Math.abs(totalPct - 100) > 0.5 ? 'text-red-500' : 'text-green-600'}`}>{percent(totalPct)}</span>
                             </div>
                             {/* Stacked bar */}
                             <div className="flex h-4 rounded-full overflow-hidden mb-4">

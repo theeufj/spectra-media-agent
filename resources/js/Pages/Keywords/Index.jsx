@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { count } from '@/utils/format';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -33,7 +34,7 @@ function StatCard({ label, value, color = 'gray' }) {
     return (
         <div className={`rounded-lg p-4 ${colors[color]}`}>
             <p className="text-xs font-medium opacity-70">{label}</p>
-            <p className="text-2xl font-bold">{value?.toLocaleString() ?? '—'}</p>
+            <p className="text-2xl font-bold">{value != null ? count(value) : '—'}</p>
         </div>
     );
 }
@@ -63,7 +64,7 @@ export default function Index({ keywords, stats, qsTrends }) {
         <AuthenticatedLayout>
             <Head title="Keywords" />
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm:">
+                <div className="mx-auto max-w-7xl">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Keyword Portfolio</h1>
