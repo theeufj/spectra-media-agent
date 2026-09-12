@@ -457,6 +457,25 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 standing between the customer and deploying, and without it they
                 would click Deploy and be told to confirm a budget with nowhere
                 to do it. */}
+            {/*
+                The deployment status page (campaigns.deployment-status) existed
+                with no inbound link from anywhere — a route the customer could
+                only reach by typing it. It is the only place that shows
+                per-platform deployment state and the error message when one
+                fails, which is exactly what someone whose ads have not appeared
+                is looking for.
+            */}
+            {campaign.strategies?.some(s => s.deployed_at || s.deployment_status) && (
+                <div className="mx-auto max-w-7xl mb-6">
+                    <Link
+                        href={route('campaigns.deployment-status', { campaign: campaign.id })}
+                        className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                        View deployment status
+                    </Link>
+                </div>
+            )}
+
             {campaign.auto_generated_at && (
                 <div className="mx-auto max-w-7xl">
                     {/* The prop, not the polled local state: confirming the

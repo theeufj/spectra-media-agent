@@ -1,7 +1,21 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
+import { MegaphoneIcon } from '@heroicons/react/24/outline';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import React from 'react';
+import { money, date } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
+
+/**
+ * Has this strategy been sent to a platform?
+ *
+ * `deployment_status` in production holds null, 'active', 'deployed',
+ * 'verified' and 'deploy_unverified'. Anything other than null means a
+ * deployment was attempted and there is something to look at.
+ */
+const hasDeployed = (strategy) =>
+    Boolean(strategy?.deployed_at) || Boolean(strategy?.deployment_status);
 
 // Mirrors App\Enums\CampaignStatus. Values are canonical lowercase — the column
 // previously held mixed casing ('DRAFT', 'PAUSED') and this badge only ever
@@ -25,6 +39,7 @@ const CAMPAIGN_STATUS_STYLES = {
 };
 
 export default function Index({ auth, campaigns = [] }) {
+    const currency = useCurrency();
     const [expandedCampaign, setExpandedCampaign] = React.useState(null);
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
@@ -71,7 +86,7 @@ export default function Index({ auth, campaigns = [] }) {
             />
 
             <div className="py-6 sm:py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     {campaigns && campaigns.length > 0 ? (
                         campaigns.map(campaign => {
                             const isExpanded = expandedCampaign === campaign.id;
@@ -99,7 +114,7 @@ export default function Index({ auth, campaigns = [] }) {
                                             }`}>
                                                 {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
                                             </span>
-                                            <span className="text-sm font-semibold text-brand-dark bg-brand-primary/10 px-3 py-1 rounded">{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
+                                            <span className="text-sm font-semibold text-brand-dark px-3 py-1 rounded" style={{ backgroundColor: brandTint(10) }}>{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
                                         </div>
                                     </div>
 
@@ -110,15 +125,15 @@ export default function Index({ auth, campaigns = [] }) {
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 pb-6 border-b border-gray-200">
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">Budget</p>
-                                                    <p className="font-semibold">${parseFloat(campaign.total_budget || 0).toFixed(2)}</p>
+                                                    <p className="font-semibold">{money(campaign.total_budget || 0, currency)}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">Start Date</p>
-                                                    <p className="font-semibold">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                                                    <p className="font-semibold">{campaign.start_date ? date(campaign.start_date) : '—'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">End Date</p>
-                                                    <p className="font-semibold">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                                                    <p className="font-semibold">{campaign.end_date ? date(campaign.end_date) : '—'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">Primary KPI</p>
@@ -165,12 +180,30 @@ export default function Index({ auth, campaigns = [] }) {
                                                                                     <span className="text-xs text-gray-600">Videos</span>
                                                                                 </div>
                                                                             </div>
-                                                                            <Link 
-                                                                                href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })} 
-                                                                                className="px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker text-sm font-medium"
-                                                                            >
-                                                                                View Details
-                                                                            </Link>
+                                                                            {/*
+                                                                                Deploy lives on the collateral page and this was the
+                                                                                only route to it, labelled "View Details" — a name
+                                                                                that promises reading, not doing. The step the whole
+                                                                                funnel exists to reach was behind a link that sounded
+                                                                                like a detour, so the label now says what is actually
+                                                                                on the other side of it.
+                                                                            */}
+                                                                            <div className="flex items-center gap-2">
+                                                                                {hasDeployed(strategy) && (
+                                                                                    <Link
+                                                                                        href={route('campaigns.deployment-status', { campaign: campaign.id })}
+                                                                                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
+                                                                                    >
+                                                                                        Deployment status
+                                                                                    </Link>
+                                                                                )}
+                                                                                <Link
+                                                                                    href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
+                                                                                    className="px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker text-sm font-medium"
+                                                                                >
+                                                                                    {hasDeployed(strategy) ? 'Review creative' : 'Review & deploy'}
+                                                                                </Link>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
 
@@ -205,15 +238,31 @@ export default function Index({ auth, campaigns = [] }) {
                             );
                         })
                     ) : (
-                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div className="p-6 text-center text-gray-900">
-                                <h3 className="text-lg font-bold">No campaigns yet!</h3>
-                                <p className="mt-2">Get started by creating your first campaign.</p>
+                        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                            <div className="p-8 text-center sm:p-12">
+                                <span
+                                    className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full text-brand-darker"
+                                    style={{ backgroundColor: brandTint(12) }}
+                                >
+                                    <MegaphoneIcon className="h-6 w-6" aria-hidden="true" />
+                                </span>
+                                <h3 className="text-lg font-bold text-gray-900">No campaigns yet</h3>
+                                <p className="mx-auto mt-2 max-w-sm text-sm text-gray-600">
+                                    Your first campaign takes a couple of minutes. We write the ads; you approve
+                                    them before anything goes live.
+                                </p>
+                                {/*
+                                    The one primary action in the product still
+                                    wearing the stock Breeze `bg-gray-800`. Every
+                                    other one goes through PrimaryButton, so this
+                                    empty state offered a dark grey button on a
+                                    page whose header CTA is brand orange.
+                                */}
                                 <Link
                                     href="/campaigns/wizard"
-                                    className="mt-4 inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:border-gray-900 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150"
+                                    className="mt-6 inline-flex items-center rounded-md border border-transparent bg-brand-dark px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-brand-darker focus:outline-none focus:ring-2 focus:ring-brand-dark focus:ring-offset-2"
                                 >
-                                    Create Your First Campaign
+                                    Create your first campaign
                                 </Link>
                             </div>
                         </div>
