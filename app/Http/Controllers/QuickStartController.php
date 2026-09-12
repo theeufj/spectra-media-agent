@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\CrawlSitemap;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
+use App\Services\Onboarding\WebsiteIdentity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -61,8 +62,19 @@ class QuickStartController extends Controller
 
     private function doProcess(string $url, $user, Request $request): RedirectResponse
     {
-        $host = parse_url($url, PHP_URL_HOST) ?: $url;
-        $businessName = ucfirst(str_replace('www.', '', $host));
+        /*
+           A shortener is not the customer's website, it is a redirect to it.
+           This used to take the host as typed, so a signup who pasted a bit.ly
+           link to her trucking brokerage had her business created as "Bit.ly"
+           and a brand profile built from whatever the crawler found there. She
+           left four minutes later.
+
+           Resolving happens before anything is stored, because the URL is
+           written to the customer and every later job reads it from there.
+        */
+        $identity = app(WebsiteIdentity::class);
+        $url = $identity->resolve($url);
+        $businessName = $identity->businessName($url);
 
         $timezone = $request->input('timezone') ?: 'UTC';
 

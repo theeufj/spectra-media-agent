@@ -187,6 +187,39 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         </div>
                     )}
                     {/* Header */}
+                    {/*
+                        Lead with the doubt, not the answer.
+
+                        A signup entered a parked domain. The crawler found the
+                        domain broker sitting on it, the extractor built a
+                        complete brand identity from that, scored itself 94/100,
+                        and this page presented it as her business. She left one
+                        minute later. Where we have reason to think the content
+                        was not hers, she should read that first — above the
+                        confident prose, not after it.
+                    */}
+                    {brandGuideline.extraction_warning && (
+                        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
+                            <h2 className="text-sm font-semibold text-amber-900">
+                                This may not be your business
+                            </h2>
+                            <p className="mt-1 text-sm text-amber-900">
+                                {brandGuideline.extraction_warning}
+                            </p>
+                            <p className="mt-2 text-sm text-amber-900">
+                                Everything below was written from what we found there, so check it before
+                                we build ads on it. If the address is wrong you can change it and we'll
+                                read the site again.
+                            </p>
+                            <a
+                                href={route('customers.edit', customer.id)}
+                                className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker"
+                            >
+                                Change my website address
+                            </a>
+                        </div>
+                    )}
+
                     <div className="mb-8">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                             <div className="min-w-0">
@@ -198,9 +231,21 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             ✓ Verified
                                         </span>
                                     )}
-                                    {brandGuideline.extraction_quality_score && (
-                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                            Quality: {brandGuideline.extraction_quality_score}/100
+                                    {/*
+                                        Was "Quality: 94/100", which reads as
+                                        "94% sure this is your brand". It is not
+                                        that — it is how much readable content
+                                        the page gave us, and a parking page
+                                        gives plenty. Labelled for what it
+                                        measures, and dropped entirely when we
+                                        already doubt the source.
+                                    */}
+                                    {brandGuideline.extraction_quality_score && ! brandGuideline.extraction_warning && (
+                                        <span
+                                            className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                            title="How much usable text your site gave us — not a measure of whether the result is right."
+                                        >
+                                            Read {brandGuideline.extraction_quality_score}% of what we needed
                                         </span>
                                     )}
                                 </p>

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BrandGuideline;
 use App\Models\Customer;
 use App\Prompts\BrandGuidelineExtractionPrompt;
+use App\Services\Onboarding\PlaceholderSiteDetector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Browsershot\Browsershot;
@@ -128,6 +129,28 @@ class BrandGuidelineExtractorService
                 return null;
             }
 
+            /*
+               Is this the customer's business, or the page standing where it
+               should be? The quality score cannot answer that — it measures how
+               cleanly the page parsed, and a parked domain parses beautifully.
+               One scored 94 while describing the domain broker sitting on the
+               address instead of the signup's business.
+
+               Extraction still runs. The warning travels with the result so the
+               review screen can lead with the doubt rather than presenting
+               someone else's brand as fact.
+            */
+            $extractionWarning = app(PlaceholderSiteDetector::class)
+                ->warningFor($websiteContent, $customer->website);
+
+            if ($extractionWarning) {
+                Log::info('Brand extraction ran against content that may not be the customer\'s', [
+                    'customer_id' => $customer->id,
+                    'website' => $customer->website,
+                    'warning' => $extractionWarning,
+                ]);
+            }
+
             // Step 2: Scrape and analyze homepage for visual elements
             $visualAnalysis = $this->analyzeVisualStyle($customer->website);
 
@@ -196,6 +219,7 @@ class BrandGuidelineExtractorService
                     'do_not_use' => $guidelines['do_not_use'] ?? [],
                     'service_lines' => $guidelines['service_lines'] ?? [],
                     'extraction_quality_score' => $guidelines['extraction_quality_score'] ?? 50,
+                    'extraction_warning' => $extractionWarning,
                     'extracted_at' => now(),
                 ]
             );

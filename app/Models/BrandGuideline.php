@@ -26,6 +26,7 @@ class BrandGuideline extends Model
         'do_not_use',
         'service_lines',
         'extraction_quality_score',
+        'extraction_warning',
         'user_verified',
         'extracted_at',
         'last_verified_at',
