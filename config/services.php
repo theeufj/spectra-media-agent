@@ -34,6 +34,14 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    /*
+     * Where a billing failure is emailed. A provider that stops for money is
+     * fixed in two minutes by a human with a card, so the only thing that
+     * matters is how fast that human hears about it — a prepaid balance ran dry
+     * and took every AI path down for over a day without anyone knowing.
+     */
+    'billing_alert_email' => env('BILLING_ALERT_EMAIL', 'theeufj@gmail.com'),
+
     'openrouter' => [
         'api_key' => env('OPENROUTER_API_KEY'),
         // Admins are alerted when the prepaid credit balance drops below this.

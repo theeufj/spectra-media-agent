@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AiCost;
+use App\Support\BillingAlert;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -51,6 +52,8 @@ class OpenRouterService
                     'status' => $response->status(),
                     'body' => substr($response->body(), 0, 300),
                 ]);
+
+                BillingAlert::check('OpenRouter', $response->body(), $response->status());
 
                 return null;
             }
@@ -137,6 +140,8 @@ class OpenRouterService
                     'status' => $response->status(),
                     'body' => substr($response->body(), 0, 300),
                 ]);
+
+                BillingAlert::check('OpenRouter', $response->body(), $response->status());
 
                 return null;
             }

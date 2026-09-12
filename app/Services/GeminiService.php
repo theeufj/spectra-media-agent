@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\GeminiUnavailable;
 use App\Models\AiCost;
+use App\Support\BillingAlert;
 use Google\Auth\CredentialsLoader;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -424,6 +425,10 @@ class GeminiService
                 // which is the difference between "enable billing" and a day of
                 // guessing.
                 $this->lastFailure = "HTTP {$statusCode} from {$model}: ".mb_substr((string) $response->body(), 0, 500);
+
+                // Money, not a bad request: email the operator now rather than
+                // wait for someone to notice the product has stopped.
+                BillingAlert::check('Gemini', $response->body(), $statusCode);
 
                 return null;
 
