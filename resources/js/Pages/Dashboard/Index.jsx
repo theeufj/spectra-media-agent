@@ -523,9 +523,9 @@ export default function Dashboard({ auth }) {
                                                         ))}
                                                     </div>
                                                     <div className="mt-4 grid grid-cols-3 gap-4 text-center pt-4 border-t">
-                                                        <div><p className="text-xs text-gray-500">CPM</p><p className="text-sm font-bold">${funnel.cost_per_funnel_stage?.cpm ?? 0}</p></div>
-                                                        <div><p className="text-xs text-gray-500">CPC</p><p className="text-sm font-bold">${funnel.cost_per_funnel_stage?.cpc ?? 0}</p></div>
-                                                        <div><p className="text-xs text-gray-500">CPA</p><p className="text-sm font-bold">${funnel.cost_per_funnel_stage?.cpa ?? 0}</p></div>
+                                                        <div><p className="text-xs text-gray-500">CPM</p><p className="text-sm font-bold">{money(funnel.cost_per_funnel_stage?.cpm ?? 0, currency)}</p></div>
+                                                        <div><p className="text-xs text-gray-500">CPC</p><p className="text-sm font-bold">{money(funnel.cost_per_funnel_stage?.cpc ?? 0, currency)}</p></div>
+                                                        <div><p className="text-xs text-gray-500">CPA</p><p className="text-sm font-bold">{money(funnel.cost_per_funnel_stage?.cpa ?? 0, currency)}</p></div>
                                                     </div>
                                                 </div>
                                             )}
@@ -628,12 +628,12 @@ export default function Dashboard({ auth }) {
                                         <div className="bg-gradient-to-r from-delft-blue-50 to-air-superiority-blue-50 rounded-xl border border-delft-blue-200 p-6">
                                             <h3 className="text-lg font-semibold text-delft-blue-900 mb-4">Spending Projections</h3>
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                                <div><p className="text-sm text-delft-blue-600">Daily Avg Spend</p><p className="text-xl font-bold text-delft-blue-900">${projections.daily_avg_spend}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Daily Avg Spend</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.daily_avg_spend ?? 0, currency)}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Monthly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.monthly_projected_spend ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Monthly Projected Revenue</p><p className="text-xl font-bold text-green-700">{money(projections.monthly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Monthly Projected Profit</p><p className={`text-xl font-bold ${projections.monthly_projected_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{money(projections.monthly_projected_profit ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Budget Utilization</p><p className="text-xl font-bold text-delft-blue-900">{projections.budget_utilization}%</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Daily Budget (Total)</p><p className="text-xl font-bold text-delft-blue-900">${projections.daily_budget_total}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Daily Budget (Total)</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.daily_budget_total ?? 0, currency)}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Quarterly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.quarterly_projected_spend ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Quarterly Projected Revenue</p><p className="text-xl font-bold text-green-700">{money(projections.quarterly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                             </div>
@@ -673,7 +673,7 @@ export default function Dashboard({ auth }) {
                                                                 <td className="py-3 px-4 text-right">
                                                                     <span className={c.roas >= 2 ? 'text-green-600 font-semibold' : c.roas >= 1 ? 'text-yellow-600' : 'text-red-600 font-semibold'}>{c.roas}x</span>
                                                                 </td>
-                                                                <td className="py-3 px-4 text-right">${c.cpa}</td>
+                                                                <td className="py-3 px-4 text-right">{money(c.cpa ?? 0, currency)}</td>
                                                                 <td className="py-3 px-4 text-right">
                                                                     <div className="flex items-center justify-end gap-2">
                                                                         <div className="w-16 bg-gray-200 rounded-full h-2">

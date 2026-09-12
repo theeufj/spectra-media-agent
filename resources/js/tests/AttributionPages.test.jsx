@@ -5,6 +5,9 @@ import { render } from '@testing-library/react';
 vi.mock('@inertiajs/react', () => ({
     Head: () => null,
     Link: ({ children, ...props }) => <a {...props}>{children}</a>,
+    // The report reads the active customer's currency from shared props now,
+    // rather than formatting every figure as en-US/USD.
+    usePage: () => ({ props: { auth: { user: { active_customer: { currency_code: 'AUD' } } } } }),
 }));
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({
     default: ({ children }) => <div>{children}</div>,

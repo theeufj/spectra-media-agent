@@ -51,6 +51,27 @@ describe('useCurrency', () => {
     });
 });
 
+describe('AttributionReport', () => {
+    const summary = { total_conversions: 12, total_value: 4500, avg_touchpoints: 3.2, avg_days_to_convert: 5 };
+
+    it('does not format a customer\'s attributed value as US dollars', async () => {
+        // formatCurrency() was hardcoded to en-US/USD, so every figure in the
+        // report — total value, each channel's value, each conversion's value —
+        // read as US dollars for every customer.
+        const { default: AttributionReport } = await import('@/Components/AttributionReport');
+
+        withCustomer('AUD');
+        const aud = render(<AttributionReport summary={summary} channelBreakdown={{}} recentTouchpoints={[]} conversions={[]} />);
+        const audText = aud.container.textContent;
+        aud.unmount();
+
+        withCustomer('USD');
+        const usdText = render(<AttributionReport summary={summary} channelBreakdown={{}} recentTouchpoints={[]} conversions={[]} />).container.textContent;
+
+        expect(audText).not.toBe(usdText);
+    });
+});
+
 describe('PerformanceStats', () => {
     const stats = { total_spend: 1234, total_clicks: 5678, average_ctr: 2.4, average_cpa: 12.5 };
 

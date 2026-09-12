@@ -1,4 +1,7 @@
 import { useState, useMemo } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
+import { money } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 
 /**
  * The body of the attribution report: summary cards, the model comparison,
@@ -30,7 +33,13 @@ const MODEL_DESCRIPTIONS = {
 
 const CHANNEL_COLORS = {
     'google / cpc': { bg: 'bg-blue-100', text: 'text-blue-800', bar: 'bg-blue-500' },
-    'facebook / cpc': { bg: 'bg-brand-primary/20', text: 'text-brand-darker', bar: 'bg-brand-primary' },
+    /*
+     * Every other channel gets its badge ground from a real palette entry. The
+     * brand one cannot: brand.* is a bare var(), so `bg-brand-primary/20` never
+     * compiled and this badge has always been transparent. `tint` carries the
+     * colour through an inline style instead — see getChannelColor below.
+     */
+    'facebook / cpc': { bg: '', tint: 20, text: 'text-brand-darker', bar: 'bg-brand-primary' },
     'microsoft / cpc': { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' },
     'linkedin / cpc': { bg: 'bg-sky-100', text: 'text-sky-800', bar: 'bg-sky-500' },
     'google / organic': { bg: 'bg-green-100', text: 'text-green-800', bar: 'bg-green-500' },
@@ -41,14 +50,25 @@ const CHANNEL_COLORS = {
 
 function getChannelColor(channel) {
     const key = channel.toLowerCase();
-    return CHANNEL_COLORS[key] || { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' };
+    const colors = CHANNEL_COLORS[key] || { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' };
+
+    return { ...colors, bgStyle: colors.tint ? { backgroundColor: brandTint(colors.tint) } : undefined };
 }
 
-function formatCurrency(value) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+/*
+ * Was hardcoded to en-US/USD, so every attribution figure — total value, each
+ * channel's value, each conversion's value — read as US dollars for every
+ * customer. Nine of seventeen are on AUD. useCurrency() is a usePage() read
+ * and valid in any of the components below.
+ */
+function useFormatCurrency() {
+    const currency = useCurrency();
+
+    return (value) => money(value, currency);
 }
 
 function SummaryCards({ summary }) {
+    const formatCurrency = useFormatCurrency();
     const cards = [
         {
             label: 'Total Conversions',
@@ -95,6 +115,7 @@ function SummaryCards({ summary }) {
 }
 
 function ChannelBar({ channels, maxValue }) {
+    const formatCurrency = useFormatCurrency();
     if (!channels.length) {
         return <p className="text-gray-500 text-sm py-4">No data available for this model.</p>;
     }
@@ -107,7 +128,7 @@ function ChannelBar({ channels, maxValue }) {
                 return (
                     <div key={ch.channel}>
                         <div className="flex justify-between items-center mb-1">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`} style={colors.bgStyle}>
                                 {ch.channel}
                             </span>
                             <div className="flex items-center space-x-4 text-sm">
@@ -173,6 +194,7 @@ function ModelComparison({ channelBreakdown }) {
 }
 
 function ModelComparisonTable({ channelBreakdown }) {
+    const formatCurrency = useFormatCurrency();
     // Collect all unique channels across all models
     const allChannels = useMemo(() => {
         const set = new Set();
@@ -217,7 +239,7 @@ function ModelComparisonTable({ channelBreakdown }) {
                             return (
                                 <tr key={channel} className="hover:bg-gray-50">
                                     <td className="px-4 py-3 whitespace-nowrap">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`} style={colors.bgStyle}>
                                             {channel}
                                         </span>
                                     </td>
@@ -270,7 +292,7 @@ function TouchpointJourney({ touchpoints }) {
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center space-x-2 mb-1">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`} style={colors.bgStyle}>
                                                 {tp.utm_source || 'direct'} / {tp.utm_medium || 'none'}
                                             </span>
                                             {tp.utm_campaign && (
@@ -299,6 +321,7 @@ function TouchpointJourney({ touchpoints }) {
 }
 
 function RecentConversions({ conversions }) {
+    const formatCurrency = useFormatCurrency();
     if (!conversions.length) return null;
 
     return (
