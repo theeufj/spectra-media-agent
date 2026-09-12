@@ -161,27 +161,46 @@ HTML;
                 preg_match_all('/<h1[^>]*>(.*?)<\/h1>/is', $html, $h1Matches);
                 $h1s = implode(' ', $h1Matches[1] ?? []);
 
-                $textContent = "Title: {$title}\nDescription: {$description}\nHeadings: {$h1s}";
+                $meta = [];
 
                 /*
-                   Prefer the page as a browser renders it.
+                   Everything the page says about itself, cheaply.
 
-                   The three regexes above are all a static fetch can offer, and
-                   for a client-rendered site that is a title and a meta tag —
-                   yourfirststore.com gives 52 characters of visible text to a
-                   fetch and 3,732 to Chromium, with a different <title> after
-                   hydration. Every React, Vue or Next storefront was handing
-                   this prompt two sentences of boilerplate.
+                   The <h1> regex was the only body signal, and a page that
+                   builds itself in the browser has none — which is how this
+                   ended up with a couple of hundred characters and wrote
+                   nothing. But a client-rendered page still ships its pitch in
+                   the head, because that is what search engines and link
+                   previews read: yourfirststore.com's meta description is
+                   "Build and launch your online store in minutes. Accept
+                   payments with Stripe, manage products, track analytics, and
+                   sell globally. No coding required." That is an ad brief.
 
-                   Chromium is already running for the screenshot further down,
-                   so this costs a render we were paying for anyway. The static
-                   read stays as the fallback, and its metadata is kept in front
-                   of the rendered body because a good meta description is often
-                   the clearest sentence about the business on the whole page.
+                   I briefly solved this by rendering the page through Chromium
+                   for its text. It works — 52 characters becomes 3,900 — but it
+                   is a second headless browser on top of the screenshot, and it
+                   put the request over PHP's 30-second limit, which turned a
+                   thin result into a fatal one. Reading the head costs nothing
+                   and answers the same question for almost every site.
                 */
-                if ($rendered = $this->brandService->renderedText($url)) {
-                    $textContent .= "\n\nPage content:\n".$rendered;
+                foreach ([
+                    'og:title', 'og:description', 'og:site_name',
+                    'twitter:title', 'twitter:description',
+                ] as $property) {
+                    if (preg_match('/<meta[^>]*(?:property|name)=["\']'.preg_quote($property, '/').'["\'][^>]*content=["\']([^"\']*)["\']/i', $html, $m)
+                        && ! empty(trim($m[1]))) {
+                        $meta[$property] = trim($m[1]);
+                    }
                 }
+
+                // Body copy where the server renders it, headings either way.
+                preg_match_all('/<h([1-3])[^>]*>(.*?)<\/h\1>/is', $html, $headingMatches);
+                $headings = trim(strip_tags(implode(' · ', $headingMatches[2])));
+
+                $body = preg_replace('#<(script|style|noscript|svg|head)[^>]*>.*?</\1>#is', ' ', $html);
+                $body = trim((string) preg_replace('/\s+/u', ' ', strip_tags((string) preg_replace('/<[^>]+>/', ' ', (string) $body))));
+
+                $textContent = self::describePage($url, $title, $description, $meta, $headings, $body);
 
                 // Extract colors directly from HTML styles
                 preg_match_all('/#([a-fA-F0-9]{6})\b/', $html, $colorMatches);
@@ -272,63 +291,64 @@ HTML;
         */
         $adCopy = ['headlines' => [], 'descriptions' => []];
         $notes = [];
-        try {
-            /*
-               Was "keep it punchy and highlight the value proposition", over
-               1,000 characters of input. That is a brief for
-               "Transform Your Business | Sign Up Today" — which is exactly what
-               it returned, on a page that says it builds Stripe-backed stores
-               from a plain-English description in five minutes.
 
-               Ask for the specifics the page actually contains, refuse the
-               stock phrases by name, and let it read enough of the page to find
-               them.
-            */
-            $prompt = <<<'PROMPT'
-                Write Google Search ads for the business described below.
+        /*
+           This is the primary call to action. It does not get to fail.
 
-                Return strict JSON: 'headlines' (3 strings, max 30 characters
-                each) and 'descriptions' (2 strings, max 90 characters each).
+           It has failed two different ways already. First it substituted
+           hardcoded filler — "Transform Your Business | Sign Up Today" — and
+           presented it as a reading of the visitor's site. Then I replaced that
+           with an honest "we could not write ad copy from that page", which is
+           worse: it is the product saying it cannot do the one thing the page
+           promises, on a page whose meta description is a ready-made ad brief.
 
-                Use the specifics on the page — what it sells, who for, the
-                price, the mechanism, the offer. A reader should be able to tell
-                which business the ad is for without being told.
+           So: two attempts, the second one told plainly that it may not come
+           back empty. A page that returns HTTP 200 says enough about itself to
+           advertise — it has a title, a description, a domain — and the job is
+           to use them, not to grade the page.
+        */
+        foreach ([false, true] as $insist) {
+            try {
+                $prompt = self::adCopyPrompt($textContent, $insist);
 
-                Do not write generic SaaS filler. Phrases like "Transform Your
-                Business", "Leading Industry Solution", "Take It To The Next
-                Level", "Trusted By Thousands", "The All-In-One Solution" or
-                "Sign Up Today" say nothing and must not appear.
+                $aiResponse = $this->geminiService->generateContent(
+                    config('ai.models.default'),
+                    $prompt,
+                    ['responseMimeType' => 'application/json']
+                );
 
-                If the page does not say enough to write a specific ad, return
-                empty arrays rather than inventing a business.
+                if ($aiResponse && isset($aiResponse['text'])) {
+                    $strippedJSON = preg_replace('/```json\s*|\s*```/', '', $aiResponse['text']);
+                    $parsedAdCopy = json_decode($strippedJSON, true);
 
-                Website data:
-
-                PROMPT."\n".substr($textContent, 0, 6000);
-
-            $aiResponse = $this->geminiService->generateContent(
-                config('ai.models.default'),
-                $prompt,
-                ['responseMimeType' => 'application/json']
-            );
-
-            if ($aiResponse && isset($aiResponse['text'])) {
-                $strippedJSON = preg_replace('/```json\s*|\s*```/', '', $aiResponse['text']);
-                $parsedAdCopy = json_decode($strippedJSON, true);
-                if ($parsedAdCopy && isset($parsedAdCopy['headlines'], $parsedAdCopy['descriptions'])) {
-                    $adCopy = [
-                        'headlines' => array_values(array_filter((array) $parsedAdCopy['headlines'])),
-                        'descriptions' => array_values(array_filter((array) $parsedAdCopy['descriptions'])),
-                    ];
+                    if ($parsedAdCopy && isset($parsedAdCopy['headlines'], $parsedAdCopy['descriptions'])) {
+                        $adCopy = [
+                            'headlines' => array_values(array_filter(array_map('trim', (array) $parsedAdCopy['headlines']))),
+                            'descriptions' => array_values(array_filter(array_map('trim', (array) $parsedAdCopy['descriptions']))),
+                        ];
+                    }
                 }
+            } catch (\Throwable $e) {
+                report($e);
+                Log::warning('DemoController ad copy generation failed: '.$e->getMessage());
             }
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('DemoController ad copy generation failed: '.$e->getMessage());
+
+            if (! empty($adCopy['headlines'])) {
+                break;
+            }
+
+            Log::warning('DemoController: ad copy came back empty', [
+                'url' => $url,
+                'insisted' => $insist,
+                'input_chars' => mb_strlen($textContent),
+            ]);
         }
 
         if (empty($adCopy['headlines'])) {
-            $notes[] = 'We could not write ad copy from that page.';
+            // Both attempts produced nothing. That is ours to fix, not the
+            // visitor's to read about — it is reported and the panel simply
+            // leads with Google's forecast instead.
+            report(new \RuntimeException('Demo produced no ad copy for '.$url));
         }
 
         // 3. Extract Visuals via Browsershot + Gemini Vision
@@ -377,6 +397,89 @@ HTML;
             // gaps with invented copy rather than admit to them.
             'notes' => $notes,
         ]);
+    }
+
+    /**
+     * The brief.
+     *
+     * The original — "keep it punchy and highlight the value proposition" over
+     * 1,000 characters — is a brief for "Transform Your Business", which is
+     * what it returned. My replacement then added "if the page does not say
+     * enough, return empty arrays", which handed the model an exit it took.
+     *
+     * A page that answered HTTP 200 has a title, a description and a domain.
+     * That is enough. The second pass says so in as many words.
+     */
+    private static function adCopyPrompt(string $pageDescription, bool $insist): string
+    {
+        $brief = <<<'PROMPT'
+            Write Google Search ads for the business described below.
+
+            Return strict JSON: 'headlines' (3 strings, max 30 characters each)
+            and 'descriptions' (2 strings, max 90 characters each).
+
+            Use the specifics on the page — what it sells, who for, the price,
+            the mechanism, the offer. A reader should be able to tell which
+            business the ad is for without being told.
+
+            Do not write generic SaaS filler. Phrases like "Transform Your
+            Business", "Leading Industry Solution", "Take It To The Next Level",
+            "Trusted By Thousands", "The All-In-One Solution" or "Sign Up Today"
+            say nothing and must not appear.
+            PROMPT;
+
+        if ($insist) {
+            $brief .= "\n\n".<<<'PROMPT'
+                You must return three headlines and two descriptions. Empty
+                arrays are not an acceptable answer. If the page is sparse, work
+                from its title, its meta description and its domain name — those
+                are always enough to say what the business does. Write the
+                strongest honest ad the available detail supports, and do not
+                state anything the page does not.
+                PROMPT;
+        }
+
+        return $brief."\n\nWebsite data:\n".mb_substr($pageDescription, 0, 6000);
+    }
+
+    /**
+     * Everything we know about the page, in the order a person would say it.
+     *
+     * @param  array<string, string>  $meta
+     */
+    private static function describePage(
+        string $url,
+        string $title,
+        string $description,
+        array $meta,
+        string $headings,
+        string $body,
+    ): string {
+        $parts = ['Website: '.$url];
+
+        if ($title !== '') {
+            $parts[] = 'Page title: '.trim(strip_tags($title));
+        }
+
+        if ($description !== '') {
+            $parts[] = 'Meta description: '.trim($description);
+        }
+
+        foreach ($meta as $key => $value) {
+            $parts[] = $key.': '.$value;
+        }
+
+        if ($headings !== '') {
+            $parts[] = 'Headings: '.mb_substr($headings, 0, 1500);
+        }
+
+        // Last, and capped: on a server-rendered page this is the richest
+        // signal, and on a client-rendered one it is navigation chrome.
+        if (mb_strlen($body) > 40) {
+            $parts[] = 'Page text: '.mb_substr($body, 0, 5000);
+        }
+
+        return implode("\n", $parts);
     }
 
     /**

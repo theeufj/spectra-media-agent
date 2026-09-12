@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\GeminiUnavailable;
 use App\Models\AiCost;
 use Google\Auth\CredentialsLoader;
 use Illuminate\Support\Facades\Cache;
@@ -42,6 +43,53 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class GeminiService
 {
+    /**
+     * Why the most recent attempt failed, for the outage report. Not part of
+     * the public contract — callers still get null.
+     */
+    private ?string $lastFailure = null;
+
+    /**
+     * How long one outage stays quiet after it has been reported once.
+     *
+     * A billing lapse fails every call, and the demo alone makes several per
+     * visitor. Reporting each one would bury the dashboard in thousands of rows
+     * describing a single problem, which is its own kind of silence.
+     */
+    private const OUTAGE_REPORT_EVERY_MINUTES = 15;
+
+    /**
+     * Put a total generation failure on the admin dashboard.
+     *
+     * Throttled per distinct cause, so a sustained outage is one row every
+     * quarter hour rather than one per request, and two different causes are
+     * never collapsed into each other.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function reportOutage(string $model, array $context): void
+    {
+        $reason = $this->lastFailure ?? 'no response and no exception';
+        $this->lastFailure = null;
+
+        // Keyed on the shape of the failure, not its text: an upstream message
+        // that embeds a request id would defeat the throttle entirely.
+        $key = 'gemini-outage:'.$model.':'.md5(preg_replace('/\d+/', '#', $reason) ?? $reason);
+
+        try {
+            if (! Cache::add($key, true, now()->addMinutes(self::OUTAGE_REPORT_EVERY_MINUTES))) {
+                return;
+            }
+        } catch (\Throwable) {
+            // Cache down as well: report anyway rather than swallow the outage.
+        }
+
+        report(new GeminiUnavailable(
+            "Gemini produced nothing for {$model} or its fallback. {$reason}"
+            .($context ? ' Context: '.json_encode($context) : '')
+        ));
+    }
+
     private string $project;
 
     private string $location;
@@ -175,6 +223,10 @@ class GeminiService
                     hrtime(true)
                 );
             }
+        }
+
+        if ($result === null) {
+            $this->reportOutage($model, $context);
         }
 
         return $result;
@@ -312,6 +364,12 @@ class GeminiService
                     'max_retries' => $maxRetries,
                 ]);
 
+                // Kept for the report in generateContent(): without it the
+                // dashboard entry would say "generation failed" and not why,
+                // which is the difference between "enable billing" and a day of
+                // guessing.
+                $this->lastFailure = "HTTP {$statusCode} from {$model}: ".mb_substr((string) $response->body(), 0, 500);
+
                 return null;
 
             } catch (\Throwable $e) {
@@ -327,6 +385,8 @@ class GeminiService
 
                     continue;
                 }
+                $this->lastFailure = get_class($e).' from '.$model.': '.mb_substr($e->getMessage(), 0, 500);
+
                 Log::error("GeminiService: Exception during content generation from model {$model} (Max retries reached): ".$e->getMessage(), [
                     'model' => $model,
                     'attempt' => $attempt,

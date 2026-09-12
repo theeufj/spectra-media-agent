@@ -72,11 +72,48 @@ class DemoHonestyTest extends TestCase
         );
 
         $this->assertStringContainsString('Do not write generic SaaS filler', $controller);
+
+        /*
+           The first version of this test asserted the opposite — that the model
+           was told to "return empty arrays rather than inventing a business".
+           That instruction was an exit, and the model took it: the demo told a
+           visitor "We could not write ad copy from that page" on a page whose
+           meta description is a ready-made ad brief. Worse than the filler it
+           replaced, on the primary call to action.
+
+           The real cause was a 403 for the whole project, so nothing would have
+           written copy either way. But the brief should not offer giving up as
+           an option, and the second pass now says so.
+        */
         $this->assertStringContainsString(
+            'Empty arrays are not an acceptable answer',
+            $controller,
+            'the retry must insist rather than permit an empty result',
+        );
+        $this->assertStringNotContainsString(
             'return empty arrays rather than inventing a business',
             $controller,
-            'the model must be told that nothing is an acceptable answer',
+            'the brief must not offer the model a way out',
         );
+    }
+
+    public function test_the_demo_does_not_render_the_page_a_second_time(): void
+    {
+        /*
+           Reading the text through Chromium works — 52 characters becomes 3,900
+           — but it is a second headless browser on top of the screenshot, and
+           it put this request over PHP's 30-second limit. A thin result became
+           a fatal one. The head carries enough: title, meta description and the
+           og: pair.
+        */
+        $controller = file_get_contents(app_path('Http/Controllers/Api/DemoController.php'));
+
+        $this->assertStringNotContainsString(
+            'renderedText(',
+            $controller,
+            'the demo must not add a second browser render to a synchronous request',
+        );
+        $this->assertStringContainsString('og:description', $controller);
     }
 
     /**
