@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -10,6 +10,7 @@ import ProgressStepper, { CompactStepper } from '@/Components/ProgressStepper';
 import ProductSelection from './ProductSelection';
 import KeywordSelector from '@/Components/KeywordSelector';
 import { useTenant } from '@/hooks/useTenant';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 // Campaign Templates for quick start
 const CAMPAIGN_TEMPLATES = [
@@ -307,12 +308,23 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     // step the user was on, so a remount (including the redirect-back from a
     // plan-limit rejection) resumes where they left off instead of wiping
     // nine steps of typing.
+    //
+    // Scoped to the user and the customer it was written for. The key used to
+    // be a bare 'campaign_draft', so one person managing two customers had the
+    // first one's half-built campaign restored into the second, and two people
+    // sharing a browser restored each other's. A draft holds a business's
+    // landing pages, keywords and budget.
+    const draftKey = useMemo(
+        () => `campaign_draft:${auth?.user?.id ?? 'anon'}:${auth?.user?.active_customer?.id ?? 'none'}`,
+        [auth?.user?.id, auth?.user?.active_customer?.id]
+    );
+
     const [draftSavedAt, setDraftSavedAt] = useState(null);
 
     useEffect(() => {
         // On mount currentStep is always 0, so this must not be gated on it —
         // the old guard meant the draft was written but never restored.
-        const savedDraft = localStorage.getItem('campaign_draft');
+        const savedDraft = localStorage.getItem(draftKey);
         if (!savedDraft) return;
         try {
             const parsed = JSON.parse(savedDraft);
@@ -333,13 +345,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             setCreationMode('template');
             setCurrentStep(Math.min(step, WIZARD_STEPS.length - 1));
         } catch {
-            localStorage.removeItem('campaign_draft');
+            localStorage.removeItem(draftKey);
         }
-    }, []);
+    }, [draftKey]);
 
     useEffect(() => {
         if (currentStep > 0) {
-            localStorage.setItem('campaign_draft', JSON.stringify({ data, step: currentStep }));
+            localStorage.setItem(draftKey, JSON.stringify({ data, step: currentStep }));
             setDraftSavedAt(new Date());
         }
     }, [data, currentStep]);
@@ -401,8 +413,28 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         }
     };
     
+    const isFinalStep = currentStep === WIZARD_STEPS.length - 1;
+
+    /**
+     * Enter only submits on the final step.
+     *
+     * Textareas keep their newlines, and anything that opts out (a combobox
+     * handling its own Enter) can stop propagation before this sees it.
+     */
+    const handleFormKeyDown = (e) => {
+        if (e.key !== 'Enter' || isFinalStep) return;
+        if (e.target.tagName === 'TEXTAREA') return;
+
+        e.preventDefault();
+    };
+
     const submit = (e) => {
         e.preventDefault();
+
+        // Belt and braces: a submit that arrives from anywhere other than the
+        // final step is not a campaign the user has finished describing.
+        if (!isFinalStep) return;
+
         form.transform((d) => ({
             ...d,
             images: stagedImages.filter(s => !s.isSeed).map(s => s.file),
@@ -417,7 +449,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             // component, and the draft is what restores the work.
             onSuccess: (page) => {
                 if (!page.url.includes('/campaigns/wizard')) {
-                    localStorage.removeItem('campaign_draft');
+                    localStorage.removeItem(draftKey);
                 }
             },
             onError: () => {
@@ -473,16 +505,24 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         p-6 rounded-lg border-2 text-left transition-all duration-200
                                         hover:border-brand-primary hover:shadow-lg
                                         ${selectedTemplate === template.id
-                                            ? 'border-brand-primary bg-brand-primary/5'
+                                            ? 'border-brand-primary'
                                             : 'border-gray-200 bg-white'
                                         }
                                     `}
+                                    style={
+                                        selectedTemplate === template.id
+                                            ? { backgroundColor: brandTint(5) }
+                                            : undefined
+                                    }
                                 >
                                     <span className="text-3xl mb-3 block">{template.icon}</span>
                                     <h3 className="font-semibold text-gray-900">{template.name}</h3>
                                     <p className="text-sm text-gray-500 mt-1">{template.description}</p>
                                     {template.verticals?.includes(tenantVertical) && (
-                                        <span className="mt-3 inline-block text-xs font-medium text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">
+                                        <span
+                                            className="mt-3 inline-block text-xs font-medium text-brand-darker px-2 py-0.5 rounded-full"
+                                            style={{ backgroundColor: brandTint(10) }}
+                                        >
                                             Recommended
                                         </span>
                                     )}
@@ -584,11 +624,12 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         }}
                                         className={`relative flex flex-col items-start p-5 rounded-xl border-2 text-left transition-all ${
                                             isSelected
-                                                ? 'border-brand-primary bg-brand-primary/10 ring-2 ring-brand-primary/30'
+                                                ? 'border-brand-primary ring-2 ring-brand-dark'
                                                 : isSelectable
                                                     ? 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                                                     : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
                                         }`}
+                                        style={isSelected ? { backgroundColor: brandTint(10) } : undefined}
                                     >
                                         {isSelected && (
                                             <div className="absolute top-3 right-3">
@@ -1040,9 +1081,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             </div>
                         )}
 
-                        <div className="bg-brand-primary/10 border border-brand-primary/30 rounded-lg p-4">
+                        <div className="rounded-lg border p-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
                             <div className="flex">
-                                <svg className="w-5 h-5 text-brand-primary mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-5 h-5 text-brand-darker mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
                                 </svg>
                                 <div>
@@ -1076,7 +1117,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             <Head title="Create Campaign" />
             
             <div className="py-8">
-                <div className="max-w-5xl mx-auto sm:">
+                <div className="max-w-5xl mx-auto">
                     {/* Progress Stepper — the full version squeezes 8 labelled
                         columns into a phone viewport, so small screens get the
                         compact dots with the current step named underneath. */}
@@ -1115,7 +1156,15 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
                     {/* Step Content */}
                     <div className="bg-white rounded-lg shadow-md p-6 sm:p-8">
-                        <form onSubmit={submit}>
+                        {/*
+                            One form wraps every step, so pressing Enter in any
+                            step with a single text input triggered HTML implicit
+                            submission and posted a half-filled wizard to
+                            campaigns.store — no submit button needs to be on
+                            screen for that to happen. Continue is already
+                            type="button"; this closes the keyboard path.
+                        */}
+                        <form onSubmit={submit} onKeyDown={handleFormKeyDown}>
                             {renderStepContent()}
                             
                             {/* Navigation Buttons */}

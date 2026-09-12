@@ -78,6 +78,37 @@ describe('SetupProgressNav', () => {
         expect(getByText('Site scan description')).toBeInTheDocument();
     });
 
+    it('marks the step the server says is current, not its own guess', async () => {
+        // The server sends current_step; this component used to recompute it as
+        // "first incomplete step that is not in progress", so whenever anything
+        // was actually running it highlighted the step *after* the work in
+        // flight — on the one card whose job is to say what happens next.
+        const steps = [
+            step('site_scan', 'Site scan', 'in_progress'),
+            step('first_campaign', 'First campaign', 'pending'),
+        ];
+
+        fetchJson.mockResolvedValue(payload(steps, { current_step: steps[0] }));
+
+        const { getByText } = render(<SetupProgressNav />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(getByText('Site scan').closest('a')).toHaveAttribute('aria-current', 'step');
+        expect(getByText('First campaign').closest('a')).not.toHaveAttribute('aria-current');
+    });
+
+    it('falls back to the first incomplete step when the server sends none', async () => {
+        fetchJson.mockResolvedValue(payload([
+            step('site_scan', 'Site scan', 'completed'),
+            step('first_campaign', 'First campaign', 'pending'),
+        ]));
+
+        const { getByText } = render(<SetupProgressNav />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(getByText('First campaign').closest('a')).toHaveAttribute('aria-current', 'step');
+    });
+
     it('disappears once setup is complete', async () => {
         fetchJson.mockResolvedValue(payload(
             [step('site_scan', 'Site scan', 'completed')],

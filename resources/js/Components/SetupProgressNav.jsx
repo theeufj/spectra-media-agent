@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 import { usePolling } from '@/hooks/usePolling';
 
 /**
@@ -26,11 +27,29 @@ export default function SetupProgressNav() {
     if (!setupData || error) return null;
     if (!setupData.steps?.length || setupData.progress === 100) return null;
 
-    const { steps, progress, completed_steps, total_steps } = setupData;
-    const currentKey = steps.find(s => !s.completed && s.status !== 'in_progress')?.key;
+    const { steps, progress, completed_steps, total_steps, current_step } = setupData;
+
+    /*
+     * The server decides which step is current, not this component.
+     *
+     * It sends `current_step` (the first step that is not complete) and this
+     * recomputed its own answer as "the first incomplete step that is also not
+     * in progress" — so the moment anything was actually running, the server
+     * pointed at the running step and the card highlighted the one after it.
+     * The user was being pointed past the work in flight, on the one screen
+     * whose job is to say what happens next.
+     */
+    const currentKey = current_step?.key
+        ?? steps.find(s => !s.completed)?.key;
 
     return (
-        <div className="bg-gradient-to-r from-brand-primary/10 to-purple-50 border border-brand-primary/20 rounded-lg p-4 mb-4">
+        <div
+            className="border rounded-lg p-4 mb-4"
+            style={{
+                backgroundImage: `linear-gradient(to right, ${brandTint(10)}, #faf5ff)`,
+                borderColor: brandTint(20),
+            }}
+        >
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
                     <span className="text-lg">🚀</span>
@@ -58,6 +77,9 @@ export default function SetupProgressNav() {
                             transition-all duration-200
                             ${stepClasses(step, step.key === currentKey)}
                         `}
+                        // "Which one am I on" was carried only by a background
+                        // colour, so a screen reader heard five equal links.
+                        aria-current={step.key === currentKey ? 'step' : undefined}
                         title={step.description}
                     >
                         <span className="flex-shrink-0">{stepMarker(step)}</span>
@@ -83,7 +105,13 @@ function stepClasses(step, isCurrent) {
     if (step.completed) return 'bg-green-100 text-green-700 hover:bg-green-200';
     if (step.status === 'failed') return 'bg-red-50 text-red-700 hover:bg-red-100 ring-2 ring-red-200';
     if (step.status === 'in_progress') return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
-    if (isCurrent) return 'bg-brand-primary/20 text-brand-darker hover:bg-brand-primary/30 ring-2 ring-brand-primary/50';
+    /*
+     * The ring is the solid brand-dark, not a tint: a ring here has to stay a
+     * class (this function returns nothing but classes) and brand-dark is 4.96:1
+     * on white, comfortably over the 3:1 a UI boundary needs, where the /50 it
+     * replaces drew nothing at all.
+     */
+    if (isCurrent) return 'bg-brand-tint-20 text-brand-darker hover:bg-brand-tint-30 ring-2 ring-brand-dark';
     return 'bg-white text-gray-500 hover:bg-gray-50';
 }
 
