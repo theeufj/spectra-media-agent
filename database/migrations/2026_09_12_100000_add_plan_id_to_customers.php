@@ -51,7 +51,11 @@ return new class extends Migration
         $free = Plan::where('slug', 'free')->first();
 
         Customer::withoutEvents(function () use ($free) {
-            Customer::query()->chunkById(100, function ($customers) use ($free) {
+            // withTrashed(), because Customer soft-deletes and the global scope
+            // would quietly skip them — six rows in production, all of them
+            // restorable. A customer that came back would have come back with
+            // no plan.
+            Customer::withTrashed()->chunkById(100, function ($customers) use ($free) {
                 foreach ($customers as $customer) {
                     // Highest sort_order among the account's people. price_cents
                     // cannot order this — Agency is 0 because it is "contact us",
