@@ -3,26 +3,26 @@ import axios from 'axios';
 import InputLabel from '@/Components/InputLabel';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 
-export default function ProductSelection({ customerId, selectedPages, onSelectionChange }) {
+export default function ProductSelection({ customerUuid, selectedPages, onSelectionChange }) {
     const [pages, setPages] = useState([]);
     const [loading, setLoading] = useState(false);
     const [query, setQuery] = useState('');
     const [selectedPageObject, setSelectedPageObject] = useState(null);
 
     useEffect(() => {
-        if (customerId) {
+        if (customerUuid) {
             const timer = setTimeout(() => {
                 fetchPages(query);
             }, 300);
             return () => clearTimeout(timer);
         }
-    }, [customerId, query]);
+    }, [customerUuid, query]);
 
     const fetchPages = async (searchQuery) => {
         setLoading(true);
         try {
             const response = await axios.get(route('api.customers.pages.index', { 
-                customer: customerId,
+                customer: customerUuid,
                 search: searchQuery
             }));
             setPages(response.data.data);

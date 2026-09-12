@@ -264,7 +264,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [creationMode, setCreationMode] = useState(null); // 'template'
-    const customerId = auth.user?.active_customer?.id;
+    // active_customer is the full model, so the uuid is already in the props.
+    const customerUuid = auth.user?.active_customer?.uuid;
     
     // Build initial form values from brand guidelines if available
     const brandDefaults = brandGuideline ? {
@@ -840,13 +841,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             <InputError message={errors.product_focus} className="mt-2" />
                         </div>
                         
-                        {customerId && (
+                        {customerUuid && (
                             <div>
                                 <InputLabel value="Select Landing Pages" />
                                 <HelpText text="Choose product pages from your website to promote" />
                                 <div className="mt-2">
                                     <ProductSelection
-                                        customerId={customerId}
+                                        customerUuid={customerUuid}
                                         selectedPages={data.selected_pages || []}
                                         onSelectionChange={(page) => {
                                             setData('selected_pages', page ? [page.id] : []);

@@ -168,7 +168,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     <div className="p-2 text-center bg-green-100 text-green-800 rounded-lg">
                         Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                         <Link
-                            href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.uuid })}
+                            href={route('campaigns.collateral.show', { campaign: campaigns.uuid, strategy: strategy.uuid })}
                             className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                         >
                             View Collateral
@@ -639,7 +639,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                                 <StrategyCard
                                     key={strategy.id}
                                     strategy={strategy}
-                                    campaignId={campaigns.id}
+                                    campaignUuid={campaigns.uuid}
                                     onSignOff={handleSignOffStrategy}
                                 />
                             ))}
@@ -655,7 +655,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             </div>
 
             {/* Campaign Copilot */}
-            <CampaignCopilot campaignId={campaigns.id} isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
+            <CampaignCopilot campaignUuid={campaigns.uuid} isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
 
             {/* Copilot FAB */}
             {!copilotOpen && (

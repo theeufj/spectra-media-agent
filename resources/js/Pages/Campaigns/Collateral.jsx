@@ -197,7 +197,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         setActiveTab(platform);
     };
 
-    const handleGenerateAdCopy = (strategyId, platform) => {
+    const handleGenerateAdCopy = (strategyUuid, platform) => {
         setConfirmModal({
             show: true,
             title: 'Generate Ad Copy',
@@ -206,7 +206,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingAdCopy(true);
                 setIsPolling(true);
-                router.post(route('campaigns.ad-copy.store', { campaign: campaign.uuid, strategy: strategyId }), { platform: platform }, {
+                router.post(route('campaigns.ad-copy.store', { campaign: campaign.uuid, strategy: strategyUuid }), { platform: platform }, {
                     onError: (errors) => {
                         setGeneratingAdCopy(false);
                         setIsPolling(false);
@@ -219,7 +219,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleGenerateImage = (strategyId) => {
+    const handleGenerateImage = (strategyUuid) => {
         setConfirmModal({
             show: true,
             title: 'Generate Image',
@@ -228,7 +228,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingImage(true);
                 setIsPolling(true);
-                router.post(route('campaigns.collateral.image.store', { campaign: campaign.uuid, strategy: strategyId }), {}, {
+                router.post(route('campaigns.collateral.image.store', { campaign: campaign.uuid, strategy: strategyUuid }), {}, {
                     onError: (errors) => {
                         setGeneratingImage(false);
                         setIsPolling(false);
@@ -241,7 +241,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleGenerateVideo = (strategyId, platform) => {
+    const handleGenerateVideo = (strategyUuid, platform) => {
         setConfirmModal({
             show: true,
             title: 'Generate Video',
@@ -250,7 +250,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingVideo(true);
                 setIsPolling(true);
-                router.post(route('campaigns.collateral.video.store', { campaign: campaign.uuid, strategy: strategyId }), { platform }, {
+                router.post(route('campaigns.collateral.video.store', { campaign: campaign.uuid, strategy: strategyUuid }), { platform }, {
                     onError: (errors) => {
                         setGeneratingVideo(false);
                         setIsPolling(false);
@@ -300,7 +300,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleImageUpload = (strategyId, files) => {
+    const handleImageUpload = (strategyUuid, files) => {
         if (!files || files.length === 0) return;
         setUploadingImages(true);
         setImageUploadErrors([]);
@@ -310,7 +310,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             formData.append('images[]', file);
         });
 
-        router.post(route('campaigns.collateral.image.upload', { campaign: campaign.uuid, strategy: strategyId }), formData, {
+        router.post(route('campaigns.collateral.image.upload', { campaign: campaign.uuid, strategy: strategyUuid }), formData, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -326,14 +326,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleVideoUpload = (strategyId, file) => {
+    const handleVideoUpload = (strategyUuid, file) => {
         if (!file) return;
         setUploadingVideo(true);
 
         const formData = new FormData();
         formData.append('video', file);
 
-        router.post(route('campaigns.collateral.video.upload', { campaign: campaign.uuid, strategy: strategyId }), formData, {
+        router.post(route('campaigns.collateral.video.upload', { campaign: campaign.uuid, strategy: strategyUuid }), formData, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -744,7 +744,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <p>Generate dynamic ad copy for {strategyItem.platform} based on the strategy.</p>
                                         
                                         <button
-                                            onClick={() => handleGenerateAdCopy(strategyItem.id, strategyItem.platform)}
+                                            onClick={() => handleGenerateAdCopy(strategyItem.uuid, strategyItem.platform)}
                                             disabled={generatingAdCopy}
                                             className="mt-4 px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
@@ -868,7 +868,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <div className="flex flex-wrap gap-3 mt-4">
                                             <button
-                                                onClick={() => handleGenerateImage(strategyItem.id)}
+                                                onClick={() => handleGenerateImage(strategyItem.uuid)}
                                                 disabled={generatingImage || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.image_generations.remaining <= 0)}
                                                 className="px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
@@ -898,7 +898,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     multiple
                                                     accept="image/jpeg,image/png,image/webp"
                                                     className="hidden"
-                                                    onChange={(e) => handleImageUpload(strategyItem.id, e.target.files)}
+                                                    onChange={(e) => handleImageUpload(strategyItem.uuid, e.target.files)}
                                                     disabled={uploadingImages}
                                                 />
                                             </label>
@@ -1166,7 +1166,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <div className="flex flex-wrap gap-3 mt-4">
                                             <button
-                                                onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
+                                                onClick={() => handleGenerateVideo(strategyItem.uuid, strategyItem.platform)}
                                                 disabled={generatingVideo || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.video_generations.remaining <= 0)}
                                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
@@ -1195,7 +1195,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     type="file"
                                                     accept="video/mp4,video/quicktime,video/webm"
                                                     className="hidden"
-                                                    onChange={(e) => handleVideoUpload(strategyItem.id, e.target.files?.[0])}
+                                                    onChange={(e) => handleVideoUpload(strategyItem.uuid, e.target.files?.[0])}
                                                     disabled={uploadingVideo}
                                                 />
                                             </label>

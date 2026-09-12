@@ -5,7 +5,7 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
 // A reusable component for a single strategy card
-const StrategyCard = ({ strategy, campaignId }) => {
+const StrategyCard = ({ strategy, campaignUuid }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const { data, setData, post, put, processing } = useForm({
@@ -28,10 +28,10 @@ const StrategyCard = ({ strategy, campaignId }) => {
             message: 'Are you sure you want to sign off this strategy? This action cannot be undone.',
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
-                post(route('campaigns.strategies.sign-off', { campaign: campaignId, strategy: strategy.uuid }), {
+                post(route('campaigns.strategies.sign-off', { campaign: campaignUuid, strategy: strategy.uuid }), {
                     onSuccess: () => {
                         // Redirect to the collateral page after signing off
-                        window.location.href = route('campaigns.collateral.show', { campaign: campaignId });
+                        window.location.href = route('campaigns.collateral.show', { campaign: campaignUuid });
                     }
                 });
             },
@@ -104,7 +104,7 @@ const StrategyCard = ({ strategy, campaignId }) => {
                 <div className="mt-6 p-2 text-center bg-green-100 text-green-800 rounded-lg">
                     Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                     <Link
-                        href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.uuid })}
+                        href={route('campaigns.collateral.show', { campaign: campaignUuid, strategy: strategy.uuid })}
                         className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                     >
                         View Collateral

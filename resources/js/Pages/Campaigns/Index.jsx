@@ -93,14 +93,14 @@ export default function Index({ auth, campaigns = [] }) {
     const [expandedCampaign, setExpandedCampaign] = React.useState(campaigns[0]?.id ?? null);
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
-    const handleDelete = (campaignId) => {
+    const handleDelete = (campaignUuid) => {
         setConfirmModal({
             show: true,
             title: 'Delete Campaign',
             message: 'Are you sure you want to delete this campaign? This action cannot be undone.',
             onConfirm: () => {
                 setConfirmModal({ ...confirmModal, show: false });
-                router.delete(route('campaigns.destroy', campaignId));
+                router.delete(route('campaigns.destroy', campaignUuid));
             },
             confirmText: 'Delete',
             confirmButtonClass: 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800',
@@ -274,7 +274,7 @@ export default function Index({ auth, campaigns = [] }) {
                                             {/* Delete Button */}
                                             <div className="mt-6 pt-6 border-t border-gray-200">
                                                 <button 
-                                                    onClick={() => handleDelete(campaign.id)} 
+                                                    onClick={() => handleDelete(campaign.uuid)} 
                                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
                                                 >
                                                     Delete Campaign

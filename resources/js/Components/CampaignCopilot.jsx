@@ -9,7 +9,7 @@ const SUGGESTED_QUESTIONS = [
     "Are my ad creatives working?",
 ];
 
-export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
+export default function CampaignCopilot({ campaignUuid, isOpen, onClose }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +34,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
 
     const loadHistory = async () => {
         try {
-            const res = await fetch(`/api/campaigns/${campaignId}/chat/history`, {
+            const res = await fetch(`/api/campaigns/${campaignUuid}/chat/history`, {
                 credentials: 'include',
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -57,7 +57,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
         setIsLoading(true);
 
         try {
-            const res = await fetch(`/api/campaigns/${campaignId}/chat`, {
+            const res = await fetch(`/api/campaigns/${campaignUuid}/chat`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -95,7 +95,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
 
     const clearChat = async () => {
         try {
-            await fetch(`/api/campaigns/${campaignId}/chat`, {
+            await fetch(`/api/campaigns/${campaignUuid}/chat`, {
                 method: 'DELETE',
                 credentials: 'include',
                 headers: {
@@ -151,7 +151,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                                 <button
                                     key={i}
                                     onClick={() => sendMessage(q)}
-                                    className="block w-full text-left px-3 py-2 text-sm text-brand-darker bg-brand-primary/10 rounded-lg hover:bg-brand-primary/20 transition"
+                                    className="block w-full text-left px-3 py-2 text-sm text-brand-darker bg-brand-tint-10 rounded-lg hover:bg-brand-tint-20 transition"
                                 >
                                     {q}
                                 </button>
