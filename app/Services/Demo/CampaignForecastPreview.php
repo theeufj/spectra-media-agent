@@ -2,12 +2,9 @@
 
 namespace App\Services\Demo;
 
-use App\Models\Customer;
-use App\Models\MccAccount;
-use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
-use App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas;
+use App\Services\Forecasting\ForecastFrame;
+use App\Services\Forecasting\KeywordForecastBuilder;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 /**
  * What a visitor's own market actually costs, before they pay us anything.
@@ -17,250 +14,27 @@ use Illuminate\Support\Facades\Log;
  * numbers instead — real monthly search volume, real top-of-page bids, and
  * Google's own forecast of what that keyword set delivers over a month.
  *
- * Everything here except the conversion rate is measured by Google rather than
- * asserted by us, which is the whole point: it is evidence about the visitor's
- * business, not a testimonial about ours.
+ * The pipeline itself now lives in KeywordForecastBuilder, because a signed-up
+ * customer deserves the same evidence against their own country and their own
+ * budget rather than the demo's fixed ones. This class is what remains that is
+ * genuinely specific to the anonymous funnel: demo configuration, and a cache
+ * keyed on nothing but the URL, since there is no visitor identity to key on.
  *
- * Runs against the platform MCC. BaseGoogleAdsService authenticates from
- * MccAccount::getActive() and uses the Customer only to label its logs, so no
- * visitor account is needed — Keyword Planner returns market data, not account
- * data, and forecasts create nothing.
+ * @see \App\Services\Forecasting\CustomerMarketForecast for the signed-in path
  */
 class CampaignForecastPreview
 {
-    /** Ideas below this monthly volume are noise, not a market. */
-    private const MIN_MONTHLY_SEARCHES = 10;
-
-    /**
-     * Google's forecast for the keywords behind a URL.
-     *
-     * Returns null rather than throwing: the visitor is waiting on a demo, and
-     * a slow or unavailable Keyword Planner must cost them the forecast, not
-     * the whole result.
-     *
-     * @return array{
-     *     keywords: list<array{keyword: string, monthly_searches: int, cpc: float}>,
-     *     max_cpc: float,
-     *     days: int,
-     *     conversion_rate: float,
-     *     impressions: int, clicks: int, cost: float, conversions: float,
-     *     average_cpc: float, ctr: float
-     * }|null
-     */
     public function forUrl(string $url): ?array
     {
-        return Cache::remember(
+        // The cache holds Google's unscaled answer. Framing is arithmetic and
+        // happens after it, so changing the demo budget does not invalidate a
+        // day's worth of Keyword Planner calls.
+        $raw = Cache::remember(
             'demo_forecast:'.md5($url),
             now()->addHours(24),
-            fn () => $this->build($url)
-        );
-    }
-
-    private function build(string $url): ?array
-    {
-        $mcc = MccAccount::getActive();
-
-        if (! $mcc) {
-            Log::warning('CampaignForecastPreview: no active MCC, skipping forecast', ['url' => $url]);
-
-            return null;
-        }
-
-        $mccId = preg_replace('/[^0-9]/', '', $mcc->google_customer_id);
-
-        try {
-            $ideas = (new GenerateKeywordIdeas($this->houseCustomer()))(
-                $mccId,
-                [],                              // no seed terms — the URL is the seed
-                $url,
-                config('demo.language'),
-                [config('demo.geo_target')],
-                config('demo.keyword_count') * 5 // over-fetch, then score down
-            );
-
-            $chosen = $this->pick($ideas);
-
-            if ($chosen === []) {
-                Log::info('CampaignForecastPreview: no usable keyword ideas', ['url' => $url]);
-
-                return null;
-            }
-
-            $maxCpc = $this->bid($chosen);
-
-            $forecast = (new GenerateKeywordForecast($this->houseCustomer()))(
-                $mccId,
-                array_column($chosen, 'keyword'),
-                $maxCpc,
-                config('demo.conversion_rate'),
-                config('demo.forecast_days'),
-            );
-
-            if (! $forecast['success']) {
-                Log::info('CampaignForecastPreview: forecast unavailable', [
-                    'url' => $url,
-                    'error' => $forecast['error'] ?? 'unknown',
-                ]);
-
-                return null;
-            }
-
-            $frame = $this->frame($forecast);
-            $f = $frame['factor'];
-
-            return [
-                'keywords' => $chosen,
-                'max_cpc' => round($maxCpc, 2),
-                'days' => (int) config('demo.forecast_days'),
-                'conversion_rate' => (float) config('demo.conversion_rate'),
-                'budget' => round($frame['budget'], 2),
-                'budget_capped' => $frame['scaled'],
-                'impressions' => (int) round(((float) ($forecast['impressions'] ?? 0)) * $f),
-                'clicks' => (int) round(((float) ($forecast['clicks'] ?? 0)) * $f),
-                'cost' => round(((float) ($forecast['cost'] ?? 0)) * $f, 2),
-                'conversions' => round(((float) ($forecast['conversions'] ?? 0)) * $f, 1),
-                // Per-click figures are ratios and do not scale with budget.
-                'average_cpc' => round((float) ($forecast['average_cpc'] ?? 0), 2),
-                'ctr' => round((float) ($forecast['ctr'] ?? 0), 4),
-            ];
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('CampaignForecastPreview failed: '.$e->getMessage(), ['url' => $url]);
-
-            return null;
-        }
-    }
-
-    /**
-     * The keywords worth forecasting: real volume, cheapest competition first.
-     *
-     * Same trade-off the real campaign builder makes — volume is worth having
-     * and competition is worth avoiding — so the visitor is shown the keyword
-     * set the platform would actually build for them.
-     *
-     * @param  list<array<string, mixed>>  $ideas
-     * @return list<array{keyword: string, monthly_searches: int, cpc: float}>
-     */
-    private function pick(array $ideas): array
-    {
-        // A keyword Google quotes no bid for has no commercial demand behind
-        // it, and rendering "$0.00" next to it reads as a broken page rather
-        // than a cheap opportunity.
-        $usable = array_filter(
-            $ideas,
-            fn ($i) => ($i['avg_monthly_searches'] ?? 0) >= self::MIN_MONTHLY_SEARCHES
-                && $this->topOfPageBid($i) > 0.0
+            fn () => KeywordForecastBuilder::fromDemoConfig()->forUrl($url)
         );
 
-        usort($usable, function ($a, $b) {
-            return $this->score($b) <=> $this->score($a);
-        });
-
-        return array_map(fn ($i) => [
-            'keyword' => (string) $i['keyword'],
-            'monthly_searches' => (int) $i['avg_monthly_searches'],
-            'cpc' => round($this->topOfPageBid($i), 2),
-        ], array_slice($usable, 0, (int) config('demo.keyword_count')));
-    }
-
-    /** @param array<string, mixed> $idea */
-    private function score(array $idea): float
-    {
-        $volume = (int) ($idea['avg_monthly_searches'] ?? 0);
-        $competition = (int) ($idea['competition_index'] ?? 50);
-
-        // Volume leads, competition breaks ties. Weighted evenly, a 10/month
-        // term with no competition outscored a 140/month one, and the panel
-        // filled with keywords nobody searches — technically the easiest to
-        // win, and worthless as evidence of a market. Log scale still keeps a
-        // single head term from drowning the set.
-        return log10(max($volume, 1)) * 25 + (100 - $competition) * 0.5;
-    }
-
-    /**
-     * What Google says it costs to reach the top of the page for this keyword.
-     *
-     * Interpolated between the low and high top-of-page bids so the number
-     * reflects a real competitive position rather than the cheapest possible
-     * placement, which forecasts volume nobody would actually receive.
-     *
-     * @param  array<string, mixed>  $idea
-     */
-    private function topOfPageBid(array $idea): float
-    {
-        $low = ((int) ($idea['low_top_of_page_bid_micros'] ?? 0)) / 1_000_000;
-        $high = ((int) ($idea['high_top_of_page_bid_micros'] ?? 0)) / 1_000_000;
-
-        if ($high <= 0.0) {
-            return $low > 0.0 ? $low : ((int) ($idea['average_cpc_micros'] ?? 0)) / 1_000_000;
-        }
-
-        $aggressiveness = (float) config('demo.bid_aggressiveness');
-
-        return $low + (($high - $low) * $aggressiveness);
-    }
-
-    /**
-     * One bid for the whole forecast ad group, since Google forecasts per bid.
-     *
-     * Median, not mean: sitetospend.com returned a keyword quoted at $968 a
-     * click beside others near $75, and the mean set the whole group's bid to
-     * $156 — a bid nobody would place, forecasting spend nobody would make.
-     *
-     * @param  list<array{keyword: string, monthly_searches: int, cpc: float}>  $chosen
-     */
-    private function bid(array $chosen): float
-    {
-        $bids = array_values(array_filter(array_column($chosen, 'cpc'), fn ($c) => $c > 0));
-
-        if ($bids === []) {
-            return 2.0;
-        }
-
-        sort($bids);
-        $mid = intdiv(count($bids), 2);
-
-        return count($bids) % 2 === 1
-            ? $bids[$mid]
-            : ($bids[$mid - 1] + $bids[$mid]) / 2;
-    }
-
-    /**
-     * Google's forecast, framed against a budget someone would actually set.
-     *
-     * The forecast is unconstrained — it answers "what is all the demand at
-     * this bid", which for a competitive market is a six-figure monthly spend.
-     * Scaling it to a realistic budget keeps every underlying figure Google's
-     * (the bid, the volumes, the effective cost per click) and makes the
-     * headline one a visitor can act on. The page says which it is showing.
-     *
-     * @param  array<string, mixed>  $forecast
-     * @return array{scaled: bool, factor: float, budget: float}
-     */
-    private function frame(array $forecast): array
-    {
-        $budget = (float) config('demo.monthly_budget');
-        $cost = (float) ($forecast['cost'] ?? 0);
-
-        if ($budget <= 0 || $cost <= $budget) {
-            return ['scaled' => false, 'factor' => 1.0, 'budget' => $budget];
-        }
-
-        return ['scaled' => true, 'factor' => $budget / $cost, 'budget' => $budget];
-    }
-
-    /**
-     * A Customer the Google Ads services can be constructed with.
-     *
-     * Not persisted and never queried. BaseGoogleAdsService takes a Customer
-     * but authenticates from the MCC, reading the model only to name the
-     * account in its log lines.
-     */
-    private function houseCustomer(): Customer
-    {
-        $customer = new Customer(['name' => 'Public demo forecast']);
-        $customer->id = 0;
-
-        return $customer;
+        return $raw ? ForecastFrame::apply($raw, (float) config('demo.monthly_budget')) : null;
     }
 }

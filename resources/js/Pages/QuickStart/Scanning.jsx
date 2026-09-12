@@ -2,6 +2,7 @@ import React from 'react';
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useJobWatch } from '@/hooks/useJobWatch';
+import ForecastPanel from '@/Components/ForecastPanel';
 
 /**
  * The post-QuickStart holding screen. The old flow dumped the user on the
@@ -99,6 +100,16 @@ export function ScanningProgress({ phase, data, website }) {
                     detail="Your voice, services, colours and audience — everything your ads start from."
                 />
                 <Step state="pending" label="Reviewing your brand profile together" />
+            </div>
+
+            {/*
+                The wait was dead time, and the answer to "is this worth
+                anything?" is already available from the URL alone. Market size
+                only: there is no campaign and no order value yet, so there is
+                no honest revenue figure to show here.
+            */}
+            <div className="mt-8 max-w-md mx-auto">
+                <ForecastPanel variant="market" />
             </div>
         </div>
     );

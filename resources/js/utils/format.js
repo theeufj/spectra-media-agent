@@ -65,10 +65,22 @@ function currencyCode(currency) {
  *   for chart axis labels where cents are noise.
  */
 export function money(value, currency = 'USD', options = {}) {
+    /*
+     * The floor follows the ceiling when a caller lowers it.
+     *
+     * Intl throws RangeError when minimumFractionDigits exceeds
+     * maximumFractionDigits, so the `{ maximumFractionDigits: 0 }` this
+     * function's own documentation recommends for axis labels used to crash
+     * against the hardcoded minimum of 2. Nothing had called it that way yet —
+     * this helper had no adopters at all — so the advertised usage had never
+     * actually been run.
+     */
+    const max = options.maximumFractionDigits;
+
     return new Intl.NumberFormat(undefined, {
         style: 'currency',
         currency: currencyCode(currency),
-        minimumFractionDigits: 2,
+        minimumFractionDigits: max === undefined ? 2 : Math.min(2, max),
         maximumFractionDigits: 2,
         ...options,
     }).format(toNumber(value));

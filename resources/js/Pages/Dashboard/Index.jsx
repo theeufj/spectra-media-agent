@@ -10,13 +10,43 @@ import PerformanceChart from '@/Components/PerformanceChart';
 import NoCampaigns from '@/Components/NoCampaigns';
 import WaitingForData from '@/Components/WaitingForData';
 import SetupProgressNav from '@/Components/SetupProgressNav';
+import ForecastPanel from '@/Components/ForecastPanel';
 import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
 // ─── Platform constants ─────────────────────────────────────────
-const PLATFORM_LABELS = { google: 'Google Ads', facebook: 'Facebook Ads', microsoft: 'Microsoft Ads', linkedin: 'LinkedIn Ads' };
-const PLATFORM_HEX   = { google: '#4285F4', facebook: '#1877F2', microsoft: '#00A4EF', linkedin: '#0A66C2' };
-const PLATFORM_BG    = { Google: 'bg-blue-500', Facebook: 'bg-indigo-500', Microsoft: 'bg-teal-500', LinkedIn: 'bg-sky-500' };
+/*
+ * One map, keyed by the slug the API sends.
+ *
+ * There were three — PLATFORM_LABELS and PLATFORM_HEX keyed by 'google', and
+ * PLATFORM_BG keyed by 'Google' — so the same platform was a different colour
+ * in the spend bar than in the comparison bars, and a lookup that guessed the
+ * casing wrong fell through to grey.
+ *
+ * The colours are NOT the platforms' own brand colours any more. Those are
+ * #4285F4, #1877F2, #00A4EF and #0A66C2 — four blues. Run through the palette
+ * validator, Google↔Facebook came back at ΔE 4.8 for NORMAL vision (the floor
+ * is 15) and 3.9 under deuteranopia: in the stacked spend bar, nobody could
+ * tell which segment was which, colour-blind or not. These four are a
+ * validated categorical set — all-pairs ΔE 16.3 normal, 9.1 worst CVD — and
+ * every chart that uses them also carries a text label, which is what the
+ * validator's sub-3:1 contrast warning requires.
+ */
+const PLATFORMS = {
+    google:    { label: 'Google Ads',    color: '#2a78d6' },
+    facebook:  { label: 'Facebook Ads',  color: '#4a3aa7' },
+    microsoft: { label: 'Microsoft Ads', color: '#1baf7a' },
+    linkedin:  { label: 'LinkedIn Ads',  color: '#eda100' },
+};
+const OTHER_PLATFORM = { label: 'Other', color: '#6b7280' };
+const platformOf = (name) => PLATFORMS[String(name || '').toLowerCase()] ?? OTHER_PLATFORM;
+
+// Cost and revenue, as a validated pair (ΔE 24.0 normal, 23.1 protan).
+// Cost was red-300, which reads as an error state — spending is the point of
+// the product, not a fault.
+const SERIES = { cost: '#2a78d6', revenue: '#1baf7a' };
+
+const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 // ─── Small reusable pieces ──────────────────────────────────────
 function KpiCard({ label, value, sub, color }) {
@@ -29,55 +59,154 @@ function KpiCard({ label, value, sub, color }) {
     );
 }
 
+/**
+ * Where the money went, across platforms.
+ *
+ * A 100%-wide bar in a single colour is not a chart — it encodes one number as
+ * a full-width rectangle and says nothing the figure beside it does not. On
+ * this account, which runs Google only, that was a whole card spent on a solid
+ * blue rule. One platform now renders as the stat it is; the bar appears when
+ * there is actually a split to show.
+ */
 function SpendBar({ platforms }) {
-    const total = Object.values(platforms).reduce((s, p) => s + p.cost, 0);
+    const rows = Object.entries(platforms)
+        .map(([name, data]) => ({ ...platformOf(name), cost: data.cost }))
+        .filter((r) => r.cost > 0)
+        .sort((a, b) => b.cost - a.cost);
+
+    const total = rows.reduce((s, r) => s + r.cost, 0);
     if (total === 0) return null;
+
+    if (rows.length === 1) {
+        return (
+            <p className="text-sm text-gray-600">
+                All of it through{' '}
+                <span className="font-semibold text-gray-900">{rows[0].label}</span> —{' '}
+                <span className="font-semibold text-gray-900">{money(rows[0].cost)}</span>.
+            </p>
+        );
+    }
+
     return (
-        <div className="space-y-2">
-            <div className="flex h-6 rounded-full overflow-hidden">
-                {Object.entries(platforms).map(([name, data]) => {
-                    const pct = (data.cost / total) * 100;
-                    return <div key={name} className="h-full" style={{ width: `${pct}%`, backgroundColor: PLATFORM_HEX[name] || '#6B7280' }} title={`${PLATFORM_LABELS[name]}: $${data.cost.toLocaleString()} (${pct.toFixed(1)}%)`} />;
-                })}
-            </div>
-            <div className="flex flex-wrap gap-4 text-xs">
-                {Object.entries(platforms).map(([name, data]) => (
-                    <div key={name} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: PLATFORM_HEX[name] }} />
-                        <span className="text-gray-600">{PLATFORM_LABELS[name]}: ${data.cost.toLocaleString()}</span>
-                    </div>
+        <div className="space-y-3">
+            {/* 2px surface gaps between segments, so adjacent fills stay separable. */}
+            <div className="flex h-6 gap-0.5 overflow-hidden rounded-full">
+                {rows.map((r) => (
+                    <div
+                        key={r.label}
+                        className="h-full first:rounded-l-full last:rounded-r-full"
+                        style={{ width: `${(r.cost / total) * 100}%`, backgroundColor: r.color }}
+                    />
                 ))}
             </div>
+            <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
+                {rows.map((r) => (
+                    <li key={r.label} className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: r.color }} aria-hidden="true" />
+                        <span className="text-gray-600">
+                            {r.label} <span className="font-medium text-gray-900">{money(r.cost)}</span>{' '}
+                            <span className="text-gray-500">({Math.round((r.cost / total) * 100)}%)</span>
+                        </span>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
 
+/**
+ * One measure over time, as an area with a 2px cap.
+ *
+ * @param {Array<{date: string, value: number}>} points
+ */
+function Sparkline({ points, color, label, format = money }) {
+    const [hover, setHover] = useState(null);
+
+    const W = 640;
+    const H = 96;
+    const max = Math.max(...points.map((p) => p.value), 1);
+    const stepX = points.length > 1 ? W / (points.length - 1) : 0;
+    const xy = points.map((p, i) => [i * stepX, H - (p.value / max) * (H - 8) - 2]);
+    const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const area = `${line} L${W},${H} L0,${H} Z`;
+    const peak = points.reduce((a, b) => (b.value > a.value ? b : a), points[0]);
+
+    return (
+        <figure className="min-w-0">
+            <figcaption className="mb-1 flex items-baseline justify-between gap-3">
+                <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+                    {label}
+                </span>
+                {/* One direct label — the peak — not a number on every point. */}
+                <span className="text-xs text-gray-500">
+                    peak <span className="font-semibold text-gray-900">{format(peak?.value)}</span>
+                </span>
+            </figcaption>
+
+            <div className="relative" onMouseLeave={() => setHover(null)}>
+                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-24 w-full" role="img"
+                     aria-label={`${label} over time, peak ${format(peak?.value)}`}>
+                    <path d={area} fill={color} opacity="0.12" />
+                    <path d={line} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"
+                          strokeLinejoin="round" strokeLinecap="round" />
+                    {hover !== null && (
+                        <circle cx={xy[hover][0]} cy={xy[hover][1]} r="4" fill={color} stroke="#fff" strokeWidth="2"
+                                vectorEffect="non-scaling-stroke" />
+                    )}
+                </svg>
+
+                {/* Hit targets are full-height columns, so they are bigger than the mark. */}
+                <div className="absolute inset-0 flex">
+                    {points.map((p, i) => (
+                        <button
+                            key={p.date}
+                            type="button"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                            className="h-full flex-1"
+                            onMouseEnter={() => setHover(i)}
+                            onFocus={() => setHover(i)}
+                        />
+                    ))}
+                </div>
+
+                {hover !== null && (
+                    <div
+                        className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white shadow-lg"
+                        style={{ left: `${(hover / Math.max(points.length - 1, 1)) * 100}%` }}
+                    >
+                        {points[hover].date}: <span className="font-semibold">{format(points[hover].value)}</span>
+                    </div>
+                )}
+            </div>
+        </figure>
+    );
+}
+
+/**
+ * Cost and revenue over the period.
+ *
+ * Small multiples, not one chart. These are two measures on scales an order of
+ * magnitude apart — on this account $629 of spend against $2,595 of revenue —
+ * and the old chart put both against a single `max(cost, revenue)` axis. The
+ * cost series was therefore drawn as a row of 6px hairlines while revenue used
+ * the full height, which is the shared-axis version of the dual-axis mistake:
+ * the smaller series becomes unreadable. Two panels, each with its own scale
+ * and its own peak labelled, compares the shapes without lying about either.
+ */
 function DailyChart({ data }) {
     if (!data || data.length === 0) return null;
-    const maxVal = Math.max(...data.map(d => Math.max(d.cost, d.revenue)));
-    const chartHeight = 200;
+
+    const labels = [data[0]?.date, data[data.length - 1]?.date].filter(Boolean);
+
     return (
-        <div className="overflow-x-auto">
-            <div className="flex items-end gap-1 min-w-fit" style={{ height: chartHeight + 40 }}>
-                {data.map((day, i) => {
-                    const costH = maxVal > 0 ? (day.cost / maxVal) * chartHeight : 0;
-                    const revH  = maxVal > 0 ? (day.revenue / maxVal) * chartHeight : 0;
-                    return (
-                        <div key={i} className="flex flex-col items-center gap-0.5" style={{ width: Math.max(16, 800 / data.length) }}>
-                            <div className="flex items-end gap-px">
-                                <div className="bg-red-300 rounded-t" style={{ height: costH, width: 6 }} title={`Cost: $${day.cost}`} />
-                                <div className="bg-green-400 rounded-t" style={{ height: revH, width: 6 }} title={`Revenue: $${day.revenue}`} />
-                            </div>
-                            {i % Math.ceil(data.length / 10) === 0 && (
-                                <span className="text-xs text-gray-500 mt-1 rotate-[-45deg] origin-top-left whitespace-nowrap">{day.date.split('-').slice(1).join('/')}</span>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-            <div className="flex gap-4 mt-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-300 rounded" /> Cost</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-400 rounded" /> Revenue</span>
+        <div className="space-y-5">
+            <Sparkline points={data.map((d) => ({ date: d.date, value: d.cost }))} color={SERIES.cost} label="Cost" />
+            <Sparkline points={data.map((d) => ({ date: d.date, value: d.revenue }))} color={SERIES.revenue} label="Revenue" />
+            {/* Two endpoint labels rather than a rotated tick under every bar. */}
+            <div className="flex justify-between text-xs text-gray-500">
+                {labels.map((d) => <span key={d}>{d}</span>)}
             </div>
         </div>
     );
@@ -85,30 +214,51 @@ function DailyChart({ data }) {
 
 function FunnelBar({ stage, maxValue }) {
     const width = maxValue > 0 ? (stage.value / maxValue) * 100 : 0;
+    // A label only fits inside the fill once the fill is wide enough to hold
+    // it. Below that it was being clipped by the bar's own rounded end —
+    // 16,024 impressions read fine, 420 clicks rendered as "20".
+    const labelInside = width >= 18;
+    const value = stage.value.toLocaleString();
+
     return (
         <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-700 w-28">{stage.name}</span>
-            <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                <div className="bg-gradient-to-r from-brand-primary to-brand-primary/70 h-6 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max(width, 2)}%` }}>
-                    <span className="text-xs text-white font-medium">{stage.value.toLocaleString()}</span>
+            <span className="w-28 shrink-0 text-sm font-medium text-gray-700">{stage.name}</span>
+            <div className="relative h-6 flex-1 rounded-full bg-gray-100">
+                <div
+                    className="flex h-6 items-center justify-end rounded-full pr-2"
+                    style={{
+                        width: `${Math.max(width, 2)}%`,
+                        backgroundImage: 'linear-gradient(to right, var(--color-brand-primary), var(--color-brand-dark))',
+                    }}
+                >
+                    {labelInside && <span className="text-xs font-medium text-white">{value}</span>}
                 </div>
+                {!labelInside && (
+                    <span
+                        className="absolute top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-900"
+                        style={{ left: `calc(${Math.max(width, 2)}% + 8px)` }}
+                    >
+                        {value}
+                    </span>
+                )}
             </div>
-            <span className="text-xs text-gray-500 w-14 text-right">{stage.rate}%</span>
+            <span className="w-14 shrink-0 text-right text-xs text-gray-500">{stage.rate}%</span>
         </div>
     );
 }
 
 function PlatformComparisonBar({ platform, metric, maxValue }) {
     const width = maxValue > 0 ? (platform[metric] / maxValue) * 100 : 0;
-    const color = PLATFORM_BG[platform.platform] || 'bg-gray-400';
+    const { color } = platformOf(platform.platform);
+
     return (
         <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-600 w-20">{platform.platform}</span>
-            <div className="flex-1 bg-gray-200 rounded-full h-4">
-                <div className={`${color} h-4 rounded-full`} style={{ width: `${Math.max(width, 1)}%` }} />
+            <span className="w-20 shrink-0 text-xs text-gray-600">{platform.platform}</span>
+            <div className="h-4 flex-1 rounded-full bg-gray-100">
+                <div className="h-4 rounded-full" style={{ width: `${Math.max(width, 1)}%`, backgroundColor: color }} />
             </div>
-            <span className="text-xs font-medium text-gray-900 w-20 text-right">
-                {metric === 'cost' ? `$${platform[metric]?.toLocaleString()}` : metric === 'roas' ? `${platform[metric]}x` : platform[metric]?.toLocaleString()}
+            <span className="w-20 shrink-0 text-right text-xs font-medium text-gray-900">
+                {metric === 'cost' ? money(platform[metric]) : metric === 'roas' ? `${platform[metric]}x` : platform[metric]?.toLocaleString()}
             </span>
         </div>
     );
@@ -118,7 +268,7 @@ function PlatformComparisonBar({ platform, metric, maxValue }) {
 function TabBtn({ children }) {
     return (
         <Tab className={({ selected }) =>
-            `px-4 py-2.5 text-sm font-medium rounded-lg transition focus:outline-none ${
+            `shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition focus:outline-none ${
                 selected
                     ? 'bg-white text-brand-darker shadow-sm border border-gray-200'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
@@ -232,7 +382,7 @@ export default function Dashboard({ auth }) {
             <Head title="Performance Dashboard" />
 
             <div className="py-6 sm:py-10">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     <SetupProgressNav />
 
                     {trackingStatus?.provisioned && !trackingStatus?.installed && (
@@ -288,11 +438,27 @@ export default function Dashboard({ auth }) {
                         </div>
                     )}
 
+                    {/*
+                        Only once a campaign exists. A cache miss here is a pair
+                        of Keyword Planner calls against the shared MCC quota,
+                        and an account with nothing set up has no budget to
+                        frame the answer against anyway.
+                    */}
+                    {campaigns.length > 0 && (
+                        <ForecastPanel className="mb-6" campaignId={campaigns[0]?.id} />
+                    )}
+
                     {campaigns.length === 0 ? (
                         <NoCampaigns />
                     ) : (
                         <TabGroup>
-                            <TabList className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
+                            {/*
+                                Four tabs at px-4 are wider than a 390px screen,
+                                and a plain flex row pushed the whole document
+                                sideways rather than clipping. Scrolls in its own
+                                track now, so the page itself never does.
+                            */}
+                            <TabList className="-mx-4 mb-6 flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1 px-4 sm:mx-0 sm:px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 <TabBtn>Overview</TabBtn>
                                 <TabBtn>Platforms</TabBtn>
                                 <TabBtn>Campaigns</TabBtn>
@@ -379,14 +545,14 @@ export default function Dashboard({ auth }) {
                                                 <div className="flex gap-2 mb-4">
                                                     {crossPlatformComparison.filter(p => p.spend_share > 0).map(p => (
                                                         <div key={p.platform} className="flex items-center gap-2">
-                                                            <div className={`w-3 h-3 rounded-full ${PLATFORM_BG[p.platform] || 'bg-gray-400'}`} />
+                                                            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: platformOf(p.platform).color }} />
                                                             <span className="text-sm text-gray-700">{p.platform}: {p.spend_share}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                                 <div className="flex h-4 rounded-full overflow-hidden bg-gray-200">
                                                     {crossPlatformComparison.filter(p => p.spend_share > 0).map(p => (
-                                                        <div key={p.platform} className={PLATFORM_BG[p.platform] || 'bg-gray-400'} style={{ width: `${p.spend_share}%` }} />
+                                                        <div key={p.platform} style={{ width: `${p.spend_share}%`, backgroundColor: platformOf(p.platform).color }} />
                                                     ))}
                                                 </div>
                                             </div>
@@ -425,7 +591,7 @@ export default function Dashboard({ auth }) {
                                                                 <tr key={p.platform} className="border-b border-gray-100">
                                                                     <td className="py-2.5 font-medium text-gray-900">
                                                                         <span className="flex items-center gap-2">
-                                                                            <span className={`w-2 h-2 rounded-full ${PLATFORM_BG[p.platform] || 'bg-gray-400'}`} />
+                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: platformOf(p.platform).color }} />
                                                                             {p.platform}
                                                                         </span>
                                                                     </td>

@@ -1,4 +1,6 @@
 import { useForm } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
+import ForecastPanel from '@/Components/ForecastPanel';
 
 /**
  * Accept the budget on a campaign we generated for the customer.
@@ -37,8 +39,8 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
     }
 
     return (
-        <div className="mb-6 overflow-hidden rounded-lg border-2 border-brand-primary/50 bg-white shadow-sm">
-            <div className="border-b border-brand-primary/30 bg-brand-primary/10 px-6 py-4">
+        <div className="mb-6 overflow-hidden rounded-lg border-2 bg-white shadow-sm" style={{ borderColor: brandTint(50) }}>
+            <div className="border-b px-6 py-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
                 <h3 className="text-base font-semibold text-gray-900">Confirm your budget before going live</h3>
                 <p className="mt-1 text-sm text-gray-600">
                     We built this campaign from your website, including a suggested budget. Nothing is live
@@ -81,6 +83,18 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
                 {errors.daily_budget && (
                     <p className="mt-2 text-sm text-red-600">{errors.daily_budget}</p>
                 )}
+
+                {/*
+                    What the number buys, before they are asked to agree to it.
+                    Re-frames as they type: the figures are already in the
+                    browser, so editing the budget costs no Keyword Planner
+                    quota.
+                */}
+                <ForecastPanel
+                    className="mt-4"
+                    campaignId={campaign.id}
+                    monthlyBudget={Number(data.daily_budget || 0) * 30}
+                />
 
                 {/* The number that actually leaves their account, stated before
                     they agree to it rather than after. */}

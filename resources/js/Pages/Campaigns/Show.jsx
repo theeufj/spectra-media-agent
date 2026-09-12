@@ -5,8 +5,10 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
+import ForecastPanel from '@/Components/ForecastPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
 import { useJobWatch } from '@/hooks/useJobWatch';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 // Collateral Summary Card Component
 const CollateralSummaryCard = ({ campaign }) => {
@@ -61,7 +63,7 @@ const CollateralSummaryCard = ({ campaign }) => {
                 ) : (
                     <div className="text-center py-6">
                         <div className="animate-pulse flex flex-col items-center">
-                            <svg className="w-12 h-12 text-brand-primary/70 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-12 h-12 text-brand-primary mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-600 font-medium">Generating your collateral...</p>
@@ -104,7 +106,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     <p className="text-xs text-gray-500 mt-0.5">AI-generated strategy</p>
                 </div>
                 {!isSignedOff && !isEditing && (
-                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-dark hover:text-brand-darker hover:bg-brand-primary/10 px-3 py-1.5 rounded-lg transition">
+                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-dark hover:text-brand-darker hover:bg-brand-tint-10 px-3 py-1.5 rounded-lg transition">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         Edit
                     </button>
@@ -232,10 +234,21 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                             <p className="text-white/80 text-xs">elapsed</p>
                         </div>
                     </div>
-                    <div className="mt-4 h-2 bg-brand-darker/30 rounded-full overflow-hidden">
+                    {/*
+                      * This bar sits on the dark brand-dark→purple header, so the
+                      * track is white at low alpha rather than a brand tint —
+                      * brandTint() mixes towards white, which is the wrong
+                      * direction on a dark ground, and the `bg-brand-darker/30`
+                      * it replaces compiled to nothing at all. The fill ends on
+                      * white so the filled portion stays obvious against the band.
+                      */}
+                    <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-gradient-to-r from-brand-primary/50 to-white rounded-full transition-all duration-1000 ease-out"
-                            style={{ width: `${overallProgress}%` }}
+                            className="h-full rounded-full transition-all duration-1000 ease-out"
+                            style={{
+                                width: `${overallProgress}%`,
+                                backgroundImage: `linear-gradient(to right, ${brandTint(50)}, #fff)`,
+                            }}
                         />
                     </div>
                 </div>
@@ -251,9 +264,14 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                 <div
                                     key={idx}
                                     className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
-                                        isActive ? 'bg-brand-primary/10 border border-brand-primary/30' :
+                                        isActive ? 'border' :
                                         isComplete ? 'opacity-60' : 'opacity-40'
                                     }`}
+                                    style={
+                                        isActive
+                                            ? { backgroundColor: brandTint(10), borderColor: brandTint(30) }
+                                            : undefined
+                                    }
                                 >
                                     <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
                                         {isComplete ? (
@@ -440,12 +458,27 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 would click Deploy and be told to confirm a budget with nowhere
                 to do it. */}
             {campaign.auto_generated_at && (
-                <div className="mx-auto max-w-7xl sm:">
+                <div className="mx-auto max-w-7xl">
                     {/* The prop, not the polled local state: confirming the
                         budget redirects back with fresh props, and the local
                         copy is only seeded once so it would still show as
                         unconfirmed. */}
                     <BudgetConfirmation campaign={campaign} currency={campaign.currency_code || 'USD'} />
+
+                    {/*
+                        Once the budget is confirmed BudgetConfirmation collapses
+                        to a one-line receipt and stops rendering its own copy,
+                        so the forecast is shown here instead. Rendering it in
+                        both places unconditionally would show it twice while the
+                        budget is still unconfirmed.
+                    */}
+                    {campaign.budget_confirmed_at && (
+                        <ForecastPanel
+                            className="mb-6"
+                            campaignId={campaign.id}
+                            monthlyBudget={Number(campaign.daily_budget || 0) * 30}
+                        />
+                    )}
                 </div>
             )}
 
@@ -453,7 +486,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 without the snippet the ads run blind, and the setup page was
                 previously only reachable from an email. */}
             {conversionTracking && (
-                <div className="mx-auto max-w-7xl sm:">
+                <div className="mx-auto max-w-7xl">
                     {conversionTracking.installed ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
                             <span aria-hidden="true">✓</span>
@@ -497,7 +530,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     {isPolling && (
                         <StrategyGenerationLoader
                             elapsedSeconds={elapsedSeconds}

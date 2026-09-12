@@ -562,6 +562,15 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     Route::get('/setup-progress', [\App\Http\Controllers\SetupProgressController::class, 'index'])
         ->name('api.setup-progress.index');
 
+    // What this customer's market is worth. Throttled because a cache miss is
+    // a pair of Keyword Planner calls against the shared MCC quota.
+    Route::get('/forecast', [\App\Http\Controllers\ForecastController::class, 'show'])
+        ->middleware('throttle:30,1')
+        ->name('api.forecast.show');
+    Route::post('/forecast/order-value', [\App\Http\Controllers\ForecastController::class, 'storeOrderValue'])
+        ->middleware('throttle:20,1')
+        ->name('api.forecast.order-value');
+
     // Deployment status polling
     Route::get('/campaigns/{campaign}/deployment-status', [\App\Http\Controllers\CampaignController::class, 'apiDeploymentStatus'])
         ->name('api.campaigns.deployment-status');
