@@ -108,6 +108,21 @@ export default function OnboardingTour({ forceShow = false }) {
     const brand = props?.tenant?.name || 'Spectra';
     const [active, setActive] = useState(false);
     const [step, setStep] = useState(0);
+
+    /*
+     * The steps this account can actually be shown.
+     *
+     * Not every nav item exists for every user — Sandbox is admin-only — and a
+     * step whose target is missing did not get skipped: positionTooltip()
+     * called finish() on it, ending the whole tour. A non-admin therefore
+     * reached the Sandbox step seventh of nine and the tour simply stopped,
+     * never reaching "Ready to start? Click here to create your first
+     * campaign", which is the only step that asks them to do anything.
+     *
+     * Fixed by filtering rather than by special-casing Sandbox: any future
+     * gated nav item would have reintroduced exactly this.
+     */
+    const [steps, setSteps] = useState(TOUR_STEPS);
     const [pos, setPos] = useState(null);
     const tooltipRef = useRef(null);
 
@@ -118,6 +133,11 @@ export default function OnboardingTour({ forceShow = false }) {
         // start, and don't mark the tour completed either, so it still shows
         // the first time this account opens the dashboard on a desktop.
         if (!isVisible(document.querySelector(TOUR_STEPS[0].target))) return;
+
+        const visible = TOUR_STEPS.filter(s => isVisible(document.querySelector(s.target)));
+        if (visible.length === 0) return;
+
+        setSteps(visible);
         startPathRef.current = window.location.pathname;
         setStep(0);
         setActive(true);
@@ -163,7 +183,7 @@ export default function OnboardingTour({ forceShow = false }) {
 
     const positionTooltip = useCallback(() => {
         if (!active) return;
-        const current = TOUR_STEPS[step];
+        const current = steps[step];
         if (!current) return;
         const el = document.querySelector(current.target);
         // Mid-tour resize into a layout where the target no longer renders:
@@ -174,7 +194,7 @@ export default function OnboardingTour({ forceShow = false }) {
             return;
         }
         setPos(getTooltipPosition(el, current.placement));
-    }, [active, step, finish]);
+    }, [active, step, steps, finish]);
 
     useEffect(() => {
         positionTooltip();
@@ -189,7 +209,7 @@ export default function OnboardingTour({ forceShow = false }) {
     // Highlight current target element
     useEffect(() => {
         if (!active) return;
-        const current = TOUR_STEPS[step];
+        const current = steps[step];
         if (!current) return;
         const el = document.querySelector(current.target);
         if (!el) return;
@@ -202,15 +222,15 @@ export default function OnboardingTour({ forceShow = false }) {
             el.style.position = '';
             el.style.zIndex = '';
         };
-    }, [active, step]);
+    }, [active, step, steps]);
 
     const next = useCallback(() => {
-        if (step < TOUR_STEPS.length - 1) {
+        if (step < steps.length - 1) {
             setStep(s => s + 1);
         } else {
             finish();
         }
-    }, [step, finish]);
+    }, [step, steps, finish]);
 
     const prev = useCallback(() => {
         if (step > 0) setStep(s => s - 1);
@@ -237,8 +257,8 @@ export default function OnboardingTour({ forceShow = false }) {
 
     if (!active || !pos) return null;
 
-    const current = TOUR_STEPS[step];
-    const isLast = step === TOUR_STEPS.length - 1;
+    const current = steps[step];
+    const isLast = step === steps.length - 1;
 
     return (
         <>
@@ -268,7 +288,7 @@ export default function OnboardingTour({ forceShow = false }) {
                 {/* Step counter */}
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-brand-dark uppercase tracking-wider">
-                        Step {step + 1} of {TOUR_STEPS.length}
+                        Step {step + 1} of {steps.length}
                     </span>
                     <button
                         onClick={finish}
@@ -293,7 +313,7 @@ export default function OnboardingTour({ forceShow = false }) {
                             <div
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                                    i === step ? 'bg-brand-primary' : i < step ? 'bg-brand-primary/30' : 'bg-gray-200'
+                                    i === step ? 'bg-brand-primary' : i < step ? 'bg-brand-dark' : 'bg-gray-200'
                                 }`}
                             />
                         ))}

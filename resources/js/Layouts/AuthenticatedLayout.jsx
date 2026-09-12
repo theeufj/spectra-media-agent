@@ -20,7 +20,7 @@ function UserInitials({ name, className = '' }) {
         .toUpperCase()
         .slice(0, 2);
     return (
-        <div className={`flex items-center justify-center rounded-full bg-brand-primary/20 text-brand-darker text-xs font-semibold ${className}`}>
+        <div className={`flex items-center justify-center rounded-full bg-brand-tint-20 text-brand-darker text-xs font-semibold ${className}`}>
             {initials}
         </div>
     );
@@ -69,7 +69,7 @@ function MobileNavLink({ href, active = false, icon, children, ...props }) {
             href={href}
             className={`flex items-center gap-3 mx-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary ${
                 active
-                    ? 'bg-brand-primary/10 text-brand-darker'
+                    ? 'bg-brand-tint-10 text-brand-darker'
                     : 'text-gray-700 hover:bg-gray-50'
             }`}
             {...props}
@@ -251,10 +251,19 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </Dropdown.Content>
                                 </Dropdown>
 
-                                {/* Sandbox */}
-                                <NavLink href={route('sandbox.index')} active={route().current('sandbox.*')} data-tour="sandbox">
-                                    Sandbox
-                                </NavLink>
+                                {/*
+                                    Admin-only, matching the route. The link was
+                                    shown to everyone while routes/web.php put
+                                    the whole sandbox group behind ['auth',
+                                    'admin'], so a customer clicking it got a
+                                    403 — and the onboarding tour walked them
+                                    straight to it.
+                                */}
+                                {user.isAdmin && (
+                                    <NavLink href={route('sandbox.index')} active={route().current('sandbox.*')} data-tour="sandbox">
+                                        Sandbox
+                                    </NavLink>
+                                )}
 
                                 {/* Strategy Dropdown */}
                                 <Dropdown>
@@ -340,7 +349,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                                     onClick={() => handleSwitchCustomer(customer)}
                                                     aria-current={activeCustomer?.id === customer.id ? 'true' : undefined}
                                                     className={`flex w-full items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary ${
-                                                        activeCustomer?.id === customer.id ? 'text-brand-darker bg-brand-primary/10' : 'text-gray-700'
+                                                        activeCustomer?.id === customer.id ? 'text-brand-darker bg-brand-tint-10' : 'text-gray-700'
                                                     }`}
                                                 >
                                                     <span className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 text-xs font-bold text-gray-500" aria-hidden="true">
@@ -502,7 +511,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     {/* text-brand-primary on a 20% tint of itself is
                                         2.57:1; brand-darker is 5.92:1 on the orange skin
                                         and 11.9:1 on the navy one. */}
-                                    <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-primary/20 text-xs font-bold text-brand-darker" aria-hidden="true">
+                                    <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-tint-20 text-xs font-bold text-brand-darker" aria-hidden="true">
                                         {(activeCustomer.name || '?')[0].toUpperCase()}
                                     </span>
                                     <span className="text-sm font-medium text-gray-700 truncate">{activeCustomer.name}</span>
@@ -641,6 +650,9 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </MobileNavLink>
                                 </MobileNavSection>
 
+                                {/* Admin-only here too — the route is gated, so
+                                    the whole section is empty for a customer. */}
+                                {user.isAdmin && (
                                 <MobileNavSection title="Tools">
                                     <MobileNavLink
                                         href={route('sandbox.index')}
@@ -650,6 +662,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         Sandbox
                                     </MobileNavLink>
                                 </MobileNavSection>
+                                )}
 
                                 <MobileNavSection title="Strategy">
                                     <MobileNavLink
@@ -741,7 +754,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                                 aria-current={activeCustomer?.id === customer.id ? 'true' : undefined}
                                                 className={`flex items-center gap-3 mx-3 px-3 py-2.5 w-[calc(100%-1.5rem)] text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary ${
                                                     activeCustomer?.id === customer.id
-                                                        ? 'bg-brand-primary/10 text-brand-darker'
+                                                        ? 'bg-brand-tint-10 text-brand-darker'
                                                         : 'text-gray-700 hover:bg-gray-50'
                                                 }`}
                                             >
