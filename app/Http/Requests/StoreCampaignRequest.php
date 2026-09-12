@@ -23,6 +23,40 @@ class StoreCampaignRequest extends FormRequest
     }
 
     /**
+     * Field names the customer will recognise from the form.
+     *
+     * Without this, a missing Brand Voice reads as "voice: The voice field is
+     * required." on the review step — a column name, not a label, and nine
+     * steps away from the field it refers to. Every name here matches the
+     * label rendered in the wizard.
+     *
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return [
+            'name' => 'Campaign Name',
+            'reason' => 'why you are running this campaign',
+            'goals' => 'your primary goals',
+            'target_market' => 'Target Audience',
+            'voice' => 'Brand Voice / Tone',
+            'total_budget' => 'Total Budget',
+            'daily_budget' => 'Daily Budget',
+            'start_date' => 'Start Date',
+            'end_date' => 'End Date',
+            'primary_kpi' => 'Primary KPI / Target',
+            'product_focus' => 'Product/Service Focus',
+            'landing_page_url' => 'Campaign Destination',
+            'exclusions' => 'Exclusions',
+            'selected_pages' => 'Landing Pages',
+            'platforms' => 'Platforms',
+            'images' => 'Images',
+            'videos' => 'Videos',
+            'keywords' => 'Keywords',
+        ];
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      * This is the direct equivalent of Go's struct tags for validation.
      *

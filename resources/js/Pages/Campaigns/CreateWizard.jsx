@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { money } from '@/utils/format';
+import { money, date } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
@@ -716,7 +716,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                     <div className="space-y-6 max-w-2xl mx-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <InputLabel htmlFor="total_budget" value="Total Budget ($)" />
+                                <InputLabel htmlFor="total_budget" value={`Total Budget (${currency})`} />
                                 <HelpText text="Total amount to spend over the campaign period" />
                                 <TextInput 
                                     id="total_budget" 
@@ -777,8 +777,11 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         {data.total_budget && data.start_date && data.end_date && (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                                 <p className="text-sm text-green-700">
-                                    <strong>Daily Budget:</strong> ~$
-                                    {(data.total_budget / Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24)))).toFixed(2)}
+                                    <strong>Daily Budget:</strong> ~
+                                    {money(
+                                        data.total_budget / Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24))),
+                                        currency
+                                    )}
                                     /day over {Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24))} days
                                 </p>
                             </div>
@@ -1036,7 +1039,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             <ReviewSection title="Budget & Schedule" step={4} onEdit={() => goToStep(4)}>
                                 <ReviewItem label="Total Budget" value={money(data.total_budget || 0, currency)} />
                                 <ReviewItem label="Primary KPI" value={data.primary_kpi} />
-                                <ReviewItem label="Duration" value={`${data.start_date} to ${data.end_date}`} />
+                                <ReviewItem label="Duration" value={`${date(data.start_date)} to ${date(data.end_date)}`} />
                             </ReviewSection>
                             
                             <ReviewSection title="Product Focus" step={5} onEdit={() => goToStep(5)}>
@@ -1077,9 +1080,18 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         {Object.keys(errors).length > 0 && (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                                 <h4 className="text-sm font-semibold text-red-800 mb-2">Please fix the following errors:</h4>
+                                {/*
+                                    The message already names the field —
+                                    StoreCampaignRequest::attributes() maps each
+                                    key to the label shown on the form — so
+                                    prefixing the raw column name produced
+                                    "voice: The Brand Voice / Tone field is
+                                    required." Say it once, in the customer's
+                                    words.
+                                */}
                                 <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
                                     {Object.entries(errors).map(([field, message]) => (
-                                        <li key={field}><strong>{field.replace(/_/g, ' ')}:</strong> {message}</li>
+                                        <li key={field}>{message}</li>
                                     ))}
                                 </ul>
                             </div>
