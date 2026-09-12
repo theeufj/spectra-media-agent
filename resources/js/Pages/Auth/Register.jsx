@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import PlatformIcon from '@/Components/PlatformIcon';
-import CloudflareTurnstile from '@/Components/CloudflareTurnstile';
+import TurnstileField from '@/Components/TurnstileField';
+import { Field, OrDivider, OAUTH_BUTTON, SUBMIT } from '@/Components/Forms';
+import { brandTint } from '@/Components/Marketing/Hero';
+import { SparklesIcon } from '@heroicons/react/24/outline';
 import { trackConversion } from '@/utils/conversions';
 
 function getDemoUrl() {
@@ -13,10 +16,19 @@ function getDemoUrl() {
     }
 }
 
+/*
+ * The signup form. Like Login, it had no heading — it opened on "Create your
+ * account to get started." set as body text — and its submit button was white
+ * on brand-primary at 3.33:1, below the 4.5:1 a 14px label needs. Both come
+ * from Forms.jsx now.
+ *
+ * The demo banner was violet, which is not a brand token and so ignored the
+ * tenant skin entirely: a realpropertyads.com signup showed a violet panel
+ * under a navy header.
+ */
 export default function Register({ enabledPlatforms = [] }) {
-    const { turnstileSiteKey } = usePage().props;
     const demoUrl = getDemoUrl();
-    const demoDomain = demoUrl ? (new URL(demoUrl).hostname.replace(/^www\./, '')) : '';
+    const demoDomain = demoUrl ? new URL(demoUrl).hostname.replace(/^www\./, '') : '';
 
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
@@ -46,139 +58,110 @@ export default function Register({ enabledPlatforms = [] }) {
         <GuestLayout>
             <Head title="Register" />
 
+            <div className="mb-6 text-center">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">Create your account</h1>
+                <p className="mt-1.5 text-sm text-gray-600">
+                    Free to explore. No credit card until you go live.
+                </p>
+            </div>
+
             {demoDomain && (
-                <div className="mb-4 flex items-center gap-2 rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-800">
-                    <svg className="h-4 w-4 shrink-0 text-violet-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                    </svg>
-                    <span>We'll analyse <strong>{demoDomain}</strong> and set up your brand guidelines automatically.</span>
+                <div
+                    className="mb-4 flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm text-gray-700"
+                    style={{ backgroundColor: brandTint(8), borderColor: brandTint(30) }}
+                >
+                    <SparklesIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-darker" aria-hidden="true" />
+                    <span>
+                        We'll analyse <strong className="font-semibold">{demoDomain}</strong> and set up your
+                        brand guidelines automatically.
+                    </span>
                 </div>
             )}
 
-            <div className="w-full mt-2 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
-                <div className="mb-4 text-sm text-gray-600 text-center">
-                    Create your account to get started.
-                </div>
-
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <form onSubmit={submit} className="space-y-4">
                     <input type="hidden" name="demo_url" value={data.demo_url} />
 
-                    <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                            Name
-                        </label>
-                        <input
-                            id="name"
-                            type="text"
-                            name="name"
-                            value={data.name}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="name"
-                            autoFocus
-                            onChange={(e) => setData('name', e.target.value)}
-                            required
-                        />
-                        {errors.name && (
-                            <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="name"
+                        label="Name"
+                        type="text"
+                        value={data.name}
+                        autoComplete="name"
+                        autoFocus
+                        required
+                        error={errors.name}
+                        onChange={(e) => setData('name', e.target.value)}
+                    />
 
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                            Email
-                        </label>
-                        <input
-                            id="email"
-                            type="email"
-                            name="email"
-                            value={data.email}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="username"
-                            onChange={(e) => setData('email', e.target.value)}
-                            required
-                        />
-                        {errors.email && (
-                            <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="email"
+                        label="Email"
+                        type="email"
+                        value={data.email}
+                        autoComplete="username"
+                        required
+                        error={errors.email}
+                        onChange={(e) => setData('email', e.target.value)}
+                    />
 
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                            Password
-                        </label>
-                        <input
-                            id="password"
-                            type="password"
-                            name="password"
-                            value={data.password}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="new-password"
-                            onChange={(e) => setData('password', e.target.value)}
-                            required
-                        />
-                        {errors.password && (
-                            <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="password"
+                        label="Password"
+                        type="password"
+                        value={data.password}
+                        autoComplete="new-password"
+                        required
+                        hint="At least 8 characters."
+                        error={errors.password}
+                        onChange={(e) => setData('password', e.target.value)}
+                    />
 
-                    <div>
-                        <label htmlFor="password_confirmation" className="block text-sm font-medium text-gray-700">
-                            Confirm Password
-                        </label>
-                        <input
-                            id="password_confirmation"
-                            type="password"
-                            name="password_confirmation"
-                            value={data.password_confirmation}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="new-password"
-                            onChange={(e) => setData('password_confirmation', e.target.value)}
-                            required
-                        />
-                        {errors.password_confirmation && (
-                            <p className="mt-1 text-sm text-red-600">{errors.password_confirmation}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="password_confirmation"
+                        label="Confirm password"
+                        type="password"
+                        value={data.password_confirmation}
+                        autoComplete="new-password"
+                        required
+                        error={errors.password_confirmation}
+                        onChange={(e) => setData('password_confirmation', e.target.value)}
+                    />
 
-                    {turnstileSiteKey && (
-                        <div className="flex justify-center">
-                            <CloudflareTurnstile
-                                siteKey={turnstileSiteKey}
-                                onVerify={(token) => setData('cf_turnstile_response', token)}
-                                onExpire={() => setData('cf_turnstile_response', '')}
-                            />
-                        </div>
-                    )}
-                    {errors.cf_turnstile_response && (
-                        <p className="text-sm text-red-600 text-center">{errors.cf_turnstile_response}</p>
-                    )}
+                    <TurnstileField
+                        onToken={(token) => setData('cf_turnstile_response', token)}
+                        error={errors.cf_turnstile_response}
+                    />
 
-                    <button
-                        type="submit"
-                        disabled={processing}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-primary hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary disabled:opacity-50"
-                    >
-                        {processing ? 'Creating account...' : 'Register'}
+                    <button type="submit" disabled={processing} className={SUBMIT}>
+                        {processing ? 'Creating account…' : 'Create account'}
                     </button>
+
+                    <p className="text-center text-xs leading-relaxed text-gray-500">
+                        By creating an account you agree to our{' '}
+                        <Link href={route('terms')} className="underline hover:text-gray-700">
+                            Terms
+                        </Link>{' '}
+                        and{' '}
+                        <Link href={route('privacy')} className="underline hover:text-gray-700">
+                            Privacy Policy
+                        </Link>
+                        .
+                    </p>
                 </form>
 
                 {enabledPlatforms.length > 0 && (
                     <>
-                        <div className="relative my-6">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300" />
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                            </div>
-                        </div>
-
+                        <OrDivider />
                         <div className="space-y-3">
                             {enabledPlatforms.map((platform) => (
                                 <a
                                     key={platform.slug}
-                                    href={route(`${platform.slug}.redirect`) + (demoUrl ? `?demo_url=${encodeURIComponent(demoUrl)}` : '')}
-                                    className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    href={
+                                        route(`${platform.slug}.redirect`) +
+                                        (demoUrl ? `?demo_url=${encodeURIComponent(demoUrl)}` : '')
+                                    }
+                                    className={OAUTH_BUTTON}
                                 >
                                     <PlatformIcon slug={platform.slug} />
                                     Sign up with {platform.name}
@@ -187,16 +170,14 @@ export default function Register({ enabledPlatforms = [] }) {
                         </div>
                     </>
                 )}
-
-                <div className="mt-4 text-center">
-                    <Link
-                        href={route('login')}
-                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary"
-                    >
-                        Already registered?
-                    </Link>
-                </div>
             </div>
+
+            <p className="mt-6 text-center text-sm text-gray-600">
+                Already have an account?{' '}
+                <Link href={route('login')} className="font-semibold text-brand-darker hover:underline">
+                    Sign in
+                </Link>
+            </p>
         </GuestLayout>
     );
 }

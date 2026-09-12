@@ -108,7 +108,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
 
     const submit = (e) => {
         e.preventDefault();
-        put(route('customers.update', initialCustomer.id));
+        put(route('customers.update', initialCustomer.uuid));
     };
 
     const handleCancel = () => {
@@ -127,7 +127,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
             <Head title="Edit Customer Profile" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     {flash?.success && (
                         <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
                             <p className="text-sm text-green-800">{flash.success}</p>

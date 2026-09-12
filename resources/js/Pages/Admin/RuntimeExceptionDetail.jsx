@@ -29,9 +29,9 @@ export default function RuntimeExceptionDetail({ auth, exception: ex }) {
     return (
         <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title={`Exception: ${shortType(ex.type)}`} />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-6">
+                <div className="min-w-0 flex-1 p-6">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>

@@ -25,7 +25,7 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
         e.preventDefault();
         setProcessing(true);
         setErrorMessage(null);
-        router.post(route('customers.facebook.assign', customer.id), { ad_account_id: adAccountId.replace('act_', '') }, {
+        router.post(route('customers.facebook.assign', customer.uuid), { ad_account_id: adAccountId.replace('act_', '') }, {
             onFinish: () => setProcessing(false),
         });
     };
@@ -33,7 +33,7 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
     const handleVerify = () => {
         setProcessing(true);
         setErrorMessage(null);
-        router.post(route('customers.facebook.verify', customer.id), {}, {
+        router.post(route('customers.facebook.verify', customer.uuid), {}, {
             onFinish: () => setProcessing(false),
         });
     };
@@ -52,7 +52,7 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
             <Head title="Facebook Ads Setup" />
 
             <div className="py-12">
-                <div className="max-w-3xl mx-auto sm: space-y-6">
+                <div className="max-w-3xl mx-auto space-y-6">
 
                     {successMessage && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">

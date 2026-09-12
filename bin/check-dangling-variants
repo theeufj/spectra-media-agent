@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# A Tailwind variant prefix with no utility after it — `sm:`, `hover:`,
+# `disabled:` — is not a syntax error. Tailwind's scanner sees a token that
+# matches nothing, emits no CSS, and says nothing about it. The class sits in
+# the markup looking load-bearing and does absolutely nothing.
+#
+# There were 51 of them across 47 files when this check was written, almost all
+# a trailing `sm:` where `sm:px-6 lg:px-8` had been truncated — so page after
+# page silently lost its wider padding above the `sm` breakpoint. They were only
+# noticed by reading a class attribute character by character.
+#
+# The same failure mode is why bin/check-fatal-classes exists: things that are
+# wrong but never raise.
+#
+# POSIX ERE, not -P. BSD grep (which is what macOS ships, and therefore what
+# this runs against locally) has no --perl-regexp, and the first version of this
+# script used it: grep exited 2 with "invalid option", the `if` read that
+# non-zero as "found nothing", and the check reported success on a file planted
+# to fail it. A guard that cannot fail is worse than no guard, so the tool error
+# is now separated from the no-match case explicitly.
+set -uo pipefail
+
+cd "$(dirname "$0")/.."
+
+# A variant prefix immediately before the closing quote of a className, or
+# before a space that ends it. Deliberately narrow: it matches only the dead
+# form, never a completed `sm:px-6`.
+VARIANTS='sm|md|lg|xl|2xl|hover|focus|focus-visible|active|disabled|group-hover|group-focus|dark|first|last|odd|even|motion-safe|motion-reduce|print|rtl|ltr'
+
+hits=$(grep -rnoE --include='*.jsx' --include='*.tsx' \
+    "className=\"[^\"]*(${VARIANTS}):(\"| )" resources/js)
+status=$?
+
+if [ "$status" -gt 1 ]; then
+    echo "check-dangling-variants: grep failed (exit ${status}) — the check did not run." >&2
+    exit "$status"
+fi
+
+if [ -n "$hits" ]; then
+    echo "check-dangling-variants: variant prefixes with no utility after them —"
+    echo "$hits" | sed 's/^/  /'
+    echo
+    echo "Each emits no CSS at all. Complete them or delete them."
+    exit 1
+fi
+
+echo "check-dangling-variants: no dangling Tailwind variant prefixes"

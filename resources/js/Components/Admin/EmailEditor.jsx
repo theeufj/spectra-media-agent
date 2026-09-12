@@ -38,7 +38,7 @@ const Button = ({ active, disabled, title, onClick, children }) => (
         disabled={disabled}
         onClick={onClick}
         className={`rounded px-2 py-1 text-sm leading-none transition disabled:opacity-40 ${
-            active ? 'bg-brand-primary/20 text-brand-darker' : 'text-gray-600 hover:bg-gray-100'
+            active ? 'bg-brand-tint-20 text-brand-darker' : 'text-gray-600 hover:bg-gray-100'
         }`}
     >
         {children}

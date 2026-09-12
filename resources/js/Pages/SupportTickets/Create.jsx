@@ -26,7 +26,7 @@ export default function Create() {
             <Head title="New Support Ticket" />
 
             <div className="py-12">
-                <div className="max-w-2xl mx-auto sm:">
+                <div className="max-w-2xl mx-auto">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
                         <div className="px-6 py-4 bg-gradient-to-r from-brand-dark to-purple-600">
                             <h3 className="text-lg font-semibold text-white">How can we help?</h3>

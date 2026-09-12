@@ -1,4 +1,5 @@
 import React from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function CollateralGenerationModal({ show, onClose }) {
     if (!show) return null;
@@ -17,7 +18,10 @@ export default function CollateralGenerationModal({ show, onClose }) {
                 <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                         <div className="sm:flex sm:items-start">
-                            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-purple-100 to-brand-primary/20 sm:mx-0 sm:h-10 sm:w-10">
+                            <div
+                                className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full sm:mx-0 sm:h-10 sm:w-10"
+                                style={{ backgroundImage: `linear-gradient(to bottom right, #f3e8ff, ${brandTint(20)})` }}
+                            >
                                 <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
@@ -53,7 +57,7 @@ export default function CollateralGenerationModal({ show, onClose }) {
                                             <span>Optimizing for each platform</span>
                                         </li>
                                     </ul>
-                                    <div className="bg-brand-primary/10 rounded-lg p-4 border border-brand-primary/30">
+                                    <div className="rounded-lg border p-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
                                         <div className="flex">
                                             <svg className="h-5 w-5 text-brand-dark mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />

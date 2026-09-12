@@ -90,7 +90,7 @@ export default function Audit({ audit }) {
         <AuthenticatedLayout>
             <Head title={`SEO Audit - ${audit.url}`} />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>

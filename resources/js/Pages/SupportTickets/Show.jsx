@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 const priorityColors = {
     low: 'bg-gray-100 text-gray-700',
@@ -42,7 +43,7 @@ export default function Show({ ticket }) {
             <Head title={`Ticket #${ticket.id}`} />
 
             <div className="py-12">
-                <div className="max-w-3xl mx-auto sm:">
+                <div className="max-w-3xl mx-auto">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-200">
@@ -79,12 +80,12 @@ export default function Show({ ticket }) {
 
                         {/* Admin Response */}
                         {ticket.admin_response && (
-                            <div className="px-6 py-5 border-t border-gray-200 bg-brand-primary/10">
+                            <div className="px-6 py-5 border-t border-gray-200" style={{ backgroundColor: brandTint(10) }}>
                                 <h4 className="text-sm font-medium text-brand-darker mb-2">
                                     Response from Support
                                     {ticket.assignee && <span className="font-normal text-brand-dark"> — {ticket.assignee.name}</span>}
                                 </h4>
-                                <div className="bg-white rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap border border-brand-primary/20">
+                                <div className="bg-white rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap border" style={{ borderColor: brandTint(20) }}>
                                     {ticket.admin_response}
                                 </div>
                                 {ticket.resolved_at && (

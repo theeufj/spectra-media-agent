@@ -35,9 +35,9 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
     return (
         <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="Feature Flags" />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-8 px-6 lg:px-10">
+                <div className="min-w-0 flex-1 py-8 px-6 lg:px-10">
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
                         <p className="text-sm text-gray-500 mt-1">

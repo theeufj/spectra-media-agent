@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { brandTint } from '@/Components/Marketing/Hero';
+
+const SEVERITY_ROW_BG = {
+    'deployment.failed': 'bg-red-50 border-l-4 border-l-red-500',
+    'health.critical': 'bg-red-50 border-l-4 border-l-red-500',
+    'health.warning': 'bg-yellow-50 border-l-4 border-l-yellow-500',
+    'billing.warning': 'bg-yellow-50 border-l-4 border-l-yellow-500',
+    'deployment.completed': 'bg-green-50 border-l-4 border-l-green-500',
+    'billing.success': 'bg-green-50 border-l-4 border-l-green-500',
+};
 
 export default function NotificationsIndex({ notifications, dynamicNotifications, unreadCount }) {
     const [localNotifications, setLocalNotifications] = useState([
@@ -48,17 +58,21 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
 
     const getNotificationBgColor = (notification) => {
         if (notification.read_at) return 'bg-white';
-        
-        const colors = {
-            'deployment.failed': 'bg-red-50 border-l-4 border-l-red-500',
-            'health.critical': 'bg-red-50 border-l-4 border-l-red-500',
-            'health.warning': 'bg-yellow-50 border-l-4 border-l-yellow-500',
-            'billing.warning': 'bg-yellow-50 border-l-4 border-l-yellow-500',
-            'deployment.completed': 'bg-green-50 border-l-4 border-l-green-500',
-            'billing.success': 'bg-green-50 border-l-4 border-l-green-500',
-        };
-        
-        return colors[notification.type] || 'bg-brand-primary/10 border-l-4 border-l-brand-primary';
+
+        return SEVERITY_ROW_BG[notification.type] || 'border-l-4 border-l-brand-primary';
+    };
+
+    /*
+     * The brand tint on an unread row cannot be a class: brand.* resolves to a
+     * bare var(), and Tailwind 3 needs parseable channels before it will emit an
+     * opacity modifier, so `bg-brand-primary/10` compiled to nothing and these
+     * rows have always rendered plain white. The severity colours above are real
+     * palette entries and stay as classes.
+     */
+    const getNotificationBgStyle = (notification) => {
+        if (notification.read_at || SEVERITY_ROW_BG[notification.type]) return undefined;
+
+        return { backgroundColor: brandTint(10) };
     };
 
     const markAsRead = async (notificationId) => {
@@ -169,7 +183,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
             <Head title="Notifications" />
 
             <div className="py-6">
-                <div className="mx-auto max-w-4xl sm:">
+                <div className="mx-auto max-w-4xl">
                     {localNotifications.length === 0 ? (
                         <div className="bg-white rounded-lg shadow-sm p-6 sm:p-12 text-center">
                             <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,6 +205,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                             <div
                                                 key={notification.id}
                                                 className={`p-4 hover:bg-gray-50 transition-colors ${getNotificationBgColor(notification)}`}
+                                                style={getNotificationBgStyle(notification)}
                                             >
                                                 <div className="flex items-start space-x-4">
                                                     <span className="text-2xl flex-shrink-0">

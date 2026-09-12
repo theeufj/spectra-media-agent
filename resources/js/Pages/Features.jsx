@@ -1,187 +1,245 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
+import Hero, { brandTint, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE } from '@/Components/Marketing/Hero';
+import FeatureGrid from '@/Components/Marketing/FeatureGrid';
+import CtaBand from '@/Components/Marketing/CtaBand';
+import {
+    ArrowsRightLeftIcon,
+    BanknotesIcon,
+    BeakerIcon,
+    ChartBarIcon,
+    CheckBadgeIcon,
+    ChartPieIcon,
+    MagnifyingGlassIcon,
+    PaintBrushIcon,
+    RectangleGroupIcon,
+    SparklesIcon,
+    SwatchIcon,
+    UserGroupIcon,
+    WrenchScrewdriverIcon,
+} from '@heroicons/react/24/outline';
+
+/*
+ * No <Head> here. Title, description, Open Graph pair and JSON-LD are built by
+ * LandingController and printed server-side by app.blade.php. See
+ * App\Http\Controllers\Concerns\RendersPageMeta.
+ *
+ * This page was the last one still hand-rolling its own sections, and it had
+ * collected every defect the shared Marketing components were built to end:
+ *
+ *   - `from-brand-primary/10`, `text-brand-primary/50`, `bg-brand-primary/10`.
+ *     tailwind.config maps brand.* to a bare CSS variable, which Tailwind 3
+ *     cannot split into channels, so an opacity modifier on one compiles to no
+ *     CSS at all. Verified against the shipped bundle: none of the three exist.
+ *     The hero gradient rendered as plain white and the agents eyebrow fell back
+ *     to the page's gray-800 — 1.4:1 on the brand-darker band behind it.
+ *   - `bg-${agent.color}-500/30` and `text-${agent.color}-300`, built from a
+ *     variable. Tailwind scans source for literal class names, so none of those
+ *     reached the bundle either: the icon chips had no fill and every
+ *     "Runs: Weekly" line was gray-800 on orange.
+ *   - 🔍 📊 🩹 💰 🎨 👥 as icons, which render as whatever the visitor's OS ships
+ *     and are read out literally by a screen reader.
+ *
+ * Hero, FeatureGrid and CtaBand already solve all of it, and their colour pairs
+ * are computed against both tenant palettes.
+ */
+
+// Same six agents as the landing page, and deliberately the same icons — a
+// visitor arriving from there should recognise them.
+const agents = [
+    {
+        icon: MagnifyingGlassIcon,
+        title: 'Competitor Discovery',
+        body: 'Looks at what you do and finds the businesses competing for the same customers, including the ones you did not know about.',
+        meta: 'Runs weekly',
+    },
+    {
+        icon: ChartBarIcon,
+        title: 'Competitor Analysis',
+        body: 'Reads your competitors’ websites and works out which angles you can use against them.',
+        meta: 'Runs weekly',
+    },
+    {
+        icon: WrenchScrewdriverIcon,
+        title: 'Ad Health & Fixing',
+        body: 'Scans for rejected ads and rewrites them so they pass review. Also pauses the ads that are not pulling their weight.',
+        meta: 'Runs every 4 hours',
+    },
+    {
+        icon: BanknotesIcon,
+        title: 'Smart Budget Shifting',
+        body: 'Moves budget to the hours your customers are actually online — back at quiet times, harder when it counts.',
+        meta: 'Runs hourly',
+    },
+    {
+        icon: PaintBrushIcon,
+        title: 'Ad Creative Testing',
+        body: 'Splits your headlines into A/B tests, tracks which wins at 95% confidence, and promotes it.',
+        meta: 'Runs daily',
+    },
+    {
+        icon: UserGroupIcon,
+        title: 'Audience Growth',
+        body: 'Syncs your customer list and builds lookalike audiences, so you keep reaching people like your best customers.',
+        meta: 'Runs weekly',
+    },
+];
+
+const capabilities = [
+    {
+        icon: MagnifyingGlassIcon,
+        title: 'Know your competition',
+        body: 'We find who you are up against, read their sites, and work out how you stand out. Updated weekly without you asking.',
+    },
+    {
+        icon: WrenchScrewdriverIcon,
+        title: 'Ads that fix themselves',
+        body: 'Rejected by Google? We rewrite and resubmit automatically. Ads that stop performing get paused before they burn budget.',
+    },
+    {
+        icon: BanknotesIcon,
+        title: 'Smart budget shifting',
+        body: 'Budget moves to the times people are most likely to buy. Less wasted overnight, more firepower at peak.',
+    },
+    {
+        icon: BeakerIcon,
+        title: 'Always testing your ads',
+        body: 'Headlines are split into A and B groups daily. At 95% confidence the winner is promoted automatically.',
+    },
+    {
+        icon: UserGroupIcon,
+        title: 'Reach more of the right people',
+        body: 'Your customer list syncs weekly and lookalike audiences build themselves. Nothing to upload.',
+    },
+    {
+        icon: SwatchIcon,
+        title: 'Your brand, automatically',
+        body: 'We read your website for colours, fonts and tone. Every ad looks like your own design team made it.',
+    },
+    {
+        icon: RectangleGroupIcon,
+        title: 'Every Google ad format',
+        body: 'Search, Display, Video and Performance Max, all managed from one place with the AI writing the assets.',
+    },
+    {
+        icon: ChartPieIcon,
+        title: 'Conversion tracking, set up for you',
+        body: 'We wire up tracking so you always know what the ads deliver — sales, leads, calls, whatever matters.',
+    },
+    {
+        icon: SparklesIcon,
+        title: 'Try it free first',
+        body: 'Explore everything with no commitment. Real ad copy, real images, real competitor insight. Upgrade when you are ready.',
+    },
+];
+
+const LIVE_PLATFORMS = ['Google Ads', 'Meta Ads', 'Microsoft Ads', 'LinkedIn Ads'];
+const PLANNED_PLATFORMS = ['Reddit Ads', 'TikTok Ads'];
+
+/**
+ * One platform, live or planned.
+ *
+ * The old markup gave both states the same green tick and told them apart with
+ * `grayscale`, which is a filter — the tick stayed a tick, so "Coming Soon"
+ * read as "done" to anyone skimming. Live gets the tick; planned gets a
+ * different glyph and says so in words.
+ */
+function Platform({ name, live }) {
+    const Icon = live ? CheckBadgeIcon : ArrowsRightLeftIcon;
+
+    return (
+        <li className="flex flex-col items-center text-center">
+            <span
+                className={`flex h-14 w-14 items-center justify-center rounded-full sm:h-20 sm:w-20 ${
+                    live ? 'text-brand-darker' : 'bg-gray-100 text-gray-500'
+                }`}
+                style={live ? { backgroundColor: brandTint(12) } : undefined}
+            >
+                <Icon className="h-7 w-7 sm:h-9 sm:w-9" aria-hidden="true" />
+            </span>
+            <span className="mt-3 text-sm font-semibold text-gray-900">{name}</span>
+            <span className={`text-xs font-medium ${live ? 'text-brand-darker' : 'text-gray-500'}`}>
+                {live ? 'Available now' : 'Coming soon'}
+            </span>
+        </li>
+    );
+}
 
 export default function Features({ auth }) {
     return (
         <>
-            <Head>
-                <title>Features - AI Marketing Agents & Automation | sitetospend</title>
-                <meta name="description" content="Discover sitetospend's 6 autonomous AI agents: competitor discovery, self-optimising campaigns, budget intelligence, creative A/B testing, audience management, and Vision AI brand extraction." />
-                <meta property="og:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
-                <meta property="og:description" content="Competitor discovery, self-optimising campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction—all on autopilot." />
-                <meta name="twitter:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
-                <meta name="twitter:description" content="Competitor discovery, self-optimising campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction." />
-                <script type="application/ld+json">{JSON.stringify({
-                    "@context": "https://schema.org",
-                    "@type": "ItemList",
-                    "name": "sitetospend AI Marketing Features",
-                    "description": "6 autonomous AI agents and a full suite of campaign management tools for Google Ads, Facebook Ads, and Microsoft Ads.",
-                    "numberOfItems": 6,
-                    "itemListElement": [
-                        { "@type": "ListItem", "position": 1, "name": "Competitor Discovery Agent", "description": "Uses Google Search AI to find real competitors based on your website content." },
-                        { "@type": "ListItem", "position": 2, "name": "Competitor Analysis Agent", "description": "Scrapes competitor websites, extracts messaging and pricing, generates counter-strategies." },
-                        { "@type": "ListItem", "position": 3, "name": "Self-Optimising Agent", "description": "Automatically detects and fixes disapproved ads while maintaining brand voice." },
-                        { "@type": "ListItem", "position": 4, "name": "Budget Intelligence Agent", "description": "Dynamically adjusts budgets based on time-of-day and day-of-week performance." },
-                        { "@type": "ListItem", "position": 5, "name": "Creative Intelligence Agent", "description": "Tracks A/B test performance, identifies winners, and generates new ad variations." },
-                        { "@type": "ListItem", "position": 6, "name": "Audience Intelligence Agent", "description": "Manages Customer Match lists, segments audiences, and recommends lookalike expansion." }
-                    ]
-                })}</script>
-            </Head>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
+            <PageTitle />
+            <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
                 <main>
-                    {/* Hero */}
-                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">Platform Features</p>
-                            <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
-                                Everything You Need to Win at Paid Ads
-                            </h1>
-                            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-500">
-                                Six AI specialists, full Google Ads support, automatic brand matching, and conversion tracking—all running 24/7 so you don't have to think about it.
-                            </p>
-                        </div>
-                    </div>
+                    <Hero
+                        eyebrow="Platform features"
+                        headline="Everything you need to win at paid ads"
+                        sub="Six AI specialists, full Google Ads support, automatic brand matching and conversion tracking — all running around the clock."
+                    />
 
-                    {/* Platforms Section */}
-                    <div className="bg-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">One-Click Deployment to All Your Platforms</h2>
-                                <p className="mt-6 text-lg leading-8 text-gray-600">
-                                    We set up and manage your ad accounts under our platform. Our AI agents handle the rest. We're constantly adding new platforms to our roster.
-                                </p>
-                            </div>
-                            <div className="mt-16 flex justify-center">
-                                <div className="flex flex-wrap justify-center gap-8">
-                                    {['Google Ads', 'Meta Ads', 'Microsoft Ads', 'LinkedIn Ads'].map((platform) => (
-                                        <div key={platform} className="flex flex-col items-center text-center">
-                                            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
-                                                <svg className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            </div>
-                                            <p className="mt-4 font-semibold text-gray-900">{platform}</p>
-                                            <p className="text-sm text-green-600 font-medium">Available Now</p>
-                                        </div>
-                                    ))}
-                                    {['Reddit Ads', 'TikTok Ads'].map((platform) => (
-                                        <div key={platform} className="flex flex-col items-center text-center grayscale">
-                                            <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gray-100">
-                                                <span className="absolute -top-1 -right-1 inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming Soon</span>
-                                                <svg className="h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            </div>
-                                            <p className="mt-4 font-semibold text-gray-900">{platform}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* AI Agents Showcase */}
-                    <div className="bg-gradient-to-br from-brand-darker via-brand-darker to-purple-900 py-16 sm:py-24">
+                    {/* Platforms */}
+                    <section className="border-b border-gray-200 bg-white py-12 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl lg:text-center mb-12">
-                                <p className="text-brand-primary/50 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
-                                <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
-                                <p className="mt-4 text-lg text-white/80">
-                                    Six AI specialists, each focused on a different part of your advertising, running around the clock.
+                            <div className="mx-auto max-w-2xl text-center">
+                                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                                    One-click deployment to all your platforms
+                                </h2>
+                                <p className="mt-3 text-base leading-relaxed text-gray-600 sm:mt-4 sm:text-lg">
+                                    We set up and manage the ad accounts; the agents handle the rest.
                                 </p>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {[
-                                    { icon: '🔍', color: 'flame-orange', name: 'Competitor Discovery', desc: 'Looks at what you do and finds the businesses competing for the same customers—including ones you might not know about.', freq: 'Weekly' },
-                                    { icon: '📊', color: 'flame-orange', name: 'Competitor Analysis', desc: 'Reads your competitors\' websites and figures out what angles you can use to beat them. Updated every week.', freq: 'Weekly' },
-                                    { icon: '🩹', color: 'green', name: 'Ad Health & Fixing', desc: 'Scans for rejected ads every 4 hours and rewrites them so they pass Google\'s review automatically. Also pauses ads that aren\'t pulling their weight.', freq: 'Every 4 Hours' },
-                                    { icon: '💰', color: 'yellow', name: 'Smart Budget Shifting', desc: 'Moves your budget to the times your customers are actually online. Pulls back at quiet hours, pushes harder when it counts.', freq: 'Hourly' },
-                                    { icon: '🎨', color: 'pink', name: 'Ad Creative Testing', desc: 'Automatically splits your headlines into A/B tests, tracks which version gets more clicks at 95% confidence, and promotes the winner.', freq: 'Daily' },
-                                    { icon: '👥', color: 'purple', name: 'Audience Growth', desc: 'Every week we sync your customer list and automatically build lookalike audiences so you\'re always reaching new people who look like your best customers.', freq: 'Weekly' },
-                                ].map((agent) => (
-                                    <div key={agent.name} className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-${agent.color}-500/30`}>
-                                                <span className="text-2xl">{agent.icon}</span>
-                                            </div>
-                                            <h3 className="text-lg font-bold text-white">{agent.name}</h3>
-                                        </div>
-                                        <p className="text-white/80 text-sm leading-relaxed">{agent.desc}</p>
-                                        <div className="mt-4 pt-4 border-t border-white/10">
-                                            <span className={`text-xs text-${agent.color}-300`}>Runs: {agent.freq}</span>
-                                        </div>
-                                    </div>
+                            {/*
+                                A list, because that is what it is — six items a
+                                screen reader should announce as six, not as six
+                                loose divs. Three across on a phone rather than
+                                one, which is what a 96px circle per row cost.
+                            */}
+                            <ul className="mx-auto mt-8 grid max-w-3xl grid-cols-3 gap-x-4 gap-y-8 sm:mt-16 sm:grid-cols-6 sm:gap-x-8">
+                                {LIVE_PLATFORMS.map((name) => (
+                                    <Platform key={name} name={name} live />
                                 ))}
-                            </div>
-
-                            <div className="mt-12 text-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-darker bg-white hover:bg-brand-primary/10 shadow-lg transition-colors">
-                                    Put These Agents to Work →
-                                </a>
-                            </div>
+                                {PLANNED_PLATFORMS.map((name) => (
+                                    <Platform key={name} name={name} live={false} />
+                                ))}
+                            </ul>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Features Grid */}
-                    <div className="bg-gray-50 py-12 sm:py-16 md:py-20 lg:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-base font-semibold leading-7 text-brand-dark">Built for real businesses</h2>
-                                <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
-                                    Everything you need to launch great ads and keep them running
-                                </p>
-                                <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
-                                    We handle everything from writing your ads to tracking what's working—so you can focus on actually running your business.
-                                </p>
-                            </div>
-                            <div className="mx-auto mt-12 sm:mt-16 md:mt-20 lg:mt-24 max-w-2xl sm:max-w-none lg:max-w-5xl">
-                                <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
-                                    {[
-                                        { title: 'Know Your Competition', desc: 'We find out who you\'re up against, check out their websites, and work out how you can stand out. Updated every week without you asking.', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-                                        { title: 'Ads That Fix Themselves', desc: "Ad rejected by Google? We rewrite it and resubmit automatically. Ads that stop performing get paused before they burn through your budget.", icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-                                        { title: 'Smart Budget Shifting', desc: 'Your budget moves automatically to the times people are most likely to buy. Less wasted spend overnight, more firepower during peak hours.', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-                                        { title: 'Always Testing Your Ads', desc: "Every day we automatically split your ad headlines into A and B groups and track which one gets more clicks. Once we hit 95% confidence, the winner gets promoted.", icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-                                        { title: 'Reach More of the Right People', desc: 'Every week we sync your customer list and build lookalike audiences automatically. No uploading required—just keep adding customers and we\'ll keep finding more like them.', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-                                        { title: 'Your Brand, Automatically', desc: 'We read your website and pick up your colours, fonts, and tone of voice. Every ad looks like it came from your own design team.', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
-                                        { title: 'Every Google Ad Format', desc: 'We run Search, Display, Video, and Performance Max campaigns—all managed from the same place, with AI writing the assets.', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
-                                        { title: 'Conversion Tracking, Set Up for You', desc: 'We set up your conversion tracking so you always know what your ads are actually delivering—sales, leads, calls, whatever matters to you.', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-                                        { title: 'Try It Free First', desc: "Sign up and explore everything with no commitment. Real ad copy, real images, real competitor insights. Upgrade when you're ready to go live.", icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6' },
-                                    ].map((feature) => (
-                                        <div key={feature.title} className="relative pl-16">
-                                            <dt className="text-base font-semibold leading-7 text-gray-900">
-                                                <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-dark">
-                                                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feature.icon} /></svg>
-                                                </div>
-                                                {feature.title}
-                                            </dt>
-                                            <dd className="mt-2 text-base leading-7 text-gray-600">{feature.desc}</dd>
-                                        </div>
-                                    ))}
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
+                    <FeatureGrid
+                        eyebrow="Always working for you"
+                        title="Your 24/7 marketing team"
+                        sub="Six AI specialists, each focused on a different part of your advertising."
+                        items={agents}
+                        footer={
+                            <CtaLink href="/register" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
+                                Put these agents to work
+                            </CtaLink>
+                        }
+                    />
 
-                    {/* CTA */}
-                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
-                        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
-                                See All Features in Action
-                            </h2>
-                            <p className="mt-6 text-xl text-white/80">
-                                Sign up free and explore everything sitetospend has to offer—no credit card required.
-                            </p>
-                            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
-                                    Get Started Free
-                                </a>
-                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
-                                    View Pricing
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
+                    <FeatureGrid
+                        eyebrow="Built for real businesses"
+                        title="Everything you need to launch great ads and keep them running"
+                        sub="From writing the ads to tracking what works, so you can get on with the business."
+                        items={capabilities}
+                        background="white"
+                        footer={
+                            <CtaLink href="/pricing" className={`${CTA_SECONDARY} ${CTA_SIZE}`}>
+                                See pricing
+                            </CtaLink>
+                        }
+                    />
+
+                    <CtaBand
+                        title="See all features in action"
+                        body="Sign up free and explore everything sitetospend does. No credit card required."
+                        primaryCta={{ href: '/register', label: 'Get started free' }}
+                        secondaryCta={{ href: '/pricing', label: 'View pricing' }}
+                    />
                 </main>
 
                 <Footer />

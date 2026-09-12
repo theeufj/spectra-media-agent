@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function SubscriptionRequiredModal({ show, onClose }) {
     if (!show) return null;
@@ -32,7 +33,10 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                                         You need an active subscription to deploy campaigns to advertising platforms.
                                     </p>
                                     
-                                    <div className="bg-gradient-to-r from-purple-50 to-brand-primary/10 rounded-lg p-4 border border-purple-200 mb-4">
+                                    <div
+                                        className="rounded-lg p-4 border border-purple-200 mb-4"
+                                        style={{ backgroundImage: `linear-gradient(to right, #faf5ff, ${brandTint(10)})` }}
+                                    >
                                         <h4 className="text-sm font-semibold text-gray-800 mb-2">With a subscription, you can:</h4>
                                         <ul className="text-sm text-gray-700 space-y-2">
                                             <li className="flex items-start">

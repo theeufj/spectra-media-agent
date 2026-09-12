@@ -10,20 +10,43 @@ use Illuminate\Support\Facades\Log;
 class CloudflareTurnstile implements ValidationRule
 {
     /**
+     * Whether bot protection is switched on.
+     *
+     * BOTH keys, deliberately. The widget used to render off the site key while
+     * the validation rules keyed off the secret, so setting one without the
+     * other produced a signup form that either challenged nobody or demanded a
+     * token no widget existed to mint — the second of which fails closed on an
+     * unauthenticated endpoint, with an error the visitor cannot resolve.
+     *
+     * This is also the off switch: clear either key and registration and login
+     * stop asking. There is no separate feature flag to keep in sync.
+     *
+     * Note for whoever is debugging a signup that will not go through on a new
+     * domain — a Turnstile widget only renders on hostnames listed in the
+     * widget's allowlist in the Cloudflare dashboard. A tenant skin served from
+     * a new domain therefore fails here until that domain (and its www. form)
+     * is added. `php artisan tenant:check` lists it as a launch step.
+     */
+    public static function enabled(): bool
+    {
+        return filled(config('services.cloudflare.turnstile_site_key'))
+            && filled(config('services.cloudflare.turnstile_secret_key'));
+    }
+
+    /**
      * Run the validation rule.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        // Skip validation if Turnstile is not configured
-        $secretKey = config('services.cloudflare.turnstile_secret_key');
-
-        if (empty($secretKey)) {
-            Log::warning('Cloudflare Turnstile secret key not configured, skipping validation');
+        if (! self::enabled()) {
+            Log::warning('Cloudflare Turnstile is not fully configured, skipping validation');
 
             return;
         }
+
+        $secretKey = config('services.cloudflare.turnstile_secret_key');
 
         if (empty($value)) {
             $fail('Please complete the security verification.');

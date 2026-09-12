@@ -50,38 +50,63 @@ function IconChip({ icon: Icon, size = 'sm' }) {
  * @param {string}    eyebrow
  * @param {ReactNode} title
  * @param {ReactNode} sub
- * @param {Array<{icon, title, body}>} items
+ * @param {Array<{icon, title, body, meta?}>} items
  * @param {2|3|4}     columns
  * @param {'white'|'gray'} background
  * @param {ReactNode} footer   Rendered centred under the grid — usually a link out.
  */
 export default function FeatureGrid({ eyebrow, title, sub, items, columns = 3, background = 'gray', footer }) {
     return (
-        <section className={`${SECTION_BACKGROUND[background]} py-16 sm:py-24`}>
+        /*
+         * Every vertical rhythm below is a mobile/desktop pair, because a phone
+         * only ever sees one card at a time and pays for the whitespace between
+         * them one screen at a time. Nine of these cards run down the landing
+         * page; the desktop spacing kept intact, they were 2,959px of it.
+         */
+        <section className={`${SECTION_BACKGROUND[background]} py-12 sm:py-24`}>
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 {(eyebrow || title || sub) && (
-                    <div className="mx-auto mb-14 max-w-2xl text-center">
+                    <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-14">
                         {eyebrow && (
                             <p className="text-sm font-semibold uppercase tracking-wider text-brand-darker">{eyebrow}</p>
                         )}
                         {title && (
                             <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">{title}</h2>
                         )}
-                        {sub && <p className="mt-4 text-lg leading-relaxed text-gray-600">{sub}</p>}
+                        {sub && <p className="mt-3 text-base leading-relaxed text-gray-600 sm:mt-4 sm:text-lg">{sub}</p>}
                     </div>
                 )}
 
-                <div className={`grid grid-cols-1 gap-8 ${GRID_COLUMNS[columns]}`}>
+                <div className={`grid grid-cols-1 gap-4 sm:gap-8 ${GRID_COLUMNS[columns]}`}>
                     {items.map((item) => (
-                        <div key={item.title} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                            <IconChip icon={item.icon} />
-                            <h3 className="mb-2 mt-4 text-lg font-semibold text-gray-900">{item.title}</h3>
-                            <p className="text-sm leading-relaxed text-gray-600">{item.body}</p>
+                        <div key={item.title} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+                            {/*
+                             * Icon beside the title rather than stacked above
+                             * it. The chip is 40px on its own row plus a 16px
+                             * gap; sharing the title's row it costs nothing and
+                             * the card reads as one heading instead of three
+                             * separate things.
+                             */}
+                            <div className="flex items-center gap-3">
+                                <IconChip icon={item.icon} />
+                                <h3 className="text-base font-semibold text-gray-900 sm:text-lg">{item.title}</h3>
+                            </div>
+                            <p className="mt-3 text-sm leading-relaxed text-gray-600">{item.body}</p>
+                            {/*
+                             * Optional footnote — the cadence a thing runs at,
+                             * on the features page. gray-500 is 4.83:1, not the
+                             * gray-400 a caption reaches for by reflex.
+                             */}
+                            {item.meta && (
+                                <p className="mt-4 border-t border-gray-100 pt-3 text-xs font-medium text-gray-500">
+                                    {item.meta}
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
 
-                {footer && <div className="mt-12 text-center">{footer}</div>}
+                {footer && <div className="mt-8 text-center sm:mt-12">{footer}</div>}
             </div>
         </section>
     );
@@ -97,19 +122,26 @@ export default function FeatureGrid({ eyebrow, title, sub, items, columns = 3, b
  */
 export function FeatureSteps({ items, cta, note }) {
     return (
-        <section className="bg-white py-16 sm:py-24">
-            <div className="mx-auto max-w-7xl space-y-24 px-4 sm:px-6 lg:px-8">
+        <section className="bg-white py-12 sm:py-24">
+            <div className="mx-auto max-w-7xl space-y-12 px-4 sm:px-6 sm:space-y-24 lg:px-8">
                 {items.map((item, index) => {
                     // Every second row swaps sides on wide screens only; on a phone
                     // the copy must stay above its panel or the reading order breaks.
                     const flipped = index % 2 === 1;
 
                     return (
-                        <div key={item.title} className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+                        // The HowTo schema's steps link to these anchors, so the
+                        // id is load-bearing, not decoration — a step url has to
+                        // resolve to the step it names.
+                        <div
+                            key={item.title}
+                            id={`step-${index + 1}`}
+                            className="grid grid-cols-1 items-center gap-8 scroll-mt-20 lg:grid-cols-2 lg:gap-12"
+                        >
                             <div className={flipped ? 'lg:order-2' : undefined}>
                                 <IconChip icon={item.icon} size="lg" />
-                                <h2 className="mb-4 mt-6 text-3xl font-bold text-gray-900">{item.title}</h2>
-                                <p className="mb-6 text-lg leading-relaxed text-gray-600">{item.body}</p>
+                                <h2 className="mb-3 mt-5 text-2xl font-bold text-gray-900 sm:mb-4 sm:mt-6 sm:text-3xl">{item.title}</h2>
+                                <p className="mb-5 text-base leading-relaxed text-gray-600 sm:mb-6 sm:text-lg">{item.body}</p>
 
                                 {item.bullets && (
                                     <ul className="space-y-3">
@@ -137,7 +169,7 @@ export function FeatureSteps({ items, cta, note }) {
                             </div>
 
                             <div
-                                className={`flex min-h-[300px] items-center justify-center rounded-2xl border p-8 ${
+                                className={`flex min-h-[180px] items-center justify-center rounded-2xl border p-6 sm:min-h-[300px] sm:p-8 ${
                                     flipped ? 'lg:order-1' : ''
                                 }`}
                                 style={{ backgroundColor: brandTint(5), borderColor: brandTint(25) }}

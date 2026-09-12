@@ -228,7 +228,7 @@ class CustomerController extends Controller
             ->get(['id', 'campaign_id', 'keyword_text', 'match_type', 'status', 'source', 'intent', 'funnel_stage', 'quality_score']);
 
         return Inertia::render('Admin/CustomerWorkspace', [
-            'customer' => $customer->only(['id', 'name', 'business_name', 'website', 'country', 'currency_code', 'created_at']),
+            'customer' => $customer->only(['id', 'name', 'website', 'country', 'currency_code', 'created_at']),
             'brandGuideline' => $brandGuideline,
             'campaigns' => $campaigns,
             'harvestedAssets' => $harvested,

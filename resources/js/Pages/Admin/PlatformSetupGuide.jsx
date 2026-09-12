@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
 import { useState } from 'react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 const TABS = ['Google Ads', 'Facebook Ads', 'Microsoft Ads', 'LinkedIn Ads'];
 
@@ -35,7 +36,10 @@ function Section({ title, children }) {
 function Step({ number, title, children }) {
     return (
         <div className="flex gap-4 py-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-primary/20 text-brand-darker flex items-center justify-center text-sm font-bold">
+            <div
+                className="flex-shrink-0 w-8 h-8 rounded-full text-brand-darker flex items-center justify-center text-sm font-bold"
+                style={{ backgroundColor: brandTint(20) }}
+            >
                 {number}
             </div>
             <div className="flex-1">
@@ -246,9 +250,9 @@ export default function PlatformSetupGuide() {
         >
             <Head title="Platform Setup Guide" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-4xl mx-auto">
                         {/* Header */}
                         <div className="mb-8">

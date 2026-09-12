@@ -11,7 +11,7 @@ export default function Pricing({ auth, plans, setupFee = null }) {
             <Head title="Pricing" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:">
+                <div className="max-w-7xl mx-auto">
                     <SubscriptionTierSelector plans={plans} />
 
                     {/* The one-and-done alternative: set up once, hand over,

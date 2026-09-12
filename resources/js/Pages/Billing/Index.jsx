@@ -14,7 +14,7 @@ const Index = ({ auth }) => {
             <Head title="Billing" />
 
             <div className="py-12">
-                <div className="max-w-7xl mx-auto sm: space-y-6">
+                <div className="max-w-7xl mx-auto space-y-6">
                     <SubscriptionTierSelector />
                     <InvoiceHistory />
                 </div>

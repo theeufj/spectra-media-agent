@@ -53,9 +53,9 @@ export default function RuntimeExceptions({ auth, exceptions, stats, types, filt
     return (
         <AuthenticatedLayout user={auth.user} contained={false}>
             <Head title="Runtime Exceptions" />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-6">
+                <div className="min-w-0 flex-1 p-6">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Runtime Exceptions</h1>

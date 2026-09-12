@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RecordsReportHistory;
 use App\Mail\WeeklyExecutiveReport;
 use App\Models\Customer;
 use App\Services\Reporting\ExecutiveReportService;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Mail;
 class GenerateExecutiveReport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use RecordsReportHistory;
 
     public int $tries = 2;
 
@@ -94,29 +96,6 @@ class GenerateExecutiveReport implements ShouldQueue
             ]);
             throw $e;
         }
-    }
-
-    protected function storeReportRecord(Customer $customer, array $report, ?string $pdfPath): void
-    {
-        $key = "report_history:{$customer->id}";
-        $history = Cache::get($key, []);
-
-        array_unshift($history, [
-            'period' => $report['period']['type'],
-            'start' => $report['period']['start'],
-            'end' => $report['period']['end'],
-            'generated_at' => $report['generated_at'],
-            'pdf_path' => $pdfPath,
-            'summary' => [
-                'total_cost' => $report['summary']['total_cost'],
-                'total_clicks' => $report['summary']['total_clicks'],
-                'total_conversions' => $report['summary']['total_conversions'],
-                'blended_cpa' => $report['summary']['blended_cpa'],
-            ],
-        ]);
-
-        $history = array_slice($history, 0, 24);
-        Cache::put($key, $history, now()->addDays(365));
     }
 
     /**

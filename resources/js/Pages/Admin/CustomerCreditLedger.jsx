@@ -24,9 +24,9 @@ export default function CustomerCreditLedger({ auth }) {
     return (
         <AuthenticatedLayout auth={auth} contained={false}>
             <Head title={`Credit Ledger — ${title}`} />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8 space-y-6 overflow-auto">
+                <div className="min-w-0 flex-1 space-y-6 overflow-auto p-8">
 
                     {/* Header */}
                     <div className="flex items-center justify-between">

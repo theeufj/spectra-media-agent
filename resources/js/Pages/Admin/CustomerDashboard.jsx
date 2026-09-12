@@ -50,7 +50,7 @@ export default function CustomerDashboard({ auth }) {
     useEffect(() => {
         if (selectedCampaign) {
             setLoading(true);
-            axios.get(route('admin.campaigns.performance', { campaign: selectedCampaign.id }))
+            axios.get(route('admin.campaigns.performance', { campaign: selectedCampaign.uuid }))
                 .then(response => {
                     setPerformanceData(response.data);
                     setLoading(false);
@@ -71,14 +71,14 @@ export default function CustomerDashboard({ auth }) {
         >
             <Head title={`Dashboard - ${customer.business_name}`} />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
                         {/* Back Button */}
                         <div>
                             <Link
-                                href={route('admin.customers.show', customer.id)}
+                                href={route('admin.customers.show', customer.uuid)}
                                 className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +96,7 @@ export default function CustomerDashboard({ auth }) {
                                     <p className="text-gray-500 mt-1">{owner?.email} • {customer.website_url}</p>
                                 </div>
                                 <Link
-                                    href={route('admin.customers.show', customer.id)}
+                                    href={route('admin.customers.show', customer.uuid)}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                                 >
                                     View All Details
@@ -166,7 +166,7 @@ export default function CustomerDashboard({ auth }) {
                                             {campaigns.map((campaign) => (
                                                 <tr 
                                                     key={campaign.id} 
-                                                    className={`hover:bg-gray-50 cursor-pointer ${selectedCampaign?.id === campaign.id ? 'bg-brand-primary/10' : ''}`}
+                                                    className={`hover:bg-gray-50 cursor-pointer ${selectedCampaign?.id === campaign.id ? 'bg-brand-tint-10 hover:bg-brand-tint-10' : ''}`}
                                                     onClick={() => setSelectedCampaign(campaign)}
                                                 >
                                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -190,7 +190,7 @@ export default function CustomerDashboard({ auth }) {
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                         <Link
-                                                            href={route('admin.campaigns.show', campaign.id)}
+                                                            href={route('admin.campaigns.show', campaign.uuid)}
                                                             className="text-brand-dark hover:text-brand-darker"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >

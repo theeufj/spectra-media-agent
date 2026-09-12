@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import Hero from '@/Components/Marketing/Hero';
@@ -83,17 +83,16 @@ const stats = [
     { value: '24/7', label: 'AI optimisation', detail: 'while you focus on clients' },
 ];
 
+/*
+ * No <Head> here — LandingController serves this skin's own title, description
+ * and Open Graph pair. It used to inherit the flagship's, so realpropertyads.com
+ * advertised "| sitetospend" to every crawler that does not run JavaScript,
+ * while the tags written here appended a second, different set on top.
+ */
 export default function RealEstateLanding({ auth }) {
     return (
         <>
-            <Head>
-                <title>Real Property Ads — Ad Campaigns Built for Real Estate Agents</title>
-                <meta name="description" content="Get more listings, sell faster. AI-powered Google Ads built specifically for real estate agents. Launch your first property campaign in minutes." />
-                <meta property="og:title" content="Real Property Ads — More Listings. More Closings." />
-                <meta property="og:description" content="Stop paying for generic ads. Real Property Ads generates Google campaigns tailored to each property listing automatically." />
-                <meta property="og:type" content="website" />
-            </Head>
-
+            <PageTitle />
             <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 

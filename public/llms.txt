@@ -14,6 +14,16 @@ Key capabilities: automated campaign creation, smart bidding optimisation, AI-ge
 - [Pricing](https://sitetospend.com/pricing): Plans and pricing. Includes free sandbox mode for testing with realistic campaigns and no real ad spend.
 - [Register](https://sitetospend.com/register): Create a free account. No credit card required to start.
 
+## Pricing
+
+Two ways to buy. See https://sitetospend.com/pricing for the authoritative, current figures.
+
+- **Managed subscription** — Starter US$99/month, Growth US$249/month, Agency priced on application. Flat monthly fee for the platform and the AI agents. Ad spend is separate and goes directly to Google, Facebook, Microsoft and LinkedIn on the customer's own billing; sitetospend never marks it up and takes no percentage of it.
+- **One-time Google Ads setup** — US$999, charged once, nothing recurring. sitetospend builds the Google Ads account, campaigns, ad copy and conversion tracking, then hands the account over paused for the customer to add their own Google billing and run themselves. No ongoing management. Chosen at signup as an alternative to a subscription.
+- **Free tier** — 3 website or file sources for brand matching, 4 watermarked AI images per campaign, 3 landing page audits, unlimited ad copy. Going live on Google or Facebook requires a paid plan or the one-time setup.
+
+No lock-in contract and no notice period on any option. Customers keep their own ad accounts, spend history, conversion data and audience lists.
+
 ## Blog — Google Ads & Digital Advertising Guides
 
 Practical, in-depth articles explaining why Google Ads is difficult, how the platform's AI solves those problems, and how to get better results from paid advertising.

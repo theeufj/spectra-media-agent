@@ -56,7 +56,7 @@ export default function ProgressStepper({
                                                 ? 'border-brand-dark text-brand-dark'
                                                 : 'border-gray-300 text-gray-500'
                                         }
-                                        ${isClickable ? 'group-hover:ring-2 group-hover:ring-brand-primary/30' : ''}
+                                        ${isClickable ? 'group-hover:ring-2 group-hover:ring-brand-dark' : ''}
                                     `}
                                 >
                                     {status === 'completed' ? (
@@ -116,7 +116,7 @@ export function CompactStepper({ steps, currentStep }) {
                             ${index < currentStep 
                                 ? 'bg-brand-dark text-white' 
                                 : index === currentStep
-                                    ? 'bg-brand-primary/20 text-brand-dark ring-2 ring-brand-dark'
+                                    ? 'bg-brand-tint-20 text-brand-dark ring-2 ring-brand-dark'
                                     : 'bg-gray-100 text-gray-500'
                             }
                         `}

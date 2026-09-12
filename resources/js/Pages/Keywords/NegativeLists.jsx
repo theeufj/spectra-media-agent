@@ -48,7 +48,7 @@ export default function NegativeLists({ lists = [] }) {
         <AuthenticatedLayout>
             <Head title="Negative Keyword Lists" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Negative Keyword Lists</h1>

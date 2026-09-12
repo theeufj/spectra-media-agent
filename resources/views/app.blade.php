@@ -35,6 +35,7 @@
             $metaDescription = $meta['description'] ?? 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.';
             $metaCanonical = $meta['canonical'] ?? str_replace('http://', 'https://', url()->current());
             $metaType = $meta['type'] ?? 'website';
+            $metaSchema = $meta['schema'] ?? null;
         @endphp
 
         {{--
@@ -67,6 +68,29 @@
         <meta name="twitter:title" content="{{ $meta['og_title'] ?? $metaTitle }}">
         <meta name="twitter:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn.">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
+
+        {{--
+            Structured data, rendered server-side for the same reason the tags
+            above are.
+
+            The pages used to build this graph inside a React <Head>, so it
+            existed only after hydration. Google's renderer gets there; GPTBot,
+            ClaudeBot, PerplexityBot, Google-Extended and Applebot-Extended do
+            not run JavaScript, and public/robots.txt names every one of them and
+            lets them in. They were being invited to a page whose <body> is a
+            single empty div.
+
+            JSON_HEX_TAG is what stops a `</script>` inside any answer from
+            closing this element early; the rest is cosmetic. Controllers pass
+            @graph nodes, not a whole document, so pages can compose several
+            types without each one shipping its own @context.
+        --}}
+        @if($metaSchema)
+        <script type="application/ld+json">{!! json_encode(
+            ['@context' => 'https://schema.org', '@graph' => $metaSchema],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG,
+        ) !!}</script>
+        @endif
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

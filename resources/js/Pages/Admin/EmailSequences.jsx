@@ -438,7 +438,7 @@ export default function EmailSequences({ sequences, globallyEnabled, leads, repl
                             onClick={() => setActiveSequence(s.id)}
                             className={`rounded-lg border px-4 py-2 text-sm transition ${
                                 s.id === sequence?.id
-                                    ? 'border-brand-primary bg-brand-primary/10 font-medium text-brand-darker'
+                                    ? 'border-brand-primary bg-brand-tint-10 font-medium text-brand-darker'
                                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                             }`}
                         >

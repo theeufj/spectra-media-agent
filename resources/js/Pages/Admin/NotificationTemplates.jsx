@@ -36,9 +36,9 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
         >
             <Head title="Admin - Email Templates" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-6xl mx-auto">
                         <div className="mb-6">
                             <h3 className="text-2xl font-bold text-gray-900">Notification Email Templates</h3>
@@ -71,7 +71,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                                                 key={t.key}
                                                 onClick={() => setSelectedKey(t.key)}
                                                 className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 ${
-                                                    t.key === selectedKey ? 'bg-brand-primary/10 border-l-4 border-l-brand-primary' : ''
+                                                    t.key === selectedKey ? 'bg-brand-tint-10 border-l-4 border-l-brand-primary' : ''
                                                 }`}
                                             >
                                                 <div className="flex items-center justify-between">

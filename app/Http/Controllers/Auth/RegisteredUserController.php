@@ -53,8 +53,8 @@ class RegisteredUserController extends Controller
             'invitation_token' => ['nullable', 'string', 'max:64'],
         ];
 
-        // Add Turnstile validation if configured
-        if (config('services.cloudflare.turnstile_secret_key')) {
+        // Both keys, via the rule's own predicate — see CloudflareTurnstile::enabled().
+        if (CloudflareTurnstile::enabled()) {
             $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
         }
 

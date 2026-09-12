@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, Link } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 function ScoreRing({ score, label }) {
     const color = score >= 70 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600';
@@ -94,7 +95,7 @@ export default function CroAudit({ audit }) {
         <AuthenticatedLayout>
             <Head title={`CRO Audit — ${audit.url}`} />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
@@ -170,7 +171,11 @@ export default function CroAudit({ audit }) {
                                         <p className="text-xs text-gray-500 mb-2">Detected Buttons</p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {ctaButtons.map((btn, i) => (
-                                                <span key={i} className="text-xs bg-brand-primary/10 text-brand-darker px-2 py-0.5 rounded-full border border-brand-primary/20">
+                                                <span
+                                                    key={i}
+                                                    className="text-xs text-brand-darker px-2 py-0.5 rounded-full border"
+                                                    style={{ backgroundColor: brandTint(10), borderColor: brandTint(20) }}
+                                                >
                                                     {btn.text || btn}
                                                 </span>
                                             ))}

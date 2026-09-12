@@ -326,9 +326,9 @@ export default function Plans({ plans }) {
         >
             <Head title="Admin - Plans" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-6xl mx-auto">
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">
                             <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark flex items-center justify-between">

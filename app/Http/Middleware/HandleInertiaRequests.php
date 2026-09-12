@@ -66,7 +66,16 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
-            'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
+            // Only when BOTH keys are present. The site key alone used to be
+            // enough to render the widget, while the rules in
+            // RegisteredUserController and LoginRequest keyed off the SECRET —
+            // so a half-configured install could either show a challenge
+            // nothing enforced, or (worse) demand a token no widget was there
+            // to produce, which locks everyone out of signup with a validation
+            // error they cannot act on. One condition, both ends.
+            'turnstileSiteKey' => \App\Rules\CloudflareTurnstile::enabled()
+                ? config('services.cloudflare.turnstile_site_key')
+                : null,
             'tenant' => $request->attributes->get('tenant', config('tenants.'.config('tenants.default'))),
             // Client-side (gtag) conversion targets served to the frontend.
             // Ships the complete "AW-XXXX/label" send_to rather than the bare

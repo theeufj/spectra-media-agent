@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
+
+const SEVERITY_ROW_BG = {
+    'deployment.failed': 'bg-red-50',
+    'health.critical': 'bg-red-50',
+    'health.warning': 'bg-yellow-50',
+    'billing.warning': 'bg-yellow-50',
+};
 
 /**
  * NotificationBell - Real-time notification indicator with dropdown
@@ -170,17 +178,25 @@ export default function NotificationBell() {
 
     const getNotificationBgColor = (notification) => {
         if (notification.read_at) return '';
-        
-        const colors = {
-            'deployment.failed': 'bg-red-50',
-            'health.critical': 'bg-red-50',
-            'health.warning': 'bg-yellow-50',
-            'billing.warning': 'bg-yellow-50',
-        };
-        
-        return colors[notification.type] || 'bg-brand-primary/10';
+
+        return SEVERITY_ROW_BG[notification.type] || '';
     };
-    
+
+    /*
+     * The unread default used to be `bg-brand-primary/10`, which Tailwind cannot
+     * compile — brand.* is a bare var() and an opacity modifier needs channels it
+     * can parse — so unread rows have never actually been tinted. The brand colour
+     * has to arrive as an inline style to reach the variable at all. The severity
+     * map above stays as classes: those are real Tailwind palette entries and
+     * compile fine.
+     */
+    const getNotificationBgStyle = (notification) => {
+        if (notification.read_at || SEVERITY_ROW_BG[notification.type]) return undefined;
+
+        return { backgroundColor: brandTint(10) };
+    };
+
+
     return (
         <div className="relative" ref={dropdownRef}>
             {/* Bell Button */}
@@ -271,6 +287,7 @@ export default function NotificationBell() {
                                         hover:bg-gray-50 transition-colors
                                         ${getNotificationBgColor(notification)}
                                     `}
+                                    style={getNotificationBgStyle(notification)}
                                 >
                                     <div className="flex items-start space-x-3">
                                         <span className="text-xl flex-shrink-0 mt-0.5">

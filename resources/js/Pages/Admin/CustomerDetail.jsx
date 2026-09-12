@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, useForm, router } from '@inertiajs/react';
 import SideNav from './SideNav';
 import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function CustomerDetail({ auth, bm_configured }) {
     const { customer, adSpendCredit, emailLogs = [] } = usePage().props;
@@ -15,7 +16,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
     const reconcileSpend = () => {
         if (!confirm(`Reconcile $${adSpendCredit?.unreconciled?.toFixed(2)} in untracked spend for this customer?`)) return;
         setReconcilingSpend(true);
-        router.post(route('admin.customers.reconcile-spend', customer.id), {}, {
+        router.post(route('admin.customers.reconcile-spend', customer.uuid), {}, {
             preserveScroll: true,
             onFinish: () => setReconcilingSpend(false),
         });
@@ -38,7 +39,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
 
     const saveFbAccountId = (e) => {
         e.preventDefault();
-        fbForm.put(route('admin.customers.update-facebook', customer.id), {
+        fbForm.put(route('admin.customers.update-facebook', customer.uuid), {
             preserveScroll: true,
             onSuccess: () => setEditingFbAccount(false),
         });
@@ -46,7 +47,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
 
     const saveMsAccountIds = (e) => {
         e.preventDefault();
-        msForm.put(route('admin.customers.update-microsoft', customer.id), {
+        msForm.put(route('admin.customers.update-microsoft', customer.uuid), {
             preserveScroll: true,
             onSuccess: () => setEditingMsAccount(false),
         });
@@ -54,20 +55,20 @@ export default function CustomerDetail({ auth, bm_configured }) {
 
     const saveGoogleAccountIds = (e) => {
         e.preventDefault();
-        googleForm.put(route('admin.customers.update-google', customer.id), {
+        googleForm.put(route('admin.customers.update-google', customer.uuid), {
             preserveScroll: true,
             onSuccess: () => setEditingGoogleAccount(false),
         });
     };
 
-    const [deployingCampaignId, setDeployingCampaignId] = useState(null);
+    const [deployingCampaignUuid, setDeployingCampaignUuid] = useState(null);
 
-    const adminDeploy = (campaignId) => {
+    const adminDeploy = (campaignUuid) => {
         if (!confirm('Dispatch deployment job for this campaign? Make sure the Google Ads account ID is set above first.')) return;
-        setDeployingCampaignId(campaignId);
-        router.post(route('admin.campaigns.admin-deploy', campaignId), {}, {
+        setDeployingCampaignUuid(campaignUuid);
+        router.post(route('admin.campaigns.admin-deploy', campaignUuid), {}, {
             preserveScroll: true,
-            onFinish: () => setDeployingCampaignId(null),
+            onFinish: () => setDeployingCampaignUuid(null),
         });
     };
 
@@ -81,9 +82,9 @@ export default function CustomerDetail({ auth, bm_configured }) {
         >
             <Head title={`Admin - ${customer.business_name || 'Customer'}`} />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
                         {/* Back Button */}
                         <div>
@@ -108,8 +109,9 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Link
-                                            href={route('admin.customers.workspace', customer.id)}
-                                            className="inline-flex items-center px-4 py-2 bg-white border border-brand-primary/50 text-brand-darker rounded-lg hover:bg-brand-primary/10"
+                                            href={route('admin.customers.workspace', customer.uuid)}
+                                            className="inline-flex items-center px-4 py-2 bg-white border text-brand-darker rounded-lg hover:bg-brand-tint-10"
+                                            style={{ borderColor: brandTint(50) }}
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -118,7 +120,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                             Review Workspace
                                         </Link>
                                         <Link
-                                            href={route('admin.customers.dashboard', customer.id)}
+                                            href={route('admin.customers.dashboard', customer.uuid)}
                                             className="inline-flex items-center px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker"
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +131,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                         <button
                                             onClick={() => {
                                                 if (window.confirm(`Log in as the owner of ${customer.business_name || customer.name}?`)) {
-                                                    router.post(route('admin.impersonation.start-customer', customer.id));
+                                                    router.post(route('admin.impersonation.start-customer', customer.uuid));
                                                 }
                                             }}
                                             className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
@@ -148,7 +150,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                 <button
                                                     onClick={() => {
                                                         if (window.confirm('Mark this one-time setup as handed over? The customer gets the keys email and recurring agents stay off this account.')) {
-                                                            router.post(route('admin.customers.handover', customer.id), {}, { preserveScroll: true });
+                                                            router.post(route('admin.customers.handover', customer.uuid), {}, { preserveScroll: true });
                                                         }
                                                     }}
                                                     className="inline-flex items-center px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
@@ -486,18 +488,18 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                                 <div className="flex items-center gap-3">
                                                                     <Link
-                                                                        href={route('admin.campaigns.show', campaign.id)}
+                                                                        href={route('admin.campaigns.show', campaign.uuid)}
                                                                         className="text-brand-dark hover:text-brand-darker font-medium"
                                                                     >
                                                                         View Details
                                                                     </Link>
                                                                     {campaign.status === 'pending_admin_deployment' && (
                                                                         <button
-                                                                            onClick={() => adminDeploy(campaign.id)}
-                                                                            disabled={deployingCampaignId === campaign.id}
+                                                                            onClick={() => adminDeploy(campaign.uuid)}
+                                                                            disabled={deployingCampaignUuid === campaign.uuid}
                                                                             className="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium rounded-md"
                                                                         >
-                                                                            {deployingCampaignId === campaign.id ? 'Deploying…' : 'Deploy'}
+                                                                            {deployingCampaignUuid === campaign.uuid ? 'Deploying…' : 'Deploy'}
                                                                         </button>
                                                                     )}
                                                                 </div>

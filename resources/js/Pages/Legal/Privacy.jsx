@@ -1,13 +1,13 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 
 export default function Privacy({ auth }) {
     return (
         <>
-            <Head title="Privacy Policy" />
-            <div className="min-h-screen flex flex-col bg-gray-50">
+            <PageTitle />
+                        <div className="min-h-screen flex flex-col bg-gray-50">
                 <Header auth={auth} />
                 
                 <div className="flex-1 font-sans text-gray-900 antialiased">

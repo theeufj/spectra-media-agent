@@ -114,7 +114,7 @@ export default function Hero({ eyebrow, headline, sub, children, primaryCta, sec
             className="bg-white"
             style={{ backgroundImage: `linear-gradient(to bottom, ${brandTint(10)}, #fff)` }}
         >
-            <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+            <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-24 lg:px-8">
                 <div className="mx-auto max-w-3xl text-center">
                     {eyebrow && (
                         /*
@@ -123,7 +123,7 @@ export default function Hero({ eyebrow, headline, sub, children, primaryCta, sec
                          * relaxed 3:1 bar for large text.
                          */
                         <p
-                            className="mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-brand-darker"
+                            className="mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-brand-darker sm:mb-6"
                             style={{ backgroundColor: brandTint(10) }}
                         >
                             <span className="h-1.5 w-1.5 rounded-full bg-brand-dark" aria-hidden="true" />
@@ -131,18 +131,18 @@ export default function Hero({ eyebrow, headline, sub, children, primaryCta, sec
                         </p>
                     )}
 
-                    <h1 className="text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
+                    <h1 className="text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
                         {headline}
                     </h1>
 
                     {sub && (
-                        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-600 sm:text-xl">
+                        <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-gray-600 sm:mt-6 sm:text-lg lg:text-xl">
                             {sub}
                         </p>
                     )}
                 </div>
 
-                {children && <div className="mx-auto mt-10 max-w-2xl">{children}</div>}
+                {children && <div className="mx-auto mt-6 max-w-2xl sm:mt-10">{children}</div>}
 
                 {(primaryCta || secondaryCta || note) && (
                     <div className="mx-auto mt-10 max-w-3xl text-center">

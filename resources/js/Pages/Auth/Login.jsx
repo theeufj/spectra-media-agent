@@ -1,11 +1,17 @@
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import GuestLayout from '@/Layouts/GuestLayout';
 import PlatformIcon from '@/Components/PlatformIcon';
-import CloudflareTurnstile from '@/Components/CloudflareTurnstile';
+import TurnstileField from '@/Components/TurnstileField';
+import { Field, OrDivider, OAUTH_BUTTON, SUBMIT } from '@/Components/Forms';
 
+/*
+ * The page had no heading of any kind — it opened on a bare "Email" label — and
+ * its submit button was white on brand-primary at 3.33:1. Both are fixed by the
+ * shared pieces now: Forms.jsx owns the field and button treatments, and
+ * TurnstileField owns the bot-check including the failure state this page used
+ * to swallow silently.
+ */
 export default function Login({ status, enabledPlatforms = [], canResetPassword = false }) {
-    const { turnstileSiteKey } = usePage().props;
-    
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -15,71 +21,58 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('login'), {
-            onFinish: () => reset('password'),
-        });
+        post(route('login'), { onFinish: () => reset('password') });
     };
 
     return (
         <GuestLayout>
             <Head title="Log in" />
 
+            <div className="mb-6 text-center">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">Welcome back</h1>
+                <p className="mt-1.5 text-sm text-gray-600">Sign in to pick up where you left off.</p>
+            </div>
+
             {status && (
-                <div className="mb-4 font-medium text-sm text-green-600">
+                <p role="status" className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
                     {status}
-                </div>
+                </p>
             )}
 
-            <div className="w-full mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
-                {/* Email/Password Login Form */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <form onSubmit={submit} className="space-y-4">
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                            Email
-                        </label>
-                        <input
-                            id="email"
-                            type="email"
-                            name="email"
-                            value={data.email}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="username"
-                            autoFocus
-                            onChange={(e) => setData('email', e.target.value)}
-                            required
-                        />
-                        {errors.email && (
-                            <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="email"
+                        label="Email"
+                        type="email"
+                        value={data.email}
+                        autoComplete="username"
+                        autoFocus
+                        required
+                        error={errors.email}
+                        onChange={(e) => setData('email', e.target.value)}
+                    />
 
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                            Password
-                        </label>
-                        <input
-                            id="password"
-                            type="password"
-                            name="password"
-                            value={data.password}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
-                            autoComplete="current-password"
-                            onChange={(e) => setData('password', e.target.value)}
-                            required
-                        />
-                        {errors.password && (
-                            <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-                        )}
-                    </div>
+                    <Field
+                        id="password"
+                        label="Password"
+                        type="password"
+                        value={data.password}
+                        autoComplete="current-password"
+                        required
+                        error={errors.password}
+                        onChange={(e) => setData('password', e.target.value)}
+                    />
 
-                    <div className="flex items-center justify-between">
-                        <label className="flex items-center">
+                    <div className="flex items-center justify-between gap-4">
+                        {/* py-3 so the label, which is the real target, clears 44px. */}
+                        <label className="flex min-h-[44px] cursor-pointer items-center">
                             <input
                                 type="checkbox"
                                 name="remember"
                                 checked={data.remember}
                                 onChange={(e) => setData('remember', e.target.checked)}
-                                className="rounded border-gray-300 text-brand-primary shadow-sm focus:ring-brand-primary"
+                                className="h-4 w-4 rounded border-gray-300 text-brand-dark shadow-sm focus:ring-brand-dark"
                             />
                             <span className="ml-2 text-sm text-gray-600">Remember me</span>
                         </label>
@@ -87,54 +80,32 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                         {canResetPassword && (
                             <Link
                                 href={route('password.request')}
-                                className="text-sm text-gray-600 hover:text-gray-900 underline"
+                                className="inline-flex min-h-[44px] items-center text-sm font-medium text-brand-darker hover:underline"
                             >
                                 Forgot password?
                             </Link>
                         )}
                     </div>
 
-                    {/* Cloudflare Turnstile Bot Detection */}
-                    {turnstileSiteKey && (
-                        <div className="flex justify-center">
-                            <CloudflareTurnstile
-                                siteKey={turnstileSiteKey}
-                                onVerify={(token) => setData('cf_turnstile_response', token)}
-                                onExpire={() => setData('cf_turnstile_response', '')}
-                            />
-                        </div>
-                    )}
-                    {errors.cf_turnstile_response && (
-                        <p className="text-sm text-red-600 text-center">{errors.cf_turnstile_response}</p>
-                    )}
+                    <TurnstileField
+                        onToken={(token) => setData('cf_turnstile_response', token)}
+                        error={errors.cf_turnstile_response}
+                    />
 
-                    <button
-                        type="submit"
-                        disabled={processing}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-primary hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary disabled:opacity-50"
-                    >
-                        {processing ? 'Signing in...' : 'Sign in'}
+                    <button type="submit" disabled={processing} className={SUBMIT}>
+                        {processing ? 'Signing in…' : 'Sign in'}
                     </button>
                 </form>
 
-                {/* OAuth Divider */}
                 {enabledPlatforms.length > 0 && (
                     <>
-                        <div className="relative my-6">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300" />
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                            </div>
-                        </div>
-
+                        <OrDivider />
                         <div className="space-y-3">
                             {enabledPlatforms.map((platform) => (
                                 <a
                                     key={platform.slug}
                                     href={route(`${platform.slug}.redirect`)}
-                                    className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    className={OAUTH_BUTTON}
                                 >
                                     <PlatformIcon slug={platform.slug} />
                                     Sign in with {platform.name}
@@ -143,16 +114,17 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                         </div>
                     </>
                 )}
-
-                <div className="mt-4 text-center">
-                    <Link
-                        href={route('register')}
-                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary"
-                    >
-                        Don't have an account? Register
-                    </Link>
-                </div>
             </div>
+
+            <p className="mt-6 text-center text-sm text-gray-600">
+                Don't have an account?{' '}
+                <Link
+                    href={route('register')}
+                    className="font-semibold text-brand-darker hover:underline"
+                >
+                    Create one free
+                </Link>
+            </p>
         </GuestLayout>
     );
 }

@@ -50,7 +50,7 @@ const Td = ({ children, right, mono, bold }) => (
     </td>
 );
 
-const PctBar = ({ pct, color = 'bg-brand-primary/70' }) => (
+const PctBar = ({ pct, color = 'bg-brand-primary' }) => (
     <div className="flex items-center gap-2">
         <div className="flex-1 bg-gray-100 rounded-full h-1.5">
             <div className={`${color} h-1.5 rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -86,7 +86,7 @@ const DailyChart = ({ data }) => {
                 {data.map((d, i) => (
                     <div key={i} className="flex flex-col items-center flex-1 group relative">
                         <div
-                            className="w-full bg-brand-primary/70 hover:bg-brand-primary rounded-t transition-all cursor-default"
+                            className="w-full bg-brand-tint-30 hover:bg-brand-primary rounded-t transition-all cursor-default"
                             style={{ height: `${(d.total_cost / max) * 100}%`, minHeight: d.total_cost > 0 ? '3px' : '0' }}
                         />
                         <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
@@ -124,7 +124,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
             <Head title="AI Costs — Admin" />
             <div className="flex min-h-screen bg-gray-50">
                 <SideNav />
-                <div className="flex-1 p-8 overflow-auto">
+                <div className="min-w-0 flex-1 overflow-auto p-8">
 
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">

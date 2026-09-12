@@ -49,9 +49,9 @@ export default function Index({ tickets, stats, filters }) {
         >
             <Head title="Admin - Support Tickets" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     {/* Stats */}
                     <div className="grid grid-cols-4 gap-4 mb-6">
                         {[

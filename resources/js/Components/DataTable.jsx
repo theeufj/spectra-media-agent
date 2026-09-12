@@ -33,7 +33,7 @@ const DataTable = ({ headers, data }) => {
                         {filteredData.map((row, rowIndex) => (
                             <tr key={rowIndex}>
                                 {row.map((cell, cellIndex) => (
-                                    <td key={cellIndex} className="px-6 py-4 whitespace-no-wrap border-b border-gray-500">{cell}</td>
+                                    <td key={cellIndex} className="px-6 py-4 whitespace-nowrap border-b border-gray-200">{cell}</td>
                                 ))}
                             </tr>
                         ))}

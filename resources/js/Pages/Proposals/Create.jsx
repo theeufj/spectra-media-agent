@@ -40,7 +40,7 @@ export default function Create() {
         <AuthenticatedLayout>
             <Head title="Create Proposal" />
 
-            <div className="max-w-3xl mx-auto sm:">
+            <div className="max-w-3xl mx-auto">
                 <Link
                     href={route('proposals.index')}
                     className="text-brand-dark hover:text-brand-darker text-sm font-medium inline-flex items-center mb-6"

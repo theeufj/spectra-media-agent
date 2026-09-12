@@ -46,7 +46,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
 
     const handleDelete = () => {
         if (confirm('This will delete your sandbox and all its data. Continue?')) {
-            router.delete(route('sandbox.destroy', existingSandbox.id));
+            router.delete(route('sandbox.destroy', existingSandbox.uuid));
         }
     };
 
@@ -57,7 +57,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
             <Head title="Sandbox Simulation" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm: space-y-6">
+                <div className="mx-auto max-w-7xl space-y-6">
                     {/* Hero */}
                     <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl p-8 text-white">
                         <h1 className="text-2xl font-bold mb-2">Test Our AI Agents — Risk Free</h1>
@@ -81,7 +81,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
                                 </div>
                                 <div className="flex gap-3">
                                     <a
-                                        href={route('sandbox.results', existingSandbox.id)}
+                                        href={route('sandbox.results', existingSandbox.uuid)}
                                         className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
                                     >
                                         {existingSandbox.has_results ? 'View Results' : 'Check Progress'}

@@ -55,7 +55,7 @@ export default function History({ logs = [] }) {
         <AuthenticatedLayout>
             <Head title="Rebalance History" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Rebalance History</h1>

@@ -1,154 +1,161 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
+import Hero, { brandTint } from '@/Components/Marketing/Hero';
+import FeatureGrid from '@/Components/Marketing/FeatureGrid';
+import CtaBand from '@/Components/Marketing/CtaBand';
+import { BoltIcon, EyeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+
+/*
+ * No <Head> here. LandingController builds the metadata and app.blade.php
+ * prints it server-side. See App\Http\Controllers\Concerns\RendersPageMeta.
+ *
+ * Like Features.jsx, this page hand-rolled its sections and carried the two
+ * defects that follows from it: `from-brand-primary/10` and `bg-brand-primary/10`,
+ * neither of which compiles to any CSS — an opacity modifier on a brand token
+ * is unparseable to Tailwind 3, so the hero gradient and the stats panel both
+ * rendered plain white — and 🔍 🤖 🛡️ as icons, which render as whatever the
+ * visitor's OS ships and are announced literally by a screen reader.
+ */
+
+const values = [
+    {
+        icon: EyeIcon,
+        title: 'Transparency',
+        body: 'No hidden fees and no markup on ad spend. You pay the platforms directly and see exactly where the money goes.',
+    },
+    {
+        icon: BoltIcon,
+        title: 'Always on',
+        body: 'The best marketing never sleeps. The agents fix issues, test ideas and shift budget while you are focused elsewhere.',
+    },
+    {
+        icon: LockClosedIcon,
+        title: 'Your data, your control',
+        body: 'Customer data and brand assets stay yours. Accounts sit under our management umbrella; ownership and visibility do not.',
+    },
+];
+
+// Every figure is stated elsewhere on the site: six agents, "live in minutes",
+// and $99 a month against the $2,500 retainer the pricing page attributes to an
+// agency.
+const stats = [
+    { stat: '24/7', label: 'Campaign monitoring' },
+    { stat: '6', label: 'Autonomous AI agents' },
+    { stat: 'Minutes', label: 'Setup to first campaign' },
+    { stat: '96%', label: 'Cost saving vs an agency retainer' },
+];
+
+const differences = [
+    {
+        label: 'Your brand, instantly',
+        body: 'No twenty-page brand questionnaire. We read your website and pick up your colours, fonts and tone straight away.',
+    },
+    {
+        label: 'Problems get fixed before you notice',
+        body: 'Rejected ad? Fixed. Underperforming creative? Paused and replaced. Nobody waits for a Monday morning call.',
+    },
+    {
+        label: 'We watch your competitors for you',
+        body: 'Every week we look at who is advertising in your space, read their sites, and work out how you beat them.',
+    },
+    {
+        label: 'What you see is what you pay',
+        body: 'Your subscription covers the platform. Ad spend goes straight to Google and Meta. We never add a margin to media.',
+    },
+];
 
 export default function About({ auth }) {
     return (
         <>
-            <Head>
-                <title>About Us - AI-Powered Marketing for Everyone | sitetospend</title>
-                <meta name="description" content="sitetospend is on a mission to democratize digital advertising. Our AI agents deliver agency-level results at a fraction of the cost—so every business can compete." />
-                <meta property="og:title" content="About sitetospend — Democratizing Digital Advertising with AI" />
-                <meta property="og:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
-                <meta name="twitter:title" content="About sitetospend — Democratizing Digital Advertising with AI" />
-                <meta name="twitter:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
-                <script type="application/ld+json">{JSON.stringify({
-                    "@context": "https://schema.org",
-                    "@type": "AboutPage",
-                    "name": "About sitetospend",
-                    "description": "sitetospend is on a mission to democratize digital advertising with autonomous AI agents.",
-                    "url": "https://sitetospend.com/about",
-                    "mainEntity": {
-                        "@type": "Organization",
-                        "name": "sitetospend",
-                        "url": "https://sitetospend.com",
-                        "logo": "https://sitetospend.com/og-image.png",
-                        "description": "AI-powered digital advertising platform with 6 autonomous agents that manage and optimize ad campaigns across Google, Facebook, and Microsoft.",
-                        "foundingDate": "2026",
-                        "knowsAbout": ["Digital Advertising", "AI Marketing", "Google Ads", "Facebook Ads", "Campaign Optimization"]
-                    }
-                })}</script>
-            </Head>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
+            <PageTitle />
+            <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
                 <main>
-                    {/* Hero */}
-                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">About Us</p>
-                            <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
-                                Agency-Level Marketing, Accessible&nbsp;to&nbsp;Everyone
-                            </h1>
-                            <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-500">
-                                We believe every business—from local shops to scaling startups—deserves the same caliber of digital advertising that Fortune 500 companies get.
-                            </p>
-                        </div>
-                    </div>
+                    <Hero
+                        eyebrow="About us"
+                        headline={<>Agency-level marketing, accessible&nbsp;to&nbsp;everyone</>}
+                        sub="Every business — from local shops to scaling startups — deserves the calibre of advertising that large companies take for granted."
+                    />
 
                     {/* Mission */}
-                    <div className="bg-white py-16 sm:py-24">
+                    <section className="bg-white py-12 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                            <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
                                 <div>
-                                    <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Mission</h2>
-                                    <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Traditional agencies charge thousands a month, lock you into long contracts, and send you a report once a week if you're lucky. We built sitetospend because that's just not good enough for most businesses.
-                                    </p>
-                                    <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Our AI works every hour of every day—finding your competitors, shifting your budget to the right times, fixing rejected ads the moment they happen, and always testing new ideas. It never takes a day off, never misses something, and costs a fraction of what an agency charges.
-                                    </p>
-                                    <p className="text-lg text-gray-600 leading-relaxed">
-                                        We're not here to replace your marketing instincts—we're here to give every business the tools that used to be reserved for companies with enormous ad budgets.
-                                    </p>
-                                </div>
-                                <div className="bg-brand-primary/10 rounded-2xl p-10">
-                                    <div className="space-y-8">
-                                        {[
-                                            { stat: '24/7', label: 'Campaign Monitoring' },
-                                            { stat: '6', label: 'Autonomous AI Agents' },
-                                            { stat: '<5 min', label: 'Setup to First Campaign' },
-                                            { stat: '96%', label: 'Cost Savings vs. Agencies' },
-                                        ].map((item) => (
-                                            <div key={item.label} className="flex items-center gap-4">
-                                                <div className="text-3xl font-extrabold text-brand-dark w-24 text-right">{item.stat}</div>
-                                                <div className="text-gray-700 font-medium">{item.label}</div>
-                                            </div>
-                                        ))}
+                                    <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Our mission</h2>
+                                    <div className="mt-5 space-y-4 text-base leading-relaxed text-gray-600 sm:mt-6 sm:text-lg">
+                                        <p>
+                                            Traditional agencies charge thousands a month, lock you into a long contract, and
+                                            send a report once a week if you are lucky. We built sitetospend because that is
+                                            not good enough for most businesses.
+                                        </p>
+                                        <p>
+                                            Our agents work every hour of every day — finding competitors, shifting budget to
+                                            the right times, fixing rejected ads the moment they happen, always testing
+                                            something new. It costs a fraction of a retainer and it never takes a day off.
+                                        </p>
+                                        <p>
+                                            We are not here to replace your marketing instincts. We are here to hand every
+                                            business the tools that used to need an enormous ad budget to justify.
+                                        </p>
                                     </div>
                                 </div>
+                                {/*
+                                    color-mix, not `bg-brand-primary/10` — the
+                                    latter compiles to nothing, so this panel has
+                                    been rendering as plain white on white.
+                                */}
+                                <dl
+                                    className="space-y-5 rounded-2xl p-6 sm:space-y-8 sm:p-10"
+                                    style={{ backgroundColor: brandTint(10) }}
+                                >
+                                    {stats.map((item) => (
+                                        <div key={item.label} className="flex items-center gap-4">
+                                            <dd className="w-24 flex-shrink-0 text-right text-2xl font-extrabold text-brand-darker sm:text-3xl">
+                                                {item.stat}
+                                            </dd>
+                                            <dt className="font-medium text-gray-700">{item.label}</dt>
+                                        </div>
+                                    ))}
+                                </dl>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Values */}
-                    <div className="bg-gray-50 py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-16">
-                                <h2 className="text-3xl font-bold text-gray-900">What We Stand For</h2>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                {[
-                                    { icon: '🔍', title: 'Transparency', desc: 'No hidden fees, no markup on ad spend. You pay the platforms directly and always see exactly where your money goes.' },
-                                    { icon: '🤖', title: 'Always On', desc: "The best marketing never sleeps. Our AI doesn't rest—it's fixing issues, testing new ideas, and shifting your budget while you're focused on everything else." },
-                                    { icon: '🛡️', title: 'Your Data, Your Control', desc: 'Your customer data and brand assets stay yours. We create and manage your ad accounts under our management umbrella—you always retain full ownership and visibility.' },
-                                ].map((value) => (
-                                    <div key={value.title} className="bg-white rounded-xl p-8 shadow-sm ring-1 ring-gray-900/5">
-                                        <span className="text-4xl">{value.icon}</span>
-                                        <h3 className="mt-4 text-xl font-bold text-gray-900">{value.title}</h3>
-                                        <p className="mt-3 text-gray-600 leading-relaxed">{value.desc}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                    <FeatureGrid title="What we stand for" items={values} />
 
-                    {/* How We're Different */}
-                    <div className="bg-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl font-bold text-gray-900">How We're Different</h2>
-                            </div>
-                            <div className="space-y-6">
-                                {[
-                                    { label: 'Your brand, instantly', desc: 'No 20-page brand questionnaires. We read your website and understand your colours, fonts, and tone straight away. Every ad looks like it came from your own team.' },
-                                    { label: 'Problems get fixed before you notice', desc: 'Rejected ad? Fixed. Underperforming creative? Paused and replaced. We don\'t wait for a Monday morning call to deal with it.' },
-                                    { label: 'We watch your competitors for you', desc: 'Every week we look at who\'s advertising in your space, read their websites, and figure out how you can beat them. You just see the results.' },
-                                    { label: 'What you see is what you pay', desc: 'Your subscription covers the platform. Your ad spend goes straight to Google, Facebook, and the others. We never add a margin to your media costs.' },
-                                ].map((item) => (
-                                    <div key={item.label} className="flex gap-4 items-start">
-                                        <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-brand-primary"></div>
+                    {/* How we're different */}
+                    <section className="bg-white py-12 sm:py-24">
+                        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                            <h2 className="text-center text-3xl font-bold text-gray-900 sm:text-4xl">
+                                How we're different
+                            </h2>
+                            <dl className="mt-8 space-y-6 sm:mt-12">
+                                {differences.map((item) => (
+                                    <div key={item.label} className="flex items-start gap-4">
+                                        <span
+                                            className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-brand-dark"
+                                            aria-hidden="true"
+                                        />
                                         <div>
-                                            <h3 className="font-bold text-gray-900">{item.label}</h3>
-                                            <p className="text-gray-600">{item.desc}</p>
+                                            <dt className="font-bold text-gray-900">{item.label}</dt>
+                                            <dd className="mt-1 leading-relaxed text-gray-600">{item.body}</dd>
                                         </div>
                                     </div>
                                 ))}
-                            </div>
+                            </dl>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* CTA */}
-                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
-                        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
-                                Ready to see the difference?
-                            </h2>
-                            <p className="mt-6 text-xl text-white/80">
-                                Start free and discover what AI-powered marketing can do for your business.
-                            </p>
-                            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
-                                    Get Started Free
-                                </a>
-                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
-                                    Explore Features
-                                </Link>
-                            </div>
-                            <p className="mt-8 text-white/80">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
-                        </div>
-                    </div>
+                    <CtaBand
+                        title="Ready to see the difference?"
+                        body="Start free and find out what AI-run advertising does for your business."
+                        primaryCta={{ href: '/register', label: 'Get started free' }}
+                        secondaryCta={{ href: '/pricing', label: 'View pricing' }}
+                    />
                 </main>
 
                 <Footer />

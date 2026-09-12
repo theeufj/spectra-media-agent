@@ -38,7 +38,7 @@ export default function AgentHealth({ auth, jobs = [] }) {
             <Head title="Automation Health — Admin" />
             <div className="flex min-h-screen bg-gray-50">
                 <SideNav />
-                <main className="flex-1 p-6 lg:p-8 max-w-6xl">
+                <main className="min-w-0 flex-1 max-w-6xl p-6 lg:p-8">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Automation Health</h1>

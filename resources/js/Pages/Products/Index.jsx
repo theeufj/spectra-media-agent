@@ -42,7 +42,7 @@ function FeedCard({ feed }) {
             <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">{feed.last_synced_at ? `Synced: ${new Date(feed.last_synced_at).toLocaleDateString()}` : 'Never synced'}</span>
                 <div className="flex gap-2">
-                    <button onClick={() => router.post(route('products.feeds.sync', feed.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Sync</button>
+                    <button onClick={() => router.post(route('products.feeds.sync', feed.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-tint-10 text-brand-darker rounded-lg hover:bg-brand-tint-20 font-medium">Sync</button>
                     <button onClick={() => { if (confirm('Delete this feed?')) router.delete(route('products.feeds.delete', feed.id), {preserveScroll: true}); }} className="text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg">Delete</button>
                 </div>
             </div>
@@ -70,7 +70,7 @@ export default function Index({ feeds = [], stats }) {
         <AuthenticatedLayout>
             <Head title="Product Feeds" />
             <div className="py-8">
-                <div className="mx-auto max-w-5xl sm:">
+                <div className="mx-auto max-w-5xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Google Shopping & Product Feeds</h1>

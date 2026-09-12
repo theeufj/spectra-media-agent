@@ -27,7 +27,7 @@ const PerformanceStats = ({ stats, loading }) => {
         { label: 'Clicks', value: stats.clicks?.toLocaleString() || '0', color: 'text-green-600', bg: 'bg-green-50' },
         { label: 'Cost', value: `$${(stats.cost || 0).toFixed(2)}`, color: 'text-red-600', bg: 'bg-red-50' },
         { label: 'Conversions', value: (stats.conversions || 0).toFixed(1), color: 'text-purple-600', bg: 'bg-purple-50' },
-        { label: 'CTR', value: `${(stats.ctr || 0).toFixed(2)}%`, color: 'text-brand-dark', bg: 'bg-brand-primary/10' },
+        { label: 'CTR', value: `${(stats.ctr || 0).toFixed(2)}%`, color: 'text-brand-dark', bg: 'bg-brand-tint-10' },
         { label: 'CPC', value: `$${(stats.cpc || 0).toFixed(2)}`, color: 'text-orange-600', bg: 'bg-orange-50' },
         { label: 'CPA', value: stats.cpa > 0 ? `$${stats.cpa.toFixed(2)}` : '-', color: 'text-pink-600', bg: 'bg-pink-50' },
     ];
@@ -69,7 +69,7 @@ export default function CampaignDetail({ auth }) {
     useEffect(() => {
         if (campaign.google_ads_campaign_id) {
             setPerformanceLoading(true);
-            axios.get(route('admin.campaigns.performance', { campaign: campaign.id }))
+            axios.get(route('admin.campaigns.performance', { campaign: campaign.uuid }))
                 .then(response => {
                     // API returns { summary: {...}, daily_data: [...] }
                     setPerformanceData(response.data.summary || response.data);
@@ -86,7 +86,7 @@ export default function CampaignDetail({ auth }) {
 
     const handleUpdate = (e) => {
         e.preventDefault();
-        put(route('admin.campaigns.update', campaign.id), {
+        put(route('admin.campaigns.update', campaign.uuid), {
             onSuccess: () => setIsEditing(false),
         });
     };
@@ -99,7 +99,7 @@ export default function CampaignDetail({ auth }) {
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                pausePost(route('admin.campaigns.pause', campaign.id));
+                pausePost(route('admin.campaigns.pause', campaign.uuid));
             },
         });
     };
@@ -111,7 +111,7 @@ export default function CampaignDetail({ auth }) {
             message: 'Are you sure you want to start this campaign?',
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                startPost(route('admin.campaigns.start', campaign.id));
+                startPost(route('admin.campaigns.start', campaign.uuid));
             },
         });
     };
@@ -123,14 +123,14 @@ export default function CampaignDetail({ auth }) {
         >
             <Head title={`Admin - ${campaign.name}`} />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
                         {/* Back Button */}
                         <div>
                             <Link
-                                href={route('admin.customers.show', customer.id)}
+                                href={route('admin.customers.show', customer.uuid)}
                                 className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,4 +1,5 @@
 import Modal from '@/Components/Modal';
+import { brandTint } from '@/Components/Marketing/Hero';
 import { Description, DialogTitle } from '@headlessui/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -88,10 +89,13 @@ export default function ConfirmationModal({
                 <div className="sm:flex sm:items-start">
                     <div
                         className={`mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
-                            isDestructive
-                                ? 'bg-red-100'
-                                : 'bg-gradient-to-br from-blue-100 to-brand-primary/20'
+                            isDestructive ? 'bg-red-100' : ''
                         } sm:mx-0 sm:h-10 sm:w-10`}
+                        style={
+                            isDestructive
+                                ? undefined
+                                : { backgroundImage: `linear-gradient(to bottom right, #dbeafe, ${brandTint(20)})` }
+                        }
                     >
                         {isDestructive ? (
                             <svg

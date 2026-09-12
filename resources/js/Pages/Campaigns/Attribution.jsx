@@ -7,11 +7,11 @@ export default function Attribution({ campaign, pixelConfig, summary, channelBre
         <AuthenticatedLayout>
             <Head title={`Attribution — ${campaign.name}`} />
 
-            <div className="max-w-7xl mx-auto sm:">
+            <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <Link
-                        href={route('campaigns.show', campaign.id)}
+                        href={route('campaigns.show', campaign.uuid)}
                         className="text-brand-dark hover:text-brand-darker text-sm font-medium inline-flex items-center mb-3"
                     >
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

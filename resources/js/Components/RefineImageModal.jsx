@@ -44,7 +44,7 @@ export default function RefineImageModal({ image, onClose }) {
                             type="file"
                             id="context_image"
                             onChange={(e) => setData('context_image', e.target.files[0])}
-                            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-primary/10 file:text-brand-darker hover:file:bg-brand-primary/20"
+                            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-tint-10 file:text-brand-darker hover:file:bg-brand-tint-20"
                         />
                         {errors.context_image && <p className="mt-2 text-sm text-red-600">{errors.context_image}</p>}
                     </div>

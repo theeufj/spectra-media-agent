@@ -17,9 +17,9 @@ export default function AdminShell({ title, heading, subheading, actions, header
     return (
         <AuthenticatedLayout header={header} contained={false}>
             <Head title={title} />
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-6">
+                <div className="min-w-0 flex-1 p-6">
                     {(heading || actions) && (
                         <div className="flex items-start justify-between mb-6 gap-4">
                             <div>

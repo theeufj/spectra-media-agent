@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function DemoResultsPanel({ result }) {
     if (!result) return null;
@@ -145,7 +146,10 @@ export default function DemoResultsPanel({ result }) {
                     </div>
                 )}
 
-                <div className="mt-12 text-center bg-brand-primary/10 rounded-lg p-8 border border-brand-primary/20">
+                <div
+                    className="mt-12 text-center rounded-lg border p-8"
+                    style={{ backgroundColor: brandTint(10), borderColor: brandTint(20) }}
+                >
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to deploy these campaigns?</h3>
                     <p className="text-gray-600 mb-6">Our AI agents will build out your entire account structure, write dozens of variations, and manage the budget automatically.</p>
                     <Link

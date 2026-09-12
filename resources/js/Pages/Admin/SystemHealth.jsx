@@ -126,9 +126,9 @@ export default function SystemHealth({ health }) {
         >
             <Head title="System Health" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-6xl mx-auto">
                         {/* Header with refresh */}
                         <div className="flex justify-between items-center mb-6">

@@ -51,7 +51,7 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
         <AuthenticatedLayout>
             <Head title="SEO Rankings" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>

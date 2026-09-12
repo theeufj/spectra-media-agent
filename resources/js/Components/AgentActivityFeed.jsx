@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 const AGENT_TYPE_CONFIG = {
     optimization: { icon: '⚡', label: 'Optimization Agent', color: 'text-yellow-600 bg-yellow-50' },
     budget: { icon: '💰', label: 'Budget Agent', color: 'text-green-600 bg-green-50' },
     creative: { icon: '🎨', label: 'Creative Agent', color: 'text-purple-600 bg-purple-50' },
     maintenance: { icon: '🔧', label: 'Maintenance Agent', color: 'text-blue-600 bg-blue-50' },
-    monitoring: { icon: '📊', label: 'Monitoring Agent', color: 'text-brand-dark bg-brand-primary/10' },
+    /*
+     * The other rows get their ground from a real Tailwind palette entry; the
+     * brand one cannot, because brand.* is a bare var() and `bg-brand-primary/10`
+     * compiles to no CSS. Its tint comes through `style` instead, so the emoji
+     * still sits on a brand ground rather than on nothing.
+     */
+    monitoring: { icon: '📊', label: 'Monitoring Agent', color: 'text-brand-dark', tint: 10 },
     keyword: { icon: '🔑', label: 'Keyword Agent', color: 'text-orange-600 bg-orange-50' },
     strategy: { icon: '🧠', label: 'Strategy Agent', color: 'text-pink-600 bg-pink-50' },
     deployment: { icon: '🚀', label: 'Deployment Agent', color: 'text-cyan-600 bg-cyan-50' },
@@ -37,7 +44,10 @@ function ActivityItem({ activity }) {
 
     return (
         <div className="flex items-start space-x-3 py-3 border-b border-gray-100 last:border-0">
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${config.color}`}>
+            <div
+                className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm ${config.color}`}
+                style={config.tint ? { backgroundColor: brandTint(config.tint) } : undefined}
+            >
                 {config.icon}
             </div>
             <div className="flex-1 min-w-0">

@@ -55,9 +55,9 @@ export default function Show({ ticket }) {
         >
             <Head title={`Admin - Ticket #${ticket.id}`} />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-4xl">
                         {/* Ticket Details */}
                         <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
@@ -138,7 +138,7 @@ export default function Show({ ticket }) {
                                                         key={i}
                                                         className={`rounded-lg p-4 text-sm whitespace-pre-wrap ${
                                                             isBot
-                                                                ? 'bg-brand-primary/10 border-l-4 border-brand-primary text-gray-800'
+                                                                ? 'bg-brand-tint-10 border-l-4 border-brand-primary text-gray-800'
                                                                 : 'bg-white border border-gray-200 text-gray-800'
                                                         }`}
                                                     >

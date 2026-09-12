@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 /**
  * QuickActions - Dashboard widget for quick access to common actions
@@ -137,7 +138,10 @@ export function PendingTasks({ tasks = [] }) {
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-gray-700">Pending Tasks</h3>
-                <span className="px-2 py-0.5 text-xs font-medium bg-brand-primary/20 text-brand-darker rounded-full">
+                <span
+                    className="px-2 py-0.5 text-xs font-medium text-brand-darker rounded-full"
+                    style={{ backgroundColor: brandTint(20) }}
+                >
                     {tasks.length}
                 </span>
             </div>

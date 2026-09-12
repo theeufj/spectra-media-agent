@@ -21,7 +21,7 @@ export default function Header({ auth }) {
             <header className="bg-white shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
-                        <Link href="/" className="flex-shrink-0">
+                        <Link href="/" className="flex h-11 flex-shrink-0 items-center">
                             <span className="text-2xl font-bold text-brand-primary">{tenant.logo_text}</span>
                         </Link>
 
@@ -74,7 +74,7 @@ export default function Header({ auth }) {
                             onClick={() => setMobileOpen(!mobileOpen)}
                             aria-expanded={mobileOpen}
                             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-                            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                            className="md:hidden inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                         >
                             <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 {mobileOpen ? (
@@ -95,7 +95,7 @@ export default function Header({ auth }) {
                                 <Link
                                     key={link.href}
                                     href={link.href}
-                                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-brand-dark hover:bg-gray-50"
+                                    className="block rounded-md px-3 py-3 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-brand-dark"
                                     onClick={() => setMobileOpen(false)}
                                 >
                                     {link.label}
@@ -103,15 +103,15 @@ export default function Header({ auth }) {
                             ))}
                             <div className="pt-4 border-t border-gray-200 space-y-2">
                                 {auth && auth.user ? (
-                                    <Link href={route('dashboard')} className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                                    <Link href={route('dashboard')} className="block rounded-md px-3 py-3 text-base font-medium text-gray-700 hover:bg-gray-50">
                                         Dashboard
                                     </Link>
                                 ) : (
                                     <>
-                                        <a href="/login" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                                        <a href="/login" className="block rounded-md px-3 py-3 text-base font-medium text-gray-700 hover:bg-gray-50">
                                             Log in
                                         </a>
-                                        <a href="/register" className="block px-3 py-2 rounded-md text-base font-medium text-white bg-brand-dark hover:bg-brand-darker text-center">
+                                        <a href="/register" className="block rounded-md bg-brand-dark px-3 py-3 text-center text-base font-medium text-white hover:bg-brand-darker">
                                             Start Free
                                         </a>
                                     </>

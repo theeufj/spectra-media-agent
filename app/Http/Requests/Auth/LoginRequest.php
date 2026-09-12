@@ -32,8 +32,8 @@ class LoginRequest extends FormRequest
             'password' => ['required', 'string'],
         ];
 
-        // Add Turnstile validation if configured
-        if (config('services.cloudflare.turnstile_secret_key')) {
+        // Both keys, via the rule's own predicate — see CloudflareTurnstile::enabled().
+        if (CloudflareTurnstile::enabled()) {
             $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
         }
 

@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage, Link } from '@inertiajs/react';
 import SideNav from './SideNav';
+import { brandTint } from '@/Components/Marketing/Hero';
 
 const JsonViewer = ({ data, title }) => (
     <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
@@ -108,7 +109,7 @@ const ExecutionSteps = ({ plan }) => {
                             {index + 1}
                         </div>
                         {index < plan.steps.length - 1 && (
-                            <div className="w-0.5 h-full bg-brand-primary/50 mt-2"></div>
+                            <div className="w-0.5 h-full mt-2" style={{ backgroundColor: brandTint(50) }}></div>
                         )}
                     </div>
                     <div className="flex-1 bg-gray-50 rounded-lg p-4 mb-2">
@@ -163,9 +164,9 @@ export default function ExecutionDetail({ auth }) {
         >
             <Head title="Admin - Execution Detail" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                         {/* Header Info */}
                         <div className="bg-white rounded-lg shadow p-6 mb-6">

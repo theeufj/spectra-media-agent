@@ -15,7 +15,7 @@ export default function Backlinks({ profile, domain, error }) {
         <AuthenticatedLayout>
             <Head title="Backlink Analysis" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl sm:">
+                <div className="mx-auto max-w-6xl">
                     <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">Backlink Analysis</h1>
                     <p className="text-sm text-gray-500 mb-6">{domain ? `Analyzing: ${domain}` : 'Set your website to analyze backlinks.'}</p>

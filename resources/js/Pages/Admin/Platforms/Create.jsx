@@ -27,7 +27,7 @@ export default function Create({ auth }) {
         >
             <Head title="Create Platform" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
                 <div className="flex-1 py-12">
                     <div className="max-w-3xl mx-auto sm:px-6 lg:px-8">

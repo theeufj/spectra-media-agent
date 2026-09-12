@@ -14,6 +14,35 @@
     --color-brand-accent: #ffc300;
 }
 
+/* ── Brand tints ─────────────────────────────────────────────────────────
+   tailwind.config.js maps brand.* to a bare var(--color-brand-*), and
+   Tailwind 3 only emits an opacity modifier for a colour it can split into
+   channels — so `bg-brand-primary/10` and every sibling of it compiled to no
+   CSS at all, which is why every "brand tinted" panel in the app has been
+   rendering as plain white. color-mix reaches the variable and produces a
+   real colour; where it is unsupported the declaration is dropped and the
+   element falls back to the white it already showed, so this cannot render
+   worse than the current state.
+
+   Most call sites use brandTint() from @/Components/Marketing/Hero as an
+   inline style. These classes are for the places that cannot: the states a
+   style attribute does not reach (:hover, ::file-selector-button) and the
+   helpers that return nothing but a class string for a caller to interpolate,
+   where threading a second style prop through would be pure noise. They are
+   hand-written
+   rules, not generated utilities: they carry Tailwind's escaped-colon naming
+   so they read the same way in JSX, but a percentage that is not listed here
+   simply does not exist. They sit after @tailwind utilities so a hover rule
+   still beats the resting background. */
+.bg-brand-tint-10 { background-color: color-mix(in srgb, var(--color-brand-primary) 10%, white); }
+.bg-brand-tint-20 { background-color: color-mix(in srgb, var(--color-brand-primary) 20%, white); }
+.bg-brand-tint-30 { background-color: color-mix(in srgb, var(--color-brand-primary) 30%, white); }
+.hover\:bg-brand-tint-10:hover { background-color: color-mix(in srgb, var(--color-brand-primary) 10%, white); }
+.hover\:bg-brand-tint-20:hover { background-color: color-mix(in srgb, var(--color-brand-primary) 20%, white); }
+.hover\:bg-brand-tint-30:hover { background-color: color-mix(in srgb, var(--color-brand-primary) 30%, white); }
+.file\:bg-brand-tint-10::file-selector-button { background-color: color-mix(in srgb, var(--color-brand-primary) 10%, white); }
+.hover\:file\:bg-brand-tint-20:hover::file-selector-button { background-color: color-mix(in srgb, var(--color-brand-primary) 20%, white); }
+
 /* ── Help article prose styles ──────────────────────────── */
 .prose-article h2 {
     @apply text-xl font-bold text-gray-900 mt-10 mb-3;

@@ -46,7 +46,7 @@ export default function Index({ tickets }) {
             <Head title="Support Tickets" />
 
             <div className="py-12">
-                <div className="max-w-4xl mx-auto sm:">
+                <div className="max-w-4xl mx-auto">
                     {tickets.length === 0 ? (
                         <div className="bg-white rounded-lg shadow-md p-6 sm:p-12 text-center">
                             <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

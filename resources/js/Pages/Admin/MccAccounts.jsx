@@ -158,9 +158,9 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
         >
             <Head title="Admin - MCC Accounts" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-4xl mx-auto">
                         {/* Header */}
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">

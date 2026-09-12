@@ -310,9 +310,9 @@ export default function ExecutionMetrics({ auth }) {
         >
             <Head title="Admin - Execution Metrics" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                         {/* Overview Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

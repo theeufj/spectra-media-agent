@@ -58,9 +58,9 @@ export default function CustomerWorkspace({ auth }) {
         >
             <Head title={`Workspace - ${customer.business_name || customer.name}`} />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-8 px-6 max-w-6xl space-y-6">
+                <div className="min-w-0 flex-1 py-8 px-6 max-w-6xl space-y-6">
                     {/* Header */}
                     <div className="flex items-start justify-between flex-wrap gap-3">
                         <div>
@@ -71,16 +71,16 @@ export default function CustomerWorkspace({ auth }) {
                             </p>
                         </div>
                         <div className="flex gap-2">
-                            <Link href={route('admin.customers.show', customer.id)} className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                            <Link href={route('admin.customers.show', customer.uuid)} className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                                 Account Detail
                             </Link>
-                            <Link href={route('admin.customers.dashboard', customer.id)} className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                            <Link href={route('admin.customers.dashboard', customer.uuid)} className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                                 Performance
                             </Link>
                             <button
                                 onClick={() => {
                                     if (window.confirm(`Log in as the owner of ${customer.business_name || customer.name}?`)) {
-                                        router.post(route('admin.impersonation.start-customer', customer.id));
+                                        router.post(route('admin.impersonation.start-customer', customer.uuid));
                                     }
                                 }}
                                 className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"

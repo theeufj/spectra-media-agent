@@ -161,9 +161,9 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
         >
             <Head title="Activity Logs" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Filters */}
                         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -226,7 +226,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                 </div>
                             </div>
                             <div className="flex justify-between items-center mt-4">
-                                <div className="flex space-x-2">
+                                <div className="flex flex-wrap gap-2">
                                     <button
                                         onClick={applyFilters}
                                         className="px-4 py-2 bg-brand-dark text-white text-sm rounded-md hover:bg-brand-darker"
@@ -276,7 +276,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                     <p className="text-sm text-gray-500">
                                         Showing {logs.from} to {logs.to} of {logs.total} results
                                     </p>
-                                    <div className="flex space-x-2">
+                                    <div className="flex flex-wrap gap-2">
                                         {logs.links.map((link, index) => (
                                             <Link
                                                 key={index}

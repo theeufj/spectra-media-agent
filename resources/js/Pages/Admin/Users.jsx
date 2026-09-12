@@ -13,9 +13,9 @@ export default function Users({ auth }) {
         >
             <Head title="Admin - Users" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 py-12">
+                <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                         <UserTable users={users} plans={plans} />
                     </div>

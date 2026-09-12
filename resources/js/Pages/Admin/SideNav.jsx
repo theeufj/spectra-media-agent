@@ -23,8 +23,15 @@ const SectionHeader = ({ children }) => (
 export default function SideNav() {
     const { url } = usePage();
 
+    /*
+     * w-64 is a quarter of a 390px screen, and the admin shell is a plain flex
+     * row — so on a phone the sidebar took 256px and squeezed every admin
+     * page's content column down to about 100px, which then pushed the
+     * document sideways. Full width above the content on small screens, fixed
+     * column from lg.
+     */
     return (
-        <div className="w-64 min-h-screen bg-white shadow-lg">
+        <div className="w-full shrink-0 bg-white shadow-lg lg:min-h-screen lg:w-64">
             <div className="px-6 py-4">
                 <h2 className="text-lg font-semibold text-gray-800">Admin Menu</h2>
             </div>

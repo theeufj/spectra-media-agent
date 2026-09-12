@@ -40,9 +40,9 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
         >
             <Head title="Admin - Settings" />
 
-            <div className="flex">
+            <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="flex-1 p-8">
+                <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-4xl mx-auto">
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">
                             <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark">

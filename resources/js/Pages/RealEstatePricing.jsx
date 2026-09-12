@@ -1,11 +1,11 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import Hero, { brandTint } from '@/Components/Marketing/Hero';
 import PricingTable from '@/Components/Marketing/PricingTable';
 import CtaBand from '@/Components/Marketing/CtaBand';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import FaqAccordion from '@/Components/Marketing/FaqAccordion';
 
 const faqs = [
     {
@@ -75,16 +75,17 @@ const features = [
     'Pause or cancel anytime — no penalty',
 ];
 
+/*
+ * No <Head> here — LandingController serves this skin's own title, description
+ * and Open Graph pair. It used to inherit the flagship's, so realpropertyads.com
+ * advertised "| sitetospend" to every crawler that does not run JavaScript,
+ * while the tags written here appended a second, different set on top.
+ */
 export default function RealEstatePricing({ auth }) {
-    const [openFAQ, setOpenFAQ] = React.useState(null);
 
     return (
         <>
-            <Head>
-                <title>Pricing — Real Property Ads</title>
-                <meta name="description" content="One simple package for real estate agents. $1,000 to launch your property campaign, then $500/month until it sells. No lock-in." />
-            </Head>
-
+            <PageTitle />
             <div className="min-h-screen bg-white">
                 <Header auth={auth} />
 
@@ -160,37 +161,12 @@ export default function RealEstatePricing({ auth }) {
                     </div>
 
                     {/* FAQ */}
-                    <div className="bg-white py-16 sm:py-24">
+                    <div className="bg-white py-12 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                            <h2 className="mb-10 text-center text-3xl font-extrabold text-gray-900">
+                            <h2 className="mb-8 text-center text-3xl font-extrabold text-gray-900 sm:mb-10">
                                 Frequently Asked Questions
                             </h2>
-                            <div className="space-y-4">
-                                {faqs.map((faq, index) => (
-                                    <div key={faq.question} className="rounded-lg border border-gray-200">
-                                        <h3>
-                                            <button
-                                                type="button"
-                                                onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
-                                                aria-expanded={openFAQ === index}
-                                                aria-controls={`faq-answer-${index}`}
-                                                className="flex w-full items-center justify-between px-6 py-4 text-left text-base font-semibold text-gray-900 transition-colors hover:bg-gray-50"
-                                            >
-                                                <span className="pr-4">{faq.question}</span>
-                                                <ChevronDownIcon
-                                                    className={`h-5 w-5 flex-shrink-0 text-brand-dark transition-transform ${openFAQ === index ? 'rotate-180' : ''}`}
-                                                    aria-hidden="true"
-                                                />
-                                            </button>
-                                        </h3>
-                                        {openFAQ === index && (
-                                            <div id={`faq-answer-${index}`} className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-                                                <p className="text-sm leading-relaxed text-gray-600">{faq.answer}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                            <FaqAccordion items={faqs} />
                         </div>
                     </div>
 
