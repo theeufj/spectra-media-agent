@@ -14,6 +14,38 @@ import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 import { usePolling } from '@/hooks/usePolling';
 
+/**
+ * Make a clickable div behave as a checkbox for everyone.
+ *
+ * Approving creative for deployment — which ad copy, which images, which
+ * videos actually go live — was three `<div onClick>` handlers with
+ * `cursor-pointer` and nothing else. No keyboard path, no role, no state
+ * announced. The ad-copy panel even instructs "Check the box to include this
+ * ad copy in deployment" above a thing that is not a checkbox and cannot be
+ * checked without a mouse.
+ *
+ * Returns the props rather than a component so the existing markup and its
+ * conditional borders stay exactly as they are.
+ */
+function approvalToggle({ checked, onToggle, label, enabled = true }) {
+    if (!enabled) return {};
+
+    return {
+        role: 'checkbox',
+        'aria-checked': checked,
+        'aria-label': label,
+        tabIndex: 0,
+        onClick: onToggle,
+        onKeyDown: (e) => {
+            // Space is what a checkbox answers to; Enter is what people try.
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                onToggle();
+            }
+        },
+    };
+}
+
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
@@ -724,8 +756,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     <span>Check the box to include this ad copy in deployment. Unchecked ad copy will not go live.</span>
                                                 </p>
                                                 <div
-                                                    className={`mt-3 p-4 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer relative`}
-                                                    onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
+                                                    className={`mt-3 p-4 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
+                                                    {...approvalToggle({
+                                                        checked: Boolean(collateral.adCopy.should_deploy),
+                                                        onToggle: () => handleToggleCollateral('ad_copy', collateral.adCopy.id),
+                                                        label: 'Include this ad copy in deployment',
+                                                    })}
                                                 >
                                                     {/* Checkbox */}
                                                     <div className={`absolute top-3 left-3 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${collateral.adCopy.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
@@ -1016,8 +1052,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 {collateral.imageCollaterals.map((image) => (
                                                     <div
                                                         key={image.id}
-                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer`}
-                                                        onClick={() => handleToggleCollateral('image', image.id)}
+                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
+                                                        {...approvalToggle({
+                                                            checked: Boolean(image.should_deploy),
+                                                            onToggle: () => handleToggleCollateral('image', image.id),
+                                                            label: 'Include this image in deployment',
+                                                        })}
                                                     >
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
                                                         {/* Checkbox */}
@@ -1172,8 +1212,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         className="relative group"
                                                     >
                                                         <div
-                                                            className={`border-2 ${video.status === 'completed' && video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md ${video.status === 'completed' ? 'cursor-pointer' : ''}`}
-                                                            onClick={() => { if (video.status === 'completed') handleToggleCollateral('video', video.id); }}
+                                                            className={`border-2 ${video.status === 'completed' && video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md ${video.status === 'completed' ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2' : ''}`}
+                                                            {...approvalToggle({
+                                                                checked: Boolean(video.should_deploy),
+                                                                onToggle: () => handleToggleCollateral('video', video.id),
+                                                                label: 'Include this video in deployment',
+                                                                enabled: video.status === 'completed',
+                                                            })}
                                                         >
                                                             {/* Deploy checkbox — only completed videos can be deployed */}
                                                             {video.status === 'completed' && (
