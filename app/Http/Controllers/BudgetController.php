@@ -23,6 +23,11 @@ class BudgetController extends Controller
             'allocation' => $analysis['allocation'],
             'snapshot' => $analysis['snapshot'],
             'recommendations' => $analysis['recommendations'],
+            // The page drew a card and a percentage box for all four platforms
+            // whether or not the account had them, so three quarters of it was
+            // an invitation to split a budget across platforms that cannot
+            // receive it. It needs to know which are real.
+            'configuredPlatforms' => $customer->configuredPlatforms(),
         ]);
     }
 
