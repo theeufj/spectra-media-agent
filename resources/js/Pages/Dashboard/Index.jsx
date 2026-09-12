@@ -484,7 +484,7 @@ export default function Dashboard({ auth }) {
                                                 <KpiCard label="Revenue" value={money(displayKpis.revenue || 0, currency, { maximumFractionDigits: 0 })} />
                                                 <KpiCard label="ROAS" value={`${displayKpis.roas || 0}x`} sub={displayKpis.roas >= 3 ? 'Strong' : displayKpis.roas >= 1 ? 'Moderate' : 'Needs attention'} color={displayKpis.roas >= 2 ? 'text-green-600' : displayKpis.roas >= 1 ? 'text-yellow-600' : 'text-red-600'} />
                                                 <KpiCard label="Conversions" value={count(displayKpis.conversions || 0)} color="text-green-600" />
-                                                <KpiCard label="Avg CPA" value={`$${displayKpis.cpa || 0}`} />
+                                                <KpiCard label="Avg CPA" value={money(displayKpis.cpa || 0, currency)} />
                                             </div>
 
                                             {/* Spend Allocation */}

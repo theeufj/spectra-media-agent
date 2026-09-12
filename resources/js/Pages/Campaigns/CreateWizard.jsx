@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { money } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -314,6 +316,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     // first one's half-built campaign restored into the second, and two people
     // sharing a browser restored each other's. A draft holds a business's
     // landing pages, keywords and budget.
+    const currency = useCurrency();
+
     const draftKey = useMemo(
         () => `campaign_draft:${auth?.user?.id ?? 'anon'}:${auth?.user?.active_customer?.id ?? 'none'}`,
         [auth?.user?.id, auth?.user?.active_customer?.id]
@@ -1030,7 +1034,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             </ReviewSection>
                             
                             <ReviewSection title="Budget & Schedule" step={4} onEdit={() => goToStep(4)}>
-                                <ReviewItem label="Total Budget" value={`$${data.total_budget}`} />
+                                <ReviewItem label="Total Budget" value={money(data.total_budget || 0, currency)} />
                                 <ReviewItem label="Primary KPI" value={data.primary_kpi} />
                                 <ReviewItem label="Duration" value={`${data.start_date} to ${data.end_date}`} />
                             </ReviewSection>

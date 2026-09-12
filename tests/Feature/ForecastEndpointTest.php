@@ -139,6 +139,52 @@ class ForecastEndpointTest extends TestCase
             ->assertJsonPath('forecast', null);
     }
 
+    public function test_saving_an_order_value_keeps_the_budget_the_panel_was_showing(): void
+    {
+        /*
+         * Found by driving the UI, not by reading it.
+         *
+         * This replied with a forecast framed at the demo default, so entering
+         * an order value on a campaign budgeted at $1,350/mo silently redrew
+         * the panel at $1,500/mo — the heading, the clicks and the spend all
+         * jumped to a budget the customer had never set, in the same instant
+         * they were shown revenue for the first time.
+         */
+        [, $customer] = $this->signedIn();
+        $this->seedForecast($customer);
+
+        $response = $this->postJson(route('api.forecast.order-value'), [
+            'average_order_value' => 180,
+            'monthly_budget' => 1350,
+        ])->assertOk();
+
+        $this->assertSame(1350.0, (float) $response->json('forecast.budget'));
+
+        // Google says this market is worth 1000; a 1350 budget does not cap it,
+        // so the spend figure stays Google's rather than the budget.
+        $this->assertSame(1000.0, (float) $response->json('forecast.cost'));
+        $this->assertFalse($response->json('forecast.budget_capped'));
+    }
+
+    public function test_saving_an_order_value_can_frame_on_a_campaign(): void
+    {
+        [, $customer] = $this->signedIn();
+        $this->seedForecast($customer);
+
+        $campaign = \App\Models\Campaign::factory()->create([
+            'customer_id' => $customer->id,
+            'daily_budget' => 45.00,
+        ]);
+
+        $response = $this->postJson(route('api.forecast.order-value'), [
+            'average_order_value' => 180,
+            'campaign_id' => $campaign->id,
+        ])->assertOk();
+
+        // 45/day is 1350 a month.
+        $this->assertSame(1350.0, (float) $response->json('forecast.budget'));
+    }
+
     public function test_a_campaign_belonging_to_another_customer_is_ignored(): void
     {
         [, $customer] = $this->signedIn();

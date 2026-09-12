@@ -84,9 +84,9 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
                         <MetricCard label="Clicks" value={count(totals.clicks ?? 0)} />
                         <MetricCard label="CTR" value={`${totals.ctr ?? 0}%`} />
                         <MetricCard label="Cost" value={money(totals.cost ?? 0, currency, { maximumFractionDigits: 0 })} />
-                        <MetricCard label="CPC" value={`$${totals.cpc ?? 0}`} />
+                        <MetricCard label="CPC" value={money(totals.cpc ?? 0, currency)} />
                         <MetricCard label="Conversions" value={count(totals.conversions ?? 0)} color="text-green-600" />
-                        <MetricCard label="CPA" value={`$${totals.cpa ?? 0}`} />
+                        <MetricCard label="CPA" value={money(totals.cpa ?? 0, currency)} />
                         <MetricCard label="ROAS" value={`${totals.roas ?? 0}x`} color="text-blue-600" />
                     </div>
 

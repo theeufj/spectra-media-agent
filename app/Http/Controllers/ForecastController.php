@@ -70,6 +70,19 @@ class ForecastController extends Controller
              * decisions later.
              */
             'average_order_value' => 'required|numeric|min:1|max:1000000',
+
+            /*
+             * The budget the panel is currently showing.
+             *
+             * Without it this replied with a forecast framed at the demo
+             * default, so entering an order value on a campaign budgeted at
+             * $1,350/mo silently redrew the panel at $1,500/mo — the heading,
+             * the clicks and the spend all jumped to a budget the customer had
+             * never set, in the same instant they were being shown revenue for
+             * the first time.
+             */
+            'monthly_budget' => 'nullable|numeric|min:0|max:10000000',
+            'campaign_id' => 'nullable|integer',
         ]);
 
         $customer = $this->activeCustomer($request);
@@ -88,9 +101,20 @@ class ForecastController extends Controller
             'average_order_value' => $validated['average_order_value'],
         ]);
 
-        return response()->json([
-            'forecast' => app(CustomerMarketForecast::class)->for($customer->fresh()),
-        ]);
+        $fresh = $customer->fresh();
+        $service = app(CustomerMarketForecast::class);
+
+        $campaign = isset($validated['campaign_id'])
+            ? Campaign::where('customer_id', $customer->id)->find($validated['campaign_id'])
+            : null;
+
+        // Reply at the budget the panel was already showing, so the only thing
+        // that changes on screen is the revenue they just unlocked.
+        $forecast = isset($validated['monthly_budget']) && (float) $validated['monthly_budget'] > 0
+            ? $service->atBudget($fresh, (float) $validated['monthly_budget'])
+            : $service->for($fresh, $campaign);
+
+        return response()->json(['forecast' => $forecast]);
     }
 
     /**

@@ -70,20 +70,26 @@ function Figure({ label, value, hint, emphasis = false }) {
     );
 }
 
-function OrderValuePrompt({ currency, onSaved }) {
+function OrderValuePrompt({ currency, monthlyBudget, campaignId, onSaved }) {
     const [value, setValue] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
-    const save = async (e) => {
-        e.preventDefault();
+    const save = async () => {
+        if (!value || saving) return;
+
         setError(null);
         setSaving(true);
 
         try {
             const { forecast } = await fetchJson(route('api.forecast.order-value'), {
                 method: 'POST',
-                json: { average_order_value: value },
+                json: {
+                    average_order_value: value,
+                    // Keep the panel on the budget it is already showing.
+                    monthly_budget: monthlyBudget > 0 ? monthlyBudget : undefined,
+                    campaign_id: campaignId ?? undefined,
+                },
             });
             onSaved(forecast);
         } catch {
@@ -95,8 +101,19 @@ function OrderValuePrompt({ currency, onSaved }) {
         }
     };
 
+    /*
+     * Not a <form>.
+     *
+     * This panel renders inside BudgetConfirmation's form, and nested forms are
+     * invalid HTML. In this browser the inner form simply never submitted —
+     * pressing Enter in the amount field did nothing at all — but the failure
+     * mode is not guaranteed to be the harmless one: the enclosing form's
+     * submit button is "Confirm budget", which charges seven days of spend up
+     * front. Enter in a field asking "what is a customer worth to you?" must
+     * never be able to reach it.
+     */
     return (
-        <form onSubmit={save} className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 p-4">
+        <div className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 p-4">
             <label htmlFor="forecast-order-value" className="block text-sm font-medium text-gray-900">
                 What's one customer worth to you?
             </label>
@@ -106,8 +123,14 @@ function OrderValuePrompt({ currency, onSaved }) {
             </p>
 
             <div className="mt-3 flex flex-wrap items-start gap-2">
-                <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-500">
+                {/*
+                    The currency sits in its own bordered gutter rather than
+                    floating inside the field. Butted straight against the
+                    placeholder it read as "AUD 180" — an already-filled value —
+                    so people would have skipped the field thinking it was done.
+                */}
+                <div className="flex rounded-md shadow-sm">
+                    <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-100 px-3 text-sm text-gray-600">
                         {currency}
                     </span>
                     <input
@@ -118,12 +141,22 @@ function OrderValuePrompt({ currency, onSaved }) {
                         inputMode="decimal"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
-                        className="w-40 rounded-md border-gray-300 pl-12 text-sm shadow-sm focus:border-brand-primary focus:ring-brand-primary"
-                        placeholder="180"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                // Stops here rather than bubbling to the budget
+                                // form this panel is nested inside.
+                                e.preventDefault();
+                                e.stopPropagation();
+                                save();
+                            }
+                        }}
+                        className="w-32 rounded-none rounded-r-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
+                        placeholder="e.g. 180"
                     />
                 </div>
                 <button
-                    type="submit"
+                    type="button"
+                    onClick={save}
                     disabled={saving || !value}
                     className="rounded-md bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
                 >
@@ -132,7 +165,7 @@ function OrderValuePrompt({ currency, onSaved }) {
             </div>
 
             {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
-        </form>
+        </div>
     );
 }
 
@@ -258,6 +291,8 @@ export default function ForecastPanel({
                 {!framed.has_order_value && (
                     <OrderValuePrompt
                         currency={currency}
+                        monthlyBudget={Number(monthlyBudget)}
+                        campaignId={campaignId}
                         onSaved={(updated) => updated && setForecast(updated)}
                     />
                 )}
