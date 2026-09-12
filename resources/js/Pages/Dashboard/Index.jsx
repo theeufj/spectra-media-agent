@@ -11,6 +11,8 @@ import NoCampaigns from '@/Components/NoCampaigns';
 import WaitingForData from '@/Components/WaitingForData';
 import SetupProgressNav from '@/Components/SetupProgressNav';
 import ForecastPanel from '@/Components/ForecastPanel';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
@@ -46,7 +48,6 @@ const platformOf = (name) => PLATFORMS[String(name || '').toLowerCase()] ?? OTHE
 // the product, not a fault.
 const SERIES = { cost: '#2a78d6', revenue: '#1baf7a' };
 
-const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 // ─── Small reusable pieces ──────────────────────────────────────
 function KpiCard({ label, value, sub, color }) {
@@ -119,7 +120,9 @@ function SpendBar({ platforms }) {
  *
  * @param {Array<{date: string, value: number}>} points
  */
-function Sparkline({ points, color, label, format = money }) {
+function Sparkline({ points, color, label, format }) {
+    const currency = useCurrency();
+    const formatValue = format ?? ((n) => money(n, currency, { maximumFractionDigits: 0 }));
     const [hover, setHover] = useState(null);
 
     const W = 640;
@@ -140,13 +143,13 @@ function Sparkline({ points, color, label, format = money }) {
                 </span>
                 {/* One direct label — the peak — not a number on every point. */}
                 <span className="text-xs text-gray-500">
-                    peak <span className="font-semibold text-gray-900">{format(peak?.value)}</span>
+                    peak <span className="font-semibold text-gray-900">{formatValue(peak?.value)}</span>
                 </span>
             </figcaption>
 
             <div className="relative" onMouseLeave={() => setHover(null)}>
                 <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-24 w-full" role="img"
-                     aria-label={`${label} over time, peak ${format(peak?.value)}`}>
+                     aria-label={`${label} over time, peak ${formatValue(peak?.value)}`}>
                     <path d={area} fill={color} opacity="0.12" />
                     <path d={line} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"
                           strokeLinejoin="round" strokeLinecap="round" />
@@ -176,7 +179,7 @@ function Sparkline({ points, color, label, format = money }) {
                         className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white shadow-lg"
                         style={{ left: `${(hover / Math.max(points.length - 1, 1)) * 100}%` }}
                     >
-                        {points[hover].date}: <span className="font-semibold">{format(points[hover].value)}</span>
+                        {points[hover].date}: <span className="font-semibold">{formatValue(points[hover].value)}</span>
                     </div>
                 )}
             </div>
@@ -213,12 +216,13 @@ function DailyChart({ data }) {
 }
 
 function FunnelBar({ stage, maxValue }) {
+    const currency = useCurrency();
     const width = maxValue > 0 ? (stage.value / maxValue) * 100 : 0;
     // A label only fits inside the fill once the fill is wide enough to hold
     // it. Below that it was being clipped by the bar's own rounded end —
     // 16,024 impressions read fine, 420 clicks rendered as "20".
     const labelInside = width >= 18;
-    const value = stage.value.toLocaleString();
+    const value = count(stage.value);
 
     return (
         <div className="flex items-center gap-4">
@@ -248,6 +252,7 @@ function FunnelBar({ stage, maxValue }) {
 }
 
 function PlatformComparisonBar({ platform, metric, maxValue }) {
+    const currency = useCurrency();
     const width = maxValue > 0 ? (platform[metric] / maxValue) * 100 : 0;
     const { color } = platformOf(platform.platform);
 
@@ -258,7 +263,7 @@ function PlatformComparisonBar({ platform, metric, maxValue }) {
                 <div className="h-4 rounded-full" style={{ width: `${Math.max(width, 1)}%`, backgroundColor: color }} />
             </div>
             <span className="w-20 shrink-0 text-right text-xs font-medium text-gray-900">
-                {metric === 'cost' ? money(platform[metric]) : metric === 'roas' ? `${platform[metric]}x` : platform[metric]?.toLocaleString()}
+                {metric === 'cost' ? money(platform[metric], currency, { maximumFractionDigits: 0 }) : metric === 'roas' ? `${platform[metric]}x` : count(platform[metric] ?? 0)}
             </span>
         </div>
     );
@@ -283,6 +288,7 @@ function TabBtn({ children }) {
 // Main Dashboard Component
 // ═══════════════════════════════════════════════════════════════
 export default function Dashboard({ auth }) {
+    const currency = useCurrency();
     const {
         campaigns, defaultCampaign, days: initialDays,
         usageStats, creativeUsage, pendingTasks, healthAlerts, agentActivities, flash,
@@ -474,10 +480,10 @@ export default function Dashboard({ auth }) {
                                         <>
                                             {/* KPI Cards */}
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                                                <KpiCard label="Ad Spend" value={`$${Number(displayKpis.cost || 0).toLocaleString()}`} sub={`${selectedDays} days`} />
-                                                <KpiCard label="Revenue" value={`$${Number(displayKpis.revenue || 0).toLocaleString()}`} />
+                                                <KpiCard label="Ad Spend" value={money(displayKpis.cost || 0, currency, { maximumFractionDigits: 0 })} sub={`${selectedDays} days`} />
+                                                <KpiCard label="Revenue" value={money(displayKpis.revenue || 0, currency, { maximumFractionDigits: 0 })} />
                                                 <KpiCard label="ROAS" value={`${displayKpis.roas || 0}x`} sub={displayKpis.roas >= 3 ? 'Strong' : displayKpis.roas >= 1 ? 'Moderate' : 'Needs attention'} color={displayKpis.roas >= 2 ? 'text-green-600' : displayKpis.roas >= 1 ? 'text-yellow-600' : 'text-red-600'} />
-                                                <KpiCard label="Conversions" value={Number(displayKpis.conversions || 0).toLocaleString()} color="text-green-600" />
+                                                <KpiCard label="Conversions" value={count(displayKpis.conversions || 0)} color="text-green-600" />
                                                 <KpiCard label="Avg CPA" value={`$${displayKpis.cpa || 0}`} />
                                             </div>
 
@@ -595,9 +601,9 @@ export default function Dashboard({ auth }) {
                                                                             {p.platform}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="py-2.5">{p.impressions?.toLocaleString()}</td>
-                                                                    <td className="py-2.5">{p.clicks?.toLocaleString()}</td>
-                                                                    <td className="py-2.5">${p.cost?.toLocaleString()}</td>
+                                                                    <td className="py-2.5">{count(p.impressions ?? 0)}</td>
+                                                                    <td className="py-2.5">{count(p.clicks ?? 0)}</td>
+                                                                    <td className="py-2.5">{money(p.cost ?? 0, currency, { maximumFractionDigits: 0 })}</td>
                                                                     <td className="py-2.5">{p.conversions}</td>
                                                                     <td className="py-2.5">{p.roas}x</td>
                                                                     <td className="py-2.5">{p.conversion_share}%</td>
@@ -623,13 +629,13 @@ export default function Dashboard({ auth }) {
                                             <h3 className="text-lg font-semibold text-delft-blue-900 mb-4">Spending Projections</h3>
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                                 <div><p className="text-sm text-delft-blue-600">Daily Avg Spend</p><p className="text-xl font-bold text-delft-blue-900">${projections.daily_avg_spend}</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">${projections.monthly_projected_spend?.toLocaleString()}</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Revenue</p><p className="text-xl font-bold text-green-700">${projections.monthly_projected_revenue?.toLocaleString()}</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Profit</p><p className={`text-xl font-bold ${projections.monthly_projected_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>${projections.monthly_projected_profit?.toLocaleString()}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.monthly_projected_spend ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Revenue</p><p className="text-xl font-bold text-green-700">{money(projections.monthly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Monthly Projected Profit</p><p className={`text-xl font-bold ${projections.monthly_projected_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{money(projections.monthly_projected_profit ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Budget Utilization</p><p className="text-xl font-bold text-delft-blue-900">{projections.budget_utilization}%</p></div>
                                                 <div><p className="text-sm text-delft-blue-600">Daily Budget (Total)</p><p className="text-xl font-bold text-delft-blue-900">${projections.daily_budget_total}</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Quarterly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">${projections.quarterly_projected_spend?.toLocaleString()}</p></div>
-                                                <div><p className="text-sm text-delft-blue-600">Quarterly Projected Revenue</p><p className="text-xl font-bold text-green-700">${projections.quarterly_projected_revenue?.toLocaleString()}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Quarterly Projected Spend</p><p className="text-xl font-bold text-delft-blue-900">{money(projections.quarterly_projected_spend ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
+                                                <div><p className="text-sm text-delft-blue-600">Quarterly Projected Revenue</p><p className="text-xl font-bold text-green-700">{money(projections.quarterly_projected_revenue ?? 0, currency, { maximumFractionDigits: 0 })}</p></div>
                                             </div>
                                         </div>
                                     )}
@@ -661,8 +667,8 @@ export default function Dashboard({ auth }) {
                                                                     if (camp) handleCampaignChange(camp);
                                                                 }}>
                                                                 <td className="py-3 px-4 font-medium text-gray-900">{c.name}</td>
-                                                                <td className="py-3 px-4 text-right">${c.cost.toLocaleString()}</td>
-                                                                <td className="py-3 px-4 text-right">${c.revenue.toLocaleString()}</td>
+                                                                <td className="py-3 px-4 text-right">{money(c.cost, currency, { maximumFractionDigits: 0 })}</td>
+                                                                <td className="py-3 px-4 text-right">{money(c.revenue, currency, { maximumFractionDigits: 0 })}</td>
                                                                 <td className="py-3 px-4 text-right">{c.conversions}</td>
                                                                 <td className="py-3 px-4 text-right">
                                                                     <span className={c.roas >= 2 ? 'text-green-600 font-semibold' : c.roas >= 1 ? 'text-yellow-600' : 'text-red-600 font-semibold'}>{c.roas}x</span>

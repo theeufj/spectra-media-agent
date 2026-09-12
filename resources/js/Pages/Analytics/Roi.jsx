@@ -1,5 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { money, count } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useState } from 'react';
 
 const platformLabels = {
@@ -32,6 +34,8 @@ function KpiCard({ label, value, sub, trend }) {
 }
 
 function SpendBar({ platforms }) {
+    const currency = useCurrency();
+
     const total = Object.values(platforms).reduce((s, p) => s + p.cost, 0);
     if (total === 0) return null;
 
@@ -45,7 +49,7 @@ function SpendBar({ platforms }) {
                             key={name}
                             className="h-full"
                             style={{ width: `${pct}%`, backgroundColor: platformColors[name] || '#6B7280' }}
-                            title={`${platformLabels[name]}: $${data.cost.toLocaleString()} (${pct.toFixed(1)}%)`}
+                            title={`${platformLabels[name]}: ${money(data.cost, currency, { maximumFractionDigits: 0 })} (${pct.toFixed(1)}%)`}
                         />
                     );
                 })}
@@ -54,7 +58,7 @@ function SpendBar({ platforms }) {
                 {Object.entries(platforms).map(([name, data]) => (
                     <div key={name} className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: platformColors[name] }} />
-                        <span className="text-gray-600">{platformLabels[name]}: ${data.cost.toLocaleString()}</span>
+                        <span className="text-gray-600">{platformLabels[name]}: {money(data.cost, currency, { maximumFractionDigits: 0 })}</span>
                     </div>
                 ))}
             </div>
@@ -63,6 +67,8 @@ function SpendBar({ platforms }) {
 }
 
 function DailyChart({ data }) {
+    const currency = useCurrency();
+
     if (!data || data.length === 0) return null;
 
     const maxVal = Math.max(...data.map(d => Math.max(d.cost, d.revenue)));
@@ -81,12 +87,12 @@ function DailyChart({ data }) {
                                 <div
                                     className="bg-red-300 rounded-t"
                                     style={{ height: costH, width: 6 }}
-                                    title={`Cost: $${day.cost}`}
+                                    title={`Cost: ${money(day.cost, currency)}`}
                                 />
                                 <div
                                     className="bg-green-400 rounded-t"
                                     style={{ height: revH, width: 6 }}
-                                    title={`Revenue: $${day.revenue}`}
+                                    title={`Revenue: ${money(day.revenue, currency)}`}
                                 />
                             </div>
                             {i % Math.ceil(data.length / 10) === 0 && (
@@ -107,6 +113,8 @@ function DailyChart({ data }) {
 }
 
 export default function Roi({ days, platformData, campaignBreakdown, dailyTrend, projections }) {
+    const currency = useCurrency();
+
     const [selectedDays, setSelectedDays] = useState(days);
 
     const handleDaysChange = (newDays) => {
@@ -127,7 +135,7 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
             <Head title="ROI Dashboard" />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl sm: space-y-6">
+                <div className="mx-auto max-w-7xl space-y-6">
                     {/* Time Range Selector */}
                     <div className="flex justify-end">
                         <div className="inline-flex rounded-lg border border-gray-200 bg-white">
@@ -149,11 +157,11 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
 
                     {/* KPI Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <KpiCard label="Total Ad Spend" value={`$${totalCost.toLocaleString()}`} sub={`${selectedDays} days`} />
-                        <KpiCard label="Total Revenue" value={`$${totalRevenue.toLocaleString()}`} />
+                        <KpiCard label="Total Ad Spend" value={money(totalCost, currency, { maximumFractionDigits: 0 })} sub={`${selectedDays} days`} />
+                        <KpiCard label="Total Revenue" value={money(totalRevenue, currency, { maximumFractionDigits: 0 })} />
                         <KpiCard label="ROAS" value={`${overallRoas}x`} sub={overallRoas >= 3 ? 'Strong' : overallRoas >= 1 ? 'Moderate' : 'Needs attention'} />
-                        <KpiCard label="Conversions" value={totalConversions.toLocaleString()} />
-                        <KpiCard label="Avg CPA" value={`$${avgCpa}`} />
+                        <KpiCard label="Conversions" value={count(totalConversions)} />
+                        <KpiCard label="Avg CPA" value={money(avgCpa, currency)} />
                     </div>
 
                     {/* Spend Allocation */}
@@ -179,11 +187,11 @@ export default function Roi({ days, platformData, campaignBreakdown, dailyTrend,
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 <div>
                                     <p className="text-sm text-indigo-600">Daily Avg Spend</p>
-                                    <p className="text-xl font-bold text-indigo-900">${projections.daily_avg_spend}</p>
+                                    <p className="text-xl font-bold text-indigo-900">{money(projections.daily_avg_spend, currency)}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Monthly Projected Spend</p>
-                                    <p className="text-xl font-bold text-indigo-900">${projections.monthly_projected_spend?.toLocaleString()}</p>
+                                    <p className="text-xl font-bold text-indigo-900">{money(projections.monthly_projected_spend, currency, { maximumFractionDigits: 0 })}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-indigo-600">Monthly Projected Revenue</p>

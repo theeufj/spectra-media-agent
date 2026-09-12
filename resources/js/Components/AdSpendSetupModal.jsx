@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import Modal from '@/Components/Modal';
+import { brandTint } from '@/Components/Marketing/Hero';
 import { fetchJson } from '@/utils/http';
+import { money } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
@@ -64,14 +67,19 @@ const useBudgetCalcs = (campaign) => {
 };
 
 // Budget summary block shared by both form variants
-const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge }) => (
+const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge }) => {
+    // This panel states the amount actually taken from their card. Nine of
+    // seventeen customers are on AUD, and every figure here said "$".
+    const currency = useCurrency();
+
+    return (
     <>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-medium text-blue-900 mb-2">Campaign Budget Details</h4>
             <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                     <p className="text-blue-600">Total Budget</p>
-                    <p className="font-semibold text-blue-900">${Number(campaign?.total_budget || 0).toLocaleString()}</p>
+                    <p className="font-semibold text-blue-900">{money(campaign?.total_budget || 0, currency, { maximumFractionDigits: 0 })}</p>
                 </div>
                 <div>
                     <p className="text-blue-600">Duration</p>
@@ -79,7 +87,7 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
                 </div>
                 <div>
                     <p className="text-blue-600">Calculated Daily Budget</p>
-                    <p className="font-semibold text-blue-900">${estimatedDailySpend.toFixed(2)}/day</p>
+                    <p className="font-semibold text-blue-900">{money(estimatedDailySpend, currency)}/day</p>
                 </div>
                 <div>
                     <p className="text-blue-600">Campaign Dates</p>
@@ -90,11 +98,11 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
             </div>
         </div>
 
-        <div className="bg-brand-primary/10 border border-brand-primary/30 rounded-lg p-4">
+        <div className="rounded-lg border p-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
             <h4 className="font-medium text-brand-darker mb-2">How Ad Spend Billing Works</h4>
             <ul className="text-sm text-brand-darker space-y-1">
                 <li>• We charge <strong>{daysToCharge} days of estimated ad spend</strong> upfront as credit
-                    {daysToCharge < 7 && <span className="text-brand-primary"> (your campaign is only {campaignDurationDays} days)</span>}
+                    {daysToCharge < 7 && <span className="text-brand-darker font-semibold"> (your campaign is only {campaignDurationDays} days)</span>}
                 </li>
                 <li>• Your actual daily spend is deducted each morning at 6 AM</li>
                 <li>• Balance is automatically topped up when low</li>
@@ -106,19 +114,21 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
             <div className="flex justify-between items-center">
                 <div>
                     <p className="text-sm text-gray-500">Daily Budget</p>
-                    <p className="text-lg font-semibold text-gray-900">${estimatedDailySpend.toFixed(2)}/day</p>
+                    <p className="text-lg font-semibold text-gray-900">{money(estimatedDailySpend, currency)}/day</p>
                 </div>
                 <div className="text-right">
                     <p className="text-sm text-gray-500">Initial Charge ({daysToCharge} days)</p>
-                    <p className="text-2xl font-bold text-brand-dark">${upfrontCharge.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-brand-dark">{money(upfrontCharge, currency)}</p>
                 </div>
             </div>
         </div>
-    </>
-);
+        </>
+    );
+};
 
 // Form for users who already have a payment method on file — no card entry needed
 const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
+    const currency = useCurrency();
     const [error, setError] = useState(null);
     const [processing, setProcessing] = useState(false);
     const { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge } = useBudgetCalcs(campaign);
@@ -192,7 +202,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay $${upfrontCharge.toFixed(2)} & Deploy`}
+                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & Deploy`}
                 </button>
             </div>
 
@@ -206,6 +216,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
 
 // Form for users with no payment method on file — collects card via Stripe Elements
 const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
+    const currency = useCurrency();
     const stripe = useStripe();
     const elements = useElements();
     const [error, setError] = useState(null);
@@ -294,7 +305,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay $${upfrontCharge.toFixed(2)} & Deploy`}
+                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & Deploy`}
                 </button>
             </div>
 
@@ -308,6 +319,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
 
 // Main Modal Component
 export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, existingCredit, hasPaymentMethod }) {
+    const currency = useCurrency();
     const isTopUp = existingCredit && existingCredit.status === 'active';
     return (
         <Modal show={show} onClose={onClose} maxWidth="lg">
@@ -318,7 +330,7 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                     </h2>
                     <p className="mt-1 text-sm text-gray-500">
                         {isTopUp
-                            ? <>Add funds for <strong>{campaignName}</strong>. Your existing balance of <strong>${Number(existingCredit.current_balance).toFixed(2)}</strong> will be topped up.</>
+                            ? <>Add funds for <strong>{campaignName}</strong>. Your existing balance of <strong>{money(existingCredit.current_balance, currency)}</strong> will be topped up.</>
                             : <>Before deploying <strong>{campaignName}</strong>, we need to fund your ad spend account.</>
                         }
                     </p>

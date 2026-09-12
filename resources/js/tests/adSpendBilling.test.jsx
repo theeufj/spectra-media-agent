@@ -7,6 +7,9 @@ const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('@inertiajs/react', () => ({
     Head: () => null,
     router: { reload: vi.fn() },
+    // The billing panels read the active customer's currency from shared
+    // props now, rather than printing a hardcoded dollar sign.
+    usePage: () => ({ props: { auth: { user: { active_customer: { currency_code: 'AUD' } } } } }),
 }));
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({
     default: ({ children }) => <div>{children}</div>,

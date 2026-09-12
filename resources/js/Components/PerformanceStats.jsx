@@ -1,4 +1,6 @@
 import React from 'react';
+import { money, count, percent } from '@/utils/format';
+import { useCurrency } from '@/hooks/useCurrency';
 
 const StatCard = ({ title, value, change }) => (
     <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
@@ -13,24 +15,28 @@ const StatCard = ({ title, value, change }) => (
 );
 
 const PerformanceStats = ({ stats }) => {
+    // Nine of seventeen customers are on AUD: "$1,234" was their spend
+    // rendered as US dollars on their own dashboard.
+    const currency = useCurrency();
+
     // Handle null/undefined stats gracefully
     if (!stats) {
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Spend" value="$0" />
+                <StatCard title="Total Spend" value={money(0, currency, { maximumFractionDigits: 0 })} />
                 <StatCard title="Total Clicks" value="0" />
-                <StatCard title="Average CTR" value="0%" />
-                <StatCard title="Average CPA" value="$0" />
+                <StatCard title="Average CTR" value={percent(0)} />
+                <StatCard title="Average CPA" value={money(0, currency)} />
             </div>
         );
     }
-    
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="Total Spend" value={`$${(stats.total_spend ?? 0).toLocaleString()}`} />
-            <StatCard title="Total Clicks" value={(stats.total_clicks ?? 0).toLocaleString()} />
-            <StatCard title="Average CTR" value={`${(stats.average_ctr ?? 0).toFixed(2)}%`} />
-            <StatCard title="Average CPA" value={`$${(stats.average_cpa ?? 0).toFixed(2)}`} />
+            <StatCard title="Total Spend" value={money(stats.total_spend ?? 0, currency, { maximumFractionDigits: 0 })} />
+            <StatCard title="Total Clicks" value={count(stats.total_clicks ?? 0)} />
+            <StatCard title="Average CTR" value={percent(stats.average_ctr ?? 0, { digits: 2 })} />
+            <StatCard title="Average CPA" value={money(stats.average_cpa ?? 0, currency)} />
         </div>
     );
 };
