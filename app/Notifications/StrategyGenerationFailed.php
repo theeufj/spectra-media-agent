@@ -43,9 +43,21 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
             ->salutation($this->teamSalutation());
     }
 
+    /**
+     * The bell reads title/message/action_url out of this payload.
+     *
+     * Without them the Notification model falls back to the literal string
+     * "Notification" and an empty body to satisfy its NOT NULL columns, which
+     * is what 273 rows in production say. The one thing the customer needs —
+     * the reason, already carried in `error` — was never shown to them.
+     */
     public function toArray(object $notifiable): array
     {
         return [
+            'title' => 'We could not build a strategy for '.$this->campaign->name,
+            'message' => $this->error,
+            'action_url' => url('/campaigns/'.$this->campaign->id.'/strategies'),
+            'action_text' => 'Open campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'error' => $this->error,
