@@ -1,13 +1,13 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 
 export default function Terms({ auth }) {
     return (
         <>
-            <Head title="Terms of Service" />
-            <div className="min-h-screen flex flex-col bg-gray-50">
+            <PageTitle />
+                        <div className="min-h-screen flex flex-col bg-gray-50">
                 <Header auth={auth} />
                 
                 <div className="flex-1 font-sans text-gray-900 antialiased">
@@ -15,7 +15,7 @@ export default function Terms({ auth }) {
                         <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
                             <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
                             <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Terms of Service</h1>
-                            <p className="mt-2 text-sm text-gray-500">Last updated: April 12, 2026</p>
+                            <p className="mt-2 text-sm text-gray-500">Last updated: September 12, 2026</p>
 
                             <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
                                 <p>Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the sitetospend application (the "Service") operated by sitetospend ("us", "we", or "our").</p>
@@ -64,11 +64,26 @@ export default function Terms({ auth }) {
                                     <li>AI agents will make real-time decisions about your campaigns without requiring your approval for each action</li>
                                     <li>Campaign performance can vary based on numerous factors including market conditions, competition, and seasonality</li>
                                     <li>We do not guarantee specific results, return on ad spend (ROAS), click-through rates, conversion rates, or any other performance metrics</li>
+                                    <li>Any forecast or projection shown to you is indicative only and is governed by clause 6</li>
                                     <li>You retain the ability to set campaign budgets, goals, and constraints that our AI agents will respect</li>
                                     <li>You can pause or terminate campaigns at any time through our platform</li>
                                 </ul>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">6. User Responsibilities and Content</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">6. Forecasts, Estimates and Projections</h2>
+                                <p>Parts of the Service display forecasts, estimates and projections. These may include estimated monthly search volume, estimated cost per click, and forecast clicks, conversions, ad spend, revenue, profit and return on ad spend. <strong className="font-semibold text-gray-800">These figures are indicative only.</strong> They are not a prediction, promise, guarantee or representation that your advertising will achieve any particular result.</p>
+                                <p>You acknowledge and agree that:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>Forecast figures are derived in part from data supplied by third-party advertising platforms, including the Google Ads Keyword Planner. That data is itself an estimate produced by the platform, may change without notice, and is not independently verified by us.</li>
+                                    <li>Any conversion rate applied in a forecast is an assumption we apply for illustration. It is not measured from your business, it is disclosed on screen where it is used, and your actual conversion rate will differ.</li>
+                                    <li>Any figure derived from a value you supply — including your average order value, or what you tell us a customer, sale or enquiry is worth — depends entirely on the accuracy of the figure you provide. We do not verify it.</li>
+                                    <li>Revenue, profit and return figures are arithmetic applied to the assumptions above. They are not a forecast of your actual revenue or profit.</li>
+                                    <li>Actual performance may be materially better or materially worse than any figure shown, and results shown for one period do not indicate results in another.</li>
+                                </ul>
+                                <p>We do not control, and are not responsible for, demand for your products or services, your pricing, the content or performance of your website and landing pages, your sales process, your stock or fulfilment, the activity of your competitors, auction dynamics, advertising platform algorithm or policy changes, seasonality, or general market and economic conditions. These factors materially affect advertising results and sit outside the Service.</p>
+                                <p>To the maximum extent permitted by law, we are not liable for any loss or damage arising from your reliance on a forecast, estimate or projection displayed by the Service, including where actual performance falls below, or exceeds, the figures shown. A forecast is not an offer, and no forecast forms part of any agreement between us.</p>
+                                <p>Nothing in this clause excludes, restricts or modifies any right or remedy available to you under the <em>Australian Consumer Law</em> that cannot be excluded, restricted or modified by agreement. See clause 16.</p>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">7. User Responsibilities and Content</h2>
                                 <p>You are responsible for providing accurate business information, including but not limited to your products, services, target audience, geographic targeting preferences, and brand guidelines. You must ensure that:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>All information you provide is accurate, current, and complete</li>
@@ -78,7 +93,7 @@ export default function Terms({ auth }) {
                                 </ul>
                                 <p>You retain all rights to your business information and brand assets. We will use this information solely to provide our Service.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">7. Compliance with Advertising Policies</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">8. Compliance with Advertising Policies</h2>
                                 <p>You agree to comply with all policies from applicable advertising platforms and applicable advertising laws and regulations. While our AI agents are designed to create compliant campaigns, you acknowledge that:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Any advertising platform may disapprove ads or suspend accounts for policy violations</li>
@@ -87,14 +102,14 @@ export default function Terms({ auth }) {
                                     <li>We will make reasonable efforts to create policy-compliant campaigns but cannot guarantee approval of all ads on all platforms</li>
                                 </ul>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">8. Data and Privacy</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">9. Data and Privacy</h2>
                                 <p>We collect and process data from your advertising platform accounts to provide our Service, including campaign performance data, conversion data, and account settings. We may also access your Google Tag Manager containers to implement and manage tracking tags for conversion measurement and analytics. This data is used to optimize your campaigns and improve our Service. Please refer to our Privacy Policy for detailed information about how we handle your data.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">9. Intellectual Property</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">10. Intellectual Property</h2>
                                 <p>The Service and its original content, features, and functionality, including our AI technology, algorithms, and proprietary methods, are and will remain the exclusive property of Site to Spend and its licensors. The Service is protected by copyright, trademark, and other laws.</p>
                                 <p>Ad copy, keywords, and other campaign elements generated by our AI for your campaigns are provided to you for use in your advertising. You may continue to use these materials even after termination of the Service.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">10. Termination</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">11. Termination</h2>
                                 <p>We may terminate or suspend your account immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.</p>
                                 <p>Upon termination:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
@@ -106,21 +121,22 @@ export default function Terms({ auth }) {
                                 </ul>
                                 <p>You may terminate your account at any time by discontinuing use of the Service and revoking our access to your advertising platform accounts.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">11. Limitation of Liability</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">12. Limitation of Liability</h2>
                                 <p>In no event shall sitetospend, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, ad spend, lost sales, or other intangible losses, resulting from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your access to or use of or inability to access or use the Service</li>
                                     <li>Campaign performance or lack thereof</li>
+                                    <li>Your reliance on any forecast, estimate or projection displayed by the Service (see clause 6)</li>
                                     <li>Advertising platform account suspensions or policy violations</li>
                                     <li>Unauthorized access to your accounts or data</li>
                                     <li>Any errors or omissions in campaign management</li>
                                 </ul>
                                 <p>Our total liability shall not exceed the amount you paid us in subscription fees during the twelve (12) months preceding the claim.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">12. Warranties and Disclaimers</h2>
-                                <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. WE MAKE NO WARRANTIES REGARDING CAMPAIGN PERFORMANCE, RETURN ON INVESTMENT, OR ANY SPECIFIC RESULTS.</p>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">13. Warranties and Disclaimers</h2>
+                                <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. WE MAKE NO WARRANTIES REGARDING CAMPAIGN PERFORMANCE, RETURN ON INVESTMENT, OR ANY SPECIFIC RESULTS. WE MAKE NO WARRANTY THAT ANY FORECAST, ESTIMATE OR PROJECTION SHOWN BY THE SERVICE WILL BE ACHIEVED, AND ACTUAL RESULTS MAY DIFFER MATERIALLY IN EITHER DIRECTION.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">13. Indemnification</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">14. Indemnification</h2>
                                 <p>You agree to indemnify and hold harmless sitetospend and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your use of the Service</li>
@@ -129,17 +145,17 @@ export default function Terms({ auth }) {
                                     <li>The content of your advertisements or the products/services you advertise</li>
                                 </ul>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">14. Governing Law</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">15. Governing Law</h2>
                                 <p>These Terms shall be governed by and construed in accordance with the laws of New South Wales, Australia. You irrevocably submit to the exclusive jurisdiction of the courts of New South Wales, Australia for any disputes arising out of or in connection with these Terms.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">15. Australian Consumer Law</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">16. Australian Consumer Law</h2>
                                 <p>Nothing in these Terms excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred on you by the <em>Australian Consumer Law</em> (Schedule 2 of the <em>Competition and Consumer Act 2010</em> (Cth)) or any other applicable law that cannot be excluded, restricted, or modified by agreement. If the Australian Consumer Law applies to you as a consumer, and we supply goods or services to you that are not of a kind ordinarily acquired for personal, domestic, or household use or consumption, our liability for failure to comply with a consumer guarantee is limited, at our option, to:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>In the case of services: re-supplying the services or paying the cost of having the services re-supplied</li>
                                     <li>In the case of goods: replacing the goods, supplying equivalent goods, or paying the cost of replacement</li>
                                 </ul>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">16. Changes</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">17. Changes</h2>
                                 <p>We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material we will try to provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Contact Us</h2>
