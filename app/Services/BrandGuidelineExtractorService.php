@@ -81,6 +81,54 @@ class BrandGuidelineExtractorService
         return implode("\n\n---PAGE BREAK---\n\n", $kept);
     }
 
+    /**
+     * The page as a person sees it, not as it arrives on the wire.
+     *
+     * The demo read text with a plain HTTP GET and a regex over <title>,
+     * <meta description> and <h1>. For anything rendered client-side that is
+     * almost nothing: yourfirststore.com returns 52 characters of visible text
+     * to a fetch and 3,732 to a browser, and even its <title> differs, because
+     * the real one is set after hydration. A React, Vue or Next storefront —
+     * which is most of them now — handed the ad-copy prompt a couple of
+     * sentences of boilerplate and got boilerplate back.
+     *
+     * Chromium is already running on this server for the screenshot in the same
+     * request. This reads the text out of the same render rather than
+     * pretending the page is static.
+     *
+     * Returns null on any failure; the caller keeps whatever the plain fetch
+     * gave it.
+     */
+    public function renderedText(string $websiteUrl, int $limit = 20000): ?string
+    {
+        try {
+            $html = Browsershot::url($websiteUrl)
+                ->setNodeBinary(config('browsershot.node_binary_path'))
+                ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
+                ->waitUntilNetworkIdle()
+                ->windowSize(1440, 900)
+                ->timeout(30)
+                ->bodyHtml();
+
+            $text = preg_replace('#<(script|style|noscript|svg)[^>]*>.*?</\1>#is', ' ', $html);
+            // A space per tag, not strip_tags: adjacent elements have no
+            // whitespace between them in the DOM, so stripping alone welds
+            // "yourfirststore" to "Sign in" and the model reads one word.
+            $text = preg_replace('/<[^>]+>/', ' ', (string) $text);
+            $text = html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+            return $text === '' ? null : mb_substr($text, 0, $limit);
+        } catch (\Throwable $e) {
+            // A site that will not render is the caller's problem to report, not
+            // a reason to fail the request.
+            report($e);
+            Log::warning('renderedText failed for '.$websiteUrl.': '.$e->getMessage());
+
+            return null;
+        }
+    }
+
     public function extractGuidelines(Customer $customer): ?BrandGuideline
     {
         try {

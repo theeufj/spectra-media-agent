@@ -5,7 +5,21 @@ import { brandTint } from '@/Components/Marketing/Hero';
 export default function DemoResultsPanel({ result }) {
     if (!result) return null;
 
-    const { url, ad_copy, visuals, forecast } = result;
+    const { url, ad_copy, visuals, forecast, notes = [] } = result;
+
+    /*
+     * Nothing on this panel is invented.
+     *
+     * Each of these fields used to end in `|| "…"`, so when generation returned
+     * nothing the page wrote its own ad — "Transform Your Business | Sign Up
+     * Today", "Discover why thousands trust our platform" — under a heading
+     * reading "Your AI-Generated Ad Package". A stranger's first contact with
+     * the product was boilerplate presented as a reading of their website. An
+     * empty result now says it is empty.
+     */
+    const headlines = ad_copy?.headlines?.filter(Boolean) ?? [];
+    const descriptions = ad_copy?.descriptions?.filter(Boolean) ?? [];
+    const hasAdCopy = headlines.length > 0;
 
     const num = (n) => Number(n || 0).toLocaleString();
     const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,6 +31,17 @@ export default function DemoResultsPanel({ result }) {
                     <h2 className="text-3xl font-extrabold text-gray-900">Your AI-Generated Ad Package</h2>
                     <p className="mt-2 text-gray-600">Extracted from <span className="font-semibold">{url}</span></p>
                 </div>
+
+                {/* What we could not read, before what we did. */}
+                {notes.length > 0 && (
+                    <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                        <ul className="space-y-1">
+                            {notes.map((note, i) => (
+                                <li key={i} className="text-sm text-amber-900">{note}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                     {/* Brand Identity / Visuals */}
@@ -53,13 +78,15 @@ export default function DemoResultsPanel({ result }) {
                                         ))}
                                     </ul>
                                 ) : (
-                                    <p className="text-sm text-gray-500">Standard Web Fonts</p>
+                                    <p className="text-sm text-gray-500">No typeface of its own — the page renders in the browser default.</p>
                                 )}
                             </div>
 
                             <div>
                                 <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Visual Vibe</h4>
-                                <p className="text-gray-800 text-sm leading-relaxed">{visuals?.style_description || "Professional & Modern"}</p>
+                                <p className="text-gray-800 text-sm leading-relaxed">
+                                    {visuals?.style_description || <span className="text-gray-500">Nothing distinctive enough to name.</span>}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -70,15 +97,25 @@ export default function DemoResultsPanel({ result }) {
                             <span className="text-2xl mr-2">🔍</span> Google Ad Preview
                         </h3>
                         <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm h-full">
-                            <div className="flex items-center text-sm text-gray-600 mb-1">
-                                <span className="font-bold text-black mr-2">Ad</span> · {url}
-                            </div>
-                            <div className="text-blue-700 text-xl font-medium hover:underline cursor-pointer leading-tight mb-2">
-                                {ad_copy?.headlines?.slice(0, 3).join(' | ') || "Transform Your Business | Sign Up Today"}
-                            </div>
-                            <div className="text-gray-600 text-sm">
-                                {ad_copy?.descriptions?.slice(0, 2).join(' ') || "Discover why thousands trust our platform. Flexible pricing to suit any scale."}
-                            </div>
+                            {hasAdCopy ? (
+                                <>
+                                    <div className="flex items-center text-sm text-gray-600 mb-1">
+                                        <span className="font-bold text-black mr-2">Ad</span> · {url}
+                                    </div>
+                                    <div className="text-blue-700 text-xl font-medium hover:underline cursor-pointer leading-tight mb-2">
+                                        {headlines.slice(0, 3).join(' | ')}
+                                    </div>
+                                    <div className="text-gray-600 text-sm">
+                                        {descriptions.slice(0, 2).join(' ')}
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="text-sm text-gray-600">
+                                    There wasn't enough on that page for us to write an ad worth showing you.
+                                    That is usually a site that builds itself in the browser, or one that
+                                    hasn't launched — the numbers below come from Google either way.
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

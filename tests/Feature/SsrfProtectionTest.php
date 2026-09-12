@@ -174,6 +174,11 @@ class SsrfProtectionTest extends TestCase
 
         $this->mock(BrandGuidelineExtractorService::class, function ($mock) {
             $mock->shouldReceive('analyzeVisualStyle')->andReturn([]);
+            // The demo renders the page through Chromium for its text now, in
+            // the same request as the screenshot. Null here is "the render gave
+            // us nothing", which is the path that falls back to the static
+            // fetch — and that fetch is what these tests are about.
+            $mock->shouldReceive('renderedText')->andReturn(null);
         });
 
         $this->mock(CampaignForecastPreview::class, function ($mock) {

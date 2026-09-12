@@ -8,6 +8,7 @@ use App\Rules\SafePublicUrl;
 use App\Services\BrandGuidelineExtractorService;
 use App\Services\Demo\CampaignForecastPreview;
 use App\Services\GeminiService;
+use App\Services\Onboarding\PlaceholderSiteDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -162,6 +163,26 @@ HTML;
 
                 $textContent = "Title: {$title}\nDescription: {$description}\nHeadings: {$h1s}";
 
+                /*
+                   Prefer the page as a browser renders it.
+
+                   The three regexes above are all a static fetch can offer, and
+                   for a client-rendered site that is a title and a meta tag —
+                   yourfirststore.com gives 52 characters of visible text to a
+                   fetch and 3,732 to Chromium, with a different <title> after
+                   hydration. Every React, Vue or Next storefront was handing
+                   this prompt two sentences of boilerplate.
+
+                   Chromium is already running for the screenshot further down,
+                   so this costs a render we were paying for anyway. The static
+                   read stays as the fallback, and its metadata is kept in front
+                   of the rendered body because a good meta description is often
+                   the clearest sentence about the business on the whole page.
+                */
+                if ($rendered = $this->brandService->renderedText($url)) {
+                    $textContent .= "\n\nPage content:\n".$rendered;
+                }
+
                 // Extract colors directly from HTML styles
                 preg_match_all('/#([a-fA-F0-9]{6})\b/', $html, $colorMatches);
                 if (! empty($colorMatches[0])) {
@@ -235,10 +256,55 @@ HTML;
             $textContent = 'Domain: '.parse_url($url, PHP_URL_HOST);
         }
 
-        // 2. Generate Ad Copy with Gemini
+        /*
+           2. Generate Ad Copy with Gemini.
+
+           Two ways this used to end up lying to a visitor. The catch block
+           substituted "Leading Industry Solution / Start Your Free Trial /
+           Transform Your Business" — boilerplate that describes no business in
+           particular, returned under the heading "Your AI-Generated Ad Package".
+           And a response Gemini returned but that did not parse raised no
+           exception at all, so $adCopy stayed empty, success came back true, and
+           the frontend's own || fallbacks invented the same copy client-side.
+
+           Now: empty is empty, it is reported as such, and nothing is written
+           on the visitor's behalf.
+        */
         $adCopy = ['headlines' => [], 'descriptions' => []];
+        $notes = [];
         try {
-            $prompt = "Based on this website data, write 3 Google Search Ad headlines (max 30 chars each) and 2 descriptions (max 90 chars each). Keep it punchy and highlight the value proposition. Return strict JSON with the keys 'headlines' (array of strings) and 'descriptions' (array of strings).\n\nWebsite Data:\n".substr($textContent, 0, 1000);
+            /*
+               Was "keep it punchy and highlight the value proposition", over
+               1,000 characters of input. That is a brief for
+               "Transform Your Business | Sign Up Today" — which is exactly what
+               it returned, on a page that says it builds Stripe-backed stores
+               from a plain-English description in five minutes.
+
+               Ask for the specifics the page actually contains, refuse the
+               stock phrases by name, and let it read enough of the page to find
+               them.
+            */
+            $prompt = <<<'PROMPT'
+                Write Google Search ads for the business described below.
+
+                Return strict JSON: 'headlines' (3 strings, max 30 characters
+                each) and 'descriptions' (2 strings, max 90 characters each).
+
+                Use the specifics on the page — what it sells, who for, the
+                price, the mechanism, the offer. A reader should be able to tell
+                which business the ad is for without being told.
+
+                Do not write generic SaaS filler. Phrases like "Transform Your
+                Business", "Leading Industry Solution", "Take It To The Next
+                Level", "Trusted By Thousands", "The All-In-One Solution" or
+                "Sign Up Today" say nothing and must not appear.
+
+                If the page does not say enough to write a specific ad, return
+                empty arrays rather than inventing a business.
+
+                Website data:
+
+                PROMPT."\n".substr($textContent, 0, 6000);
 
             $aiResponse = $this->geminiService->generateContent(
                 config('ai.models.default'),
@@ -250,16 +316,19 @@ HTML;
                 $strippedJSON = preg_replace('/```json\s*|\s*```/', '', $aiResponse['text']);
                 $parsedAdCopy = json_decode($strippedJSON, true);
                 if ($parsedAdCopy && isset($parsedAdCopy['headlines'], $parsedAdCopy['descriptions'])) {
-                    $adCopy = $parsedAdCopy;
+                    $adCopy = [
+                        'headlines' => array_values(array_filter((array) $parsedAdCopy['headlines'])),
+                        'descriptions' => array_values(array_filter((array) $parsedAdCopy['descriptions'])),
+                    ];
                 }
             }
         } catch (\Throwable $e) {
             report($e);
             Log::warning('DemoController ad copy generation failed: '.$e->getMessage());
-            $adCopy = [
-                'headlines' => ['Leading Industry Solution', 'Start Your Free Trial', 'Transform Your Business'],
-                'descriptions' => ['Discover why thousands trust our platform. Get started today and see results fast.', 'The all-in-one solution you have been looking for. Flexible pricing to suit any scale.'],
-            ];
+        }
+
+        if (empty($adCopy['headlines'])) {
+            $notes[] = 'We could not write ad copy from that page.';
         }
 
         // 3. Extract Visuals via Browsershot + Gemini Vision
@@ -268,13 +337,28 @@ HTML;
         // Normalize the JSON keys from Gemini Vision so the frontend receives what it expects
         $visuals = [
             'colors' => $rawVisuals['primary_colors'] ?? $rawVisuals['colors'] ?? [],
-            'fonts' => $rawVisuals['fonts'] ?? [],
-            'style_description' => $rawVisuals['image_style'] ?? $rawVisuals['style_description'] ?? 'Professional & Modern',
+            'fonts' => self::brandFonts($rawVisuals['fonts'] ?? []),
+            'style_description' => $rawVisuals['image_style'] ?? $rawVisuals['style_description'] ?? null,
         ];
 
         // Fallback to CSS colors if Vision failed to extract them
         if (empty($visuals['colors']) && ! empty($cssColors)) {
             $visuals['colors'] = $cssColors;
+        }
+
+        if (empty($visuals['colors']) && empty($visuals['fonts'])) {
+            $notes[] = 'We could not pick out a distinctive palette or typeface.';
+        }
+
+        /*
+           Is this the visitor's business at all, or the page standing where it
+           should be? The same check signup runs — a parked domain, a for-sale
+           listing or an unlaunched template extracts beautifully and describes
+           somebody else. Worth more on the demo than anywhere: this is the
+           first thing a stranger sees us do.
+        */
+        if ($placeholder = app(PlaceholderSiteDetector::class)->warningFor($textContent, $url)) {
+            $notes[] = $placeholder;
         }
 
         // End on evidence rather than on a plan. Ad copy and brand colours are
@@ -289,7 +373,36 @@ HTML;
             'ad_copy' => $adCopy,
             'visuals' => $visuals,
             'forecast' => $forecast,
+            // What we could not do, said plainly. The page used to fill these
+            // gaps with invented copy rather than admit to them.
+            'notes' => $notes,
         ]);
+    }
+
+    /**
+     * Typefaces that say something about a brand.
+     *
+     * Vision reports whatever the page renders in, and a site with no font
+     * stack of its own renders in the browser's — so the demo listed "Arial,
+     * Helvetica" under Typography as though it had discovered something. Those
+     * are the absence of a choice, not a choice.
+     *
+     * @param  array<int, mixed>  $fonts
+     * @return list<string>
+     */
+    private static function brandFonts(array $fonts): array
+    {
+        $generic = [
+            'arial', 'helvetica', 'helvetica neue', 'sans-serif', 'serif',
+            'times', 'times new roman', 'system-ui', '-apple-system',
+            'segoe ui', 'roboto', 'monospace', 'inherit', 'initial',
+            'blinkmacsystemfont', 'ui-sans-serif', 'ui-serif',
+        ];
+
+        return array_values(array_filter(
+            array_map(fn ($font) => trim((string) $font, " \t\n\r\0\x0B\"'"), $fonts),
+            fn (string $font) => $font !== '' && ! in_array(mb_strtolower($font), $generic, true),
+        ));
     }
 
     /**
