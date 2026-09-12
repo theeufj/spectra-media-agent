@@ -2,10 +2,11 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { money as formatMoney, count as formatCount, date as formatDate } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
     ArrowDownTrayIcon,
     ArrowPathIcon,
+    ChevronRightIcon,
     DocumentTextIcon,
     SparklesIcon,
 } from '@heroicons/react/24/outline';
@@ -96,6 +97,55 @@ function dedupeByPeriod(reports) {
     return [...seen.values()];
 }
 
+/*
+ * The report itself, read on the page.
+ *
+ * The listing offered four numbers and a PDF, so finding out what the AI made
+ * of a week meant downloading a file — on a page whose subtitle promises "the
+ * AI's read on what changed". The narrative is now kept in the history record
+ * (App\Jobs\Concerns\RecordsReportHistory) and shown here; the PDF stays for
+ * anyone who wants to send it on.
+ *
+ * Records written before that change carry neither field, so this renders
+ * nothing for them and the row simply does not expand.
+ */
+function ReportDetail({ report, currency }) {
+    const insights = report.insights ?? [];
+
+    return (
+        <div className="border-t border-gray-100 bg-gray-50 px-4 py-4">
+            {report.executive_summary && (
+                <p className="max-w-prose text-sm leading-relaxed text-gray-700">
+                    {report.executive_summary}
+                </p>
+            )}
+
+            {insights.length > 0 && (
+                <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {insights.map((insight) => {
+                        const up = Number(insight.change) > 0;
+                        const tone = insight.direction === 'improved' ? 'text-green-700'
+                            : insight.direction === 'declined' ? 'text-red-700'
+                            : 'text-gray-700';
+
+                        return (
+                            <div key={insight.metric} className="rounded-lg border border-gray-200 bg-white p-3">
+                                <dt className="text-xs text-gray-500">{insight.label}</dt>
+                                <dd className={`mt-0.5 text-sm font-semibold tabular-nums ${tone}`}>
+                                    {up ? '+' : ''}{insight.change}%
+                                    <span className="ml-1.5 font-normal text-gray-500">
+                                        vs the period before
+                                    </span>
+                                </dd>
+                            </div>
+                        );
+                    })}
+                </dl>
+            )}
+        </div>
+    );
+}
+
 export default function Index({ reports = [], canWhiteLabel }) {
     const currency = useCurrency();
 
@@ -104,7 +154,11 @@ export default function Index({ reports = [], canWhiteLabel }) {
     const money = (n) => (n === null || n === undefined ? '—' : formatMoney(n, currency));
 
     const [generating, setGenerating] = useState(false);
+    const [expanded, setExpanded] = useState(null);
     const rows = useMemo(() => dedupeByPeriod(reports), [reports]);
+
+    const keyOf = (report) => `${report.period}-${report.start}`;
+    const isReadable = (report) => Boolean(report.executive_summary) || (report.insights?.length > 0);
 
     const handleGenerate = (period) => {
         setGenerating(true);
@@ -196,15 +250,34 @@ export default function Index({ reports = [], canWhiteLabel }) {
                                     <tbody className="divide-y divide-gray-100">
                                         {rows.map((report) => {
                                             const quiet = ! report.summary?.total_clicks;
+                                            const key = keyOf(report);
+                                            const readable = isReadable(report);
+                                            const open = expanded === key;
 
                                             return (
-                                                <tr key={`${report.period}-${report.start}`} className="hover:bg-gray-50">
+                                                <Fragment key={key}>
+                                                <tr className="hover:bg-gray-50">
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center gap-2">
                                                             <PeriodBadge period={report.period} />
-                                                            <span className="font-medium text-gray-900">
-                                                                {formatDate(report.start)} — {formatDate(report.end)}
-                                                            </span>
+                                                            {readable ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setExpanded(open ? null : key)}
+                                                                    aria-expanded={open}
+                                                                    className="inline-flex items-center gap-1 font-medium text-gray-900 hover:underline"
+                                                                >
+                                                                    <ChevronRightIcon
+                                                                        className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    {formatDate(report.start)} — {formatDate(report.end)}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="font-medium text-gray-900">
+                                                                    {formatDate(report.start)} — {formatDate(report.end)}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <span className="text-xs text-gray-500">
                                                             generated {formatGenerated(report.generated_at)}
@@ -234,6 +307,14 @@ export default function Index({ reports = [], canWhiteLabel }) {
                                                         <PdfButton report={report} onDownload={handleDownload} />
                                                     </td>
                                                 </tr>
+                                                {open && (
+                                                    <tr>
+                                                        <td colSpan={6} className="p-0">
+                                                            <ReportDetail report={report} currency={currency} />
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </Fragment>
                                             );
                                         })}
                                     </tbody>
@@ -244,7 +325,7 @@ export default function Index({ reports = [], canWhiteLabel }) {
                             <ul className="space-y-3 sm:hidden">
                                 {rows.map((report) => (
                                     <li
-                                        key={`${report.period}-${report.start}`}
+                                        key={keyOf(report)}
                                         className="rounded-xl border border-gray-200 bg-white p-4"
                                     >
                                         <div className="flex items-center gap-2">
@@ -266,6 +347,11 @@ export default function Index({ reports = [], canWhiteLabel }) {
                                                 </div>
                                             ))}
                                         </dl>
+                                        {isReadable(report) && (
+                                            <div className="mt-3 -mx-4 -mb-1">
+                                                <ReportDetail report={report} currency={currency} />
+                                            </div>
+                                        )}
                                         <div className="mt-3">
                                             <PdfButton report={report} onDownload={handleDownload} className="w-full justify-center" />
                                         </div>

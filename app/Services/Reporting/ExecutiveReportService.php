@@ -489,15 +489,24 @@ class ExecutiveReportService
 
         $current = $report['summary'];
 
-        // Compute deltas
+        /*
+         * Labels are read by the customer, not by us.
+         *
+         * These strings reach three places — the reports page, the emailed
+         * report and the PDF — and three of them were acronyms. "CPA fell 26%"
+         * only tells you something if you already know what CPA is, and the
+         * people reading a weekly report on their own ad account frequently do
+         * not. The metric keys are unchanged, so nothing downstream that
+         * switches on them moves.
+         */
         $metrics = [
-            'spend' => ['current' => $current['total_cost'],        'prior' => $prior['total_cost'],        'label' => 'Total Spend',       'higher_is' => 'neutral'],
-            'impressions' => ['current' => $current['total_impressions'],  'prior' => $prior['total_impressions'],  'label' => 'Impressions',       'higher_is' => 'good'],
-            'clicks' => ['current' => $current['total_clicks'],       'prior' => $prior['total_clicks'],       'label' => 'Clicks',            'higher_is' => 'good'],
-            'ctr' => ['current' => $current['blended_ctr'],        'prior' => $prior['blended_ctr'],        'label' => 'CTR',               'higher_is' => 'good'],
-            'cpc' => ['current' => $current['blended_cpc'],        'prior' => $prior['blended_cpc'],        'label' => 'CPC',               'higher_is' => 'bad'],
-            'conversions' => ['current' => $current['total_conversions'],  'prior' => $prior['total_conversions'],  'label' => 'Conversions',       'higher_is' => 'good'],
-            'cpa' => ['current' => $current['blended_cpa'],        'prior' => $prior['blended_cpa'],        'label' => 'CPA',               'higher_is' => 'bad'],
+            'spend' => ['current' => $current['total_cost'],        'prior' => $prior['total_cost'],        'label' => 'Total spend',         'higher_is' => 'neutral'],
+            'impressions' => ['current' => $current['total_impressions'],  'prior' => $prior['total_impressions'],  'label' => 'Times shown',         'higher_is' => 'good'],
+            'clicks' => ['current' => $current['total_clicks'],       'prior' => $prior['total_clicks'],       'label' => 'Clicks',              'higher_is' => 'good'],
+            'ctr' => ['current' => $current['blended_ctr'],        'prior' => $prior['blended_ctr'],        'label' => 'Click-through rate',  'higher_is' => 'good'],
+            'cpc' => ['current' => $current['blended_cpc'],        'prior' => $prior['blended_cpc'],        'label' => 'Cost per click',      'higher_is' => 'bad'],
+            'conversions' => ['current' => $current['total_conversions'],  'prior' => $prior['total_conversions'],  'label' => 'Conversions',         'higher_is' => 'good'],
+            'cpa' => ['current' => $current['blended_cpa'],        'prior' => $prior['blended_cpa'],        'label' => 'Cost per conversion', 'higher_is' => 'bad'],
         ];
 
         $movers = [];
