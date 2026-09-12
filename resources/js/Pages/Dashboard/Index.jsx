@@ -13,6 +13,7 @@ import SetupProgressNav from '@/Components/SetupProgressNav';
 import ForecastPanel from '@/Components/ForecastPanel';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
+import { platform as platformOf, platformHex, platformLabel } from '@/utils/platforms';
 import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
@@ -34,14 +35,12 @@ import AgentActivityFeed from '@/Components/AgentActivityFeed';
  * every chart that uses them also carries a text label, which is what the
  * validator's sub-3:1 contrast warning requires.
  */
-const PLATFORMS = {
-    google:    { label: 'Google Ads',    color: '#2a78d6' },
-    facebook:  { label: 'Facebook Ads',  color: '#4a3aa7' },
-    microsoft: { label: 'Microsoft Ads', color: '#1baf7a' },
-    linkedin:  { label: 'LinkedIn Ads',  color: '#eda100' },
-};
-const OTHER_PLATFORM = { label: 'Other', color: '#6b7280' };
-const platformOf = (name) => PLATFORMS[String(name || '').toLowerCase()] ?? OTHER_PLATFORM;
+/*
+ * Labels and colours come from utils/platforms, which is the same table the
+ * analytics pages now use. This file had its own — a fourth set of hues for the
+ * same four platforms, so Google was #2a78d6 here and #4285F4 on the ROI page.
+ * A platform's colour is its identity in a chart; it cannot change per screen.
+ */
 
 // Cost and revenue, as a validated pair (ΔE 24.0 normal, 23.1 protan).
 // Cost was red-300, which reads as an error state — spending is the point of
@@ -70,6 +69,7 @@ function KpiCard({ label, value, sub, color }) {
  * there is actually a split to show.
  */
 function SpendBar({ platforms }) {
+    const currency = useCurrency();
     const rows = Object.entries(platforms)
         .map(([name, data]) => ({ ...platformOf(name), cost: data.cost }))
         .filter((r) => r.cost > 0)
@@ -83,7 +83,7 @@ function SpendBar({ platforms }) {
             <p className="text-sm text-gray-600">
                 All of it through{' '}
                 <span className="font-semibold text-gray-900">{rows[0].label}</span> —{' '}
-                <span className="font-semibold text-gray-900">{money(rows[0].cost)}</span>.
+                <span className="font-semibold text-gray-900">{money(rows[0].cost, currency, { maximumFractionDigits: 0 })}</span>.
             </p>
         );
     }
@@ -96,16 +96,16 @@ function SpendBar({ platforms }) {
                     <div
                         key={r.label}
                         className="h-full first:rounded-l-full last:rounded-r-full"
-                        style={{ width: `${(r.cost / total) * 100}%`, backgroundColor: r.color }}
+                        style={{ width: `${(r.cost / total) * 100}%`, backgroundColor: r.hex }}
                     />
                 ))}
             </div>
             <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
                 {rows.map((r) => (
                     <li key={r.label} className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: r.color }} aria-hidden="true" />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: r.hex }} aria-hidden="true" />
                         <span className="text-gray-600">
-                            {r.label} <span className="font-medium text-gray-900">{money(r.cost)}</span>{' '}
+                            {r.label} <span className="font-medium text-gray-900">{money(r.cost, currency, { maximumFractionDigits: 0 })}</span>{' '}
                             <span className="text-gray-500">({Math.round((r.cost / total) * 100)}%)</span>
                         </span>
                     </li>
@@ -254,7 +254,7 @@ function FunnelBar({ stage, maxValue }) {
 function PlatformComparisonBar({ platform, metric, maxValue }) {
     const currency = useCurrency();
     const width = maxValue > 0 ? (platform[metric] / maxValue) * 100 : 0;
-    const { color } = platformOf(platform.platform);
+    const color = platformHex(platform.platform);
 
     return (
         <div className="flex items-center gap-3">
@@ -551,14 +551,14 @@ export default function Dashboard({ auth }) {
                                                 <div className="flex gap-2 mb-4">
                                                     {crossPlatformComparison.filter(p => p.spend_share > 0).map(p => (
                                                         <div key={p.platform} className="flex items-center gap-2">
-                                                            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: platformOf(p.platform).color }} />
+                                                            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: platformHex(p.platform) }} />
                                                             <span className="text-sm text-gray-700">{p.platform}: {p.spend_share}%</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                                 <div className="flex h-4 rounded-full overflow-hidden bg-gray-200">
                                                     {crossPlatformComparison.filter(p => p.spend_share > 0).map(p => (
-                                                        <div key={p.platform} style={{ width: `${p.spend_share}%`, backgroundColor: platformOf(p.platform).color }} />
+                                                        <div key={p.platform} style={{ width: `${p.spend_share}%`, backgroundColor: platformHex(p.platform) }} />
                                                     ))}
                                                 </div>
                                             </div>
@@ -597,7 +597,7 @@ export default function Dashboard({ auth }) {
                                                                 <tr key={p.platform} className="border-b border-gray-100">
                                                                     <td className="py-2.5 font-medium text-gray-900">
                                                                         <span className="flex items-center gap-2">
-                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: platformOf(p.platform).color }} />
+                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: platformHex(p.platform) }} />
                                                                             {p.platform}
                                                                         </span>
                                                                     </td>

@@ -2,6 +2,7 @@ import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
+import { platformLabel } from '@/utils/platforms';
 import { useState, useEffect } from 'react';
 
 const statusColors = {
@@ -9,13 +10,6 @@ const statusColors = {
     error: 'bg-red-100 text-red-800',
     failed: 'bg-red-100 text-red-800',
     no_data: 'bg-yellow-100 text-yellow-800',
-};
-
-const platformLabels = {
-    google: 'Google Ads',
-    facebook: 'Facebook Ads',
-    microsoft: 'Microsoft Ads',
-    linkedin: 'LinkedIn Ads',
 };
 
 const severityStyles = {
@@ -50,7 +44,7 @@ function PlatformRow({ name, data }) {
     const currency = useCurrency();
     return (
         <tr className="border-b border-gray-100">
-            <td className="py-3 px-4 font-medium text-gray-900">{platformLabels[name] || name}</td>
+            <td className="py-3 px-4 font-medium text-gray-900">{platformLabel(name)}</td>
             <td className="py-3 px-4 text-right">{count(data.impressions ?? 0)}</td>
             <td className="py-3 px-4 text-right">{count(data.clicks ?? 0)}</td>
             <td className="py-3 px-4 text-right">{money(data.cost ?? 0, currency, { maximumFractionDigits: 0 })}</td>

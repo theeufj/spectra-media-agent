@@ -2,21 +2,19 @@ import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
+import { platformHex, platformLabel } from '@/utils/platforms';
 import { useState } from 'react';
 
-const platformLabels = {
-    google: 'Google Ads',
-    facebook: 'Facebook Ads',
-    microsoft: 'Microsoft Ads',
-    linkedin: 'LinkedIn Ads',
-};
-
-const platformColors = {
-    google: '#4285F4',
-    facebook: '#1877F2',
-    microsoft: '#00A4EF',
-    linkedin: '#0A66C2',
-};
+/*
+ * Labels and colours come from utils/platforms now.
+ *
+ * The map that was here used the vendor blues — Google #4285F4 beside Facebook
+ * #1877F2 — as the two largest adjacent segments of the same stacked bar. They
+ * are near-indistinguishable, and worse under colour-vision deficiency. The
+ * shared palette's first four categorical slots are validated for
+ * adjacent-pair separability; brand fidelity is not worth a chart nobody can
+ * read.
+ */
 
 function KpiCard({ label, value, sub, trend }) {
     return (
@@ -48,8 +46,8 @@ function SpendBar({ platforms }) {
                         <div
                             key={name}
                             className="h-full"
-                            style={{ width: `${pct}%`, backgroundColor: platformColors[name] || '#6B7280' }}
-                            title={`${platformLabels[name]}: ${money(data.cost, currency, { maximumFractionDigits: 0 })} (${pct.toFixed(1)}%)`}
+                            style={{ width: `${pct}%`, backgroundColor: platformHex(name) }}
+                            title={`${platformLabel(name)}: ${money(data.cost, currency, { maximumFractionDigits: 0 })} (${pct.toFixed(1)}%)`}
                         />
                     );
                 })}
@@ -57,8 +55,8 @@ function SpendBar({ platforms }) {
             <div className="flex flex-wrap gap-4 text-xs">
                 {Object.entries(platforms).map(([name, data]) => (
                     <div key={name} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: platformColors[name] }} />
-                        <span className="text-gray-600">{platformLabels[name]}: {money(data.cost, currency, { maximumFractionDigits: 0 })}</span>
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: platformHex(name) }} />
+                        <span className="text-gray-600">{platformLabel(name)}: {money(data.cost, currency, { maximumFractionDigits: 0 })}</span>
                     </div>
                 ))}
             </div>

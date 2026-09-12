@@ -1,24 +1,32 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { money, count } from '@/utils/format';
+import { money, count, percent } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
+import { platformHex, platformLabel } from '@/utils/platforms';
 import { Head, router } from '@inertiajs/react';
 
-const PLATFORM_COLORS = {
-    Google: 'bg-blue-500',
-    Facebook: 'bg-indigo-500',
-    Microsoft: 'bg-teal-500',
-    LinkedIn: 'bg-sky-500',
-};
+/*
+ * The colour map that used to live here was keyed 'LinkedIn' while the API
+ * sends ucfirst('linkedin') = 'Linkedin' (CrossPlatformAnalyticsService:180),
+ * so every LinkedIn bar missed the lookup and fell through to bg-gray-400 —
+ * a customer's LinkedIn spend rendered as an unknown platform. utils/platforms
+ * looks up through platformKey(), which lowercases first, so casing cannot do
+ * that again.
+ */
 
 function PlatformBar({ platform, metric, maxValue }) {
     const currency = useCurrency();
     const width = maxValue > 0 ? (platform[metric] / maxValue * 100) : 0;
-    const color = PLATFORM_COLORS[platform.platform] || 'bg-gray-400';
+
     return (
         <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-600 w-20">{platform.platform}</span>
+            {/* Label beside the bar, never on it: none of the platform hues
+                carries text at AA. */}
+            <span className="text-xs text-gray-600 w-20">{platformLabel(platform.platform)}</span>
             <div className="flex-1 bg-gray-200 rounded-full h-4">
-                <div className={`${color} h-4 rounded-full`} style={{ width: `${Math.max(width, 1)}%` }} />
+                <div
+                    className="h-4 rounded-full"
+                    style={{ width: `${Math.max(width, 1)}%`, backgroundColor: platformHex(platform.platform) }}
+                />
             </div>
             <span className="text-xs font-medium text-gray-900 w-20 text-right">
                 {metric === 'cost' ? money(platform[metric] ?? 0, currency, { maximumFractionDigits: 0 }) : metric === 'roas' ? `${platform[metric]}x` : count(platform[metric] ?? 0)}
@@ -67,8 +75,8 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                             <div className="flex gap-2 mb-4">
                                 {comparison.filter(p => p.spend_share > 0).map((p) => (
                                     <div key={p.platform} className="flex items-center gap-2">
-                                        <div className={`w-3 h-3 rounded-full ${PLATFORM_COLORS[p.platform] || 'bg-gray-400'}`} />
-                                        <span className="text-sm text-gray-700">{p.platform}: {p.spend_share}%</span>
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: platformHex(p.platform) }} />
+                                        <span className="text-sm text-gray-700">{platformLabel(p.platform)}: {percent(p.spend_share)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -76,8 +84,7 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                                 {comparison.filter(p => p.spend_share > 0).map((p) => (
                                     <div
                                         key={p.platform}
-                                        className={PLATFORM_COLORS[p.platform] || 'bg-gray-400'}
-                                        style={{ width: `${p.spend_share}%` }}
+                                        style={{ width: `${p.spend_share}%`, backgroundColor: platformHex(p.platform) }}
                                     />
                                 ))}
                             </div>
@@ -125,8 +132,8 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                                             <tr key={p.platform} className="border-b border-gray-100">
                                                 <td className="py-2.5 font-medium text-gray-900">
                                                     <span className="flex items-center gap-2">
-                                                        <span className={`w-2 h-2 rounded-full ${PLATFORM_COLORS[p.platform] || 'bg-gray-400'}`} />
-                                                        {p.platform}
+                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: platformHex(p.platform) }} />
+                                                        {platformLabel(p.platform)}
                                                     </span>
                                                 </td>
                                                 <td className="py-2.5">{count(p.impressions ?? 0)}</td>
