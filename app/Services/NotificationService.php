@@ -36,18 +36,42 @@ class NotificationService
     }
 
     /**
+     * The person to tell about something that happened to a customer.
+     *
+     * Every helper below reached for `$customer->user` — a singular relation
+     * that does not exist. Ownership is the `customers` pivot on User, and the
+     * `customers.user_id` column was dropped; only `users()` remains. So each
+     * of these threw the moment it was called, which is why not one of them had
+     * a caller and why a client was never told their strategy or their creative
+     * was ready.
+     */
+    private function ownerOf(?Customer $customer): ?User
+    {
+        if (! $customer) {
+            return null;
+        }
+
+        return $customer->users()->wherePivot('role', 'owner')->first()
+            ?? $customer->users()->first();
+    }
+
+    /**
      * Notify about a strategy ready for review.
      */
-    public function notifyStrategyReady(Campaign $campaign, Strategy $strategy): Notification
+    public function notifyStrategyReady(Campaign $campaign, Strategy $strategy): ?Notification
     {
-        $user = $campaign->customer->user;
+        $user = $this->ownerOf($campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,
             Notification::TYPE_STRATEGY_READY,
             'Strategy Ready for Review',
             "Campaign \"{$campaign->name}\" has a new strategy ready for your review.",
-            route('campaigns.strategies.show', ['campaign' => $campaign->id, 'strategy' => $strategy->id]),
+            route('campaigns.show', ['campaign' => $campaign->id]),
             'Review Strategy',
             $campaign->customer,
             [
@@ -60,9 +84,13 @@ class NotificationService
     /**
      * Notify about collateral ready for deployment.
      */
-    public function notifyCollateralReady(Campaign $campaign, Strategy $strategy): Notification
+    public function notifyCollateralReady(Campaign $campaign, Strategy $strategy): ?Notification
     {
-        $user = $campaign->customer->user;
+        $user = $this->ownerOf($campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,
@@ -82,16 +110,20 @@ class NotificationService
     /**
      * Notify about deployment started.
      */
-    public function notifyDeploymentStarted(Campaign $campaign, Strategy $strategy): Notification
+    public function notifyDeploymentStarted(Campaign $campaign, Strategy $strategy): ?Notification
     {
-        $user = $campaign->customer->user;
+        $user = $this->ownerOf($campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,
             Notification::TYPE_DEPLOYMENT_STARTED,
             'Deployment Started',
             "Campaign \"{$campaign->name}\" is being deployed to ad platforms.",
-            route('campaigns.deployment.status', $campaign),
+            route('campaigns.deployment-status', $campaign),
             'View Progress',
             $campaign->customer,
             [
@@ -104,9 +136,13 @@ class NotificationService
     /**
      * Notify about deployment completed.
      */
-    public function notifyDeploymentCompleted(Campaign $campaign, Strategy $strategy): Notification
+    public function notifyDeploymentCompleted(Campaign $campaign, Strategy $strategy): ?Notification
     {
-        $user = $campaign->customer->user;
+        $user = $this->ownerOf($campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,
@@ -126,16 +162,20 @@ class NotificationService
     /**
      * Notify about deployment failure.
      */
-    public function notifyDeploymentFailed(Campaign $campaign, Strategy $strategy, string $error): Notification
+    public function notifyDeploymentFailed(Campaign $campaign, Strategy $strategy, string $error): ?Notification
     {
-        $user = $campaign->customer->user;
+        $user = $this->ownerOf($campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,
             Notification::TYPE_DEPLOYMENT_FAILED,
             'Deployment Failed',
             "Campaign \"{$campaign->name}\" deployment failed: {$error}",
-            route('campaigns.deployment.status', $campaign),
+            route('campaigns.deployment-status', $campaign),
             'View Details',
             $campaign->customer,
             [
@@ -205,8 +245,12 @@ class NotificationService
         array $winner,
         float $confidence,
         float $liftPct
-    ): Notification {
-        $user = $test->campaign->customer->user;
+    ): ?Notification {
+        $user = $this->ownerOf($test->campaign->customer);
+
+        if (! $user) {
+            return null;
+        }
 
         return $this->notify(
             $user,

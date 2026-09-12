@@ -345,6 +345,20 @@ class GenerateStrategy implements ShouldQueue
                 'strategy_generation_completed_at' => now(),
             ]);
 
+            /*
+             * Tell them it is ready.
+             *
+             * Only failure was ever announced: a customer heard from us when
+             * strategy generation broke and never when it worked. The whole
+             * funnel depends on them coming back to review and deploy, and
+             * nothing invited them to.
+             */
+            $firstStrategy = $this->campaign->strategies()->latest('id')->first();
+            if ($firstStrategy) {
+                app(\App\Services\NotificationService::class)
+                    ->notifyStrategyReady($this->campaign, $firstStrategy);
+            }
+
             $strategyCount = count($strategyData['strategies']);
             AgentActivity::record(
                 'strategy',

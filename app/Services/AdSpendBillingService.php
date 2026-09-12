@@ -11,6 +11,7 @@ use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Notification;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use Illuminate\Support\Facades\Cache;
@@ -292,6 +293,47 @@ class AdSpendBillingService
     }
 
     /**
+     * Put a billing event in front of the customer, not just in their inbox.
+     *
+     * Every one of these was a bare Mail::to() send, which bypasses the
+     * notification system entirely and therefore can never reach the bell. A
+     * customer whose campaigns were paused for a failed payment saw nothing at
+     * all inside the product — the one place they would look to find out why
+     * their ads had stopped.
+     *
+     * Deliberately best-effort: a notification that cannot be written must not
+     * abort a billing run that has already moved money.
+     */
+    protected function notifyInApp(
+        Customer $customer,
+        string $type,
+        string $title,
+        string $message,
+        string $actionUrl = '/billing/ad-spend',
+        string $actionText = 'View ad spend',
+    ): void {
+        try {
+            foreach ($customer->users as $user) {
+                Notification::notify(
+                    $user,
+                    $type,
+                    $title,
+                    $message,
+                    $actionUrl,
+                    $actionText,
+                    $customer,
+                );
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('AdSpendBilling: could not write in-app notification: '.$e->getMessage(), [
+                'customer_id' => $customer->id,
+                'type' => $type,
+            ]);
+        }
+    }
+
+    /**
      * Handle payment failure with grace period logic.
      */
     protected function handlePaymentFailure(Customer $customer, AdSpendCredit $credit, string $error): void
@@ -314,6 +356,13 @@ class AdSpendBillingService
                 if ($user) {
                     Mail::to($user->email)->send(new AdSpendPaymentWarning($customer, $credit, $error));
                 }
+
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_WARNING,
+                    'We could not take your ad spend payment',
+                    'Your card was declined. Your ads keep running for 24 hours — update your payment method to avoid interruption.',
+                );
                 break;
 
             case 1:
@@ -324,6 +373,13 @@ class AdSpendBillingService
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendPaymentFailed($customer, $credit, $error));
                 }
+
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_WARNING,
+                    'Your daily budgets have been halved',
+                    'We still cannot take payment, so spending is reduced while we retry. Update your payment method to restore full budgets.',
+                );
                 break;
 
             default:
@@ -334,6 +390,13 @@ class AdSpendBillingService
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendCampaignsPaused($customer, $credit));
                 }
+
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_WARNING,
+                    'Your ads have been paused',
+                    'Payment has failed three times, so your campaigns have stopped serving. They resume as soon as a payment goes through.',
+                );
                 break;
         }
     }
@@ -377,6 +440,13 @@ class AdSpendBillingService
             if ($user) {
                 Mail::to($user->email)->queue(new AdSpendCampaignsResumed($customer, $credit));
             }
+
+            $this->notifyInApp(
+                $customer,
+                Notification::TYPE_BILLING_SUCCESS,
+                'Your ads are running again',
+                'Your payment went through and your campaigns are back to their full budgets.',
+            );
 
             $result['success'] = true;
             $result['action_taken'] = 'Payment recovered, campaigns resumed';
@@ -447,6 +517,13 @@ class AdSpendBillingService
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendLowBalance($customer, $credit, $daysRemaining));
                 }
+
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_WARNING,
+                    'Your ad spend credit is running low',
+                    'About '.$daysRemaining.' days of spend left. We top up automatically, but a declined card would pause your ads.',
+                );
             }
         }
     }

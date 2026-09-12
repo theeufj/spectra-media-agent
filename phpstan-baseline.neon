@@ -1837,12 +1837,6 @@ parameters:
 			path: app/Services/MicrosoftAds/BaseMicrosoftAdsService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$user\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Services/NotificationService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 2
