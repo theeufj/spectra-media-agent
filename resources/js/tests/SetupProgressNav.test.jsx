@@ -4,8 +4,22 @@ import { render, act } from '@testing-library/react';
 import SetupProgressNav from '@/Components/SetupProgressNav';
 
 vi.mock('@/utils/http', () => ({ fetchJson: vi.fn() }));
+/*
+   The mock has to be as strict as the real thing.
+
+   Inertia's <Link> runs mergeDataIntoQueryString(method, href, ...) inside a
+   useMemo, and that calls href.toString() — so a null href is a TypeError that
+   the error boundary turns into "Something went wrong" for the whole page. A
+   forgiving `<a href={null}>` mock renders it happily, which is how a null
+   action_url took down the dashboard of a customer who had just paid US$999
+   while this suite stayed green.
+*/
 vi.mock('@inertiajs/react', () => ({
-    Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
+    Link: ({ href, children, ...props }) => {
+        href.toString();
+
+        return <a href={href} {...props}>{children}</a>;
+    },
 }));
 import { fetchJson } from '@/utils/http';
 
@@ -175,5 +189,29 @@ describe('SetupProgressNav', () => {
         const callsAtSettle = fetchJson.mock.calls.length;
         await act(() => vi.advanceTimersByTimeAsync(30000));
         expect(fetchJson.mock.calls.length).toBe(callsAtSettle);
+    });
+
+    it('does not render a link for a step with nowhere to go', async () => {
+        /*
+           The one-time setup journey is mostly work we do: "we build your
+           account", "the keys are yours". Those steps carry action_url null
+           because there is no page for the customer to visit, and the managed
+           journey has the same shape while a step is still ours to finish.
+        */
+        fetchJson.mockResolvedValue(payload([
+            step('payment', 'Pay your setup fee', 'completed'),
+            step('review_ads', 'Review and create your ads', 'in_progress', { action_url: null }),
+            step('handover', 'The keys are yours', 'pending', { action_url: null }),
+        ]));
+
+        let container;
+        await act(async () => {
+            ({ container } = render(<SetupProgressNav />));
+        });
+
+        // Rendered, and rendered as text rather than as a link to nowhere.
+        expect(container.textContent).toContain('The keys are yours');
+        expect(container.querySelectorAll('a')).toHaveLength(1);
+        expect(container.querySelector('a').getAttribute('href')).toBe('/payment');
     });
 });

@@ -80,26 +80,56 @@ export default function SetupProgressNav() {
 
             {/* Steps */}
             <div className="flex flex-col sm:flex-row gap-2">
-                {steps.map((step, index) => (
-                    <Link
-                        key={step.key}
-                        href={step.action_url}
-                        className={`
-                            sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
-                            transition-all duration-200
-                            ${stepClasses(step, step.key === currentKey, isBlocked(index))}
-                        `}
-                        // "Which one am I on" was carried only by a background
-                        // colour, so a screen reader heard five equal links.
-                        aria-current={step.key === currentKey ? 'step' : undefined}
-                        title={step.description}
-                    >
-                        <span className="flex-shrink-0">{stepMarker(step, isBlocked(index))}</span>
-                        <div className="min-w-0">
-                            <p className="font-medium truncate">{step.title}</p>
-                        </div>
-                    </Link>
-                ))}
+                {steps.map((step, index) => {
+                    /*
+                       Not every step is somewhere you can go.
+                       
+                       Steps we do ourselves carry action_url: null — the whole
+                       one-time-setup journey is mostly ours, and "the keys are
+                       yours" has no page to visit. Rendering those as <Link>
+                       took the entire dashboard down: Inertia calls
+                       href.toString() while merging query data, so a null href
+                       is a TypeError inside a useMemo, which the error boundary
+                       catches as "Something went wrong". A US$999 customer met
+                       that screen on the redirect back from paying.
+                    */
+                    const className = `
+                        sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
+                        transition-all duration-200
+                        ${stepClasses(step, step.key === currentKey, isBlocked(index))}
+                    `;
+                    const body = (
+                        <>
+                            <span className="flex-shrink-0">{stepMarker(step, isBlocked(index))}</span>
+                            <div className="min-w-0">
+                                <p className="font-medium truncate">{step.title}</p>
+                            </div>
+                        </>
+                    );
+                    // "Which one am I on" was carried only by a background
+                    // colour, so a screen reader heard five equal links.
+                    const current = step.key === currentKey ? 'step' : undefined;
+
+                    if (! step.action_url) {
+                        return (
+                            <div key={step.key} className={className} aria-current={current} title={step.description}>
+                                {body}
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <Link
+                            key={step.key}
+                            href={step.action_url}
+                            className={className}
+                            aria-current={current}
+                            title={step.description}
+                        >
+                            {body}
+                        </Link>
+                    );
+                })}
             </div>
 
             {/* One line of guidance for whatever the card is currently doing */}
