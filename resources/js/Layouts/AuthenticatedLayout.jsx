@@ -84,6 +84,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
     const { flash } = usePage().props;
     const user = usePage().props.auth.user;
     const activeCustomer = user.active_customer;
+    const setupOnly = activeCustomer?.service_type === 'setup_only';
     const customers = user.customers || [];
     const toast = useToast();
     // One slot per flash channel. A single shared slot would let a response
@@ -289,7 +290,10 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                 #ff4d00 is 3.33:1 and this label is 14px. Same
                                 swap as PrimaryButton so the header CTA and the
                                 in-page primaries agree. */}
-                            <Link
+                            {/* Not for a one-time setup customer: we write the
+                                campaign, and the wizard they landed in told them
+                                to contact us to get their account configured. */}
+                            {!setupOnly && <Link
                                 href={route('campaigns.wizard')}
                                 data-tour="new-campaign"
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
@@ -301,7 +305,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                 {/* The label collapses below lg, leaving a bare
                                     plus icon with no accessible name. */}
                                 <span className="sr-only lg:hidden">New Campaign</span>
-                            </Link>
+                            </Link>}
 
                             {/* Notifications */}
                             <NotificationBell />
@@ -521,7 +525,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                             {/* Scrollable nav */}
                             <div className="flex-1 overflow-y-auto py-2">
                                 {/* New Campaign CTA */}
-                                <div className="px-4 py-2">
+                                {!setupOnly && <div className="px-4 py-2">
                                     <Link
                                         href={route('campaigns.wizard')}
                                         className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2"
@@ -531,7 +535,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         </svg>
                                         New Campaign
                                     </Link>
-                                </div>
+                                </div>}
 
                                 <MobileNavSection>
                                     <MobileNavLink

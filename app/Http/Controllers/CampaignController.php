@@ -7,11 +7,13 @@ use App\Jobs\GenerateCampaignCollateral;
 use App\Jobs\GenerateStrategy;
 use App\Jobs\GenerateStrategyCollateral;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\ActivityLogger;
 use App\Services\StorageHelper;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -46,6 +48,50 @@ class CampaignController extends Controller
     }
 
     /**
+     * Building the campaign is what a one-time setup customer paid us not to do.
+     *
+     * They reached the wizard anyway — the shell's "New Campaign" button is
+     * shown to everyone — and it told them "No ad platform sub-accounts are set
+     * up yet. Contact us to get your account configured." That is the single
+     * worst sentence we could show this person: their account is configured on
+     * payment, automatically, and being told to contact us is the intimidation
+     * the US$999 exists to remove.
+     *
+     * So send them to the step that is actually theirs. Hiding the button is
+     * not enough on its own — a bookmark, the onboarding tour or a typed URL
+     * all land here.
+     */
+    private function setupOnlyDetour(Customer $customer): ?RedirectResponse
+    {
+        if ($customer->service_type !== 'setup_only') {
+            return null;
+        }
+
+        if (! $customer->isPaidSetupOnly()) {
+            // The journey's own payment step links here; setup-fee.checkout is
+            // a POST and cannot be redirected to.
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'info',
+                'message' => 'We build the campaign for you — that is what the one-time setup covers. It starts as soon as the fee is paid.',
+            ]);
+        }
+
+        $campaign = $customer->campaigns()->latest('id')->first();
+
+        if ($campaign) {
+            return redirect()->route('campaigns.show', $campaign)->with('flash', [
+                'type' => 'info',
+                'message' => 'This is the campaign we built for you. Review it, then create the ads when you are happy.',
+            ]);
+        }
+
+        return redirect()->route('dashboard')->with('flash', [
+            'type' => 'info',
+            'message' => 'We are building your campaign now — nothing for you to do yet. We will email you the moment it is ready to review.',
+        ]);
+    }
+
+    /**
      * wizard is the handler for showing the campaign creation wizard.
      */
     public function wizard(Request $request)
@@ -54,6 +100,10 @@ class CampaignController extends Controller
 
         if (! $customer) {
             return redirect()->route('quick-start');
+        }
+
+        if ($redirect = $this->setupOnlyDetour($customer)) {
+            return $redirect;
         }
 
         // Load available pages for the customer

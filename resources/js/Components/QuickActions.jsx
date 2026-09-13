@@ -1,14 +1,17 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
+import { isSetupOnly } from '@/utils/serviceType';
 
 /**
  * QuickActions - Dashboard widget for quick access to common actions
  */
 export default function QuickActions() {
-    const { auth } = usePage().props;
+    const page = usePage();
+    const { auth } = page.props;
     const user = auth?.user;
-    
+    const setupOnly = isSetupOnly(page);
+
     const actions = [
         {
             id: 'create-campaign',
@@ -59,7 +62,10 @@ export default function QuickActions() {
             href: '/brand-guidelines',
             color: 'bg-gray-100 hover:bg-gray-200 text-gray-700',
         },
-    ];
+        // Building the campaign is the thing a one-time setup customer paid us
+        // to do; offering it back to them as a quick action is the opposite of
+        // what they bought.
+    ].filter(a => !(setupOnly && a.id === 'create-campaign'));
     
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">

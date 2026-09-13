@@ -135,6 +135,60 @@ class SetupOnlyJourneyTest extends TestCase
         $this->assertSame('in_progress', $steps['review_ads']['status']);
     }
 
+    public function test_they_are_never_shown_the_campaign_wizard(): void
+    {
+        [$user, $customer] = $this->setupOnlyCustomer();
+
+        /*
+           Reported from production: a US$999 customer who had not paid yet
+           landed in "Create New Campaign" and was told "No ad platform
+           sub-accounts are set up yet. Contact us to get your account
+           configured." Their account is created on payment, automatically, and
+           being told to contact us is the exact intimidation the fee removes.
+        */
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('campaigns.wizard'))
+            ->assertRedirect(route('subscription.pricing', absolute: false));
+    }
+
+    public function test_a_paid_customer_is_sent_to_the_campaign_we_built(): void
+    {
+        [$user, $customer] = $this->setupOnlyCustomer(['setup_fee_paid_at' => now()]);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        // Not the pricing page — they have paid. The wizard's job for them is
+        // already done, so the URL resolves to the work itself.
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('campaigns.wizard'))
+            ->assertRedirect(route('campaigns.show', $campaign, absolute: false));
+    }
+
+    public function test_a_paid_customer_mid_build_is_told_to_wait_not_to_build(): void
+    {
+        [$user, $customer] = $this->setupOnlyCustomer(['setup_fee_paid_at' => now()]);
+
+        // Paid, but the campaign does not exist yet. Anywhere but the wizard.
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('campaigns.wizard'))
+            ->assertRedirect(route('dashboard', absolute: false));
+    }
+
+    public function test_a_managed_customer_still_reaches_the_wizard(): void
+    {
+        $user = User::factory()->create();
+        $user->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'user'])));
+        $managed = Customer::factory()->create(['service_type' => 'managed', 'is_sandbox' => false]);
+        $managed->users()->attach($user->id, ['role' => 'owner']);
+
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $managed->id])
+            ->get(route('campaigns.wizard'))
+            ->assertOk();
+    }
+
     public function test_the_managed_journey_is_untouched(): void
     {
         $user = User::factory()->create();
