@@ -111,6 +111,18 @@ class CampaignController extends Controller
             'allowedPlatforms' => $allowedPlatforms,
             'selectablePlatforms' => $selectablePlatforms,
             'configuredPlatforms' => $configuredPlatforms,
+            /*
+               Why a platform is unavailable, so the page can say something
+               true instead of guessing.
+
+               A one-time-setup customer saw "Contact admin to set up" against
+               Google — which is nobody's job, the sub-account is created the
+               moment they pay — and "Upgrade your plan to unlock" against
+               Facebook, which they cannot buy and which the US$999 never
+               included.
+            */
+            'setupOnly' => $customer->service_type === 'setup_only',
+            'setupFeePaid' => $customer->setup_fee_paid_at !== null,
         ]);
     }
 

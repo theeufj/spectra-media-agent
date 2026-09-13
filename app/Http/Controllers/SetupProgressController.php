@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CampaignStatus;
+use App\Models\Customer;
 use App\Models\Strategy;
 use App\Notifications\SiteScanFailed;
 use Illuminate\Http\Request;
@@ -92,90 +93,102 @@ class SetupProgressController extends Controller
             $deployPending = ! $hasDeployed
                 && $campaigns->contains(fn ($c) => $c->status === CampaignStatus::PendingAdminDeployment);
 
-            $steps = [
-                [
-                    'key' => 'site_scan',
-                    'title' => 'Scan your website',
-                    'description' => match ($scanStatus) {
-                        'in_progress' => 'We\'re reading your site to learn your business — this usually takes a few minutes.',
-                        'failed' => 'The scan couldn\'t finish. Add a few pages or a description manually and we\'ll work from that.',
-                        'pending' => 'No website on file — add your content so the AI knows your business.',
-                        default => 'Your site has been scanned and your knowledge base is ready.',
-                    },
-                    'completed' => $scanStatus === 'completed',
-                    'status' => $scanStatus,
-                    'action_url' => route('knowledge-base.create'),
-                    'action_text' => $scanStatus === 'failed' || $scanStatus === 'pending' ? 'Add Content' : 'View Content',
-                ],
-                [
-                    'key' => 'first_campaign',
-                    'title' => $hasCampaign ? 'Review your campaign' : 'Create your first campaign',
-                    'description' => $hasCampaign
-                        ? 'Your campaign and its strategies are ready to review.'
-                        : 'We draft one automatically after the scan — or build your own.',
-                    'completed' => $hasCampaign,
-                    'status' => $hasCampaign ? 'completed' : 'pending',
-                    'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign)
-                        : route('campaigns.wizard'),
-                    'action_text' => $hasCampaign ? 'Review Campaign' : 'Create Campaign',
-                ],
-                [
-                    'key' => 'budget_confirmed',
-                    'title' => 'Confirm your budget',
-                    'description' => 'Approve the daily spend before anything goes live — nothing is charged until you do.',
-                    'completed' => $budgetConfirmed,
-                    'status' => $budgetConfirmed ? 'completed' : 'pending',
-                    'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign)
-                        : route('campaigns.wizard'),
-                    'action_text' => 'Review Budget',
-                ],
-                [
-                    'key' => 'conversion_tracking',
-                    'title' => 'Install your tracking snippet',
-                    'description' => $customer->gtm_installed
-                        ? 'Conversion tracking is active — every lead your ads bring is counted.'
-                        : 'Two minutes on your website so we can count the leads and sales your ads bring.',
-                    'completed' => (bool) $customer->gtm_installed,
-                    'status' => $customer->gtm_installed ? 'completed' : 'pending',
-                    'action_url' => route('customers.gtm.setup', $customer),
-                    'action_text' => $customer->gtm_installed ? 'View Tracking' : 'Install Snippet',
-                ],
-                $customer->service_type === 'setup_only' ? [
-                    // One-and-done customers pay a single fee, not a plan.
-                    'key' => 'payment',
-                    'title' => 'Pay your one-time setup fee',
-                    'description' => $customer->setup_fee_paid_at
-                        ? 'Paid — we\'re building your account and will hand you the keys.'
-                        : 'US$999 once. We build everything and hand it over — nothing recurring.',
-                    'completed' => $customer->setup_fee_paid_at !== null,
-                    'status' => $customer->setup_fee_paid_at !== null ? 'completed' : 'pending',
-                    'action_url' => route('subscription.pricing'),
-                    'action_text' => $customer->setup_fee_paid_at ? 'View' : 'Pay Setup Fee',
-                ] : [
-                    'key' => 'payment',
-                    'title' => 'Add a payment method',
-                    'description' => 'Building is free — a payment method is only needed to deploy.',
-                    'completed' => $hasPayment,
-                    'status' => $hasPayment ? 'completed' : 'pending',
-                    'action_url' => route('subscription.pricing'),
-                    'action_text' => 'Choose a Plan',
-                ],
-                [
-                    'key' => 'deployed',
-                    'title' => 'Deploy your ads',
-                    'description' => $deployPending
-                        ? 'Our team is completing your account setup — your ads launch within 24 hours.'
-                        : 'Launch your campaign across your ad platforms.',
-                    'completed' => $hasDeployed,
-                    'status' => $hasDeployed ? 'completed' : ($deployPending ? 'in_progress' : 'pending'),
-                    'action_url' => $firstCampaign
-                        ? route('campaigns.show', $firstCampaign)
-                        : route('campaigns.wizard'),
-                    'action_text' => 'Deploy',
-                ],
-            ];
+            /*
+               One-time setup is a different journey, not the managed one with a
+               different payment step.
+
+               The managed list — scan, build a campaign, confirm a budget,
+               install tracking, pay, deploy — asked a US$999 customer to do four
+               things they had just paid us to do. Worse, it asked for them in an
+               order that cannot work: the Google Ads account is created when the
+               fee is paid, at step five, and the campaign wizard at step two
+               needs that account to exist. So they were sent to build a campaign
+               for an account that did not exist and told to "contact admin",
+               which is nobody's job.
+
+               What they actually do is confirm their brand and pay. Everything
+               after that is ours, and is shown as our progress rather than their
+               to-do list.
+            */
+            if ($customer->service_type === 'setup_only') {
+                $steps = $this->setupOnlySteps($customer, $scanStatus, $hasDeployed, $deployPending);
+            } else {
+                $steps = [
+                    [
+                        'key' => 'site_scan',
+                        'title' => 'Scan your website',
+                        'description' => match ($scanStatus) {
+                            'in_progress' => 'We\'re reading your site to learn your business — this usually takes a few minutes.',
+                            'failed' => 'The scan couldn\'t finish. Add a few pages or a description manually and we\'ll work from that.',
+                            'pending' => 'No website on file — add your content so the AI knows your business.',
+                            default => 'Your site has been scanned and your knowledge base is ready.',
+                        },
+                        'completed' => $scanStatus === 'completed',
+                        'status' => $scanStatus,
+                        'action_url' => route('knowledge-base.create'),
+                        'action_text' => $scanStatus === 'failed' || $scanStatus === 'pending' ? 'Add Content' : 'View Content',
+                    ],
+                    [
+                        'key' => 'first_campaign',
+                        'title' => $hasCampaign ? 'Review your campaign' : 'Create your first campaign',
+                        'description' => $hasCampaign
+                            ? 'Your campaign and its strategies are ready to review.'
+                            : 'We draft one automatically after the scan — or build your own.',
+                        'completed' => $hasCampaign,
+                        'status' => $hasCampaign ? 'completed' : 'pending',
+                        'action_url' => $firstCampaign
+                            ? route('campaigns.show', $firstCampaign)
+                            : route('campaigns.wizard'),
+                        'action_text' => $hasCampaign ? 'Review Campaign' : 'Create Campaign',
+                    ],
+                    [
+                        'key' => 'budget_confirmed',
+                        'title' => 'Confirm your budget',
+                        'description' => 'Approve the daily spend before anything goes live — nothing is charged until you do.',
+                        'completed' => $budgetConfirmed,
+                        'status' => $budgetConfirmed ? 'completed' : 'pending',
+                        'action_url' => $firstCampaign
+                            ? route('campaigns.show', $firstCampaign)
+                            : route('campaigns.wizard'),
+                        'action_text' => 'Review Budget',
+                    ],
+                    [
+                        'key' => 'conversion_tracking',
+                        'title' => 'Install your tracking snippet',
+                        'description' => $customer->gtm_installed
+                            ? 'Conversion tracking is active — every lead your ads bring is counted.'
+                            : 'Two minutes on your website so we can count the leads and sales your ads bring.',
+                        'completed' => (bool) $customer->gtm_installed,
+                        'status' => $customer->gtm_installed ? 'completed' : 'pending',
+                        'action_url' => route('customers.gtm.setup', $customer),
+                        'action_text' => $customer->gtm_installed ? 'View Tracking' : 'Install Snippet',
+                    ],
+                    [
+                        // One-time setup has its own journey entirely — see
+                        // setupOnlySteps(). This branch is the managed plan.
+                        'key' => 'payment',
+                        'title' => 'Add a payment method',
+                        'description' => 'Building is free — a payment method is only needed to deploy.',
+                        'completed' => $hasPayment,
+                        'status' => $hasPayment ? 'completed' : 'pending',
+                        'action_url' => route('subscription.pricing'),
+                        'action_text' => 'Choose a Plan',
+                    ],
+                    [
+                        'key' => 'deployed',
+                        'title' => 'Deploy your ads',
+                        'description' => $deployPending
+                            ? 'Our team is completing your account setup — your ads launch within 24 hours.'
+                            : 'Launch your campaign across your ad platforms.',
+                        'completed' => $hasDeployed,
+                        'status' => $hasDeployed ? 'completed' : ($deployPending ? 'in_progress' : 'pending'),
+                        'action_url' => $firstCampaign
+                            ? route('campaigns.show', $firstCampaign)
+                            : route('campaigns.wizard'),
+                        'action_text' => 'Deploy',
+                    ],
+                ];
+            }
 
             $completedSteps = collect($steps)->where('completed', true)->count();
             $totalSteps = count($steps);
@@ -198,6 +211,97 @@ class SetupProgressController extends Controller
 
             return $this->emptyResponse();
         }
+    }
+
+    /**
+     * The one-time setup journey: two things they do, three we do.
+     *
+     * Ordered the way the work actually happens. Paying is what creates the
+     * Google Ads account, so it comes before anything that needs one — which is
+     * everything. The build steps are reported, not assigned: a customer who
+     * paid US$999 to avoid Google Ads should not be handed a campaign wizard.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function setupOnlySteps(
+        Customer $customer,
+        string $scanStatus,
+        bool $hasDeployed,
+        bool $deployPending,
+    ): array {
+        $brandConfirmed = $customer->brandGuideline?->user_verified === true;
+        $paid = $customer->setup_fee_paid_at !== null;
+        $accountReady = ! empty($customer->google_ads_customer_id);
+        $handedOver = $customer->handover_at !== null;
+
+        return [
+            [
+                'key' => 'site_scan',
+                'title' => 'We read your website',
+                'description' => match ($scanStatus) {
+                    'in_progress' => 'Reading your site to learn your business — a few minutes.',
+                    'failed' => 'We could not finish reading your site. Add a few pages and we will work from those.',
+                    'pending' => 'No website on file yet.',
+                    default => 'Done — we know what you sell and who for.',
+                },
+                'completed' => $scanStatus === 'completed',
+                'status' => $scanStatus,
+                'action_url' => route('knowledge-base.create'),
+                'action_text' => $scanStatus === 'failed' || $scanStatus === 'pending' ? 'Add Content' : 'View',
+            ],
+            [
+                'key' => 'brand_confirmed',
+                'title' => 'Confirm your brand profile',
+                'description' => $brandConfirmed
+                    ? 'Confirmed — your ads will be written in this voice.'
+                    : 'Check we have your business right. This is the one thing only you can tell us.',
+                'completed' => $brandConfirmed,
+                'status' => $brandConfirmed ? 'completed' : ($scanStatus === 'completed' ? 'pending' : 'pending'),
+                'action_url' => route('brand-guidelines.index'),
+                'action_text' => $brandConfirmed ? 'View' : 'Review',
+            ],
+            [
+                'key' => 'payment',
+                'title' => 'Pay your one-time setup fee',
+                'description' => $paid
+                    ? 'Paid. Nothing recurring — this is the whole engagement.'
+                    : 'US$999 once. This is what creates your Google Ads account and starts the build.',
+                'completed' => $paid,
+                'status' => $paid ? 'completed' : 'pending',
+                'action_url' => route('subscription.pricing'),
+                'action_text' => $paid ? 'View Receipt' : 'Pay Setup Fee',
+            ],
+            [
+                // Ours. Reported, not assigned — hence no action.
+                'key' => 'build',
+                'title' => 'We build your account and ads',
+                'description' => match (true) {
+                    ! $paid => 'Your Google Ads account, conversion tracking, campaign and ads. Starts the moment you pay.',
+                    $hasDeployed => 'Built — your campaign and conversion tracking are in place, paused.',
+                    $deployPending, $accountReady => 'Building now. Your account exists; we are setting up tracking and your first campaign.',
+                    default => 'Starting your account build.',
+                },
+                'completed' => $hasDeployed,
+                'status' => match (true) {
+                    $hasDeployed => 'completed',
+                    $paid => 'in_progress',
+                    default => 'pending',
+                },
+                'action_url' => null,
+                'action_text' => null,
+            ],
+            [
+                'key' => 'handover',
+                'title' => 'The keys are yours',
+                'description' => $handedOver
+                    ? 'Handed over. Accept the Google invitation, add your billing, and switch the campaign on when you are ready.'
+                    : 'We invite you into the account as its admin. You add your own billing and spend what you want to spend.',
+                'completed' => $handedOver,
+                'status' => $handedOver ? 'completed' : 'pending',
+                'action_url' => null,
+                'action_text' => null,
+            ],
+        ];
     }
 
     private function emptyResponse()

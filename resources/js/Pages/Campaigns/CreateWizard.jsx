@@ -594,7 +594,18 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
                         {selectablePlatforms.length === 0 && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
-                                <strong>No platforms available.</strong> Please contact your admin to set up ad platform accounts for your business.
+                                {setupOnly && ! setupFeePaid ? (
+                                    <>
+                                        <strong>Your Google Ads account isn't built yet.</strong> It is created for
+                                        you as soon as the one-time setup fee is paid — nothing to arrange, and
+                                        nobody to contact. You can keep going and we will have it ready.
+                                    </>
+                                ) : (
+                                    <>
+                                        <strong>No platforms available.</strong> Please contact your admin to set up ad
+                                        platform accounts for your business.
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -610,10 +621,29 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 const isAllowed = allowedPlatforms.includes(platform.id);
                                 const isConfigured = configuredPlatforms.includes(platform.id);
 
+                                /*
+                                    Say the true reason, not a plausible one.
+
+                                    A one-time-setup customer read "Contact
+                                    admin to set up" against Google — which is
+                                    nobody's job, the account is created the
+                                    moment they pay — and "Upgrade your plan to
+                                    unlock" against Facebook, which they cannot
+                                    buy and which the US$999 never covered. Both
+                                    sent them somewhere that could not help.
+                                */
                                 let disabledReason = null;
-                                if (!isAllowed) disabledReason = 'Upgrade your plan to unlock';
-                                else if (!isConfigured) disabledReason = 'Contact admin to set up';
-                                else if (!isSelectable) disabledReason = 'Not available';
+                                if (!isAllowed) {
+                                    disabledReason = setupOnly
+                                        ? 'Not part of the one-time setup'
+                                        : 'Upgrade your plan to unlock';
+                                } else if (!isConfigured) {
+                                    disabledReason = setupOnly && !setupFeePaid
+                                        ? 'We create this account when you pay'
+                                        : 'Contact admin to set up';
+                                } else if (!isSelectable) {
+                                    disabledReason = 'Not available';
+                                }
 
                                 return (
                                     <button
