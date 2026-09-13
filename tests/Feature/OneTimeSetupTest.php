@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\SetupFeeService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -280,6 +281,67 @@ class OneTimeSetupTest extends TestCase
 
         $this->assertTrue($customer->fresh()->isPaidSetupOnly());
         Mail::assertSent(SetupFeeReceived::class, 1);
+    }
+
+    public function test_paying_commissions_the_campaign_even_below_the_bonus_threshold(): void
+    {
+        Mail::fake();
+        Queue::fake();
+        $this->stubInviter();
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+
+        /*
+           Four good pages, not five.
+
+           GenerateFirstCampaign::qualifies() wants five pages of substantive
+           text before it writes an unprompted campaign, and that is right for a
+           free bonus. yourfirststore.com produced four pages of 2.6k-3.9k
+           characters and missed by one, so a customer who then paid US$999 got
+           an account, conversion tracking, and no campaign — with the wizard
+           closed to them and nothing else that would ever produce one. The
+           journey sat at "writing your campaign and ads" permanently.
+        */
+        foreach (range(1, 4) as $i) {
+            \Illuminate\Support\Facades\DB::table('knowledge_bases')->insert([
+                'customer_id' => $customer->id,
+                'user_id' => $user->id,
+                'url' => "https://example.test/page-{$i}",
+                'content' => str_repeat('substantive page text. ', 60),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        app(SetupFeeService::class)->recordPayment($customer, $user);
+
+        Queue::assertPushed(\App\Jobs\GenerateFirstCampaign::class, fn ($job) => $job->paidFor === true);
+
+        // And the job it dispatched must actually write one. Asserted on
+        // qualifies() directly because Queue::fake stops the job short of it —
+        // dispatching into a gate that then declines is the bug, not the fix.
+        $customer->refresh();
+        $this->assertTrue(\App\Jobs\GenerateFirstCampaign::qualifies($customer, paidFor: true));
+        $this->assertFalse(
+            \App\Jobs\GenerateFirstCampaign::qualifies($customer),
+            'four pages must still not earn an unprompted campaign — the bar moves for payment, not in general',
+        );
+    }
+
+    public function test_an_account_with_nothing_readable_is_still_not_given_a_campaign(): void
+    {
+        Mail::fake();
+        Queue::fake();
+        $this->stubInviter();
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+
+        // Paying lowers the bar to "there is something to write from"; it does
+        // not remove it. A campaign written from nothing is worse than none,
+        // and that judgement does not change because money changed hands.
+        app(SetupFeeService::class)->recordPayment($customer, $user);
+
+        $this->assertFalse(
+            \App\Jobs\GenerateFirstCampaign::qualifies($customer->fresh(), paidFor: true),
+        );
     }
 
     public function test_setup_only_deploys_arrive_paused(): void

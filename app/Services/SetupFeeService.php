@@ -121,6 +121,22 @@ class SetupFeeService
         // Paying the setup fee IS deploy-intent — start their account build.
         \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($customer);
 
+        /*
+           And the campaign, which is the thing they actually bought.
+
+           GenerateFirstCampaign normally runs once, off the back of the crawl,
+           and only for accounts that cleared its content threshold — it is an
+           unprompted gift, so it declines rather than write a generic campaign
+           from thin material. Neither condition suits a paid engagement: the
+           customer may have signed up, been declined for having four good pages
+           instead of five, and only decided to pay afterwards. Paying is what
+           commissions the campaign, so it is asked for here, and $paidFor
+           lowers the bar to "there is something to write from".
+        */
+        if (! \App\Models\Campaign::where('customer_id', $customer->id)->exists()) {
+            \App\Jobs\GenerateFirstCampaign::dispatch($customer, paidFor: true);
+        }
+
         Mail::to($user->email)->send(new \App\Mail\SetupFeeReceived($customer, $user->name));
         Mail::raw(
             "One-time setup fee paid\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",

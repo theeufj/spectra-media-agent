@@ -66,7 +66,10 @@ class GenerateFirstCampaign implements ShouldQueue
      */
     public const MIN_CONTENT_CHARS = 300;
 
-    public function __construct(public Customer $customer) {}
+    /**
+     * @param  bool  $paidFor  bypass the content threshold — see qualifies()
+     */
+    public function __construct(public Customer $customer, public bool $paidFor = false) {}
 
     public function handle(GeminiService $gemini, KnowledgeBaseRetriever $knowledgeBase): void
     {
@@ -74,7 +77,7 @@ class GenerateFirstCampaign implements ShouldQueue
             // Re-checked rather than trusted from dispatch time: a queued
             // job can run minutes later, by which point the customer may
             // have built a campaign themselves.
-            if (! self::qualifies($this->customer)) {
+            if (! self::qualifies($this->customer, $this->paidFor)) {
                 return;
             }
 
@@ -175,7 +178,7 @@ class GenerateFirstCampaign implements ShouldQueue
      * ExtractBrandGuidelines sends a different email depending on the answer,
      * and it cannot wait for a queued job to tell it.
      */
-    public static function qualifies(Customer $customer): bool
+    public static function qualifies(Customer $customer, bool $paidFor = false): bool
     {
         if (! config('first_campaign.enabled', true)) {
             return false;
@@ -192,6 +195,27 @@ class GenerateFirstCampaign implements ShouldQueue
             ->where('customer_id', $customer->id)
             ->whereRaw('length(content) >= ?', [self::MIN_CONTENT_CHARS])
             ->count();
+
+        /*
+           The threshold gates a free bonus, not a paid deliverable.
+
+           Unprompted, this campaign is a gift we offer because the crawl went
+           well, and declining to write one from four pages of chrome is the
+           right call — a generic campaign is a worse first impression than
+           none. A one-time setup customer is the opposite case: they have paid
+           US$999 specifically for this campaign, they cannot reach the wizard
+           to build one themselves, and nothing else in the engagement will ever
+           produce it. Refusing leaves them paid-up and permanently stalled.
+
+           Found by walking the funnel: yourfirststore.com crawled four pages of
+           2.6k–3.9k characters each — ample material — and missed the
+           five-page bar by one. The customer paid, the account and tracking
+           were built, and the journey then sat at "writing your campaign"
+           forever.
+        */
+        if ($paidFor && $substantive > 0) {
+            return true;
+        }
 
         if ($substantive < self::MIN_SUBSTANTIVE_PAGES) {
             Log::info('GenerateFirstCampaign skipped: crawl found too little readable content', [
