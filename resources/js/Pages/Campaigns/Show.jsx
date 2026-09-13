@@ -77,7 +77,20 @@ const CollateralSummaryCard = ({ campaign }) => {
 };
 
 // A reusable component for a single strategy card
-const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
+/*
+   campaignUuid, not campaignId.
+
+   The uuid sweep renamed the prop at the call site and left the signature
+   alone, so this destructured a prop nobody passes and the only line that
+   needed it reached for `campaigns` — a variable belonging to the page
+   component, which does not exist out here at module scope. The result was a
+   ReferenceError, and a ReferenceError in render is the whole page.
+
+   It hid because the line sits behind `isSignedOff`: the View Collateral link
+   only renders once a strategy has been signed off, so the crash arrived at
+   the exact moment the customer approved their campaign and never before.
+*/
+export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
     const [isEditing, setIsEditing] = useState(false);
     const { data, setData, put, processing } = useForm({
         ad_copy_strategy: strategy.ad_copy_strategy,
@@ -168,7 +181,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     <div className="p-2 text-center bg-green-100 text-green-800 rounded-lg">
                         Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
                         <Link
-                            href={route('campaigns.collateral.show', { campaign: campaigns.uuid, strategy: strategy.uuid })}
+                            href={route('campaigns.collateral.show', { campaign: campaignUuid, strategy: strategy.uuid })}
                             className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
                         >
                             View Collateral
