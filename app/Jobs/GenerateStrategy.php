@@ -361,6 +361,18 @@ class GenerateStrategy implements ShouldQueue
                     ->notifyStrategyReady($this->campaign, $firstStrategy);
             }
 
+            /*
+               The other end of the same race.
+
+               A one-time setup customer's ads are built once their account
+               exists AND a strategy exists. SetupConversionTracking fires this
+               when payment completes last; this fires it when the strategy
+               lands last. Both are guarded, and the job refuses to deploy twice.
+            */
+            if ($this->campaign->customer) {
+                BuildSetupOnlyCampaign::dispatchIfReady($this->campaign->customer);
+            }
+
             $strategyCount = count($strategyData['strategies']);
             AgentActivity::record(
                 'strategy',

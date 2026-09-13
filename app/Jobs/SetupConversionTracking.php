@@ -85,6 +85,11 @@ class SetupConversionTracking implements ShouldQueue
 
         // Notify all users for this customer so they know to install the snippet
         $this->customer->users()->each(fn ($user) => $user->notify(new ConversionTrackingReady($this->customer)));
+
+        // The account and its tracking exist; for a one-time setup customer the
+        // ads are the rest of what they paid for, and nothing else dispatches
+        // them. No-ops for managed customers, who deploy when they choose.
+        BuildSetupOnlyCampaign::dispatchIfReady($this->customer);
     }
 
     public function failed(\Throwable $exception): void
