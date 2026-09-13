@@ -347,15 +347,10 @@ class Customer extends Model
      */
     public function allowedPlatforms(): array
     {
-        return match ($this->resolvePlan()->slug) {
-            'free' => ['google'],
-            'starter' => [$this->starter_platform ?? 'google'],
-            // The engagement is a one-time *Google Ads* setup, named as such on
-            // the pricing card and in the receipt. Creative allowance matches
-            // Growth; the platform list follows what was actually sold.
-            'setup_only' => ['google'],
-            default => ['google', 'facebook', 'microsoft', 'linkedin'],
-        };
+        // Plan::platformsFor is the single copy of this mapping — the wizard
+        // needs the same answer from the other direction, given a set of
+        // platforms which plan covers them.
+        return Plan::platformsFor($this->resolvePlan()->slug, $this->starter_platform);
     }
 
     /**

@@ -76,17 +76,30 @@ class WizardPlatformLockTest extends TestCase
         $this->assertSame([], $props['configuredPlatforms']);
     }
 
-    public function test_plan_entitlement_still_applies(): void
+    public function test_a_platform_above_the_current_plan_is_pickable_and_priced(): void
     {
         [$user, $customer] = $this->subscriberWithNoAccountYet();
         EnabledPlatform::updateOrCreate(['slug' => 'facebook'], ['name' => 'Facebook', 'is_enabled' => true]);
+        \App\Models\Plan::updateOrCreate(['slug' => 'growth'], [
+            'name' => 'Growth', 'price_cents' => 24900, 'billing_interval' => 'month',
+            'is_active' => true, 'stripe_price_id' => 'price_growth_test',
+        ]);
 
         $props = $this->wizardProps($user, $customer);
 
-        // Removing the infrastructure check must not hand a free account every
-        // platform — the plan is still what decides.
-        $this->assertNotContains('facebook', $props['selectablePlatforms']);
+        /*
+           Pickable, because gating the choice by plan meant buying before
+           finding out what the purchase allowed. Entitlement has not moved —
+           allowedPlatforms still says what this plan covers, and DeployCampaign
+           still filters on it — but the customer now learns the price of what
+           they want instead of being refused the choice.
+        */
+        $this->assertContains('facebook', $props['selectablePlatforms']);
         $this->assertNotContains('facebook', $props['allowedPlatforms']);
+
+        // And the page is given the figure it needs to say so.
+        $this->assertSame('Growth', $props['planForPlatforms'][2]['name']);
+        $this->assertEquals(249, $props['planForPlatforms'][2]['price']);
     }
 
     public function test_the_page_is_told_what_the_product_supports_at_all(): void

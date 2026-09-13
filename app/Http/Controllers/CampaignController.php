@@ -150,7 +150,23 @@ class CampaignController extends Controller
         $configuredPlatforms = $customer->configuredPlatforms();
 
         /*
-           Selectable is what the plan allows, not what already exists.
+           Selectable is what the product supports, not what this plan has
+           already bought.
+
+           Gating the choice by plan meant a customer had to buy before finding
+           out what the purchase let them pick — Facebook greyed out with
+           "upgrade your plan to unlock" and nothing saying which upgrade or
+           what it costs. The wizard now asks where they want to advertise and
+           the payment step answers what that costs, which is the same
+           information in the order a buyer can act on.
+
+           Entitlement has not moved: DeployCampaign still filters strategies to
+           allowedPlatforms and marks the rest skipped_plan. What changed is
+           that the customer learns the price of what they want instead of
+           being refused the choice.
+
+           The previous note on this block, still true and the other half of
+           why it was stuck:
 
            Intersecting with configuredPlatforms locked the funnel shut. The
            sub-account is created on deploy intent — confirmBudget() dispatches
@@ -172,10 +188,7 @@ class CampaignController extends Controller
            still cannot pick it. What no longer applies is a chicken-and-egg
            check on infrastructure we create later anyway.
         */
-        $selectablePlatforms = array_values(array_intersect(
-            array_map('strtolower', $enabledPlatforms),
-            $allowedPlatforms
-        ));
+        $selectablePlatforms = array_values(array_map('strtolower', $enabledPlatforms));
 
         return Inertia::render('Campaigns/CreateWizard', [
             'pages' => $pages,
@@ -193,6 +206,26 @@ class CampaignController extends Controller
                can. The two reasons need telling apart wherever they are shown.
             */
             'enabledPlatforms' => array_map('strtolower', $enabledPlatforms),
+            /*
+               What each possible choice costs, so the page can price a
+               selection as it is made rather than refusing it.
+
+               Keyed by platform count because that is what separates the tiers:
+               one platform is Starter, more than one is Growth. Sent as plain
+               figures so the wizard never has to know the pricing rules.
+            */
+            'planForPlatforms' => collect([1, 2])
+                ->mapWithKeys(function (int $count) {
+                    $sample = array_slice(['google', 'facebook', 'microsoft', 'linkedin'], 0, $count);
+                    $plan = \App\Models\Plan::cheapestFor($sample);
+
+                    return [$count => $plan ? [
+                        'name' => $plan->name,
+                        'price' => $plan->price_cents / 100,
+                        'interval' => $plan->billing_interval,
+                    ] : null];
+                })
+                ->all(),
             /*
                Why a platform is unavailable, so the page can say something
                true instead of guessing.

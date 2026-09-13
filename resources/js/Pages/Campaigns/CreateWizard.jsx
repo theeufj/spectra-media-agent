@@ -280,7 +280,7 @@ const PreflightBanner = ({ brandGuideline, pages, selectablePlatforms, configure
    Defaulted rather than required: a page rendered without them should show the
    ordinary managed copy, not crash.
 */
-export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], enabledPlatforms = [], setupOnly = false, setupFeePaid = false }) {
+export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], enabledPlatforms = [], planForPlatforms = {}, setupOnly = false, setupFeePaid = false }) {
     const tenant = useTenant();
     const tenantVertical = tenant?.vertical ?? null;
 
@@ -621,6 +621,35 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             <p className="text-sm text-gray-500 mt-1">Select the platforms to run this campaign on. Only platforms configured for your account are available.</p>
                         </div>
 
+                        {(() => {
+                            /*
+                               Price the selection as it is made.
+
+                               Platforms used to be greyed out with "upgrade
+                               your plan to unlock" and nothing saying which
+                               upgrade or what it cost — so a customer had to
+                               buy before learning what the purchase let them
+                               pick. Choosing first and pricing second is the
+                               same two facts in the order somebody can act on.
+                            */
+                            const chosen = data.platforms.length;
+                            const needed = planForPlatforms[chosen] ?? planForPlatforms[Math.min(chosen, 2)];
+                            const covered = data.platforms.every(p => allowedPlatforms.includes(p));
+
+                            if (chosen === 0 || covered || ! needed) return null;
+
+                            return (
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+                                    <strong>
+                                        {chosen === 1 ? 'One platform' : `${chosen} platforms`} needs {needed.name} —
+                                        {' '}${needed.price}/{needed.interval === 'month' ? 'month' : needed.interval}.
+                                    </strong>{' '}
+                                    Keep building; you choose a plan before anything goes live, and nothing is
+                                    charged until then.
+                                </div>
+                            );
+                        })()}
+
                         {/* Not yet built is not the same as unavailable. The
                             sub-account is created when the budget is confirmed,
                             so an unconfigured platform is still a legitimate
@@ -680,10 +709,10 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     // No plan unlocks this one, so do not offer an
                                     // upgrade as the remedy.
                                     disabledReason = 'Not available yet';
-                                } else if (!isAllowed) {
-                                    disabledReason = setupOnly
-                                        ? 'Not part of the one-time setup'
-                                        : 'Upgrade your plan to unlock';
+                                } else if (setupOnly && !isAllowed) {
+                                    // The one-time setup genuinely cannot buy
+                                    // these: there is no plan to move to.
+                                    disabledReason = 'Not part of the one-time setup';
                                 } else if (!isSelectable) {
                                     disabledReason = 'Not available';
                                 }
