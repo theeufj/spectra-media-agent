@@ -98,6 +98,24 @@ const CAMPAIGN_TEMPLATES = [
 ];
 
 // Wizard Steps Configuration
+/**
+ * Join brand-guideline fragments into prose without doubling their punctuation.
+ *
+ * These were joined with '. ' and ', ', and the fragments already end in full
+ * stops — so the wizard prefilled "launching or managing an online store..
+ * Entrepreneurs aged 20-55" and "in under 5 minutes., All-Inclusive $35/month".
+ * The first thing a customer reads about their own business, written by us,
+ * with the punctuation visibly wrong.
+ */
+function joinSentences(parts) {
+    return (parts || [])
+        .filter(Boolean)
+        .map(part => String(part).trim().replace(/[.,;]+$/, ''))
+        .filter(part => part !== '')
+        .join('. ')
+        .concat('.');
+}
+
 const WIZARD_STEPS = [
     {
         id: 'method',
@@ -281,13 +299,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     // Build initial form values from brand guidelines if available
     const brandDefaults = brandGuideline ? {
         target_market: brandGuideline.target_audience
-            ? [brandGuideline.target_audience.primary, brandGuideline.target_audience.demographics, brandGuideline.target_audience.psychographics].filter(Boolean).join('. ')
+            ? joinSentences([brandGuideline.target_audience.primary, brandGuideline.target_audience.demographics, brandGuideline.target_audience.psychographics])
             : '',
         voice: brandGuideline.brand_voice?.description || (brandGuideline.tone_attributes?.length
             ? brandGuideline.tone_attributes.join(', ')
             : ''),
         product_focus: brandGuideline.unique_selling_propositions?.length
-            ? brandGuideline.unique_selling_propositions.join(', ')
+            ? joinSentences(brandGuideline.unique_selling_propositions)
             : '',
         exclusions: brandGuideline.do_not_use?.length
             ? brandGuideline.do_not_use.join(', ')

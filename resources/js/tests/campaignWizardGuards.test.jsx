@@ -87,3 +87,39 @@ describe('wizard draft key', () => {
         expect(JSON.parse(store.get(draftKey(alice))).data.name).toBe('Alice campaign');
     });
 });
+
+/** Mirrors joinSentences in Pages/Campaigns/CreateWizard.jsx. */
+function joinSentences(parts) {
+    return (parts || [])
+        .filter(Boolean)
+        .map(part => String(part).trim().replace(/[.,;]+$/, ''))
+        .filter(part => part !== '')
+        .join('. ')
+        .concat('.');
+}
+
+describe('wizard prefill punctuation', () => {
+    it('does not double the full stops the brand guidelines already carry', () => {
+        /*
+           Seen on step 3 of a real signup: "…launching or managing an online
+           store.. Entrepreneurs aged 20-55…" and on step 5 "…in under 5
+           minutes., All-Inclusive $35/month…". The fragments are whole
+           sentences and were being joined with '. ' and ', ' regardless.
+
+           It is the first description of their own business the customer reads,
+           written by us, with the punctuation visibly wrong.
+        */
+        expect(joinSentences([
+            'First-time entrepreneurs launching an online store.',
+            'Entrepreneurs aged 20-55.',
+        ])).toBe('First-time entrepreneurs launching an online store. Entrepreneurs aged 20-55.');
+    });
+
+    it('keeps a single trailing stop when the fragments have none', () => {
+        expect(joinSentences(['Makers and sellers', 'Small brands'])).toBe('Makers and sellers. Small brands.');
+    });
+
+    it('drops empty fragments rather than leaving gaps', () => {
+        expect(joinSentences(['Only this one.', null, '', '   '])).toBe('Only this one.');
+    });
+});
