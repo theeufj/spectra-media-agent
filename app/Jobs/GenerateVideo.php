@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Prompts\CreativeVariant;
 use App\Prompts\VideoFromScriptPrompt;
 use App\Prompts\VideoScriptPrompt;
 use App\Services\GeminiService;
@@ -35,6 +36,14 @@ class GenerateVideo implements ShouldQueue
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected string $platform,
+        /**
+         * Which concept in the set this is.
+         *
+         * Already existed to vary the script; it now picks the visual lens too,
+         * so two concepts differ in what is on screen and not only in what is
+         * said. Positional — RunSelfHealingChecks passes it that way — so
+         * nothing may be inserted before it.
+         */
         protected int $variationIndex = 0,
         protected bool $force = false
     ) {}
@@ -194,6 +203,27 @@ class GenerateVideo implements ShouldQueue
 
             // Step 1: Generate Video Script using Gemini
             Log::info("Generating video script for Strategy ID: {$this->strategy->id}, variation: {$this->variationIndex}");
+            /*
+               The concept changes what is on screen, not only what is said.
+
+               VideoScriptPrompt already varied the script by this index —
+               problem-led against aspiration-led — which is worth having and
+               was never once asked for, because both dispatched videos left the
+               index at its default. But two different scripts over the same
+               footage is still one advertisement twice. The lens is what makes
+               the second concept look like a different ad.
+            */
+            $actionableContent = CreativeVariant::apply($actionableContent, $this->variationIndex);
+
+            Log::info('Video concept', [
+                'campaign_id' => $this->campaign->id,
+                'strategy_id' => $this->strategy->id,
+                'platform' => $this->platform,
+                'concept' => $this->variationIndex,
+                'lens' => CreativeVariant::label($this->variationIndex),
+                'scene' => trim(preg_replace('/\s+/', ' ', $actionableContent)),
+            ]);
+
             $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext, $this->variationIndex))->getPrompt();
             $scriptResponse = $geminiService->generateContent(config('ai.models.default'), $scriptPrompt);
 

@@ -253,4 +253,22 @@ return [
      */
     'video_narration_tts' => env('AI_VIDEO_NARRATION_TTS', true),
 
+    /*
+     * How many distinct video concepts a campaign gets. Each one is produced
+     * twice — 16:9 for Google and YouTube, 9:16 for Meta — so the number of
+     * videos generated is double this.
+     *
+     * Two by default, and the default is a cost decision rather than a creative
+     * one. Measured from ai_costs: an image is $0.04 and a video is $1.88 on
+     * Grok, or $3.20 per 8-second segment when the Veo fallback runs, so a
+     * 24-second script is $9.60. Variety in video costs 40 to 220 times what
+     * variety in images costs. Two concepts is $7.50 on Grok and $38 on Veo;
+     * three would be $11 and $58, which is most of a Starter subscription
+     * spent on one campaign's creative.
+     *
+     * The plan's own video allowance still applies on top of this and is the
+     * harder limit — see VideoCollateral::remainingForCampaign().
+     */
+    'video_concepts_per_campaign' => (int) env('AI_VIDEO_CONCEPTS_PER_CAMPAIGN', 2),
+
 ];

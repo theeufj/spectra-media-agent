@@ -88,4 +88,42 @@ class VideoCollateral extends Model
             && ! empty($this->gemini_video_uri)
             && ($this->extension_count ?? 0) < 20;
     }
+
+    /**
+     * How many more videos this campaign's plan will pay for.
+     *
+     * Images have had a gate since the free tier existed; video never did, and
+     * video is the expensive one. Measured from ai_costs: $1.88 a video on
+     * Grok, $3.20 per 8-second segment when the Veo fallback runs, so a
+     * 24-second script is $9.60 — roughly what 240 images cost. Dispatching
+     * more concepts without a ceiling is how one campaign quietly spends most
+     * of a Starter subscription on creative.
+     *
+     * Counted per campaign against the plan's allowance, matching how the image
+     * gate reads. A plan with no video allowance gets none, which is the free
+     * tier and is deliberate.
+     */
+    public static function remainingForCampaign(Campaign $campaign): int
+    {
+        $customer = $campaign->customer;
+
+        if (! $customer) {
+            return 0;
+        }
+
+        $limit = (int) ($customer->resolvePlan()->creative_limits['video_generations'] ?? 0);
+
+        if ($limit <= 0) {
+            return 0;
+        }
+
+        // Failed rows do not count: a video that never arrived is not one the
+        // customer received, and refusing to retry it would strand the campaign
+        // short of what its plan allows.
+        $used = static::where('campaign_id', $campaign->id)
+            ->where('status', '!=', 'failed')
+            ->count();
+
+        return max(0, $limit - $used);
+    }
 }
