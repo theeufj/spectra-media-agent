@@ -149,10 +149,32 @@ class CampaignController extends Controller
         $allowedPlatforms = $customer->allowedPlatforms();
         $configuredPlatforms = $customer->configuredPlatforms();
 
+        /*
+           Selectable is what the plan allows, not what already exists.
+
+           Intersecting with configuredPlatforms locked the funnel shut. The
+           sub-account is created on deploy intent — confirmBudget() dispatches
+           ProvisionGoogleAdsAccount, deliberately, so tire-kickers do not mint
+           real Google Ads accounts at signup. But confirming a budget needs a
+           campaign, creating a campaign needs to pass this step, and this step
+           needed an account that only exists after the budget is confirmed:
+
+               no campaign -> no budget -> no account -> no platform -> no campaign
+
+           The only way through was GenerateFirstCampaign writing a campaign
+           without the wizard, which makes that job the sole entrance to the
+           managed product rather than the bonus it is described as. An account
+           it declines is stuck for good on "contact your admin to set up ad
+           platform accounts" — nobody's job, and the reason every real signup
+           has stopped at or before budget_confirmed.
+
+           Entitlement still applies: a plan that does not include Facebook
+           still cannot pick it. What no longer applies is a chicken-and-egg
+           check on infrastructure we create later anyway.
+        */
         $selectablePlatforms = array_values(array_intersect(
             array_map('strtolower', $enabledPlatforms),
-            $allowedPlatforms,
-            $configuredPlatforms
+            $allowedPlatforms
         ));
 
         return Inertia::render('Campaigns/CreateWizard', [
@@ -161,6 +183,16 @@ class CampaignController extends Controller
             'allowedPlatforms' => $allowedPlatforms,
             'selectablePlatforms' => $selectablePlatforms,
             'configuredPlatforms' => $configuredPlatforms,
+            /*
+               Which platforms this product supports at all, as distinct from
+               which this plan includes.
+
+               Microsoft and LinkedIn are not enabled system-wide, and the
+               wizard told customers to "upgrade your plan to unlock" them —
+               selling an upgrade that would not deliver them, because no plan
+               can. The two reasons need telling apart wherever they are shown.
+            */
+            'enabledPlatforms' => array_map('strtolower', $enabledPlatforms),
             /*
                Why a platform is unavailable, so the page can say something
                true instead of guessing.

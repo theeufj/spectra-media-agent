@@ -262,7 +262,7 @@ const PreflightBanner = ({ brandGuideline, pages, selectablePlatforms, configure
    Defaulted rather than required: a page rendered without them should show the
    ordinary managed copy, not crash.
 */
-export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], setupOnly = false, setupFeePaid = false }) {
+export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], enabledPlatforms = [], setupOnly = false, setupFeePaid = false }) {
     const tenant = useTenant();
     const tenantVertical = tenant?.vertical ?? null;
 
@@ -603,6 +603,18 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             <p className="text-sm text-gray-500 mt-1">Select the platforms to run this campaign on. Only platforms configured for your account are available.</p>
                         </div>
 
+                        {/* Not yet built is not the same as unavailable. The
+                            sub-account is created when the budget is confirmed,
+                            so an unconfigured platform is still a legitimate
+                            choice — it just gets set up slightly later. */}
+                        {selectablePlatforms.some(p => ! configuredPlatforms.includes(p)) && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                                <strong>Your ad accounts are created for you.</strong> Pick where you want to
+                                run this campaign — we set the accounts up when you confirm your budget, so
+                                there is nothing to arrange and nobody to contact.
+                            </div>
+                        )}
+
                         {selectablePlatforms.length === 0 && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
                                 {setupOnly && ! setupFeePaid ? (
@@ -613,8 +625,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     </>
                                 ) : (
                                     <>
-                                        <strong>No platforms available.</strong> Please contact your admin to set up ad
-                                        platform accounts for your business.
+                                        <strong>No platforms on your plan.</strong> Your current plan does not include
+                                        any ad platform — choose a plan to pick where this campaign runs.
                                     </>
                                 )}
                             </div>
@@ -643,15 +655,17 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     buy and which the US$999 never covered. Both
                                     sent them somewhere that could not help.
                                 */
+                                const isEnabled = enabledPlatforms.length === 0 || enabledPlatforms.includes(platform.id);
+
                                 let disabledReason = null;
-                                if (!isAllowed) {
+                                if (!isEnabled) {
+                                    // No plan unlocks this one, so do not offer an
+                                    // upgrade as the remedy.
+                                    disabledReason = 'Not available yet';
+                                } else if (!isAllowed) {
                                     disabledReason = setupOnly
                                         ? 'Not part of the one-time setup'
                                         : 'Upgrade your plan to unlock';
-                                } else if (!isConfigured) {
-                                    disabledReason = setupOnly && !setupFeePaid
-                                        ? 'We create this account when you pay'
-                                        : 'Contact admin to set up';
                                 } else if (!isSelectable) {
                                     disabledReason = 'Not available';
                                 }
