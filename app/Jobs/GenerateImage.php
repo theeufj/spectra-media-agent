@@ -126,16 +126,23 @@ class GenerateImage implements ShouldQueue
             }
             // --- End Prompt Splitting ---
 
-            // The only words allowed inside a generated creative are the
-            // strategy's approved ad copy — the model composes a headline
-            // from these rather than inventing claims of its own.
+            /*
+               The only words allowed inside a generated creative are the
+               strategy's approved ad copy — the model composes a headline from
+               these rather than inventing claims of its own.
+
+               All of them, deliberately. This used to pass three of the five
+               headlines and one of the three descriptions, so the model chose
+               its headline from a set we had already narrowed for no reason:
+               "Launch Your Store with AI" and "Try Free - No Card Required"
+               were approved, paid for, and never once shown to the thing
+               drawing the ad. Nothing here is a budget — the copy is short by
+               construction, Google caps a headline at 30 characters — and a
+               model asked for one good line does better given every line it is
+               allowed to use.
+            */
             $adCopy = $this->strategy->adCopies()->first();
-            $adText = $adCopy
-                ? trim(implode("\n", array_filter(array_merge(
-                    array_slice($adCopy->headlines ?? [], 0, 3),
-                    [($adCopy->descriptions ?? [])[0] ?? null],
-                ))))
-                : '';
+            $adText = $this->renderableCopy($adCopy);
 
             $successfulUploads = 0;
 
@@ -359,6 +366,34 @@ class GenerateImage implements ShouldQueue
         '1:1' => '1024x1024',
         '16:9' => '1344x768',
     ];
+
+    /**
+     * Every word the image model is allowed to render.
+     *
+     * All of the approved copy, deliberately. This used to pass three of the
+     * five headlines and one of the three descriptions, so the model chose its
+     * headline from a set we had already narrowed for no reason: lines that
+     * were written, approved and paid for were never shown to the thing
+     * drawing the ad.
+     *
+     * Nothing here is a payload budget. Google caps a headline at 30
+     * characters, so the whole set is a few hundred bytes, and a model asked
+     * for one good line does better given every line it may legitimately use.
+     *
+     * @return string empty when there is no approved copy — the template's
+     *                rules then produce a composition with no words at all
+     */
+    private function renderableCopy(?\App\Models\AdCopy $adCopy): string
+    {
+        if (! $adCopy) {
+            return '';
+        }
+
+        return trim(implode("\n", array_filter(array_map(
+            fn ($line) => trim((string) $line),
+            array_merge($adCopy->headlines ?? [], $adCopy->descriptions ?? []),
+        ))));
+    }
 
     /**
      * The one line of brand copy burnt into the banner.

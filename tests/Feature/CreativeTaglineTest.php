@@ -110,4 +110,69 @@ class CreativeTaglineTest extends TestCase
     {
         $this->assertNull($this->tagline(null, null));
     }
+
+    private function renderableCopy(?AdCopy $adCopy): string
+    {
+        $job = new GenerateImage(Campaign::factory()->make(), new Strategy);
+
+        $method = new \ReflectionMethod($job, 'renderableCopy');
+        $method->setAccessible(true);
+
+        return $method->invoke($job, $adCopy);
+    }
+
+    public function test_every_approved_line_reaches_the_image_model(): void
+    {
+        $adCopy = new AdCopy([
+            'headlines' => [
+                'Build Your Store in 5 Mins',
+                'All-Inclusive $35/Mo Plan',
+                '0% Platform Transaction Fees',
+                'Launch Your Store with AI',
+                'Try Free - No Card Required',
+            ],
+            'descriptions' => [
+                'Skip Shopify app fees.',
+                'Launch in 5 mins with AI.',
+                'No hidden app taxes.',
+            ],
+        ]);
+
+        /*
+           Three of five headlines and one of three descriptions used to reach
+           the image model. The other four lines were written, approved and paid
+           for, and the thing drawing the ad never saw them — so it chose its
+           headline from a set we had narrowed for no reason at all.
+
+           Nothing here is a payload budget: Google caps a headline at 30
+           characters, so the whole set is a few hundred bytes.
+        */
+        $rendered = $this->renderableCopy($adCopy);
+
+        foreach (array_merge($adCopy->headlines, $adCopy->descriptions) as $line) {
+            $this->assertStringContainsString(
+                $line,
+                $rendered,
+                "approved copy never reached the creative: {$line}",
+            );
+        }
+    }
+
+    public function test_absent_copy_gives_the_model_nothing_to_render(): void
+    {
+        // The template's rules turn an empty marker block into a composition
+        // with no words in it — which is correct, and is why this must stay
+        // genuinely empty rather than becoming a note explaining itself.
+        $this->assertSame('', $this->renderableCopy(null));
+    }
+
+    public function test_blank_lines_do_not_become_blank_rendering_instructions(): void
+    {
+        $adCopy = new AdCopy([
+            'headlines' => ['Launch in 5 Minutes', '', '   '],
+            'descriptions' => [null, 'No hidden app taxes.'],
+        ]);
+
+        $this->assertSame("Launch in 5 Minutes\nNo hidden app taxes.", $this->renderableCopy($adCopy));
+    }
 }

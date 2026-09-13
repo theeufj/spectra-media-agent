@@ -234,8 +234,11 @@ class GenerateVideo implements ShouldQueue
             // but usually the script is enough.
             // Approved ad copy gives the model the campaign's message as
             // context for the voiceover (never rendered on screen).
+            // Every approved headline, not the first two. The voiceover model
+            // is choosing a message to carry, and narrowing its options before
+            // it chooses only makes the choice worse.
             $endCardCopy = $this->strategy->adCopies()->first();
-            $endCardText = $endCardCopy ? trim(implode("\n", array_slice($endCardCopy->headlines ?? [], 0, 2))) : '';
+            $endCardText = $endCardCopy ? trim(implode("\n", array_filter($endCardCopy->headlines ?? []))) : '';
 
             // Provider-aware narration sizing: Grok generates up to 15s in a
             // single pass with native audio, so it gets the full script. Veo

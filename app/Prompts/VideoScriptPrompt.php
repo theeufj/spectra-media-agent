@@ -135,6 +135,10 @@ PROMPT;
             return 'Engaging and professional';
         }
 
-        return implode(', ', array_slice($tones, 0, 3));
+        // Every attribute the extraction found. Brand voice is the thing the
+        // script is supposed to sound like; keeping three of it and discarding
+        // the rest narrows the voice for no reason — the list is a handful of
+        // words, not a payload concern.
+        return implode(', ', array_filter($tones));
     }
 }
