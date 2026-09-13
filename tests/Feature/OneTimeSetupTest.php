@@ -291,17 +291,23 @@ class OneTimeSetupTest extends TestCase
         [$user, $customer] = $this->setupOnlyCustomer(paid: false);
 
         /*
-           Four good pages, not five.
+           Two good pages: below the bar for an unprompted campaign.
 
-           GenerateFirstCampaign::qualifies() wants five pages of substantive
-           text before it writes an unprompted campaign, and that is right for a
-           free bonus. yourfirststore.com produced four pages of 2.6k-3.9k
-           characters and missed by one, so a customer who then paid US$999 got
-           an account, conversion tracking, and no campaign — with the wizard
-           closed to them and nothing else that would ever produce one. The
-           journey sat at "writing your campaign and ads" permanently.
+           qualifies() declines to write one off its own bat below the
+           threshold, which is right for a free bonus — a generic campaign is a
+           worse first impression than none. It is wrong for a paid engagement:
+           a US$999 customer who is declined gets an account, conversion
+           tracking and no campaign, with the wizard closed to them and nothing
+           else that would ever produce one. The journey sat at "writing your
+           campaign and ads" permanently.
+
+           Two rather than four because the threshold itself has since moved to
+           four — measured across every crawled account, nothing at all sits
+           between one substantive page and four, so five was a cliff catching
+           real sites for no benefit. This test is about payment moving the bar,
+           so it needs a page count that is still under it.
         */
-        foreach (range(1, 4) as $i) {
+        foreach (range(1, 2) as $i) {
             \Illuminate\Support\Facades\DB::table('knowledge_bases')->insert([
                 'customer_id' => $customer->id,
                 'user_id' => $user->id,
@@ -323,7 +329,7 @@ class OneTimeSetupTest extends TestCase
         $this->assertTrue(\App\Jobs\GenerateFirstCampaign::qualifies($customer, paidFor: true));
         $this->assertFalse(
             \App\Jobs\GenerateFirstCampaign::qualifies($customer),
-            'four pages must still not earn an unprompted campaign — the bar moves for payment, not in general',
+            'a thin crawl must still not earn an unprompted campaign — the bar moves for payment, not in general',
         );
     }
 

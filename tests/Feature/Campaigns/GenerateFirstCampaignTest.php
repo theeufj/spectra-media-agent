@@ -384,6 +384,27 @@ class GenerateFirstCampaignTest extends TestCase
         $this->assertTrue(GenerateFirstCampaign::qualifies($this->customer));
     }
 
+    public function test_a_real_site_one_page_short_of_five_still_qualifies(): void
+    {
+        /*
+           The threshold was five, and the cost of missing it is not a missing
+           bonus — it is the eight-step wizard, which is the experience this job
+           exists to replace.
+
+           Measured across every account ever crawled, the distribution is
+           bimodal with nothing in the middle: five customers at one substantive
+           page, none at two or three, two at four, thirteen at five or more. So
+           five was a cliff that caught a tenth of all crawls and admitted
+           nothing extra by being there.
+
+           yourfirststore.com is one of the two: four pages of 2,632 to 3,945
+           characters, plenty to write from, one page short.
+        */
+        $this->crawlPages(4, contentChars: 2600);
+
+        $this->assertTrue(GenerateFirstCampaign::qualifies($this->customer));
+    }
+
     public function test_an_account_that_already_has_a_campaign_does_not_qualify(): void
     {
         $this->crawlPages(12);

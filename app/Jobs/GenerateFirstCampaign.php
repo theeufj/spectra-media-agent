@@ -57,7 +57,30 @@ class GenerateFirstCampaign implements ShouldQueue
      * generic campaign, which is the exact "worse than nothing" first
      * impression this gate exists to prevent.
      */
-    public const MIN_SUBSTANTIVE_PAGES = 5;
+    public const MIN_SUBSTANTIVE_PAGES = 4;
+
+    /*
+       Four, not five, measured against every account that has ever been
+       crawled. The distribution is bimodal and there is nothing in the middle
+       of it:
+
+           1 substantive page    5 customers   (the chrome-only crawls above)
+           2 pages               0
+           3 pages               0
+           4 pages               2 customers   (real sites, one page short)
+           5+ pages             13 customers
+
+       So a threshold anywhere from 2 to 4 admits the same two accounts and
+       excludes the same five. Five was a cliff that caught a tenth of all
+       crawls for no benefit, and what it cost them is the whole point of this
+       job: declining means the customer is handed the eight-step wizard
+       instead of a written campaign, which is the experience
+       ExtractBrandGuidelines describes as why sixteen accounts were crawled
+       and none of them built anything.
+
+       Found by walking the managed signup: yourfirststore.com crawls four
+       pages of 2,632 to 3,945 characters — ample material — and missed by one.
+    */
 
     /**
      * Below this a page is chrome — a menu, a cookie banner, an error. Chosen
