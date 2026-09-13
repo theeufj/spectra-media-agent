@@ -212,6 +212,13 @@ class CampaignController extends Controller
         return Inertia::render('Campaigns/DeploymentStatus', [
             'campaign' => $campaign->toArray(),
             'deployments' => $deployments,
+            /*
+               A one-time setup campaign does not begin serving tomorrow, or on
+               any day we choose. It is paused as it deploys and its owner
+               starts it. The success panel told them the opposite on the very
+               screen where they watched it happen.
+            */
+            'setupOnly' => $campaign->customer?->service_type === 'setup_only',
         ]);
     }
 

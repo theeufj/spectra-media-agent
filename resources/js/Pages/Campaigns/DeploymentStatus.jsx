@@ -6,7 +6,7 @@ import { usePolling } from '@/hooks/usePolling';
 /**
  * DeploymentStatus - Shows real-time deployment progress and status
  */
-export default function DeploymentStatus({ campaign, deployments: initialDeployments }) {
+export default function DeploymentStatus({ campaign, deployments: initialDeployments, setupOnly = false }) {
     const { auth } = usePage().props;
     const [deployments, setDeployments] = useState(initialDeployments || []);
     const [overallProgress, setOverallProgress] = useState(0);
@@ -303,10 +303,17 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     {/* Success Actions */}
                     {overallStatus === 'completed' && (
                         <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-6">
-                            <h3 className="text-lg font-semibold text-green-800 mb-2">🎉 Deployment Complete!</h3>
+                            <h3 className="text-lg font-semibold text-green-800 mb-2">
+                                {setupOnly ? '🎉 Your ads are built' : '🎉 Deployment Complete!'}
+                            </h3>
+                            {/* The same promise the confirmation dialog made, kept on the
+                                screen where they watch it happen. A setup-only campaign is
+                                paused as it deploys; telling them it starts serving tomorrow
+                                is telling them money goes out tonight. */}
                             <p className="text-green-700 mb-4">
-                                Your campaign has been successfully deployed. Ads are scheduled to begin serving
-                                from tomorrow — campaigns start the day after deployment.
+                                {setupOnly
+                                    ? 'Everything is in your Google Ads account and paused. Add your billing details there and switch the campaign on whenever you are ready — it starts serving the day after you do.'
+                                    : 'Your campaign has been successfully deployed. Ads are scheduled to begin serving from tomorrow — campaigns start the day after deployment.'}
                             </p>
                             <div className="flex gap-4">
                                 <Link
