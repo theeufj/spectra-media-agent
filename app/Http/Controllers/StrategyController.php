@@ -119,8 +119,11 @@ class StrategyController extends Controller
             GenerateAdCopy::dispatch($campaign, $strategy, $strategy->platform)
                 ->delay(now()->addSeconds(3));
 
+            // $i is the slot, and the slot picks the lens. Without it all three
+            // jobs generate the scene as briefed and the set is one picture
+            // three times — the same miss as GenerateStrategyCollateral had.
             for ($i = 0; $i < 3; $i++) {
-                GenerateImage::dispatch($campaign, $strategy)
+                GenerateImage::dispatch($campaign, $strategy, $i)
                     ->delay(now()->addSeconds(10 + ($i * 10)));
             }
 

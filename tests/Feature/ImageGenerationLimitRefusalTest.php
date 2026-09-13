@@ -78,7 +78,19 @@ class ImageGenerationLimitRefusalTest extends TestCase
 
     private function fillToLimit(): void
     {
-        for ($i = 0; $i < ImageCollateral::FREE_TIER_LIMIT_PER_CAMPAIGN; $i++) {
+        /*
+           Filled to the plan's own allowance, which is what the gate reads.
+
+           This filled to FREE_TIER_LIMIT_PER_CAMPAIGN while the fixture above
+           gave the free plan five image_generations — two different numbers for
+           the same thing, and the constant is now only the fallback for a plan
+           that declares none. Reading the plan keeps the test honest whichever
+           way that number moves.
+        */
+        $limit = (int) (Plan::where('slug', 'free')->value('creative_limits')['image_generations']
+            ?? ImageCollateral::FREE_TIER_LIMIT_PER_CAMPAIGN);
+
+        for ($i = 0; $i < $limit; $i++) {
             ImageCollateral::create([
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $this->strategy->id,

@@ -112,13 +112,25 @@ class ImageCollateral extends Model
             return false;
         }
 
-        // Paid accounts have no per-campaign limit. Was read off whichever user
-        // the customer returned first, so on a shared account the limit applied
-        // or not depending on row order.
-        if ($customer->isOnPaidPlan()) {
-            return true;
+        /*
+           The plan's own allowance, for every plan.
+
+           "Paid accounts have no per-campaign limit" meant image_generations
+           was decorative above the free tier: a one-time setup customer is sold
+           ten and generated twenty-seven, because collateral generation can run
+           more than once against a strategy and nothing counted. Video got a
+           gate when concepts were added; images never had one beyond free.
+
+           Counted per campaign, which is what this method has always meant and
+           what the free tier already used.
+        */
+        $limit = (int) ($customer->resolvePlan()->creative_limits['image_generations']
+            ?? self::FREE_TIER_LIMIT_PER_CAMPAIGN);
+
+        if ($limit <= 0) {
+            return false;
         }
 
-        return static::where('campaign_id', $campaign->id)->count() < self::FREE_TIER_LIMIT_PER_CAMPAIGN;
+        return static::where('campaign_id', $campaign->id)->count() < $limit;
     }
 }

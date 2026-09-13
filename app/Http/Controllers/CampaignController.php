@@ -566,6 +566,39 @@ class CampaignController extends Controller
     /**
      * regenerateStrategies deletes existing strategies and re-dispatches the generation job.
      */
+    /**
+     * Remove every generated asset belonging to a campaign, files included.
+     */
+    private function clearCampaignCollateral(Campaign $campaign): void
+    {
+        foreach (\App\Models\ImageCollateral::where('campaign_id', $campaign->id)->get() as $image) {
+            // Uploads are the customer's own file and are not ours to delete;
+            // only what we generated goes.
+            if ($image->source === 'uploaded') {
+                continue;
+            }
+
+            if ($image->s3_path) {
+                \App\Services\StorageHelper::delete($image->s3_path);
+            }
+
+            $image->delete();
+        }
+
+        foreach (\App\Models\VideoCollateral::where('campaign_id', $campaign->id)->get() as $video) {
+            if ($video->s3_path) {
+                \App\Services\StorageHelper::delete($video->s3_path);
+            }
+
+            $video->delete();
+        }
+
+        // Ad copies hang off the strategy, not the campaign — they go with the
+        // strategies below, but taking them here keeps the clear-out in one
+        // place and makes a partial failure obvious rather than silent.
+        \App\Models\AdCopy::whereIn('strategy_id', $campaign->strategies()->pluck('id'))->delete();
+    }
+
     public function regenerateStrategies(Request $request, Campaign $campaign)
     {
         $customer = $this->getActiveCustomer($request);
@@ -590,13 +623,24 @@ class CampaignController extends Controller
             if (! $force) {
                 return back()->with('error', 'Some strategies are already signed off. Use force regeneration to revert sign-offs and start over.');
             }
-            // Force regeneration: delete all collateral and revert sign-offs
-            $campaign->strategies->each(function ($strategy) {
-                $strategy->adCopies()->delete();
-                $strategy->imageCollaterals()->delete();
-                $strategy->videoCollaterals()->delete();
-            });
+            // Force regeneration reverts the sign-offs; the collateral goes
+            // below, for the whole campaign rather than for these strategies.
         }
+
+        /*
+           Clear the campaign's collateral, not the current strategies'.
+
+           The dialog promises "delete all generated collateral", and this
+           deleted only what hung off the strategies still attached — so every
+           earlier round's images stayed behind, keyed to strategies that no
+           longer exist. Three regenerations left twenty-seven images on one
+           campaign, all of them offered for deployment, against a plan that
+           allows ten.
+
+           Files as well as rows: the rows were being deleted while the objects
+           stayed in storage, which is a bill that never stops.
+        */
+        $this->clearCampaignCollateral($campaign);
 
         // Delete existing strategies
         $campaign->strategies()->delete();
