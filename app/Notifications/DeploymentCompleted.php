@@ -37,10 +37,28 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 ->salutation($this->teamSalutation());
         }
 
-        $mail = $this->brandedMail()
-            ->subject('Your campaign is live: '.$this->campaign->name)
-            ->greeting('Great news, '.$notifiable->name.'!')
-            ->line("Your campaign **\"{$this->campaign->name}\"** is now live and your ads are running.");
+        /*
+           "Live" is only true for a customer whose ads we run.
+
+           A one-time setup campaign is paused as it deploys — SettleDeployedCampaign
+           does it deliberately, the receipt email promises it, and the Create
+           button says it in as many words. Then this arrived: "Your campaign is
+           live and your ads are running." Someone reading that believes money
+           is going out, when the entire proposition is that they decide when
+           that starts.
+        */
+        $setupOnly = $this->campaign->customer?->service_type === 'setup_only';
+
+        $mail = $setupOnly
+            ? $this->brandedMail()
+                ->subject('Your ads are ready: '.$this->campaign->name)
+                ->greeting('Good news, '.$notifiable->name.'!')
+                ->line("Your campaign **\"{$this->campaign->name}\"** is built and sitting in your Google Ads account.")
+                ->line('It is **paused** — nothing spends until you switch it on yourself.')
+            : $this->brandedMail()
+                ->subject('Your campaign is live: '.$this->campaign->name)
+                ->greeting('Great news, '.$notifiable->name.'!')
+                ->line("Your campaign **\"{$this->campaign->name}\"** is now live and your ads are running.");
 
         if ($this->failureCount > 0) {
             $mail->line("({$this->successCount} platform(s) deployed successfully — {$this->failureCount} encountered an issue and our team has been notified.)");
@@ -77,8 +95,13 @@ class DeploymentCompleted extends Notification implements ShouldQueue
             }
         }
 
+        // The closing line makes the same promise, so it changes with the rest.
+        // A paused campaign does not begin serving tomorrow or on any other day
+        // until its owner starts it.
         return $mail
-            ->line('Your ads are scheduled to begin serving from tomorrow (campaigns start the day after deployment), and performance data appears in your dashboard once they do.')
+            ->line($setupOnly
+                ? 'Add your billing details in Google Ads and switch the campaign on whenever you are ready — it will start serving the following day.'
+                : 'Your ads are scheduled to begin serving from tomorrow (campaigns start the day after deployment), and performance data appears in your dashboard once they do.')
             ->action('View Your Dashboard', $this->tenantUrl(route('dashboard', absolute: false)))
             ->salutation($this->teamSalutation());
     }
@@ -90,7 +113,9 @@ class DeploymentCompleted extends Notification implements ShouldQueue
         return [
             'title' => $allFailed
                 ? "Deployment issue: {$this->campaign->name}"
-                : "Your campaign is live: {$this->campaign->name}",
+                : ($this->campaign->customer?->service_type === 'setup_only'
+                    ? "Your ads are ready: {$this->campaign->name}"
+                    : "Your campaign is live: {$this->campaign->name}"),
             'message' => $allFailed
                 ? 'We ran into an issue deploying your campaign and our team has been notified.'
                 : ($this->failureCount > 0

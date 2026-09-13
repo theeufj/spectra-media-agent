@@ -49,14 +49,37 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         setOverallProgress(polled.overall_progress || 0);
     }, [polled]);
 
-    // Derive progress locally too, so Echo-pushed updates move the bar without
-    // waiting for the next poll. Progress means "how far through the process",
-    // so failed counts as terminal — counting only successes froze the bar at
-    // 50% forever when one of two platforms failed.
+    /*
+       Derive progress locally too, so Echo-pushed updates move the bar without
+       waiting for the next poll.
+
+       Counted in steps, not in platforms. The previous version scored each
+       platform as finished or not — terminalCount / deployments.length — and
+       then overwrote the server's figure with it. A campaign on one platform
+       has exactly two possible values under that rule, and a deploy uploading
+       twenty-seven images sat at 0% for five minutes before jumping to 100%.
+       Watched it happen.
+
+       The server already reports four steps per strategy (collateral, started,
+       live, verified), which is what this now sums. Failed still counts as
+       terminal — progress means "how far through the process", and a platform
+       that has failed is not going to move again — which is what the old
+       version was written to fix and is kept.
+    */
     useEffect(() => {
         if (deployments.length === 0) return;
-        const terminalCount = deployments.filter(isTerminal).length;
-        setOverallProgress(Math.round((terminalCount / deployments.length) * 100));
+
+        const stepsPerStrategy = 4;
+        const steps = deployments.reduce((total, d) => {
+            // A terminal deployment is all four steps done, however it ended.
+            if (isTerminal(d) && (d.progress ?? 0) < stepsPerStrategy) {
+                return total + stepsPerStrategy;
+            }
+
+            return total + (d.progress ?? 0);
+        }, 0);
+
+        setOverallProgress(Math.round((steps / (deployments.length * stepsPerStrategy)) * 100));
     }, [deployments]);
 
 
