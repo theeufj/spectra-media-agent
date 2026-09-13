@@ -213,14 +213,22 @@ const PreflightBanner = ({ brandGuideline, pages, selectablePlatforms, configure
         });
     }
 
-    if (selectablePlatforms.length === 0) {
-        warnings.push({
-            key: 'platforms',
-            message: 'No ad platform sub-accounts are set up yet. Contact us to get your account configured.',
-            action: null,
-            href: null,
-        });
-    }
+    /*
+       No warning about unconfigured sub-accounts.
+
+       This said "No ad platform sub-accounts are set up yet. Contact us to get
+       your account configured", and it fired for every customer who had not
+       subscribed yet — which is all of them at this point in the funnel. The
+       accounts are created on deploy intent, deliberately, so the state it was
+       reporting is the normal one. It presented that as a fault and offered
+       "contact us" as the remedy, which is nobody's job and no kind of
+       instruction.
+
+       The platform step itself now says the accounts are created for them and
+       prices whichever platforms they choose. That is the right place for it:
+       next to the choice, phrased as how this works rather than as what is
+       wrong with their account.
+    */
 
     if (warnings.length === 0) return null;
 
@@ -774,13 +782,17 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         <div>
                             <InputLabel htmlFor="target_market" value="Who is your target audience?" />
                             <HelpText text="Describe demographics, interests, behaviors, and pain points" />
+                            {/* Six rows: this arrives prefilled with the primary
+                                audience, the demographics and the psychographics
+                                joined together, and four clipped the customer's
+                                own audience halfway through the second one. */}
                             <TextArea 
                                 id="target_market" 
                                 className="mt-2" 
                                 value={data.target_market} 
                                 onChange={(e) => setData('target_market', e.target.value)} 
                                 placeholder="Small business owners aged 30-55 who are struggling with manual inventory management and looking for automation solutions..."
-                                rows={4}
+                                rows={6}
                                 required 
                             />
                             <InputError message={errors.target_market} className="mt-2" />
@@ -789,13 +801,19 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         <div>
                             <InputLabel htmlFor="voice" value="Brand Voice / Tone" />
                             <HelpText text="How should your ads sound? Professional, friendly, urgent, etc." />
-                            <TextInput 
-                                id="voice" 
-                                className="mt-2 block w-full" 
-                                value={data.voice} 
-                                onChange={(e) => setData('voice', e.target.value)} 
+                            {/* A textarea, not a single line. This is prefilled
+                                from the extracted brand voice — a sentence or
+                                two — and a one-line input showed the customer
+                                their own brand description cut off mid-word,
+                                with no sign there was more of it. */}
+                            <TextArea
+                                id="voice"
+                                className="mt-2"
+                                value={data.voice}
+                                onChange={(e) => setData('voice', e.target.value)}
                                 placeholder="Professional yet approachable, confident, solution-focused"
-                                required 
+                                rows={3}
+                                required
                             />
                             <InputError message={errors.voice} className="mt-2" />
                         </div>
