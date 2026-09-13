@@ -15,6 +15,12 @@ use Inertia\Inertia;
 class CollateralController extends Controller
 {
     /**
+     * What GenerateStrategyCollateral dispatches. Kept in step with it by the
+     * test that pins both.
+     */
+    private const IMAGES_PER_STRATEGY = 3;
+
+    /**
      * Display the collateral generation page for a specific campaign strategy.
      *
      * @param  Campaign  $campaign  The campaign model instance.
@@ -94,7 +100,47 @@ class CollateralController extends Controller
                says where the ads land and who turns them on.
             */
             'setupOnly' => $campaign->customer->service_type === 'setup_only',
+            /*
+               Whether work is still arriving, so the page knows to poll.
+
+               Polling only ever started when the visitor pressed Generate on
+               this page. Signing off a strategy dispatches the whole set from
+               somewhere else entirely, so the ordinary path — sign off, land
+               here, watch — showed whatever existed at page load and then sat
+               still. Images appeared in storage and the customer saw a
+               half-finished set until they refreshed by hand.
+
+               Judged on what is missing rather than on queue state, which is
+               not reliably queryable: a signed-off strategy with no ad copy or
+               fewer than the three images the dispatcher sends is still being
+               worked on. Bounded by time so an old strategy whose generation
+               genuinely failed does not poll for ever.
+            */
+            'generationPending' => $this->generationPending($strategy),
         ]);
+    }
+
+    /**
+     * Is this strategy's collateral still being produced?
+     *
+     * GenerateStrategyCollateral dispatches one ad copy job and three image
+     * jobs; anything short of that, on a strategy signed off recently enough
+     * for those jobs to still be alive, means more is coming.
+     */
+    private function generationPending(Strategy $strategy): bool
+    {
+        if (! $strategy->signed_off_at) {
+            return false;
+        }
+
+        // Long enough for a staggered set plus a Veo chain, short enough that a
+        // strategy whose generation failed months ago does not poll on load.
+        if ($strategy->signed_off_at->lt(now()->subMinutes(30))) {
+            return false;
+        }
+
+        return $strategy->adCopies()->count() < 1
+            || $strategy->imageCollaterals()->count() < self::IMAGES_PER_STRATEGY;
     }
 
     /**

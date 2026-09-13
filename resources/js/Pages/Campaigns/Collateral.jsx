@@ -46,7 +46,7 @@ function approvalToggle({ checked, onToggle, label, enabled = true }) {
     };
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
@@ -91,6 +91,24 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     useEffect(() => { generatingAdCopyRef.current = generatingAdCopy; }, [generatingAdCopy]);
     useEffect(() => { generatingImageRef.current = generatingImage; }, [generatingImage]);
     useEffect(() => { generatingVideoRef.current = generatingVideo; }, [generatingVideo]);
+
+    /*
+       Start watching if work is already in flight when we arrive.
+
+       Polling only ever began when the visitor pressed Generate on this page.
+       The ordinary path does not go through that button at all: signing off a
+       strategy dispatches the set from elsewhere, and landing here then showed
+       whatever existed at page load and sat still while the rest arrived in
+       storage behind it. The server knows what is missing; this listens.
+    */
+    useEffect(() => {
+        if (generationPending) {
+            setIsPolling(true);
+        }
+        // On mount only: once polling has run its course and switched itself
+        // off, a stale prop must not start it again.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Reset the error baseline whenever a new poll session starts.
     useEffect(() => {
@@ -1063,7 +1081,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     <span>☑️</span>
                                                     <span>Check the box on each image to include it in deployment. Unchecked images will not go live.</span>
                                                 </p>
-                                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                {/* items-start, or the row stretches every card to the
+                                                    tallest in it. A 1200x628 next to a 1024x1024 then grows
+                                                    a white band under the short one — the picture is whole,
+                                                    the card around it is not. */}
+                                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-start">
                                                 {collateral.imageCollaterals.map((image) => (
                                                     <div
                                                         key={image.id}
@@ -1074,7 +1096,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             label: 'Include this image in deployment',
                                                         })}
                                                     >
-                                                        <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
+                                                        {/* block: an inline <img> sits on the text baseline and
+                                                            leaves a few pixels of background beneath it, which is
+                                                            the thin white strip under every card. */}
+                                                        <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="block w-full h-auto" />
                                                         {/* Checkbox */}
                                                         <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${image.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
                                                             {image.should_deploy && (
