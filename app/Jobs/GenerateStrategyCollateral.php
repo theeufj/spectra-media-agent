@@ -87,7 +87,10 @@ class GenerateStrategyCollateral implements ShouldQueue
                 Log::info("Image limit reached for Campaign ID: {$this->campaign->id}, skipping remaining image generation");
                 break;
             }
-            GenerateImage::dispatch($this->campaign, $this->strategy)
+            // $i is the slot, and the slot is what picks the lens. Without it
+            // every one of these three jobs generates the scene as briefed and
+            // the set is one picture three times — see CreativeVariant.
+            GenerateImage::dispatch($this->campaign, $this->strategy, $i)
                 ->delay(now()->addSeconds(10 + ($i * 10))); // Stagger by 10 seconds
             $imageNum = $i + 1;
             Log::info("Dispatched image generation {$imageNum}/3 for Strategy ID: {$this->strategy->id}");

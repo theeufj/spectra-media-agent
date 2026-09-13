@@ -82,4 +82,17 @@ class CreativeVariantTest extends TestCase
         // outcome this class exists to prevent.
         $this->assertSame(self::SCENE, CreativeVariant::apply(self::SCENE, CreativeVariant::count() + 3));
     }
+
+    public function test_slots_map_to_different_lenses(): void
+    {
+        $scene = self::SCENE;
+
+        // What the three dispatched jobs will actually ask for.
+        $asked = array_map(fn ($slot) => CreativeVariant::apply($scene, $slot), [0, 1, 2]);
+
+        $this->assertSame(3, count(array_unique($asked)));
+        $this->assertStringNotContainsString('VARIATION', $asked[0]);
+        $this->assertStringContainsString('pull much further back', $asked[1]);
+        $this->assertStringContainsString('no face in shot', $asked[2]);
+    }
 }

@@ -47,9 +47,22 @@ class GenerateImage implements ShouldQueue
     /**
      * Create a new job instance.
      */
+    /**
+     * @param  int  $slot  which creative in the set this job is producing
+     *
+     * The slot is the job's position in the set, and it decides which lens the
+     * scene is generated through. It has to come from the caller, because the
+     * set is three separate jobs: GenerateStrategyCollateral dispatches
+     * GenerateImage three times, each with its own splitter call and its own
+     * loop counting from zero. Left to itself every job took slot 0 — the
+     * un-lensed scene as briefed — so all three asked for the same picture and
+     * the lenses never reached the work at all. Three photographs of the same
+     * woman in the same apron, which is exactly what came back.
+     */
     public function __construct(
         protected Campaign $campaign,
-        protected Strategy $strategy
+        protected Strategy $strategy,
+        protected int $slot = 0
     ) {}
 
     /**
@@ -201,7 +214,8 @@ class GenerateImage implements ShouldQueue
                    three identical scenes still produce three different
                    photographs — see CreativeVariant.
                 */
-                $scene = CreativeVariant::apply($prompt, $index);
+                $lens = $this->slot + $index;
+                $scene = CreativeVariant::apply($prompt, $lens);
 
                 $imagePrompt = (new ImagePrompt($scene, $brandGuidelines, $productContext, $adText))->getPrompt();
 
@@ -222,8 +236,9 @@ class GenerateImage implements ShouldQueue
                 Log::info('Image prompt built', [
                     'campaign_id' => $this->campaign->id,
                     'strategy_id' => $this->strategy->id,
+                    'slot' => $this->slot,
                     'variant' => $index + 1 .' of '.count($prompts),
-                    'lens' => CreativeVariant::label($index),
+                    'lens' => CreativeVariant::label($lens),
                     'scene' => $this->oneLine($prompt),
                     'scene_with_lens' => $this->oneLine($scene),
                     'ad_text' => $this->oneLine($adText),
