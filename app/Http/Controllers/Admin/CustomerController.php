@@ -91,19 +91,74 @@ class CustomerController extends Controller
             ]);
         }
 
-        if (! $customer->handover_at) {
-            $customer->forceFill(['handover_at' => now()])->save();
+        if ($customer->handover_at) {
+            return redirect()->back()->with('flash', [
+                'type' => 'success',
+                'message' => "{$customer->name} was already handed over.",
+            ]);
+        }
+
+        /*
+           The keys, before the email that says they are yours.
+
+           The account is a sub-account under Spectra's MCC, so it belongs to us
+           until a Google login is attached to it — and nothing ever attached
+           one. The handover email gave the customer an account ID and told them
+           to open Billing → Settings in an account they could not open. That is
+           the whole engagement: we do the intimidating part, then hand it over
+           and get out of the middle.
+
+           Admin, because adding billing is the first thing we ask them to do
+           and no lesser role can.
+        */
+        $invited = [];
+        $failedInvites = [];
+
+        if ($customer->google_ads_customer_id) {
+            // Through the container, not `new`: the constructor builds a Google
+            // Ads client, so a direct instantiation cannot be stood in for and
+            // this branch would be untestable.
+            $inviter = app()->makeWith(
+                \App\Services\GoogleAds\CommonServices\InviteCustomerUser::class,
+                ['customer' => $customer],
+            );
 
             foreach ($customer->users as $user) {
-                \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\HandoverComplete($customer));
-            }
+                $result = $inviter->execute($customer->cleanGoogleCustomerId(), $user->email);
 
-            \App\Services\ActivityLogger::customer('handover_completed', $customer);
+                $result['success'] ? $invited[] = $user->email : $failedInvites[$user->email] = $result['error'] ?? 'unknown';
+            }
         }
+
+        if ($failedInvites) {
+            // Do not stamp the handover: a customer who cannot get into the
+            // account has not been handed anything, and a handover_at that says
+            // otherwise is how it would never be chased.
+            report(new \RuntimeException(
+                "Handover blocked for customer {$customer->id}: ".json_encode($failedInvites)
+            ));
+
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Could not invite '.implode(', ', array_keys($failedInvites))
+                    .' to the Google Ads account, so the handover was not recorded. '
+                    .reset($failedInvites),
+            ]);
+        }
+
+        $customer->forceFill(['handover_at' => now()])->save();
+
+        foreach ($customer->users as $user) {
+            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\HandoverComplete($customer, $invited));
+        }
+
+        \App\Services\ActivityLogger::customer('handover_completed', $customer);
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => "Handover recorded — {$customer->name} has the keys.",
+            'message' => $invited
+                ? 'Handover recorded — invited '.implode(', ', $invited).' to the account.'
+                : "Handover recorded — {$customer->name} has the keys.",
         ]);
     }
 

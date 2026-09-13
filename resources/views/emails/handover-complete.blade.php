@@ -19,7 +19,13 @@
         </div>
     @endif
 
-    <p>Two steps between you and live ads:</p>
+    <p>@if (! empty($invited))
+        <p><strong>First, accept the invitation.</strong> Google has emailed
+        {{ implode(' and ', $invited) }} an invitation to this account — accept it
+        and you will have full admin access. It sometimes lands in spam.</p>
+    @endif
+
+    Two steps between you and live ads:</p>
 
     <ol style="color: #4a5568; padding-left: 20px;">
         <li style="margin-bottom: 8px;"><strong>Add your billing</strong> — in Google Ads, go to Billing → Settings and add your payment method. Spend goes straight to Google; we're not in the middle.</li>

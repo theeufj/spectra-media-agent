@@ -1,0 +1,158 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Mail\HandoverComplete;
+use App\Models\Customer;
+use App\Models\Role;
+use App\Models\User;
+use App\Services\GoogleAds\CommonServices\InviteCustomerUser;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Mail;
+use Tests\TestCase;
+
+/**
+ * The one-time setup ends with the customer owning the account.
+ *
+ * The whole $999 proposition is that Google Ads is intimidating, so we do the
+ * intimidating part — the account, the conversion tracking, the campaign, the
+ * ads — leave it paused, and hand it over. They add their own billing and spend
+ * what they want to spend. No agents, no subscription, nothing recurring.
+ *
+ * The handover email said exactly that: "the keys are yours", here is your
+ * account ID, go to Billing → Settings. But the account is a sub-account under
+ * Spectra's MCC, so it stays ours until a Google login is attached to it, and
+ * nothing ever attached one. The customer was handed an account number and no
+ * way in.
+ */
+class SetupOnlyHandoverTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    /** @var list<array{string, string}> */
+    private array $invitations = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Mail::fake();
+    }
+
+    /**
+     * @param  array{success: bool, error?: string}  $result
+     */
+    private function fakeInviter(array $result): void
+    {
+        $this->invitations = [];
+
+        $record = function (string $customerId, string $email): void {
+            $this->invitations[] = [$customerId, $email];
+        };
+
+        $this->app->bind(InviteCustomerUser::class, function () use ($result, $record) {
+            return new class($result, $record) extends InviteCustomerUser
+            {
+                /** @param array<string, mixed> $result */
+                public function __construct(private array $result, private \Closure $record)
+                {
+                    // Deliberately not calling parent::__construct — it builds a
+                    // Google Ads client, which is the thing being stood in for.
+                }
+
+                public function execute(string $customerId, string $email, int $accessRole = 2): array
+                {
+                    ($this->record)($customerId, $email);
+
+                    return $this->result;
+                }
+            };
+        });
+    }
+
+    /** @return array{User, Customer} */
+    private function setupOnlyCustomer(): array
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+
+        $owner = User::factory()->create(['email' => 'owner@example.test']);
+        $customer = Customer::factory()->create([
+            'service_type' => 'setup_only',
+            'setup_fee_paid_at' => now(),
+            'google_ads_customer_id' => '111-222-3333',
+        ]);
+        $customer->users()->attach($owner->id, ['role' => 'owner']);
+
+        return [$admin, $customer];
+    }
+
+    public function test_handover_invites_the_customer_into_their_own_account(): void
+    {
+        $this->fakeInviter(['success' => true, 'resource_name' => 'customers/1112223333/invitations/1']);
+        [$admin, $customer] = $this->setupOnlyCustomer();
+
+        $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
+
+        // Dashes stripped: the API takes the bare id.
+        $this->assertSame([['1112223333', 'owner@example.test']], $this->invitations);
+        $this->assertNotNull($customer->fresh()->handover_at);
+        Mail::assertSent(HandoverComplete::class, 1);
+    }
+
+    public function test_the_email_tells_them_to_accept_the_invitation(): void
+    {
+        $customer = Customer::factory()->create([
+            'service_type' => 'setup_only',
+            'google_ads_customer_id' => '111-222-3333',
+        ]);
+
+        $rendered = (new HandoverComplete($customer, ['owner@example.test']))->render();
+
+        // Without this the email says "the keys are yours" and then sends them
+        // to a screen they cannot reach.
+        $this->assertStringContainsString('accept the invitation', strtolower($rendered));
+        $this->assertStringContainsString('owner@example.test', $rendered);
+    }
+
+    public function test_a_failed_invitation_does_not_record_a_handover(): void
+    {
+        $this->fakeInviter(['success' => false, 'error' => 'USER_NOT_FOUND']);
+        [$admin, $customer] = $this->setupOnlyCustomer();
+
+        $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
+
+        /*
+         * A customer who cannot open the account has not been handed anything.
+         * Stamping handover_at anyway would close the engagement in our records
+         * and leave them locked out of what they paid for, with nothing to
+         * chase it.
+         */
+        $this->assertNull($customer->fresh()->handover_at);
+        Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    public function test_an_already_handed_over_customer_is_not_invited_twice(): void
+    {
+        $this->fakeInviter(['success' => true]);
+        [$admin, $customer] = $this->setupOnlyCustomer();
+        $customer->forceFill(['handover_at' => now()->subDay()])->save();
+
+        $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
+
+        $this->assertSame([], $this->invitations);
+        Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    public function test_handover_still_refuses_a_managed_customer(): void
+    {
+        $this->fakeInviter(['success' => true]);
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+        $managed = Customer::factory()->create(['service_type' => 'managed']);
+
+        $this->actingAs($admin)->post(route('admin.customers.handover', $managed));
+
+        $this->assertNull($managed->fresh()->handover_at);
+        $this->assertSame([], $this->invitations);
+    }
+}

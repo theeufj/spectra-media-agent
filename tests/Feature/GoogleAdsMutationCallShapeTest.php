@@ -55,6 +55,53 @@ class GoogleAdsMutationCallShapeTest extends TestCase
         .'|addOfflineUserDataJobOperations|runOfflineUserDataJob'
         .'|scheduleExperiment)\s*\(\s*/';
 
+    /**
+     * A handful of Google's mutate endpoints have no validate_only field at
+     * all — CustomerUserAccessInvitation carries customer_id and operation and
+     * nothing else. Asked by reflection rather than kept as a list, so the
+     * exemption disappears by itself the day Google adds the field.
+     *
+     * The rule still binds: a service calling one of these must return before
+     * the call when $this->dryRun, which the sibling assertion below checks.
+     */
+    private static function cannotValidateOnly(string $requestClass): bool
+    {
+        foreach (['Google\\Ads\\GoogleAds\\V22\\Services\\'.$requestClass, $requestClass] as $fqcn) {
+            if (class_exists($fqcn)) {
+                return ! method_exists($fqcn, 'setValidateOnly');
+            }
+        }
+
+        return false;
+    }
+
+    public function test_a_mutation_without_a_validate_only_field_returns_early_on_dry_run(): void
+    {
+        $unguarded = [];
+
+        foreach ($this->googleAdsSources() as $relative => $source) {
+            preg_match_all(self::MUTATING_REQUEST, $source, $matches);
+
+            foreach ($matches[1] as $requestClass) {
+                if (! self::cannotValidateOnly($requestClass)) {
+                    continue;
+                }
+
+                // Not a flag it can send, so it must not send the request.
+                if (! str_contains($source, 'if ($this->dryRun)')) {
+                    $unguarded[] = $relative.'  '.$requestClass;
+                }
+            }
+        }
+
+        $this->assertSame([], $unguarded, implode("\n", [
+            'These call a Google endpoint that has no validate_only field, so the',
+            'only way to honour a dry run is to return before the call. Add:',
+            '',
+            '    if ($this->dryRun) { return [...]; }',
+        ]));
+    }
+
     public function test_every_mutate_request_carries_the_dry_run_flag(): void
     {
         $missing = [];
@@ -65,7 +112,8 @@ class GoogleAdsMutationCallShapeTest extends TestCase
             foreach ($matches[0] as $i => [$match, $offset]) {
                 $literal = $this->arrayLiteralAt($source, $offset + strlen($match) - 1);
 
-                if (! str_contains($literal, "'validate_only' => \$this->dryRun")) {
+                if (! str_contains($literal, "'validate_only' => \$this->dryRun")
+                    && ! self::cannotValidateOnly($matches[1][$i][0])) {
                     $missing[] = sprintf(
                         '%s:%d  %s',
                         $relative,

@@ -74,6 +74,27 @@ class GoogleAdsDryRunTest extends TestCase
         $this->assertFalse($live->isDryRun());
     }
 
+    /**
+     * Some Google mutate endpoints have no validate_only field at all —
+     * CustomerUserAccessInvitation takes customer_id and operation and nothing
+     * else. Asked by reflection so the exemption disappears by itself if Google
+     * adds the field. GoogleAdsMutationCallShapeTest holds those services to
+     * returning before the call instead.
+     */
+    private static function cannotValidateOnly(string $requestClass): bool
+    {
+        $fqcn = 'Google\\Ads\\GoogleAds\\V22\\Services\\'.$requestClass;
+
+        return class_exists($fqcn) && ! method_exists($fqcn, 'setValidateOnly');
+    }
+
+    private static function withoutComments(string $source): string
+    {
+        $source = (string) preg_replace('#/\*.*?\*/#s', ' ', $source);
+
+        return (string) preg_replace('#^\s*//.*$#m', ' ', $source);
+    }
+
     public function test_every_mutate_request_passes_the_flag_through(): void
     {
         // Guards the mechanical sweep: a mutate added later without
@@ -89,17 +110,30 @@ class GoogleAdsDryRunTest extends TestCase
                 continue;
             }
 
-            $source = file_get_contents($file->getPathname());
-            $requests = preg_match_all('/new Mutate[A-Za-z]*Request\(/', $source);
+            /*
+               Comments stripped first.
 
-            if ($requests === 0) {
+               This counted a raw substring over the whole file, so a comment
+               that quoted "'validate_only' => \$this->dryRun" — explaining why
+               some endpoint could not use it — satisfied the check on its own.
+               A guard that prose can pass is not a guard.
+            */
+            $source = self::withoutComments(file_get_contents($file->getPathname()));
+            preg_match_all('/new (Mutate[A-Za-z]*Request)\(/', $source, $matches);
+
+            $requests = array_values(array_filter(
+                $matches[1],
+                fn (string $class) => ! self::cannotValidateOnly($class),
+            ));
+
+            if ($requests === []) {
                 continue;
             }
 
             $flags = substr_count($source, "'validate_only' => \$this->dryRun");
 
-            if ($flags < $requests) {
-                $missing[] = basename($file->getPathname())." ({$flags}/{$requests})";
+            if ($flags < count($requests)) {
+                $missing[] = basename($file->getPathname())." ({$flags}/".count($requests).')';
             }
         }
 

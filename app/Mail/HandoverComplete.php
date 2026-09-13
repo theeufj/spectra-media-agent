@@ -14,8 +14,15 @@ class HandoverComplete extends AppMailable
 {
     use Queueable, SerializesModels;
 
+    /**
+     * @param  list<string>  $invited  addresses Google has sent an access
+     *                                 invitation to, so the email can tell them
+     *                                 to accept it rather than implying they
+     *                                 already have a way in
+     */
     public function __construct(
         public Customer $customer,
+        public array $invited = [],
     ) {}
 
     public function build()
