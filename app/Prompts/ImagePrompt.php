@@ -37,11 +37,18 @@ class ImagePrompt
      * ad copy — the only text allowed to appear in the image),
      * {{creative_strategy}} (the strategy's imagery brief).
      *
-     * Asks for a DESIGNED ad creative — layout, typography, brand colour
-     * panels — not a bare photograph. The old "avoid text in the image" rule
-     * dated from a model generation whose text rendering was unreliable;
-     * current image models render type accurately, and finished ads with a
-     * headline outperform captionless photos.
+     * Asks for a photograph carrying a headline, not a built graphic. The
+     * "avoid text in the image" rule dated from a model generation whose text
+     * rendering was unreliable; current image models set type accurately, and
+     * an ad with a headline outperforms a captionless photo.
+     *
+     * But "finished, designed composition — layout, typography and colour
+     * panels" was too much licence, and the model spent it on furniture: a
+     * navy slab over 40% of the canvas, three line icons in circles picked out
+     * of the scene rather than the product (a plant pot, a paintbrush), and
+     * dot grids in the corners. On a 300x250 that left almost no photograph.
+     * The panel is now capped at a quarter of the frame and the clip art is
+     * named and refused.
      *
      * The shape of this template matters as much as its content, because an
      * image model does not reliably distinguish a brief from the copy it is
@@ -62,7 +69,7 @@ class ImagePrompt
      */
     public static function defaultTemplate(): string
     {
-        return "You are producing the artwork for one advertisement. Output a finished, designed composition — layout, typography and colour panels, not a bare photograph.\n\n".
+        return "You are producing the artwork for one advertisement. The photograph is the ad. Brand colour supports it; it does not compete with it.\n\n".
                "**SCENE TO DEPICT:**\n".
                "{{creative_strategy}}\n\n".
                "{{brand_context}}{{product_context}}\n".
@@ -71,15 +78,18 @@ class ImagePrompt
                "Set one short headline from inside those markers, shortening if it helps the layout. Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
                "**COMPOSITION:**\n".
                "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
+               "- The scene fills the frame. Any solid colour panel is a restrained accent — a corner, an edge, a band behind the headline — and never more than a quarter of the picture.\n".
                "- Keep the headline and any subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
-               "- Brand palette for backgrounds, panels and accents; generous negative space\n".
-               "- Photorealistic subject matter integrated into the layout, not pasted onto it\n\n".
+               "- Leave the bottom sixth quieter than the rest: a brand banner is composited there afterwards, and a busy strip underneath it makes both unreadable.\n".
+               "- Brand palette for the accent and for the light; generous negative space\n".
+               "- Photorealistic subject matter, photographed rather than assembled\n\n".
                "**HARD RULES:**\n".
                "- No screens full of information: no dashboards, app windows, charts, tables, spreadsheets, forms or documents. A phone or laptop may appear in shot, but its screen carries only soft blocks of colour with no readable content whatsoever.\n".
                "- No invented facts: no statistics, prices, measurements, addresses, review counts, star ratings, dates or awards, unless the characters appear between the markers above.\n".
                "- No placeholder furniture: no lorem ipsum, no grey lines standing in for text, no empty label chips, no UI skeletons.\n".
                "- Every rendered word must be a real, correctly spelled word. Fewer words beats risking a garbled one, and no text at all beats nonsense text.\n".
                "- If nothing appears between the markers above, produce a composition with no words in it at all.\n".
+               "- No decorative furniture: no icon sets, no line-art symbols in circles, no dot grids, no abstract blobs or swooshes. These read as clip art, they are chosen from the scene rather than from the product, and they cost the photograph the room it needs.\n".
                '- No watermarks, no third-party logos, no stock-photo clichés; keep it culturally sensitive and inclusive.';
     }
 

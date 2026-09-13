@@ -180,4 +180,55 @@ class ImageryStrategyContractTest extends TestCase
 
         return $m[1];
     }
+
+    public function test_the_splitter_is_told_that_paraphrasing_is_a_failure(): void
+    {
+        $prompt = (new ImagePromptSplitterPrompt('A potter in a studio holding a tablet.'))->getPrompt();
+
+        /*
+           Nine creatives for one campaign came back as the same woman in the
+           same pottery studio holding the same tablet, differing only in camera
+           angle. The strategy named one scene, and the splitter — asked to
+           "split" something that has no parts — paraphrased it three times. A
+           customer scrolling past sees one ad, three times.
+        */
+        $this->assertStringContainsString('Paraphrasing is a failure', $prompt);
+        $this->assertStringContainsString('exactly 3 strings', $prompt);
+
+        // The axes it must vary along, so "different" cannot be satisfied by
+        // moving the camera.
+        foreach (['subject', 'setting', 'shot distance', 'moment'] as $axis) {
+            $this->assertStringContainsString($axis, $prompt, "the splitter is not told to vary the {$axis}");
+        }
+    }
+
+    public function test_the_strategy_agent_is_asked_for_a_range_not_one_scene(): void
+    {
+        $prompt = $this->builtStrategyPrompt();
+
+        // One scene in produces one picture out, however many times it is
+        // rendered. The range has to be named where the scene is named.
+        $this->assertStringContainsString('Also suits:', $prompt);
+        $this->assertStringContainsString('the same picture three times', $prompt);
+    }
+
+    public function test_the_image_model_is_refused_the_clip_art_it_reaches_for(): void
+    {
+        $prompt = (new ImagePrompt('A potter at work.'))->getPrompt();
+
+        /*
+           Given "finished, designed composition — layout, typography and colour
+           panels", the model spent the licence on furniture: a navy slab over
+           40% of the canvas, three line icons in circles picked from the scene
+           rather than the product — a plant pot, a paintbrush — and dot grids
+           in the corners. On a 300x250 almost no photograph survived.
+        */
+        $this->assertStringContainsString('no icon sets', $prompt);
+        $this->assertStringContainsString('no dot grids', $prompt);
+        $this->assertStringContainsString('never more than a quarter of the picture', $prompt);
+
+        // And the strip our own banner is composited onto has to stay quiet,
+        // or the two fight each other.
+        $this->assertStringContainsString('bottom sixth', $prompt);
+    }
 }

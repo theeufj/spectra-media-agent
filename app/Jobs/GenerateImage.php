@@ -237,17 +237,7 @@ class GenerateImage implements ShouldQueue
                 $isSubscribed = $customer->isOnPaidPlan();
 
                 $brandName = $customer->name ?? '';
-                $tagline = null;
-                if ($isSubscribed && $brandGuidelines) {
-                    $usps = $brandGuidelines->unique_selling_propositions ?? [];
-                    $themes = $brandGuidelines->messaging_themes ?? [];
-                    $raw = $usps[0] ?? $themes[0] ?? null;
-                    if ($raw) {
-                        $raw = preg_replace('/^[^:]+:\s*/', '', $raw);
-                        // 32 chars max — at 22% of banner height, fits safely within any ad width
-                        $tagline = mb_strlen($raw) > 32 ? mb_substr($raw, 0, 29).'…' : $raw;
-                    }
-                }
+                $tagline = $isSubscribed ? $this->taglineFor($adCopy, $brandGuidelines) : null;
 
                 foreach ($adFormats as $format => $spec) {
                     [$targetW, $targetH] = $spec['size'];
@@ -358,10 +348,63 @@ class GenerateImage implements ShouldQueue
     /**
      * OpenRouter takes pixel dimensions where Gemini takes a ratio.
      */
+    /**
+     * What fits on the banner's second line at 22% of banner height. Google
+     * caps ad headlines at 30 characters, so approved copy clears this by
+     * construction — which is the point of drawing from it.
+     */
+    private const TAGLINE_MAX_CHARS = 32;
+
     private const GROK_SIZES = [
         '1:1' => '1024x1024',
         '16:9' => '1344x768',
     ];
+
+    /**
+     * The one line of brand copy burnt into the banner.
+     *
+     * Was unique_selling_propositions[0] cut to 29 characters with an ellipsis
+     * appended. A USP is a paragraph written for the strategy model to reason
+     * from — 133 characters in the case that exposed this — so the cut landed
+     * mid-clause and every creative in the set carried the same dangling
+     * fragment: "Conversational AI agent that …". Nine ads, one broken
+     * sentence, burnt into the pixels.
+     *
+     * Ad headlines are the right source and cost nothing. Google caps them at
+     * 30 characters, so they are already short enough by construction; they
+     * are written as ad copy rather than as analysis; and they are the exact
+     * words the customer approved. The longest that still fits is preferred —
+     * it carries the most, and all of them fit.
+     *
+     * When there is no approved copy the banner carries the brand name alone.
+     * A tagline is worth having; a truncated one is worse than none, and that
+     * judgement is what the old code got backwards.
+     */
+    private function taglineFor(?\App\Models\AdCopy $adCopy, ?\App\Models\BrandGuideline $brandGuidelines): ?string
+    {
+        $candidates = collect($adCopy->headlines ?? [])
+            ->map(fn ($h) => trim((string) $h))
+            ->filter(fn ($h) => $h !== '' && mb_strlen($h) <= self::TAGLINE_MAX_CHARS);
+
+        if ($candidates->isNotEmpty()) {
+            return $candidates->sortByDesc(fn ($h) => mb_strlen($h))->first();
+        }
+
+        /*
+           Nothing approved to draw from. A messaging theme occasionally fits
+           on its own — it is a phrase rather than a paragraph — so it is worth
+           one look, but only if it fits as written. Nothing is truncated here.
+        */
+        foreach ($brandGuidelines->messaging_themes ?? [] as $theme) {
+            $theme = trim(preg_replace('/^[^:]+:\s*/', '', (string) $theme));
+
+            if ($theme !== '' && mb_strlen($theme) <= self::TAGLINE_MAX_CHARS) {
+                return $theme;
+            }
+        }
+
+        return null;
+    }
 
     /**
      * One generated image at a given aspect ratio, with retries.

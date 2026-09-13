@@ -135,6 +135,13 @@ whole job:
 - Say what to avoid in positive terms. "Eschewing generic stock photography" tells the
   model to draw stock photography; "a specific, lived-in room with real clutter" does not.
 - One or two sentences. A long strategy produces a crowded, garbled image.
+- NAME ONE SCENE, THEN NAME THE RANGE IT SITS IN. A set of ads is generated from this, and
+  a single scene produces the same picture three times — one customer, one room, one pose,
+  repeated until a viewer sees the same ad wherever they scroll. So after the scene, add a
+  short sentence beginning "Also suits:" naming two other subjects the same offer speaks
+  to, at different distances. They can be people, a product, a workspace, or a pair of
+  hands; what matters is that a reader could not mistake one for another. If the business
+  serves several kinds of customer, this is where that shows.
 
 Good: "A letting agent in her thirties standing in the bright front room of a terraced
 house, phone in hand, warm afternoon light through a bay window, deep navy and warm gold
@@ -207,7 +214,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     {
       "platform": "Facebook Ads",
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
-      "imagery_strategy": "Two friends laughing over coffee at a sunlit kitchen table, the product open between them, shot from across the table in soft morning light.",
+      "imagery_strategy": "Two friends laughing over coffee at a sunlit kitchen table, the product open between them, shot from across the table in soft morning light. Also suits: a close detail of the product in one hand against a plain wall; a wide shot of a busy weekend market stall at first light.",
       "video_strategy": "Create short, engaging video clips...",
       "generate_video": true,
       "bidding_strategy": {
@@ -238,7 +245,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     {
       "platform": "Google Ads (SEM)",
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
-      "imagery_strategy": "A tradesperson in a van at the kerbside checking a phone before a job, early light, tools visible behind the seat, warm and unstaged.",
+      "imagery_strategy": "A tradesperson in a van at the kerbside checking a phone before a job, early light, tools visible behind the seat, warm and unstaged. Also suits: a close detail of worn hands writing in a job book on a tailgate; a wide shot of a quiet suburban street at dawn with one van parked outside a house.",
       "video_strategy": "For Search campaigns: N/A — text ads only.",
       "generate_video": false,
       "bidding_strategy": {
