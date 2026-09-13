@@ -87,6 +87,13 @@ class CollateralController extends Controller
                 'payment_status' => $adSpendCredit->payment_status,
             ] : null,
             'harvestedAssetCount' => $harvestedAssetCount,
+            /*
+               A one-time setup customer is not deploying, they are approving.
+               Nothing goes live when they press the button — a setup-only
+               campaign is paused as it deploys — so the page says Create, and
+               says where the ads land and who turns them on.
+            */
+            'setupOnly' => $campaign->customer->service_type === 'setup_only',
         ]);
     }
 

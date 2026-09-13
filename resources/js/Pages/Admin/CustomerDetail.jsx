@@ -6,7 +6,7 @@ import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function CustomerDetail({ auth, bm_configured }) {
-    const { customer, adSpendCredit, emailLogs = [] } = usePage().props;
+    const { customer, adSpendCredit, emailLogs = [], handoverPending = false } = usePage().props;
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
     const [editingMsAccount, setEditingMsAccount] = useState(false);
@@ -153,10 +153,15 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                             router.post(route('admin.customers.handover', customer.uuid), {}, { preserveScroll: true });
                                                         }
                                                     }}
-                                                    className="inline-flex items-center px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
-                                                    title={customer.setup_fee_paid_at ? 'Setup fee paid — hand over when the build is done' : 'Setup fee NOT paid yet'}
+                                                    className={`inline-flex items-center px-4 py-2 text-white rounded-lg ${handoverPending ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}
+                                                    /* A clean deploy hands itself over. Reaching this
+                                                       button with ads already live means something
+                                                       failed, and the account is sitting in ours. */
+                                                    title={handoverPending
+                                                        ? 'Ads are deployed but the automatic handover did not complete — this customer is waiting on you'
+                                                        : (customer.setup_fee_paid_at ? 'Setup fee paid — hand over when the build is done' : 'Setup fee NOT paid yet')}
                                                 >
-                                                    {customer.setup_fee_paid_at ? '💰 ' : '⚠️ '}Mark Handed Over
+                                                    {handoverPending ? 'Handover stalled — finish it' : `${customer.setup_fee_paid_at ? '💰 ' : '⚠️ '}Mark Handed Over`}
                                                 </button>
                                             )
                                         )}

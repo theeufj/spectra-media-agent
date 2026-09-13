@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\BrandGuideline;
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
@@ -61,14 +62,14 @@ class SetupOnlyJourneyTest extends TestCase
         $keys = $this->stepKeys($user, $customer);
 
         $this->assertSame(
-            ['site_scan', 'brand_confirmed', 'payment', 'build', 'handover'],
+            ['site_scan', 'brand_confirmed', 'payment', 'review_ads', 'handover'],
             $keys,
         );
 
         // The account is created on payment, so nothing that needs it may be
         // asked for first.
         $this->assertLessThan(
-            array_search('build', $keys, true),
+            array_search('review_ads', $keys, true),
             array_search('payment', $keys, true),
         );
     }
@@ -88,7 +89,36 @@ class SetupOnlyJourneyTest extends TestCase
         }
     }
 
-    public function test_the_build_is_reported_rather_than_assigned(): void
+    public function test_the_ads_are_theirs_to_approve_and_the_handover_is_not(): void
+    {
+        [$user, $customer] = $this->setupOnlyCustomer(['setup_fee_paid_at' => now()]);
+
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $steps = collect(
+            $this->actingAs($user)
+                ->withSession(['active_customer_id' => $customer->id])
+                ->getJson('/api/setup-progress')
+                ->json('steps')
+        )->keyBy('key');
+
+        /*
+           We write the ads; they press Create. That is the one decision in the
+           build that is theirs, and the step has to be reachable or the button
+           is somewhere they have no reason to look.
+        */
+        $this->assertSame(
+            route('campaigns.show', $campaign),
+            $steps['review_ads']['action_url'],
+        );
+        $this->assertSame('Review', $steps['review_ads']['action_text']);
+
+        // The handover is ours and stays ours: a button here is an instruction
+        // to do the thing they paid us to do.
+        $this->assertNull($steps['handover']['action_url']);
+    }
+
+    public function test_there_is_nothing_to_review_before_the_account_exists(): void
     {
         [$user, $customer] = $this->setupOnlyCustomer(['setup_fee_paid_at' => now()]);
 
@@ -99,11 +129,10 @@ class SetupOnlyJourneyTest extends TestCase
                 ->json('steps')
         )->keyBy('key');
 
-        // No action on our own work: a button here is an instruction, and the
-        // whole proposition is that they are not doing this.
-        $this->assertNull($steps['build']['action_url']);
-        $this->assertNull($steps['handover']['action_url']);
-        $this->assertSame('in_progress', $steps['build']['status']);
+        // Paid, but the build has not produced a campaign yet. Linking to a
+        // campaign that does not exist is a 404 at the end of the funnel.
+        $this->assertNull($steps['review_ads']['action_url']);
+        $this->assertSame('in_progress', $steps['review_ads']['status']);
     }
 
     public function test_the_managed_journey_is_untouched(): void

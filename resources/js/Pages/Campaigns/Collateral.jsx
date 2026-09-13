@@ -46,7 +46,7 @@ function approvalToggle({ checked, onToggle, label, enabled = true }) {
     };
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
@@ -463,10 +463,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
         setConfirmModal({
             show: true,
-            title: 'Deploy Collateral',
-            message: 'Are you sure you want to deploy the selected collateral?',
+            title: setupOnly ? 'Create your ads' : 'Deploy Collateral',
+            message: setupOnly
+                ? 'These go into your Google Ads account paused — nothing spends until you switch them on.'
+                : 'Are you sure you want to deploy the selected collateral?',
             onConfirm: () => confirmDeploy(),
-            confirmText: 'Deploy',
+            confirmText: setupOnly ? 'Create my ads' : 'Deploy',
             confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
             isDestructive: false
         });
@@ -565,12 +567,16 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                 onClick={handleDeploy}
                                 className="px-4 py-2 bg-brand-dark text-white rounded-l-lg hover:bg-brand-darker transition font-medium"
                             >
-                                Deploy All
+                                {/* Deploy is our word for it. To someone who paid us
+                                    once to build an account they will run themselves,
+                                    the button creates the ads — it does not start
+                                    them. */}
+                                {setupOnly ? 'Create my ads' : 'Deploy All'}
                             </button>
                             <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
                                 className="px-2 py-2 bg-brand-dark text-white rounded-r-lg hover:bg-brand-darker transition border-l border-white/30"
-                                aria-label="Deploy individual platform"
+                                aria-label={setupOnly ? 'Create ads for one platform' : 'Deploy individual platform'}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -580,7 +586,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                         {deployDropdownOpen && (
                             <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                                 <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                                    Deploy single platform
+                                    {setupOnly ? 'Create for one platform' : 'Deploy single platform'}
                                 </div>
                                 {allStrategies.map(strategy => (
                                     <button

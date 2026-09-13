@@ -214,10 +214,17 @@ class Customer extends Model
      *
      * A sub-account we create never sets google_ads_link_status, so its presence
      * is a reliable marker of an account the customer brought with them.
+     *
+     * One-time setup customers are the third case and belong with the second.
+     * We do create their sub-account, but the whole proposition is that they
+     * pay US$999 once, we build it, and then they fund it and spend what they
+     * like. Billing them for prepaid ad credit on top of that charges them for
+     * spend we never make on their behalf.
      */
     public function isSelfFundedAds(): bool
     {
-        return $this->google_ads_link_status === 'active';
+        return $this->google_ads_link_status === 'active'
+            || $this->service_type === 'setup_only';
     }
 
     /**

@@ -2,13 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\DeployCampaign;
 use App\Mail\HandoverComplete;
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Role;
+use App\Models\Strategy;
 use App\Models\User;
+use App\Services\AdSpendBillingService;
+use App\Services\DeploymentService;
 use App\Services\GoogleAds\CommonServices\InviteCustomerUser;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -24,6 +30,12 @@ use Tests\TestCase;
  * Spectra's MCC, so it stays ours until a Google login is attached to it, and
  * nothing ever attached one. The customer was handed an account number and no
  * way in.
+ *
+ * It is also no longer a button an admin has to remember. Every other step of
+ * the engagement is automatic, so the last one is too: a setup-only deployment
+ * that lands cleanly hands itself over. A partial one does not, because handing
+ * over a half-built account closes the engagement in our records while leaving
+ * the customer short of what they paid for.
  */
 class SetupOnlyHandoverTest extends TestCase
 {
@@ -154,5 +166,71 @@ class SetupOnlyHandoverTest extends TestCase
 
         $this->assertNull($managed->fresh()->handover_at);
         $this->assertSame([], $this->invitations);
+    }
+
+    public function test_a_clean_deploy_hands_itself_over(): void
+    {
+        $this->fakeInviter(['success' => true]);
+        [, $customer] = $this->setupOnlyCustomer();
+
+        /*
+           Asserted on the service rather than through DeployCampaign, which
+           cannot reach its success path in a test: it calls
+           DeploymentService::deploy() statically, so the platform call cannot be
+           stood in for (see DeployCampaignTest). The job's own contribution —
+           the gate that decides whether to call this at all — is covered by the
+           partial-deploy test below.
+        */
+        $result = app(\App\Services\Customers\HandOverAccount::class)->handOver($customer);
+
+        $this->assertTrue($result['handed_over']);
+        $this->assertSame(['owner@example.test'], $result['invited']);
+        $this->assertNotNull($customer->fresh()->handover_at);
+        Mail::assertSent(HandoverComplete::class, 1);
+    }
+
+    public function test_a_failed_deploy_does_not_hand_over(): void
+    {
+        Notification::fake();
+        $this->fakeInviter(['success' => true]);
+        [, $customer] = $this->setupOnlyCustomer();
+
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        Strategy::factory()->create([
+            'campaign_id' => $campaign->id,
+            'platform' => 'Google Ads',
+            // Deploy only considers signed-off strategies; without this the job
+            // returns before the platform call and the test proves nothing.
+            'signed_off_at' => now(),
+        ]);
+
+        $this->partialMock(DeploymentService::class, function ($mock) {
+            $mock->shouldReceive('deploy')->andReturn(['success' => false, 'error' => 'API error']);
+        });
+
+        (new DeployCampaign($campaign))->handle($this->app->make(AdSpendBillingService::class));
+
+        /*
+           Nothing was built, so there is nothing to hand over. The failure mode
+           this guards is the worse one: a handover_at stamped on an account with
+           no working ads in it, which reads as a completed engagement and is
+           never chased.
+        */
+        $this->assertNull($customer->fresh()->handover_at);
+        $this->assertSame([], $this->invitations);
+        Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    public function test_a_setup_only_customer_is_never_asked_for_prepaid_ad_credit(): void
+    {
+        [, $customer] = $this->setupOnlyCustomer();
+
+        /*
+           They fund the account themselves — that is the whole arrangement.
+           Charging them for prepaid ad spend on top of the setup fee bills them
+           for money we never spend on their behalf, and the deploy path gates on
+           this exact predicate.
+        */
+        $this->assertTrue($customer->isSelfFundedAds());
     }
 }

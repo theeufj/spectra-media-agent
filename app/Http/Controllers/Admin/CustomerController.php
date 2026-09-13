@@ -9,6 +9,7 @@ use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Services\ActivityLogger;
 use App\Services\Customers\DeactivateCustomerService;
+use App\Services\Customers\HandOverAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -82,84 +83,47 @@ class CustomerController extends Controller
      * Close a one-time setup engagement: stamp the handover and email the
      * customer the keys (account id + the two steps to go live).
      */
-    public function markHandedOver(Customer $customer)
+    /**
+     * The manual handover, for the cases the automatic one could not close.
+     *
+     * A fully successful setup-only deployment hands itself over — see
+     * HandOverAccount and the job that calls it. This button exists for the
+     * remainder: a partial deploy, a failed invite that has since been fixed,
+     * an account created outside the normal flow.
+     */
+    public function markHandedOver(Customer $customer, HandOverAccount $handover)
     {
-        if ($customer->service_type !== 'setup_only') {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Handover only applies to one-time setup customers.',
-            ]);
-        }
+        $result = $handover->handOver($customer);
 
-        if ($customer->handover_at) {
+        if ($result['handed_over']) {
             return redirect()->back()->with('flash', [
                 'type' => 'success',
-                'message' => "{$customer->name} was already handed over.",
+                'message' => $result['invited']
+                    ? 'Handover recorded — invited '.implode(', ', $result['invited']).' to the account.'
+                    : "Handover recorded — {$customer->name} has the keys.",
             ]);
         }
 
-        /*
-           The keys, before the email that says they are yours.
-
-           The account is a sub-account under Spectra's MCC, so it belongs to us
-           until a Google login is attached to it — and nothing ever attached
-           one. The handover email gave the customer an account ID and told them
-           to open Billing → Settings in an account they could not open. That is
-           the whole engagement: we do the intimidating part, then hand it over
-           and get out of the middle.
-
-           Admin, because adding billing is the first thing we ask them to do
-           and no lesser role can.
-        */
-        $invited = [];
-        $failedInvites = [];
-
-        if ($customer->google_ads_customer_id) {
-            // Through the container, not `new`: the constructor builds a Google
-            // Ads client, so a direct instantiation cannot be stood in for and
-            // this branch would be untestable.
-            $inviter = app()->makeWith(
-                \App\Services\GoogleAds\CommonServices\InviteCustomerUser::class,
-                ['customer' => $customer],
-            );
-
-            foreach ($customer->users as $user) {
-                $result = $inviter->execute($customer->cleanGoogleCustomerId(), $user->email);
-
-                $result['success'] ? $invited[] = $user->email : $failedInvites[$user->email] = $result['error'] ?? 'unknown';
-            }
-        }
-
-        if ($failedInvites) {
-            // Do not stamp the handover: a customer who cannot get into the
-            // account has not been handed anything, and a handover_at that says
-            // otherwise is how it would never be chased.
-            report(new \RuntimeException(
-                "Handover blocked for customer {$customer->id}: ".json_encode($failedInvites)
-            ));
-
-            return redirect()->back()->with('flash', [
+        return redirect()->back()->with('flash', match ($result['reason'] ?? '') {
+            'not_setup_only' => [
                 'type' => 'error',
-                'message' => 'Could not invite '.implode(', ', array_keys($failedInvites))
+                'message' => 'Handover only applies to one-time setup customers.',
+            ],
+            'already_handed_over' => [
+                'type' => 'success',
+                'message' => "{$customer->name} was already handed over.",
+            ],
+            'no_account' => [
+                'type' => 'error',
+                'message' => "{$customer->name} has no Google Ads account yet, so there is nothing to hand over.",
+            ],
+            default => [
+                'type' => 'error',
+                'message' => 'Could not invite '.implode(', ', array_keys($result['failed']))
                     .' to the Google Ads account, so the handover was not recorded. '
-                    .reset($failedInvites),
-            ]);
-        }
-
-        $customer->forceFill(['handover_at' => now()])->save();
-
-        foreach ($customer->users as $user) {
-            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\HandoverComplete($customer, $invited));
-        }
-
-        \App\Services\ActivityLogger::customer('handover_completed', $customer);
-
-        return redirect()->back()->with('flash', [
-            'type' => 'success',
-            'message' => $invited
-                ? 'Handover recorded — invited '.implode(', ', $invited).' to the account.'
-                : "Handover recorded — {$customer->name} has the keys.",
-        ]);
+                    .reset($result['failed']),
+            ],
+        });
     }
 
     public function customerShow(Customer $customer)
@@ -209,8 +173,24 @@ class CustomerController extends Controller
                 'sent_at' => $log->created_at,
             ]);
 
+        /*
+           A setup-only build that finished but did not hand itself over.
+
+           The handover is automatic on a clean deploy, so the only customers
+           left holding this button are the ones where something failed —
+           a platform that errored mid-deploy, or an invite Google rejected.
+           Without a flag they are indistinguishable from a build still in
+           progress, which is how one would sit here unnoticed.
+        */
+        $handoverPending = $customer->service_type === 'setup_only'
+            && ! $customer->handover_at
+            && $customer->campaigns
+                ->flatMap->strategies
+                ->contains(fn ($strategy) => $strategy->deployed_at !== null);
+
         return Inertia::render('Admin/CustomerDetail', [
             'customer' => $customer,
+            'handoverPending' => $handoverPending,
             'emailLogs' => $emailLogs,
             'bm_configured' => app(\App\Services\FacebookAds\BusinessManagerService::class)->isConfigured(),
             'adSpendCredit' => $credit ? [

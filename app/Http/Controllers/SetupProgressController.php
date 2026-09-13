@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CampaignStatus;
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Notifications\SiteScanFailed;
@@ -111,7 +112,7 @@ class SetupProgressController extends Controller
                to-do list.
             */
             if ($customer->service_type === 'setup_only') {
-                $steps = $this->setupOnlySteps($customer, $scanStatus, $hasDeployed, $deployPending);
+                $steps = $this->setupOnlySteps($customer, $scanStatus, $hasDeployed, $deployPending, $firstCampaign);
             } else {
                 $steps = [
                     [
@@ -228,6 +229,7 @@ class SetupProgressController extends Controller
         string $scanStatus,
         bool $hasDeployed,
         bool $deployPending,
+        ?Campaign $firstCampaign,
     ): array {
         $brandConfirmed = $customer->brandGuideline?->user_verified === true;
         $paid = $customer->setup_fee_paid_at !== null;
@@ -272,23 +274,32 @@ class SetupProgressController extends Controller
                 'action_text' => $paid ? 'View Receipt' : 'Pay Setup Fee',
             ],
             [
-                // Ours. Reported, not assigned — hence no action.
-                'key' => 'build',
-                'title' => 'We build your account and ads',
+                /*
+                   Theirs, and the only place they see the work before it exists.
+
+                   We write the campaign and the ads; they read them and press
+                   Create. The button is not called Deploy because nothing goes
+                   live — a setup-only campaign is paused as it deploys, so
+                   pressing it puts the ads in their account and leaves the
+                   switch alone.
+                */
+                'key' => 'review_ads',
+                'title' => 'Review and create your ads',
                 'description' => match (true) {
-                    ! $paid => 'Your Google Ads account, conversion tracking, campaign and ads. Starts the moment you pay.',
-                    $hasDeployed => 'Built — your campaign and conversion tracking are in place, paused.',
-                    $deployPending, $accountReady => 'Building now. Your account exists; we are setting up tracking and your first campaign.',
-                    default => 'Starting your account build.',
+                    ! $paid => 'We write the campaign and the ads. You read them and decide. Starts the moment you pay.',
+                    $hasDeployed => 'Created — they are in your Google Ads account, paused until you switch them on.',
+                    ! $accountReady => 'Building your Google Ads account and conversion tracking now.',
+                    $firstCampaign !== null => 'We have written your campaign. Read it over and create the ads when you are happy.',
+                    default => 'Writing your campaign and ads.',
                 },
                 'completed' => $hasDeployed,
                 'status' => match (true) {
                     $hasDeployed => 'completed',
-                    $paid => 'in_progress',
+                    $paid && ! $accountReady => 'in_progress',
                     default => 'pending',
                 },
-                'action_url' => null,
-                'action_text' => null,
+                'action_url' => $firstCampaign ? route('campaigns.show', $firstCampaign) : null,
+                'action_text' => $firstCampaign && ! $hasDeployed ? 'Review' : null,
             ],
             [
                 'key' => 'handover',

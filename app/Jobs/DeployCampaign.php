@@ -12,6 +12,7 @@ use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
 use App\Services\Campaigns\SettleDeployedCampaign;
+use App\Services\Customers\HandOverAccount;
 use App\Services\DeploymentService;
 use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use App\Services\FacebookAds\PixelService;
@@ -138,7 +139,14 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         $managedBillingEnabled = Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds();
 
         if ($customer->isSelfFundedAds()) {
-            if (! $customer->hasMediaCreditsRemaining()) {
+            /*
+               The media allowance is a subscription concept, and a one-time
+               setup customer has no subscription. They paid US$999 for exactly
+               these ads; refusing to publish them because a plan they were
+               never sold has no quota left is the platform charging twice and
+               delivering once.
+            */
+            if ($customer->service_type !== 'setup_only' && ! $customer->hasMediaCreditsRemaining()) {
                 Log::warning('DeployCampaign: self-funded customer has no media allowance left', [
                     'customer_id' => $customer->id,
                 ]);
@@ -434,6 +442,40 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             // mid-flight and the campaign at draft, and nothing downstream
             // could finish the job — see that class for what that costs.
             app(SettleDeployedCampaign::class)->settle($this->campaign);
+        }
+
+        /*
+           The last step of a one-time setup, and the only one that was manual.
+
+           A customer paying US$999 buys an account, tracking, a campaign and
+           ads — and then the keys. Every part of that was automatic except the
+           handover, which waited on an admin noticing. Nothing else in the
+           engagement waits on a person, so neither does this.
+
+           Only on a clean sweep. A partial deploy means some of what they paid
+           for is not there, and handing over mid-build both closes the
+           engagement in our records and hands them a half-built account. Those
+           stay for an admin, flagged on the customer page.
+        */
+        $customer = $this->campaign->customer;
+
+        if ($customer
+            && $customer->service_type === 'setup_only'
+            && $successCount > 0
+            && $failureCount === 0
+        ) {
+            try {
+                app(HandOverAccount::class)->handOver($customer);
+            } catch (\Throwable $e) {
+                // The ads are built and live-but-paused either way; a failed
+                // handover must not fail the deploy and undo that. It surfaces
+                // in the dashboard and the admin button finishes the job.
+                report($e);
+                Log::error('DeployCampaign: automatic handover failed', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         // Dispatch verification job after 60s to confirm objects exist on platforms

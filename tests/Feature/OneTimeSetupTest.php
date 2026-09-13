@@ -254,9 +254,11 @@ class OneTimeSetupTest extends TestCase
     public function test_admin_handover_emails_the_keys_once(): void
     {
         Mail::fake();
+        $this->stubInviter();
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
         [, $customer] = $this->setupOnlyCustomer(paid: true);
+        $customer->forceFill(['google_ads_customer_id' => '111-222-3333'])->save();
 
         $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
 
@@ -265,5 +267,45 @@ class OneTimeSetupTest extends TestCase
 
         $this->post(route('admin.customers.handover', $customer));
         Mail::assertSent(HandoverComplete::class, 1);
+    }
+
+    public function test_there_is_no_handover_before_there_is_an_account(): void
+    {
+        Mail::fake();
+        $this->stubInviter();
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+        // Paid, but the build has not produced a Google Ads account yet.
+        [, $customer] = $this->setupOnlyCustomer(paid: true);
+
+        $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
+
+        /*
+           The old version stamped this and sent the email anyway, because the
+           invite loop was wrapped in `if ($customer->google_ads_customer_id)`
+           and an empty loop leaves no failures behind. The result was the exact
+           thing this engagement is supposed to avoid: a "the keys are yours"
+           email naming an account that does not exist, and a handover_at that
+           stops anyone chasing it.
+        */
+        $this->assertNull($customer->fresh()->handover_at);
+        Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    /** The real one builds a Google Ads client in its constructor. */
+    private function stubInviter(): void
+    {
+        $this->app->bind(
+            \App\Services\GoogleAds\CommonServices\InviteCustomerUser::class,
+            fn () => new class extends \App\Services\GoogleAds\CommonServices\InviteCustomerUser
+            {
+                public function __construct() {}
+
+                public function execute(string $customerId, string $email, int $accessRole = 2): array
+                {
+                    return ['success' => true];
+                }
+            },
+        );
     }
 }
