@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, Link, router } from '@inertiajs/react';
+import { Head, useForm, Link, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
@@ -446,10 +446,35 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
         });
     };
 
+    /*
+       Two decisions, two screens.
+
+       This page asked the customer to set a daily budget and to sign off on
+       the strategies behind it, stacked in one scroll with a market forecast
+       between them. They are separate questions — what am I willing to spend,
+       and is this the right campaign — and answering the second means
+       scrolling past the first, which is already answered. On a one-time setup
+       it is also the page where they press Create, so the length was standing
+       between them and the thing they paid for.
+
+       The budget comes first because it is the input the forecast and the ad
+       group bids are framed against, and because the server will not deploy an
+       auto-generated campaign until it is confirmed. Once set, it collapses to
+       one line with a way back — ?budget=1 returns here deliberately, so
+       changing your mind is a link rather than a dead end.
+    */
+    const [showForecast, setShowForecast] = useState(false);
+    const pageUrl = usePage().url;
+    const revisitingBudget = pageUrl.includes('budget=1');
+    const budgetStage = Boolean(campaign.auto_generated_at)
+        && (! campaign.budget_confirmed_at || revisitingBudget);
+
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-jet leading-tight">Review Strategy for: {campaigns.name}</h2>}
+            header={<h2 className="font-semibold text-xl text-jet leading-tight">
+                {budgetStage ? `Step 1 of 2 — your budget` : `Review Strategy for: ${campaigns.name}`}
+            </h2>}
         >
             <Head title={`Strategy for ${campaigns.name}`} />
 
@@ -465,7 +490,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 fails, which is exactly what someone whose ads have not appeared
                 is looking for.
             */}
-            {campaign.strategies?.some(s => s.deployed_at || s.deployment_status) && (
+            {! budgetStage && campaign.strategies?.some(s => s.deployed_at || s.deployment_status) && (
                 <div className="mx-auto max-w-7xl mb-6">
                     <Link
                         href={route('campaigns.deployment-status', { campaign: campaign.uuid })}
@@ -476,7 +501,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 </div>
             )}
 
-            {campaign.auto_generated_at && (
+            {budgetStage && (
                 <div className="mx-auto max-w-7xl">
                     {/* The prop, not the polled local state: confirming the
                         budget redirects back with fresh props, and the local
@@ -489,16 +514,43 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                         setupOnly={setupOnly}
                     />
 
-                    {/*
-                        Once the budget is confirmed BudgetConfirmation collapses
-                        to a one-line receipt and stops rendering its own copy,
-                        so the forecast is shown here instead. Rendering it in
-                        both places unconditionally would show it twice while the
-                        budget is still unconfirmed.
-                    */}
-                    {campaign.budget_confirmed_at && (
+                    <p className="mt-4 text-sm text-gray-500">
+                        Next: the campaign and ads we wrote, for you to read and approve.
+                    </p>
+                </div>
+            )}
+
+            {/* The answered question, kept visible but out of the way. The
+                forecast lives with it: it is a framing of the budget, so it
+                belongs to that decision rather than to the strategy review. */}
+            {! budgetStage && campaign.auto_generated_at && campaign.budget_confirmed_at && (
+                <div className="mx-auto max-w-7xl mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-5 py-3">
+                        <p className="text-sm text-gray-700">
+                            <span className="font-semibold">Daily budget</span>{' '}
+                            {campaign.currency_code || 'USD'} {Number(campaign.daily_budget || 0).toFixed(2)}
+                            {selfFunded && <span className="text-gray-500"> — billed to you by Google, not by us</span>}
+                        </p>
+                        <div className="flex items-center gap-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowForecast(v => ! v)}
+                                className="text-sm font-medium text-gray-600 underline hover:text-gray-900"
+                            >
+                                {showForecast ? 'Hide forecast' : 'What this buys'}
+                            </button>
+                            <Link
+                                href={`${route('campaigns.show', { campaign: campaigns.uuid })}?budget=1`}
+                                className="text-sm font-medium text-brand-dark underline hover:text-brand-darker"
+                            >
+                                Change
+                            </Link>
+                        </div>
+                    </div>
+
+                    {showForecast && (
                         <ForecastPanel
-                            className="mb-6"
+                            className="mt-3"
                             campaignId={campaign.id}
                             monthlyBudget={Number(campaign.daily_budget || 0) * 30}
                         />
@@ -509,7 +561,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             {/* Conversion tracking, surfaced where the launch decision happens:
                 without the snippet the ads run blind, and the setup page was
                 previously only reachable from an email. */}
-            {conversionTracking && (
+            {! budgetStage && conversionTracking && (
                 <div className="mx-auto max-w-7xl">
                     {conversionTracking.installed ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
@@ -553,6 +605,10 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 onClose={() => setShowGenerationModal(false)}
             />
 
+            {/* Step 2. Not merely hidden on the budget screen — unmounted, so
+                the strategy cards and their collateral polling do not run
+                behind a decision that has not been made yet. */}
+            {! budgetStage && (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
                     {isPolling && (
@@ -658,6 +714,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                     )}
                 </div>
             </div>
+            )}
 
             {/* Campaign Copilot */}
             <CampaignCopilot campaignUuid={campaigns.uuid} isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
