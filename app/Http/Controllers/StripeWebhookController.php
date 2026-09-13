@@ -107,7 +107,15 @@ class StripeWebhookController extends CashierController
             // One-time setup fee: the fallback recorder for buyers who paid
             // and closed the tab before the success redirect ran. Idempotent
             // via SetupFeeService::recordPayment.
-            if (($metadata['purpose'] ?? null) === 'setup_fee' && $session['payment_status'] === 'paid') {
+            /*
+               'no_payment_required' is what Stripe reports when a promotion
+               code takes the total to zero: no PaymentIntent exists, so there
+               is no payment to mark paid. The session is still complete and
+               the customer still bought the thing.
+            */
+            $settled = in_array($session['payment_status'] ?? null, ['paid', 'no_payment_required'], true);
+
+            if (($metadata['purpose'] ?? null) === 'setup_fee' && $settled) {
                 $customer = \App\Models\Customer::find($metadata['customer_id'] ?? null);
 
                 if ($customer && $user->customers()->where('customers.id', $customer->id)->exists()) {
@@ -124,7 +132,7 @@ class StripeWebhookController extends CashierController
                     ]);
                 }
             }
-            if (($metadata['type'] ?? null) === 'creative_boost' && $session['payment_status'] === 'paid') {
+            if (($metadata['type'] ?? null) === 'creative_boost' && $settled) {
                 $purchaseId = $metadata['purchase_id'] ?? null;
                 $purchase = $purchaseId ? CreativeBoostPurchase::find($purchaseId) : null;
 

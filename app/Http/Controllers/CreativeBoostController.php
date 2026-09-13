@@ -69,6 +69,7 @@ class CreativeBoostController extends Controller
                     'user_id' => $user->id,
                     'period' => $period,
                 ],
+                'allow_promotion_codes' => true,
                 'success_url' => route('creative-usage').'?boost=success',
                 'cancel_url' => route('creative-usage').'?boost=cancelled',
             ]);

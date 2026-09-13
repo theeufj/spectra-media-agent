@@ -190,6 +190,98 @@ class OneTimeSetupTest extends TestCase
         Mail::assertSent(SetupFeeReceived::class, 1);
     }
 
+    public function test_a_fully_discounted_session_is_a_paid_session(): void
+    {
+        Mail::fake();
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+        $user->forceFill(['stripe_id' => 'cus_free'])->save();
+
+        /*
+           A 100%-off promotion code.
+
+           Stripe creates no PaymentIntent when a coupon takes the total to
+           zero, so the session comes back 'no_payment_required' rather than
+           'paid'. Gating on 'paid' alone meant a free code was accepted at
+           Stripe and then refused here — the customer redeems it, the checkout
+           succeeds, and they land back on a page that says they have not paid.
+        */
+        $session = (object) [
+            'metadata' => ['customer_id' => (string) $customer->id],
+            'customer' => 'cus_free',
+            'payment_status' => 'no_payment_required',
+        ];
+        $this->app->instance(SetupFeeService::class, new class($session) extends SetupFeeService
+        {
+            public function __construct(private object $session) {}
+
+            protected function retrieveSession(string $sessionId): object
+            {
+                return $this->session;
+            }
+        });
+
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('setup-fee.success', ['session_id' => 'cs_free_1']));
+
+        $this->assertTrue($customer->fresh()->isPaidSetupOnly());
+        Mail::assertSent(SetupFeeReceived::class, 1);
+    }
+
+    public function test_an_unpaid_session_is_still_refused(): void
+    {
+        Mail::fake();
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+        $user->forceFill(['stripe_id' => 'cus_unpaid'])->save();
+
+        // Widening the accepted set for coupons must not let a genuinely
+        // unpaid session through.
+        $session = (object) [
+            'metadata' => ['customer_id' => (string) $customer->id],
+            'customer' => 'cus_unpaid',
+            'payment_status' => 'unpaid',
+        ];
+        $this->app->instance(SetupFeeService::class, new class($session) extends SetupFeeService
+        {
+            public function __construct(private object $session) {}
+
+            protected function retrieveSession(string $sessionId): object
+            {
+                return $this->session;
+            }
+        });
+
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('setup-fee.success', ['session_id' => 'cs_unpaid_1']));
+
+        $this->assertFalse($customer->fresh()->isPaidSetupOnly());
+        Mail::assertNotSent(SetupFeeReceived::class);
+    }
+
+    public function test_the_webhook_also_accepts_a_fully_discounted_session(): void
+    {
+        Mail::fake();
+        $this->withoutMiddleware(\Laravel\Cashier\Http\Middleware\VerifyWebhookSignature::class);
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+        $user->forceFill(['stripe_id' => 'cus_webhook_free'])->save();
+
+        $this->postJson('/api/stripe/webhook', [
+            'type' => 'checkout.session.completed',
+            'data' => ['object' => [
+                'id' => 'cs_webhook_free',
+                'customer' => 'cus_webhook_free',
+                'mode' => 'payment',
+                'status' => 'complete',
+                'payment_status' => 'no_payment_required',
+                'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
+            ]],
+        ])->assertSuccessful();
+
+        $this->assertTrue($customer->fresh()->isPaidSetupOnly());
+        Mail::assertSent(SetupFeeReceived::class, 1);
+    }
+
     public function test_setup_only_deploys_arrive_paused(): void
     {
         [, $customer] = $this->setupOnlyCustomer(paid: true);

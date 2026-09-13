@@ -43,6 +43,9 @@ class SetupFeeService
             // Deterministic per customer: a double-click cannot open two
             // charges for the same engagement.
             'client_reference_id' => 'setup-fee-'.$customer->id,
+            // Coupons are created in the Stripe dashboard; without this the
+            // code field never appears and a promotion code has no way in.
+            'allow_promotion_codes' => true,
             'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl,
         ], [
@@ -68,7 +71,18 @@ class SetupFeeService
         $belongsHere = ($session->metadata['customer_id'] ?? null) === (string) $customer->id
             && $session->customer === $user->stripe_id;
 
-        if (! $belongsHere || $session->payment_status !== 'paid') {
+        /*
+           A fully discounted session is a paid session.
+
+           Stripe reports payment_status 'no_payment_required' — not 'paid' —
+           when a coupon takes the total to zero, because no PaymentIntent is
+           created. Gating on 'paid' alone means a 100%-off promotion code is
+           accepted at Stripe and then refused here, which reads to the customer
+           as their payment vanishing.
+        */
+        $settled = in_array($session->payment_status, ['paid', 'no_payment_required'], true);
+
+        if (! $belongsHere || ! $settled) {
             Log::warning('SetupFeeService: checkout session not accepted', [
                 'customer_id' => $customer->id,
                 'session_id' => $sessionId,
@@ -109,7 +123,7 @@ class SetupFeeService
 
         Mail::to($user->email)->send(new \App\Mail\SetupFeeReceived($customer, $user->name));
         Mail::raw(
-            "One-time setup fee paid (US$999)\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",
+            "One-time setup fee paid\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",
             fn ($m) => $m->to(config('app.admin_email'))->subject("Setup fee paid: {$customer->name}")
         );
 

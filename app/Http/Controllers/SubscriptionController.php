@@ -94,6 +94,12 @@ class SubscriptionController extends Controller
         } else {
             // Testing mode - only collect payment method without charging
             // Use Stripe Checkout in setup mode
+            //
+            // The one checkout without a promotion-code field, and it cannot
+            // have one: a setup-mode session has no line items and no amount,
+            // so Stripe rejects allow_promotion_codes here. Nothing is being
+            // charged, so there is nothing to discount — the code goes in when
+            // the subscription is actually created, on the branch above.
             $checkout = \Stripe\Checkout\Session::create([
                 'customer' => $user->stripe_id,
                 'mode' => 'setup',
