@@ -204,7 +204,31 @@ class GenerateImage implements ShouldQueue
                 $scene = CreativeVariant::apply($prompt, $index);
 
                 $imagePrompt = (new ImagePrompt($scene, $brandGuidelines, $productContext, $adText))->getPrompt();
-                Log::info('Image generation prompt:', ['prompt' => $imagePrompt]);
+
+                /*
+                   One line per creative, readable without reassembling it.
+
+                   The old entry logged the whole template with its newlines
+                   intact, so every prompt spanned forty lines of the log and
+                   `grep` returned only the first — which is the same for every
+                   creative ever generated. Diagnosing "why do these all look
+                   the same" was impossible from the one place that knows.
+
+                   The scene and the lens are what actually vary, so they are
+                   their own fields, flattened to a single line each. The full
+                   prompt stays available under its own key for when the answer
+                   is somewhere in the boilerplate.
+                */
+                Log::info('Image prompt built', [
+                    'campaign_id' => $this->campaign->id,
+                    'strategy_id' => $this->strategy->id,
+                    'variant' => $index + 1 .' of '.count($prompts),
+                    'lens' => CreativeVariant::label($index),
+                    'scene' => $this->oneLine($prompt),
+                    'scene_with_lens' => $this->oneLine($scene),
+                    'ad_text' => $this->oneLine($adText),
+                    'prompt' => $this->oneLine($imagePrompt),
+                ]);
 
                 // Each format is generated at its own aspect ratio.
                 //
@@ -384,6 +408,18 @@ class GenerateImage implements ShouldQueue
         '16:9' => '1344x768',
         '4:3' => '1152x896',
     ];
+
+    /**
+     * A multi-line prompt as one greppable line.
+     *
+     * Monolog writes context values verbatim, so an embedded newline splits one
+     * log entry across dozens of lines and every tool that reads logs a line at
+     * a time sees only the first of them.
+     */
+    private function oneLine(string $text): string
+    {
+        return trim(preg_replace('/\s+/', ' ', $text));
+    }
 
     /**
      * Every word the image model is allowed to render.

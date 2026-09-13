@@ -67,6 +67,27 @@ class CreativeVariant
     }
 
     /**
+     * A short name for the lens on a given slot, for logs.
+     *
+     * The lens is the thing that decides whether a set looks like a set, so
+     * when a customer says "these all look the same" the log has to be able to
+     * answer which lens each creative was generated under.
+     */
+    public static function label(int $index): string
+    {
+        // Keyed on the slot rather than on the lens text, so renaming a lens
+        // cannot silently turn every label into 'unknown'.
+        return match (true) {
+            ! isset(self::LENSES[$index]) => 'none — the scene as briefed',
+            $index === 1 => 'wide — the place is the subject',
+            $index === 2 => 'close — hands and the work, no face',
+            $index === 3 => 'recast — a different person',
+            $index === 4 => 'still life — no people',
+            default => 'slot '.$index,
+        };
+    }
+
+    /**
      * How many visibly different creatives this can produce before it starts
      * repeating itself. Callers sizing a set should not ask for more.
      */
