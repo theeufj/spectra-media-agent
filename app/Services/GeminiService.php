@@ -435,6 +435,28 @@ class GeminiService
             } catch (\Throwable $e) {
                 report($e);
                 $attempt++;
+
+                /*
+                 * Some failures never come good, and sleeping on them costs the
+                 * whole request.
+                 *
+                 * A credential that will not exchange for a token fails
+                 * identically every time — the token is cached for 3000s, so a
+                 * retry re-reads the same bad credential. This loop backed off
+                 * three times anyway, which is 30 seconds of a synchronous
+                 * request spent proving the same thing, and it is how signup
+                 * returns a 500 rather than a failed scan. During the
+                 * BILLING_DISABLED outage every AI call in the product paid
+                 * that cost before giving up.
+                 */
+                if (self::isTerminalFailure($e)) {
+                    Log::warning('GeminiService: not retrying a failure that cannot succeed: '.$e->getMessage(), [
+                        'model' => $model,
+                        'exception' => get_class($e),
+                    ]);
+                    $attempt = $maxRetries;
+                }
+
                 if ($attempt < $maxRetries) {
                     $delayMs = $this->calculateBackoffDelay($attempt);
                     Log::warning("GeminiService: Exception on attempt {$attempt}/{$maxRetries}: ".$e->getMessage().". Retrying in {$delayMs}ms...", [
@@ -1456,6 +1478,34 @@ class GeminiService
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * Will another attempt, right now, with the same credentials, do anything
+     * different? For these, no.
+     */
+    private static function isTerminalFailure(\Throwable $e): bool
+    {
+        $message = mb_strtolower($e->getMessage());
+
+        foreach ([
+            'could not construct applicationdefaultcredentials',
+            'oauth2.googleapis.com/token',
+            'invalid_grant',
+            'invalid_client',
+            'unauthorized_client',
+            'billing to be enabled',
+            'billing_disabled',
+            'permission_denied',
+            'api has not been used',
+            'is not enabled',
+        ] as $terminal) {
+            if (str_contains($message, $terminal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private function isRetryableError(int $statusCode): bool
     {
