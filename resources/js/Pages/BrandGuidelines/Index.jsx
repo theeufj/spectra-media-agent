@@ -39,10 +39,21 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
         });
     };
 
+    /*
+     * Sign-off moves you on, whichever button you press.
+     *
+     * There were two: "Confirm & continue" in the banner, which sent
+     * continue:true and took you to the campaign, and "Verify as Accurate" in
+     * the toolbar, which sent nothing and came straight back to this page with
+     * a green flash. Both say they verify. Only one finished onboarding — so a
+     * customer who used the toolbar, which is where you look for an action,
+     * signed off and then sat on a dead end wondering what the next step was.
+     *
+     * The toolbar button only ever renders while unverified, so it is always
+     * the onboarding case and there is no "verify but stay" to preserve.
+     */
     const handleVerify = () => {
-        router.post(route('brand-guidelines.verify', brandGuideline.id), {}, {
-            preserveScroll: true,
-        });
+        router.post(route('brand-guidelines.verify', brandGuideline.id), { continue: true });
     };
 
     // The POST only queues the job — the real work takes minutes. Keep the
@@ -216,7 +227,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 </p>
                             </div>
                             <button
-                                onClick={() => router.post(route('brand-guidelines.verify', brandGuideline.id), { continue: true })}
+                                onClick={handleVerify}
                                 className="flex-shrink-0 px-6 py-3 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold"
                             >
                                 Confirm & continue →
