@@ -66,4 +66,61 @@ describe('BudgetConfirmation', () => {
         fireEvent.change(getByLabelText(/Daily budget/), { target: { value: '' } });
         expect(getByText('Confirm budget')).toBeDisabled();
     });
+
+    it('never promises a charge to a customer whose ads we do not fund', () => {
+        /*
+           Found on production, on the last screen before a US$999 customer
+           creates their ads. It read "You'll be charged AUD 280.00 when you
+           deploy — seven days up front. After that we top up as you spend."
+
+           None of that happens to them. Their card is on their own Google Ads
+           account, Google bills them directly, and DeployCampaign skips ad
+           spend credit for a self-funded account entirely. It also contradicts
+           what they bought: one payment, nothing recurring.
+        */
+        const { queryByText, getByText } = render(
+            <BudgetConfirmation
+                campaign={{ id: 1, daily_budget: 40, budget_confirmed_at: null }}
+                currency="AUD"
+                selfFunded
+                setupOnly
+            />
+        );
+
+        expect(queryByText(/You'll be charged/)).toBeNull();
+        expect(queryByText(/seven days up front/)).toBeNull();
+        expect(queryByText(/top up as you spend/)).toBeNull();
+        expect(getByText(/Google bills you directly/)).toBeInTheDocument();
+        expect(getByText(/US\$999 was the whole engagement/)).toBeInTheDocument();
+    });
+
+    it('still states the charge for a customer we do fund', () => {
+        // The self-funded branch must not swallow the disclosure for everyone
+        // else — for a managed prepay account the charge is real and saying so
+        // before they agree is the whole point of the panel.
+        const { getByText } = render(
+            <BudgetConfirmation
+                campaign={{ id: 1, daily_budget: 40, budget_confirmed_at: null }}
+                currency="AUD"
+            />
+        );
+
+        expect(getByText(/seven days up front/)).toBeInTheDocument();
+    });
+
+    it('does not tell a setup-only customer their ads are about to go live', () => {
+        // They arrive paused in the customer's own account; the customer
+        // switches them on. "Before going live" is the managed promise.
+        const { queryByText, getByText } = render(
+            <BudgetConfirmation
+                campaign={{ id: 1, daily_budget: 40, budget_confirmed_at: null }}
+                currency="AUD"
+                selfFunded
+                setupOnly
+            />
+        );
+
+        expect(queryByText(/before going live/)).toBeNull();
+        expect(getByText(/Your ads arrive paused/)).toBeInTheDocument();
+    });
 });

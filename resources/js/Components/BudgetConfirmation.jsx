@@ -14,7 +14,7 @@ import ForecastPanel from '@/Components/ForecastPanel';
  * rationale is shown, the field is editable, and confirming is an explicit act
  * rather than a side effect of deploying.
  */
-export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
+export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false }) {
     const { data, setData, post, processing, errors } = useForm({
         daily_budget: campaign.daily_budget ?? '',
     });
@@ -41,10 +41,16 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
     return (
         <div className="mb-6 overflow-hidden rounded-lg border-2 bg-white shadow-sm" style={{ borderColor: brandTint(50) }}>
             <div className="border-b px-6 py-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
-                <h3 className="text-base font-semibold text-gray-900">Confirm your budget before going live</h3>
+                {/* "Before going live" is the managed promise. A setup-only
+                    campaign never goes live here: it is created paused in the
+                    customer's own account and they start it themselves. */}
+                <h3 className="text-base font-semibold text-gray-900">
+                    {setupOnly ? 'Set the daily budget for your account' : 'Confirm your budget before going live'}
+                </h3>
                 <p className="mt-1 text-sm text-gray-600">
-                    We built this campaign from your website, including a suggested budget. Nothing is live
-                    and nothing has been charged — check the number below and it's yours.
+                    {setupOnly
+                        ? "We built this campaign from your website, including a suggested budget. Your ads arrive paused — this is the number they'll run at once you switch them on."
+                        : "We built this campaign from your website, including a suggested budget. Nothing is live and nothing has been charged — check the number below and it's yours."}
                 </p>
             </div>
 
@@ -97,15 +103,28 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
                 />
 
                 {/* The number that actually leaves their account, stated before
-                    they agree to it rather than after. */}
-                <p className="mt-3 text-sm text-gray-600">
-                    You'll be charged{' '}
-                    <strong>
-                        {currency} {weekly.toFixed(2)}
-                    </strong>{' '}
-                    when you deploy — seven days up front. After that we top up as you spend, and you can
-                    change or pause the budget at any time.
-                </p>
+                    they agree to it rather than after — which means saying
+                    nothing leaves it when nothing does. A self-funded account
+                    has its own card on Google and DeployCampaign skips ad-spend
+                    credit for it, so the prepay sentence was describing a
+                    charge that never arrives. On the one-time setup it
+                    contradicted the thing they were sold outright. */}
+                {selfFunded ? (
+                    <p className="mt-3 text-sm text-gray-600">
+                        We won't charge you for this. The budget goes on your own Google Ads
+                        account and Google bills you directly{setupOnly ? ' — your US$999 was the whole engagement' : ''}.
+                        You can change or pause it at any time.
+                    </p>
+                ) : (
+                    <p className="mt-3 text-sm text-gray-600">
+                        You'll be charged{' '}
+                        <strong>
+                            {currency} {weekly.toFixed(2)}
+                        </strong>{' '}
+                        when you deploy — seven days up front. After that we top up as you spend, and you can
+                        change or pause the budget at any time.
+                    </p>
+                )}
             </form>
         </div>
     );

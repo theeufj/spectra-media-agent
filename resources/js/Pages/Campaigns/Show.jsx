@@ -313,7 +313,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 };
 
 
-export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null }) {
+export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
     const [campaigns, setCampaign] = useState(campaign);
     // Whether generation is still running, as far as this page knows. Seeded
     // from the server render, then driven by the watch below.
@@ -482,7 +482,12 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                         budget redirects back with fresh props, and the local
                         copy is only seeded once so it would still show as
                         unconfirmed. */}
-                    <BudgetConfirmation campaign={campaign} currency={campaign.currency_code || 'USD'} />
+                    <BudgetConfirmation
+                        campaign={campaign}
+                        currency={campaign.currency_code || 'USD'}
+                        selfFunded={selfFunded}
+                        setupOnly={setupOnly}
+                    />
 
                     {/*
                         Once the budget is confirmed BudgetConfirmation collapses

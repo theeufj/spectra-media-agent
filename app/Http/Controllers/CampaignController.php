@@ -458,6 +458,20 @@ class CampaignController extends Controller
                 'installed' => (bool) $customer->gtm_installed,
                 'setup_url' => route('customers.gtm.setup', $customer, false),
             ],
+            /*
+               Whether we are the ones who bill for the ad spend.
+
+               The budget panel told every customer "You'll be charged AUD
+               280.00 when you deploy — seven days up front. After that we top
+               up as you spend." For a self-funded account that is simply
+               untrue: their card is on the Google account, Google charges them
+               directly, and DeployCampaign skips ad-spend credit for them
+               entirely. Worst of all on the one-time setup, which was sold as
+               one payment and nothing recurring — the last screen before the
+               ads are created promised a second charge and an ongoing one.
+            */
+            'selfFunded' => $customer->isSelfFundedAds(),
+            'setupOnly' => $customer->service_type === 'setup_only',
         ]);
     }
 
