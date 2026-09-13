@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VideoCollateral extends Model
 {
@@ -50,7 +51,8 @@ class VideoCollateral extends Model
         });
     }
 
-    public function campaign()
+    /** @return BelongsTo<Campaign, $this> */
+    public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
     }

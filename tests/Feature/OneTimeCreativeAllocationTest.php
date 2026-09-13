@@ -140,4 +140,58 @@ class OneTimeCreativeAllocationTest extends TestCase
         // the setup-only fallback.
         $this->assertSame('growth', $customer->fresh()->resolvePlan()->slug);
     }
+
+    public function test_limits_come_from_the_account_not_the_person(): void
+    {
+        [$user, $customer] = $this->setupOnlyCustomer();
+
+        /*
+           The bug this exists to stop, seen on production immediately after
+           resolvePlan() started returning setup_only: the dashboard still read
+           "Images 0 / 4" and "Videos — Not on your plan".
+
+           getLimits() asked User::resolveCurrentPlan(), which only looks at an
+           assigned_plan_id or the person's own Stripe subscription. Entitlement
+           lives on the customer now — a business has many users but one plan —
+           so a customer carrying a plan with no personal subscription behind it
+           resolved to free. Not specific to the one-time setup either: it is
+           every account whose plan sits on the customer, which is all of them.
+        */
+        $summary = app(CreativeQuotaService::class)->getUsageSummary($user, $customer);
+
+        $this->assertSame(10, $summary['image_generations']['limit']);
+        $this->assertSame(5, $summary['video_generations']['limit']);
+        $this->assertSame(5, $summary['refinements']['limit']);
+        $this->assertSame('One-time setup', $summary['plan_name']);
+
+        // And the gate agrees with the figure on screen.
+        $this->assertTrue(app(CreativeQuotaService::class)->canGenerate($user, 'video', $customer));
+    }
+
+    public function test_a_customer_plan_beats_the_users_own_subscription_state(): void
+    {
+        $user = User::factory()->create();
+        $customer = Customer::factory()->create(['service_type' => 'managed']);
+        $user->customers()->attach($customer->id, ['role' => 'owner']);
+
+        $growth = Plan::firstOrCreate(
+            ['slug' => 'growth'],
+            ['name' => 'Growth', 'price_cents' => 24900, 'billing_interval' => 'month'],
+        );
+        $growth->forceFill(['creative_limits' => [
+            'image_generations' => 150,
+            'video_generations' => 10,
+            'refinements' => 150,
+            'max_refinements_per_item' => 3,
+            'max_extensions_per_video' => 3,
+        ]])->save();
+        $customer->forceFill(['plan_id' => $growth->id])->save();
+
+        // The user has no subscription of their own — a teammate on a company
+        // plan never does. They still get the account's allowance.
+        $summary = app(CreativeQuotaService::class)->getUsageSummary($user, $customer->fresh());
+
+        $this->assertSame(150, $summary['image_generations']['limit']);
+        $this->assertSame(10, $summary['video_generations']['limit']);
+    }
 }

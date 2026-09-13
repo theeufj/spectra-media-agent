@@ -396,11 +396,6 @@ parameters:
 			count: 2
 			path: app/Http/Controllers/GoogleApiOAuthController.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\ImageCollateral\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/ImageCollateralController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$website_url\.$#'
@@ -498,11 +493,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/SubscriptionController.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/VideoCollateralController.php
 
 		-
 			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
@@ -582,11 +572,6 @@ parameters:
 			count: 1
 			path: app/Jobs/CheckCampaignPolicyViolations.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/CheckVideoStatus.php
 
 		-
 			message: '#^Strict comparison using \=\=\= between string\|null and false will always evaluate to false\.$#'
@@ -660,11 +645,6 @@ parameters:
 			count: 1
 			path: app/Jobs/ExtendPMaxVideo.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/ExtendVideo.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -750,11 +730,6 @@ parameters:
 			count: 1
 			path: app/Jobs/ReconcileAdSpend.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\ImageCollateral\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/RefineImage.php
 
 		-
 			message: '#^Strict comparison using \=\=\= between string and false will always evaluate to false\.$#'

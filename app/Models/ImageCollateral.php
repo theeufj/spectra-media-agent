@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ImageCollateral extends Model
 {
@@ -75,7 +76,8 @@ class ImageCollateral extends Model
     /**
      * Get the campaign that this image collateral belongs to.
      */
-    public function campaign()
+    /** @return BelongsTo<Campaign, $this> */
+    public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
     }

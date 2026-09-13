@@ -103,7 +103,7 @@ class CreativeQuotaService
      */
     public function canGenerate(User $user, string $type, ?Customer $customer = null): bool
     {
-        $limits = $this->getLimits($user);
+        $limits = $this->getLimits($user, $customer);
 
         // null limits = unlimited (agency tier)
         if ($limits === null) {
@@ -150,7 +150,7 @@ class CreativeQuotaService
      */
     public function recordUsage(User $user, string $type, int $count = 1, ?Customer $customer = null): void
     {
-        $limits = $this->getLimits($user);
+        $limits = $this->getLimits($user, $customer);
 
         // Don't track for unlimited (agency) users
         if ($limits === null) {
@@ -176,7 +176,9 @@ class CreativeQuotaService
      */
     public function canRefineImage(ImageCollateral $image, User $user): bool
     {
-        $limits = $this->getLimits($user);
+        // The per-item cap belongs to the account that owns the image, not to
+        // whoever happens to be clicking refine.
+        $limits = $this->getLimits($user, $image->campaign?->customer);
 
         if ($limits === null) {
             // Agency: still enforce per-item cap of 3
@@ -193,7 +195,7 @@ class CreativeQuotaService
      */
     public function canExtendVideo(VideoCollateral $video, User $user): bool
     {
-        $limits = $this->getLimits($user);
+        $limits = $this->getLimits($user, $video->campaign?->customer);
 
         if ($limits === null) {
             // Agency: still enforce per-item cap of 3
@@ -210,9 +212,9 @@ class CreativeQuotaService
      */
     public function getUsageSummary(User $user, ?Customer $customer = null): array
     {
-        $limits = $this->getLimits($user);
+        $limits = $this->getLimits($user, $customer);
         $usage = $this->getOrCreateUsage($user, $customer);
-        $plan = $user->resolveCurrentPlan();
+        $plan = $this->planFor($user, $customer);
         $isUnlimited = $limits === null;
 
         return [
@@ -266,11 +268,43 @@ class CreativeQuotaService
      * Get the creative_limits array for the user's current plan.
      * Returns null for unlimited (agency) tier.
      */
-    private function getLimits(User $user): ?array
+    private function getLimits(User $user, ?Customer $customer = null): ?array
     {
-        $plan = $user->resolveCurrentPlan();
+        return $this->planFor($user, $customer)?->creative_limits;
+    }
 
-        return $plan?->creative_limits;
+    /**
+     * The plan whose limits this generation counts against.
+     *
+     * Asked the user, and the user is the wrong object to ask. Entitlement
+     * moved onto the customer — "a business can have many users, but the plan
+     * belongs to the customer" — and User::resolveCurrentPlan() only ever looks
+     * at an assigned_plan_id or the person's own Stripe subscription. A customer
+     * carrying plan_id with no personal subscription behind it therefore
+     * resolved to free: four images, no video, no refinements.
+     *
+     * It showed up on the one-time setup, where there is no subscription by
+     * design and never will be — the dashboard read "Videos — Not on your plan"
+     * to a paid US$999 account the moment after resolvePlan() started returning
+     * setup_only. But it is not specific to that plan. Any account whose
+     * entitlement sits on the customer rather than on the person reads free
+     * limits here, which is every account since the plan was moved.
+     *
+     * The usage row was already keyed on the customer. This makes the ceiling
+     * agree with the row it is measured against.
+     */
+    private function planFor(User $user, ?Customer $customer = null): ?\App\Models\Plan
+    {
+        $customerId = $this->customerIdFor($user, $customer);
+        $resolved = $customerId ? Customer::find($customerId) : null;
+
+        if ($resolved) {
+            return $resolved->resolvePlan();
+        }
+
+        // Mid-onboarding, before a customer exists. Fall back to the person so
+        // the tool still works rather than failing closed.
+        return $user->resolveCurrentPlan();
     }
 
     /**
