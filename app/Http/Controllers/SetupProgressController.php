@@ -130,17 +130,54 @@ class SetupProgressController extends Controller
                         'action_text' => $scanStatus === 'failed' || $scanStatus === 'pending' ? 'Add Content' : 'View Content',
                     ],
                     [
+                        /*
+                           We write it. The wizard is the way out, not the way in.
+
+                           This read "Create your first campaign" with a Create
+                           Campaign button pointing at an eight-step wizard, so
+                           the checklist asked the customer to do the thing the
+                           product exists to do for them — and the automatic
+                           draft, which is the only route that actually works
+                           end to end, was described as a footnote to it.
+
+                           GenerateFirstCampaign runs off the back of the crawl
+                           and declines only when there is too little to write
+                           from. So: waiting while the scan finishes, writing
+                           once it has, and the wizard offered by name only when
+                           the draft is genuinely not coming.
+                        */
                         'key' => 'first_campaign',
-                        'title' => $hasCampaign ? 'Review your campaign' : 'Create your first campaign',
-                        'description' => $hasCampaign
-                            ? 'Your campaign and its strategies are ready to review.'
-                            : 'We draft one automatically after the scan — or build your own.',
+                        'title' => match (true) {
+                            $hasCampaign => 'Review your campaign',
+                            $scanStatus === 'completed' => 'We are writing your first campaign',
+                            default => 'Your first campaign',
+                        },
+                        'description' => match (true) {
+                            $hasCampaign => 'Your campaign and its strategies are ready to review.',
+                            $scanStatus === 'failed' => 'We could not read enough of your site to write one. Add a page or two, or build the campaign yourself.',
+                            $scanStatus === 'completed' => 'Written from your own site — your brand voice, your audience, the pages you sell from. Nothing for you to fill in.',
+                            default => 'We write this for you as soon as the scan finishes.',
+                        },
                         'completed' => $hasCampaign,
-                        'status' => $hasCampaign ? 'completed' : 'pending',
-                        'action_url' => $firstCampaign
-                            ? route('campaigns.show', $firstCampaign)
-                            : route('campaigns.wizard'),
-                        'action_text' => $hasCampaign ? 'Review Campaign' : 'Create Campaign',
+                        'status' => match (true) {
+                            $hasCampaign => 'completed',
+                            $scanStatus === 'failed' => 'failed',
+                            $scanStatus === 'completed' => 'in_progress',
+                            default => 'pending',
+                        },
+                        // No action while it is ours to do. A button here is an
+                        // instruction, and the instruction would be "go and do
+                        // it yourself".
+                        'action_url' => match (true) {
+                            $firstCampaign !== null => route('campaigns.show', $firstCampaign),
+                            $scanStatus === 'failed' => route('campaigns.wizard'),
+                            default => null,
+                        },
+                        'action_text' => match (true) {
+                            $hasCampaign => 'Review Campaign',
+                            $scanStatus === 'failed' => 'Build it yourself',
+                            default => null,
+                        },
                     ],
                     [
                         'key' => 'budget_confirmed',

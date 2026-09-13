@@ -132,7 +132,41 @@ class FirstCampaignFunnelTest extends TestCase
 
         $steps = collect($response->json('steps'));
         $this->assertSame('completed', $steps->firstWhere('key', 'site_scan')['status']);
-        $this->assertFalse($response->json('is_working'));
+
+        /*
+           Still working, because the scan finishing is what starts the campaign
+           being written — GenerateFirstCampaign runs off the back of it.
+
+           This used to assert the opposite, from when the checklist told the
+           customer to go and build the campaign themselves: the scan finished,
+           polling stopped, and the campaign appearing minutes later was
+           something they had to refresh to discover. The step reports
+           in_progress until the campaign exists, so the card keeps watching.
+        */
+        $this->assertSame('in_progress', $steps->firstWhere('key', 'first_campaign')['status']);
+        $this->assertTrue($response->json('is_working'));
+    }
+
+    public function test_the_checklist_stops_working_once_the_campaign_is_written(): void
+    {
+        $user = $this->newUser();
+        $customer = Customer::factory()->create(['website' => 'https://example.com']);
+        $this->attach($user, $customer);
+
+        KnowledgeBase::create([
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'url' => 'https://example.com/about',
+            'content' => str_repeat('Real page content. ', 30),
+        ]);
+        \App\Models\Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $response = $this->actingAs($user)->getJson('/api/setup-progress')->assertOk();
+
+        $steps = collect($response->json('steps'));
+
+        // The work is done and the card should stop polling for it.
+        $this->assertSame('completed', $steps->firstWhere('key', 'first_campaign')['status']);
     }
 
     public function test_a_manual_campaign_counts_as_budget_confirmed_but_an_auto_one_does_not(): void
