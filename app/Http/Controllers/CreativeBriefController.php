@@ -11,10 +11,14 @@ use Inertia\Response;
 
 class CreativeBriefController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = Auth::user();
-        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         $status = $request->get('status', 'pending');
 
@@ -55,9 +59,10 @@ class CreativeBriefController extends Controller
 
     private function authorizeBrief(CreativeBrief $brief): void
     {
-        $user = Auth::user();
-        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+        // No reachable customer means this brief is not theirs, which is a
+        // refusal rather than a redirect — this guards an action, not a page.
+        $customer = $this->getActiveCustomer(request());
 
-        abort_if($brief->customer_id !== $customer->id, 403);
+        abort_if(! $customer || $brief->customer_id !== $customer->id, 403);
     }
 }

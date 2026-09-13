@@ -39,7 +39,11 @@ class StrategyController extends Controller
         ]);
 
         $campaign = Campaign::findOrFail($validated['campaign_id']);
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         if ($campaign->customer_id !== $customer->id) {
             abort(403);

@@ -87,7 +87,11 @@ class DeploymentController extends Controller
 
         // Get campaign and verify ownership
         $campaign = Campaign::findOrFail($validated['campaign_id']);
-        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         if ($campaign->customer_id !== $customer->id) {
             return redirect()->back()->with('flash', [
@@ -298,7 +302,11 @@ class DeploymentController extends Controller
         ]);
 
         $campaign = Campaign::findOrFail($validated['campaign_id']);
-        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         if ($campaign->customer_id !== $customer->id) {
             return redirect()->back()->with('flash', [

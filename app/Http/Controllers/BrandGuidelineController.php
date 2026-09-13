@@ -19,14 +19,14 @@ class BrandGuidelineController extends Controller
         $user = $request->user();
 
         // Get the active customer from session
-        $activeCustomerId = session('active_customer_id');
+        // getActiveCustomer() recovers from a session pointing at a customer
+        // this user cannot reach — a deleted account, a removed membership, a
+        // session that outlived the row — instead of 404ing on it.
+        $customer = $this->getActiveCustomer($request);
 
-        if (! $activeCustomerId) {
-            return redirect()->route('dashboard')->with('error', 'No active customer selected.');
+        if (! $customer) {
+            return redirect()->route('quick-start');
         }
-
-        // Ensure user has access to this customer
-        $customer = $user->customers()->findOrFail($activeCustomerId);
 
         $brandGuideline = $customer->brandGuideline;
 
@@ -220,7 +220,11 @@ class BrandGuidelineController extends Controller
         }
 
         // Ensure user has access to this customer
-        $customer = $user->customers()->findOrFail($activeCustomerId);
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         // force: the user explicitly asked; the freshness skip that guards
         // the onboarding chain's duplicate dispatches must not eat this run.
@@ -247,7 +251,11 @@ class BrandGuidelineController extends Controller
         }
 
         // Ensure user has access to this customer
-        $customer = $user->customers()->findOrFail($activeCustomerId);
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         $brandGuideline = $customer->brandGuideline;
 
         if (! $brandGuideline) {

@@ -23,7 +23,11 @@ class CampaignController extends Controller
      */
     public function index(Request $request)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         $campaigns = $customer->campaigns()->with(['strategies' => function ($query) {
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }])->get();
@@ -46,7 +50,11 @@ class CampaignController extends Controller
      */
     public function wizard(Request $request)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         // Load available pages for the customer
         $pages = $customer->pages()
@@ -111,7 +119,11 @@ class CampaignController extends Controller
      */
     public function deploymentStatus(Request $request, Campaign $campaign)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
         }
@@ -185,7 +197,11 @@ class CampaignController extends Controller
 
     public function store(StoreCampaignRequest $request)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
 
         // THE COST CEILING FOR FREE ACCOUNTS.
         //
@@ -335,7 +351,11 @@ class CampaignController extends Controller
      */
     public function show(Request $request, Campaign $campaign)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
         }
@@ -384,7 +404,11 @@ class CampaignController extends Controller
      */
     public function signOffStrategy(Request $request, Campaign $campaign, Strategy $strategy)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id || $strategy->campaign_id !== $campaign->id) {
             abort(403);
         }
@@ -407,7 +431,11 @@ class CampaignController extends Controller
      */
     public function signOffAllStrategies(Request $request, Campaign $campaign)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
         }
@@ -425,7 +453,11 @@ class CampaignController extends Controller
      */
     public function regenerateStrategies(Request $request, Campaign $campaign)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
         }
@@ -470,7 +502,11 @@ class CampaignController extends Controller
      */
     public function destroy(Request $request, Campaign $campaign)
     {
-        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
         }

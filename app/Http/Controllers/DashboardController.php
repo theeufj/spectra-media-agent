@@ -32,7 +32,11 @@ class DashboardController extends Controller
             }
         }
 
-        $activeCustomer = $user->customers()->findOrFail(session('active_customer_id'));
+        $activeCustomer = $this->getActiveCustomer($request);
+
+        if (! $activeCustomer) {
+            return redirect()->route('quick-start');
+        }
 
         // The only proxy this app has for "has this account been seen lately".
         // There is no users.last_login_at column, and activity_logs is archived
