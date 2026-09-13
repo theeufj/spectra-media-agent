@@ -78,6 +78,14 @@ jobs:
       - name: Baseline has not grown
         run: ./bin/check-baseline-growth origin/master
 
+      # Three crashes in one day came from an identifier that did not exist in
+      # the scope using it — a null href, `campaigns`, `setupOnly` — and every
+      # one shipped through a green suite, because nothing statically checked
+      # the JSX. no-undef is exactly that check and the whole of resources/js
+      # passes it.
+      - name: Frontend lint
+        run: npm run lint
+
       # CLAUDE.md's pre-commit checklist has always listed `npm test`; CI built
       # the frontend and never ran its suite, so the nine vitest files only ran
       # when someone remembered.

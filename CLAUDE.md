@@ -165,13 +165,20 @@ For the JSON endpoints that sit alongside Inertia:
 vendor/bin/pint            # format
 vendor/bin/phpstan analyse # static analysis against the baseline
 php artisan test
+npm run lint               # frontend no-undef — see eslint.config.mjs
 npm test                   # frontend (vitest) — resources/js/tests/
 ```
 
 Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not to
 absorb new debt. Regenerate it only when a refactor moves existing errors between
-files. CI runs all four of the above plus `bin/check-fatal-classes` and
-`bin/check-baseline-growth`, on PHP 8.4 (matching the Forge server). Both
+files. CI runs all five of the above plus `bin/check-fatal-classes` and
+`bin/check-baseline-growth`, on PHP 8.4 (matching the Forge server).
+
+`npm run lint` enforces one rule, `no-undef`, and is deliberately narrow so it
+stays quiet enough to be believed. It exists because three separate crashes
+reached production in a day from an identifier that was not in scope — a null
+`href`, `campaigns` read from a module-scope component, `setupOnly` used without
+being destructured — and all three passed the test suite. Both
 PHPStan configs analyse `bootstrap/` as well as `app/` — it was outside the
 paths, which is how the exception reporter spent months writing to a class that
 does not exist, failing silently every time.

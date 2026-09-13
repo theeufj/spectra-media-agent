@@ -251,7 +251,18 @@ const PreflightBanner = ({ brandGuideline, pages, selectablePlatforms, configure
     );
 };
 
-export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [] }) {
+/*
+   setupOnly and setupFeePaid are sent by CampaignController::wizard and were
+   used in the platform step without ever being destructured here — so step 2
+   threw "setupOnly is not defined" and took the whole wizard to the error
+   boundary, for every customer, from the moment that copy landed. The
+   disabledReason branch sits inside the platform .map(), which runs on every
+   render of that step, so there was no path through it that worked.
+
+   Defaulted rather than required: a page rendered without them should show the
+   ordinary managed copy, not crash.
+*/
+export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], setupOnly = false, setupFeePaid = false }) {
     const tenant = useTenant();
     const tenantVertical = tenant?.vertical ?? null;
 
