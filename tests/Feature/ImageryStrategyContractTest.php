@@ -231,4 +231,36 @@ class ImageryStrategyContractTest extends TestCase
         // or the two fight each other.
         $this->assertStringContainsString('bottom sixth', $prompt);
     }
+
+    public function test_a_website_style_does_not_brief_an_advertisement(): void
+    {
+        // No factory for this model; constructed directly, as the tests
+        // above it do.
+        $brand = new BrandGuideline([
+            'visual_style' => [
+                'overall_aesthetic' => 'modern minimalist SaaS',
+                // Extracted from the customer's own site. True of a landing
+                // page, and a direct instruction to an ad model to draw icons.
+                'imagery_style' => 'icon-driven and typography-focused',
+            ],
+            'color_palette' => ['primary_colors' => ['#073852']],
+        ]);
+
+        $prompt = (new ImagePrompt('A maker in a studio.', $brand))->getPrompt();
+
+        /*
+           This line is why the creatives came back carrying line-art symbols in
+           circles and dot grids: the brand's own imagery_style said to. Once the
+           hard rules forbade that furniture, the prompt was arguing with itself
+           — brand style asking for icons, hard rules refusing them, and nothing
+           saying which won.
+        */
+        $this->assertStringContainsString('How their own website looks', $prompt);
+        $this->assertStringContainsString('describes a web page, not an advertisement', $prompt);
+        $this->assertStringContainsString('HARD RULES below override it', $prompt);
+
+        // The style itself still reaches the model — it is good for mood and
+        // palette, which is the half worth keeping.
+        $this->assertStringContainsString('icon-driven and typography-focused', $prompt);
+    }
 }

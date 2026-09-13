@@ -150,9 +150,24 @@ class ImagePrompt
          * as a fake dashboard. getImageColorDirection() names the colours and
          * stops there.
          */
+        /*
+           imagery_style describes the customer's WEBSITE, and saying so matters.
+
+           It is extracted from their site, so for a SaaS brand it comes back as
+           things like "icon-driven and typography-focused" — a true statement
+           about a landing page, and a direct instruction to an ad model to draw
+           icons and set type. That is exactly what came back: line-art symbols
+           in circles, dot grids, a navy slab. The hard rules below now forbid
+           all of it, which left the prompt arguing with itself in two places.
+
+           So it is labelled for what it is and scoped to what it is good for —
+           mood, palette, how their world looks — with the precedence stated
+           rather than left for the model to guess.
+        */
         return "**BRAND STYLE:**\n".
                $this->brandGuidelines->getImageColorDirection().
                "**Look and feel:** {$visualStyle['overall_aesthetic']}\n".
-               "**Imagery:** {$visualStyle['imagery_style']}\n\n";
+               "**How their own website looks:** {$visualStyle['imagery_style']}\n".
+               "Take mood, palette and subject matter from that. Do not take layout from it: it describes a web page, not an advertisement, and where it suggests icons, diagrams or type as decoration the HARD RULES below override it.\n\n";
     }
 }
