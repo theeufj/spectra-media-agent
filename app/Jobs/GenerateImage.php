@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Prompts\CreativeVariant;
 use App\Prompts\ImagePrompt;
 use App\Prompts\ImagePromptSplitterPrompt;
 use App\Services\AdminMonitorService;
@@ -190,7 +191,19 @@ class GenerateImage implements ShouldQueue
             foreach ($prompts as $index => $prompt) {
                 Log::info('Generating image '.($index + 1).'/'.count($prompts)." for Strategy ID: {$this->strategy->id}");
 
-                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext, $adText))->getPrompt();
+                /*
+                   The lens, not just the scene.
+
+                   The splitter is asked for three distinct scenes and told
+                   that paraphrasing is a failure; it still returns three
+                   versions of the same picture. Asking a model to vary its own
+                   output is a request. This makes the variation structural, so
+                   three identical scenes still produce three different
+                   photographs — see CreativeVariant.
+                */
+                $scene = CreativeVariant::apply($prompt, $index);
+
+                $imagePrompt = (new ImagePrompt($scene, $brandGuidelines, $productContext, $adText))->getPrompt();
                 Log::info('Image generation prompt:', ['prompt' => $imagePrompt]);
 
                 // Each format is generated at its own aspect ratio.
@@ -212,7 +225,11 @@ class GenerateImage implements ShouldQueue
                 $adFormats = [
                     'square' => ['size' => [1024, 1024], 'aspect' => '1:1'],
                     'landscape' => ['size' => [1200, 628], 'aspect' => '16:9'],
-                    'mrec' => ['size' => [300, 250], 'aspect' => '1:1'],
+                    // 300x250 is 6:5. Cropped from a square it lost a fifth of
+                    // the height; 4:3 is the nearest ratio either provider
+                    // generates natively, so the trim is a sliver rather than a
+                    // slice through the subject.
+                    'mrec' => ['size' => [300, 250], 'aspect' => '4:3'],
                 ];
 
                 $bases = [];
@@ -365,6 +382,7 @@ class GenerateImage implements ShouldQueue
     private const GROK_SIZES = [
         '1:1' => '1024x1024',
         '16:9' => '1344x768',
+        '4:3' => '1152x896',
     ];
 
     /**
