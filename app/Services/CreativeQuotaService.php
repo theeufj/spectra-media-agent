@@ -27,8 +27,13 @@ class CreativeQuotaService
      */
     public function getOrCreateUsage(User $user, ?Customer $customer = null): CreativeUsage
     {
-        $period = $this->getCurrentPeriod();
         $customerId = $this->customerIdFor($user, $customer);
+
+        // Resolved from the id rather than trusting the argument: customerIdFor
+        // re-checks ownership and may land on a different account than the one
+        // passed, and the period has to follow the account actually billed.
+        $resolved = $customerId ? Customer::find($customerId) : null;
+        $period = $this->periodFor($resolved);
 
         if (! $customerId) {
             // No customer yet (mid-onboarding). Fall back to per-user so the
@@ -213,7 +218,11 @@ class CreativeQuotaService
         return [
             'plan_name' => $plan?->name ?? 'Free',
             'is_unlimited' => $isUnlimited,
-            'period' => $this->getCurrentPeriod(),
+            // The row's own key, not today's date — a one-time account books
+            // against 'once' and reporting Y-m here would describe a bucket
+            // nothing was read from.
+            'period' => $usage->period,
+            'is_one_time' => $usage->period === self::ONE_TIME_PERIOD,
             'image_generations' => [
                 'used' => $usage->image_generations_used,
                 'limit' => $isUnlimited ? null : (int) ($limits['image_generations'] ?? 0),
@@ -265,7 +274,43 @@ class CreativeQuotaService
     }
 
     /**
+     * The period a one-time engagement's allowance is booked against.
+     *
+     * A literal rather than a date, so firstOrCreate keeps finding the same row
+     * however long the customer has been with us.
+     */
+    public const ONE_TIME_PERIOD = 'once';
+
+    /**
+     * Which bucket this account's usage counts against.
+     *
+     * Every plan billed a month at a time refills on the first, and Y-m is how
+     * that refill happens: a new month is a new key, so firstOrCreate hands
+     * back a fresh row at zero. That is correct for a subscription and wrong
+     * for the one-time setup, where the customer pays US$999 once. On Y-m they
+     * would receive a new allowance every month for the rest of the account's
+     * life — five videos a month, forever, against a single payment. At the
+     * measured $1.88 a video on Grok (or $3.20 per 8-second segment when the
+     * Veo fallback runs) a year of that outruns the difference between every
+     * other number on this plan put together.
+     *
+     * So a setup-only account books against one fixed key. Spending the
+     * allowance ends it, which is what "one payment, nothing recurring" means
+     * from our side of the ledger as well as theirs.
+     */
+    public function periodFor(?Customer $customer = null): string
+    {
+        if ($customer && $customer->service_type === 'setup_only') {
+            return self::ONE_TIME_PERIOD;
+        }
+
+        return Carbon::now()->format('Y-m');
+    }
+
+    /**
      * Get the current billing period string (Y-m format).
+     *
+     * Kept for callers with no customer in hand; prefer periodFor().
      */
     public function getCurrentPeriod(): string
     {

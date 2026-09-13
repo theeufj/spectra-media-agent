@@ -20,7 +20,10 @@ class CreativeBoostController extends Controller
     {
         $user = Auth::user();
         $quotaService = app(CreativeQuotaService::class);
-        $period = $quotaService->getCurrentPeriod();
+        // Follows the account's own bucket: a boost bought by a one-time setup
+        // customer has to land on the allocation they are actually spending
+        // from, not on a Y-m row nothing reads.
+        $period = $quotaService->periodFor($this->getActiveCustomer($request));
 
         // Read configurable boost pack settings
         $priceCents = (int) Setting::get('creative_boost_price_cents', 2900);

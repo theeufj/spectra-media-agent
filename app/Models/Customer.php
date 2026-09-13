@@ -304,8 +304,32 @@ class Customer extends Model
         // free row existing is a convention rather than a constraint. An unsaved
         // Plan carrying the slug says the same thing ("this account is on free
         // limits") without depending on the table.
-        return $this->plan
-            ?? Plan::where('slug', 'free')->first()
+        if ($this->plan) {
+            return $this->plan;
+        }
+
+        /*
+           A paid one-time setup is on its own limits profile, not on free.
+
+           Falling back to free gave a US$999 customer four images, no video and
+           no refinements — their dashboard read "Videos — Not on your plan" and
+           "Refinements — Not on your plan" to someone who had just paid more
+           than four months of Growth, for a build whose entire deliverable is
+           creative. The setup_only row carries Growth's allowances.
+
+           Resolved here rather than written to plan_id on payment so that the
+           customers who already paid are covered too, and so an admin setting
+           plan_id explicitly still wins — the branch above returns first.
+        */
+        if ($this->isPaidSetupOnly()) {
+            $plan = Plan::where('slug', 'setup_only')->first();
+
+            if ($plan) {
+                return $plan;
+            }
+        }
+
+        return Plan::where('slug', 'free')->first()
             ?? new Plan(['slug' => 'free', 'name' => 'Free']);
     }
 
@@ -326,6 +350,10 @@ class Customer extends Model
         return match ($this->resolvePlan()->slug) {
             'free' => ['google'],
             'starter' => [$this->starter_platform ?? 'google'],
+            // The engagement is a one-time *Google Ads* setup, named as such on
+            // the pricing card and in the receipt. Creative allowance matches
+            // Growth; the platform list follows what was actually sold.
+            'setup_only' => ['google'],
             default => ['google', 'facebook', 'microsoft', 'linkedin'],
         };
     }

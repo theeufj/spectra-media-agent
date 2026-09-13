@@ -115,6 +115,56 @@ class PlanSeeder extends Seeder
         );
 
         Plan::updateOrCreate(
+            ['slug' => 'setup_only'],
+            [
+                'name' => 'One-time setup',
+                /*
+                   Not a tier anyone chooses from the pricing grid — is_active
+                   is false, so it never renders there. It is the limits profile
+                   a paid US$999 customer resolves to, and it exists because the
+                   alternative was 'free': four images, no video, no
+                   refinements. Their dashboard read "Videos — Not on your plan"
+                   and "Refinements — Not on your plan" to someone who had just
+                   paid us more than four months of Growth, for a build whose
+                   entire deliverable is creative.
+
+                   Sized for one build, not a month of management. Measured
+                   against real spend: an image is $0.04 on Grok Imagine and a
+                   video is $1.88, or $3.20 per 8-second segment when the Veo
+                   fallback runs — so a video costs what 47 images cost, and
+                   the video count is the only number here that moves the bill.
+                   The one campaign with attributed image spend used four.
+
+                   These are an allocation, not a refill: CreativeQuotaService
+                   keys usage on 'once' for this plan rather than on Y-m.
+                */
+                'description' => 'Limits profile for the one-time Google Ads setup. Never shown on pricing.',
+                'price_cents' => 99900,
+                'billing_interval' => 'one_time',
+                'stripe_price_id' => null,
+                'features' => [
+                    'Google Ads account, built and handed over',
+                    'Conversion tracking installed',
+                    'Campaign, ad copy and creative written for you',
+                    '10 images, 5 videos and 5 refinements for the build',
+                    'No subscription, no agents, nothing recurring',
+                ],
+                'is_active' => false,
+                'is_free' => false,
+                'is_popular' => false,
+                'cta_text' => 'Pay setup fee',
+                'sort_order' => 99,
+                'creative_limits' => [
+                    'image_generations' => 10,
+                    'video_generations' => 5,
+                    'refinements' => 5,
+                    'max_refinements_per_item' => 3,
+                    'max_extensions_per_video' => 3,
+                ],
+            ]
+        );
+
+        Plan::updateOrCreate(
             ['slug' => 'agency'],
             [
                 'name' => 'Agency',
