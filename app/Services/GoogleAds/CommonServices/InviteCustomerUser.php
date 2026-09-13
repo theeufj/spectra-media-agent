@@ -30,6 +30,40 @@ use Google\ApiCore\ApiException;
 class InviteCustomerUser extends BaseGoogleAdsService
 {
     /**
+     * Refusals that mean the customer already has what we were sending.
+     *
+     * EMAIL_ADDRESS_ALREADY_HAS_PENDING_INVITATION is the one Google actually
+     * returns, and it was the one missing. The other three were guesses at the
+     * wire format; this one is verbatim from a live account during an
+     * end-to-end run:
+     *
+     *   "errorCode": { "accessInvitationError":
+     *                  "EMAIL_ADDRESS_ALREADY_HAS_PENDING_INVITATION" },
+     *   "message": "An invitation has already been sent to this email address."
+     *
+     * Getting this list wrong is not cosmetic. HandOverAccount refuses to stamp
+     * handover_at when any invite reports failure, so a refusal misread as an
+     * error reports a finished engagement as blocked — an admin pressing the
+     * button after the automatic handover was told the customer could not be
+     * invited, while their invitation sat waiting for them.
+     */
+    public static function isAlreadyInvited(string $message): bool
+    {
+        foreach ([
+            'CUSTOMER_USER_ACCESS_INVITATION_ALREADY_EXISTS',
+            'EMAIL_ADDRESS_ALREADY_HAS_PENDING_INVITATION',
+            'ALREADY_EXISTS',
+            'EMAIL_ADDRESS_ALREADY_HAS_ACCESS',
+        ] as $code) {
+            if (str_contains($message, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param  string  $customerId  Google Ads customer ID (no dashes)
      * @param  string  $email  the address Google emails the invitation to
      * @return array{success: bool, resource_name?: string|null, error?: string}
@@ -88,9 +122,21 @@ class InviteCustomerUser extends BaseGoogleAdsService
              */
             $message = $e->getMessage();
 
-            if (str_contains($message, 'CUSTOMER_USER_ACCESS_INVITATION_ALREADY_EXISTS')
-                || str_contains($message, 'ALREADY_EXISTS')
-                || str_contains($message, 'EMAIL_ADDRESS_ALREADY_HAS_ACCESS')) {
+            /*
+               EMAIL_ADDRESS_ALREADY_HAS_PENDING_INVITATION is the one Google
+               actually returns, and it was the one not listed here.
+               ALREADY_EXISTS and EMAIL_ADDRESS_ALREADY_HAS_ACCESS were both
+               guesses at the wire format; the real refusal for "we already
+               invited them" carries this code, verified against a live account.
+
+               It matters because of what sits downstream. HandOverAccount
+               refuses to stamp handover_at if any invite reports failure, so a
+               second run — an admin pressing the button after the automatic
+               one, or a retry after a partial deploy — reported the engagement
+               as blocked when in fact the customer already had their
+               invitation waiting.
+            */
+            if (self::isAlreadyInvited($message)) {
                 $this->logInfo("{$email} already has access to {$customerId} or has been invited");
 
                 return ['success' => true, 'resource_name' => null];
