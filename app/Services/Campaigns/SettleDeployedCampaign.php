@@ -92,16 +92,40 @@ class SettleDeployedCampaign
     private function pauseOnPlatform(Campaign $campaign, Customer $customer): void
     {
         $customerId = preg_replace('/[^0-9]/', '', (string) $customer->google_ads_customer_id);
-        $campaignId = preg_replace('/[^0-9]/', '', (string) $campaign->google_ads_campaign_id);
 
-        if ($customerId === '' || $campaignId === '') {
+        /*
+           google_ads_campaign_id holds a resource name, not a bare id.
+
+           Stripping non-digits from "customers/9654834654/campaigns/24246329924"
+           glues the customer id onto the front of the campaign id and produces
+           965483465424246329924 — a campaign that does not exist. So every
+           setup-only pause asked Google to pause nothing, the call failed, the
+           column was set to Paused regardless, and MonitorCampaignStatus read
+           ENABLED an hour later and correctly flipped us back to Active.
+
+           Every one-time setup campaign has therefore gone live, which is the
+           exact opposite of what the receipt email, the Create my ads dialog
+           and the deployment screen all promise. Found by noticing a campaign
+           this code had "paused" sitting at active a day later.
+
+           The resource name is what the API wants anyway, so it is used as
+           stored and only built when the column holds a bare id.
+        */
+        $resourceName = (string) $campaign->google_ads_campaign_id;
+
+        if (! str_contains($resourceName, '/')) {
+            $bare = preg_replace('/[^0-9]/', '', $resourceName);
+            $resourceName = $bare === '' ? '' : "customers/{$customerId}/campaigns/{$bare}";
+        }
+
+        if ($customerId === '' || $resourceName === '') {
             return;
         }
 
         try {
             $result = $this->campaignStatusService($customer)->execute(
                 $customerId,
-                "customers/{$customerId}/campaigns/{$campaignId}",
+                $resourceName,
                 'PAUSED'
             );
 

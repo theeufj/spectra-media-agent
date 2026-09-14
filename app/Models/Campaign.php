@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 
 class Campaign extends Model
 {
@@ -234,7 +235,35 @@ class Campaign extends Model
         // to paper over by flipping it live.
         $unfinished = in_array($this->status, [CampaignStatus::Draft, CampaignStatus::PendingAdminDeployment], true);
 
-        if (! $target || $unfinished || $this->status === $target) {
+        /*
+           A one-time setup campaign cannot have been started by its owner until
+           the account is theirs.
+
+           After handover, ENABLED means the customer switched it on, and
+           recording that is exactly right. Before handover they have no access
+           to the account, so ENABLED can only mean our own pause did not take —
+           and promoting on that reading is how every setup-only campaign went
+           live while the receipt, the Create my ads dialog and the deployment
+           screen all promised it was paused.
+
+           Belt and braces: the pause itself was targeting a campaign id that did
+           not exist, and is fixed. This is what stops a silent failure there
+           from turning into spend again.
+        */
+        $customer = $this->customer;
+        $unstartable = $target === CampaignStatus::Active
+            && $customer?->service_type === 'setup_only'
+            && $customer->handover_at === null;
+
+        if ($unstartable) {
+            Log::warning('Refusing to activate a setup-only campaign that has not been handed over', [
+                'campaign_id' => $this->id,
+                'customer_id' => $this->customer_id,
+                'platform_status' => strtoupper($platformStatus),
+            ]);
+        }
+
+        if (! $target || $unfinished || $unstartable || $this->status === $target) {
             $this->update($attributes);
 
             return false;
