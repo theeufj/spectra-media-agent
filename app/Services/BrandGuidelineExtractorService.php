@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\BrandExtractionFailed;
 use App\Models\BrandGuideline;
 use App\Models\Customer;
 use App\Prompts\BrandGuidelineExtractionPrompt;
@@ -222,7 +223,10 @@ class BrandGuidelineExtractorService
                     'customer_id' => $customer->id,
                 ]);
 
-                return null;
+                // Thrown, not returned: a model that did not answer this time
+                // is the definition of worth retrying, and only a throw reaches
+                // the job's retry budget.
+                throw BrandExtractionFailed::because('the model returned no text');
             }
 
             // Step 5: Parse and validate response
@@ -236,7 +240,7 @@ class BrandGuidelineExtractorService
                     'response_preview' => substr($response['text'], 0, 500),
                 ]);
 
-                return null;
+                throw BrandExtractionFailed::because('the model returned malformed JSON');
             }
 
             // Step 6: Validate required fields
@@ -246,7 +250,7 @@ class BrandGuidelineExtractorService
                     'guidelines' => $guidelines,
                 ]);
 
-                return null;
+                throw BrandExtractionFailed::because('the model omitted required fields');
             }
 
             // Step 7: Store brand guidelines
@@ -288,7 +292,16 @@ class BrandGuidelineExtractorService
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return null;
+            /*
+             * Rethrown rather than swallowed.
+             *
+             * This caught everything and returned null, so a timeout, a 429 or
+             * a TypeError all arrived at the job as "this website cannot be
+             * read" — final, unretried, and mailed to the customer as their
+             * fault. The job is the right place to decide how many times to
+             * try; it cannot decide anything about an exception it never sees.
+             */
+            throw $e instanceof BrandExtractionFailed ? $e : BrandExtractionFailed::because($e->getMessage());
         }
     }
 

@@ -280,11 +280,24 @@ export default function ForecastPanel({
                 </dl>
 
                 {framed.has_order_value && (
-                    <p className="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-900">
+                    /*
+                       The colour follows the number.
+
+                       This was bg-green-50 whatever the figure said, so a
+                       forecast of "-A$689 left after ad spend" was rendered as
+                       good news, in the success colour, directly above the
+                       button that confirms the budget. At a A$35 order value
+                       against A$8–A$40 clicks, a loss is exactly what an honest
+                       forecast shows — and showing it in green is the one way
+                       to make an honest number lie.
+                    */
+                    <p className={`mt-4 rounded-md px-3 py-2 text-sm ${framed.net < 0 ? 'bg-amber-50 text-amber-900' : 'bg-green-50 text-green-900'}`}>
                         <span className="font-semibold">
                             {money(framed.net, currency, { maximumFractionDigits: 0 })}
                         </span>{' '}
-                        left after ad spend, at {money(framed.order_value, currency)} per customer.
+                        {framed.net < 0
+                            ? `short of covering ad spend, at ${money(framed.order_value, currency)} per customer. Worth a higher order value, a better conversion rate, or a lower budget.`
+                            : `left after ad spend, at ${money(framed.order_value, currency)} per customer.`}
                     </p>
                 )}
 

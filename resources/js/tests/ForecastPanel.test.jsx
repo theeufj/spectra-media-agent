@@ -171,3 +171,47 @@ describe('ForecastPanel', () => {
         expect(screen.queryByText(/one customer worth to you/i)).not.toBeInTheDocument();
     });
 });
+
+describe('the net line', () => {
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    /*
+       At a A$35 order value against A$8–A$40 clicks, a loss is exactly what an
+       honest forecast shows. The panel rendered it in bg-green-50 regardless of
+       sign, so "-A$689 left after ad spend" arrived in the success colour,
+       directly above the button that confirms the budget. Showing it in green
+       is the one way to make an honest number lie.
+    */
+    it('does not dress a loss up as a gain', async () => {
+        mockForecast({ ...RAW, has_order_value: true, order_value: 35, revenue: 662, net: -689, roas: 0.49 });
+
+        const { container } = render(<ForecastPanel monthlyBudget={1350} />);
+
+        const line = await waitFor(() => {
+            const el = container.querySelector('p.rounded-md');
+            expect(el).toBeTruthy();
+
+            return el;
+        });
+
+        expect(line.className).not.toContain('bg-green-50');
+        expect(line.className).toContain('bg-amber-50');
+    });
+
+    it('still reads as good news when the forecast is profitable', async () => {
+        mockForecast({ ...RAW, has_order_value: true, order_value: 400, revenue: 12000, net: 10500, roas: 8 });
+
+        const { container } = render(<ForecastPanel monthlyBudget={1350} />);
+
+        const line = await waitFor(() => {
+            const el = container.querySelector('p.rounded-md');
+            expect(el).toBeTruthy();
+
+            return el;
+        });
+
+        expect(line.className).toContain('bg-green-50');
+        expect(line.textContent).toContain('left after ad spend');
+    });
+});
+
