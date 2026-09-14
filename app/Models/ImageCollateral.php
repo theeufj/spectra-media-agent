@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ImageCollateral extends Model
 {
@@ -152,6 +154,54 @@ class ImageCollateral extends Model
     public static function canGenerateForCampaign(Campaign $campaign): bool
     {
         return static::conceptsForCampaign($campaign) < static::capForCampaign($campaign);
+    }
+
+    /**
+     * Write one picture's rows, if the campaign still has room for it.
+     *
+     * Returns the concept key the rows were written under, or null when the
+     * campaign is full and nothing was written.
+     *
+     * canGenerateForCampaign() is a read, and three GenerateImage jobs run
+     * concurrently: two both read three pictures, both concluded a fourth was
+     * allowed, and campaign 42 ended with five against a cap of four. The
+     * count has to be read and acted on inside one lock — the same shape the
+     * money paths use, and for the same reason.
+     *
+     * The rows are passed in already uploaded. Checking the cap and writing
+     * have to share the transaction, but an S3 upload must not: holding a row
+     * lock across a network call to a storage provider is how one slow upload
+     * becomes every job waiting behind it.
+     *
+     * @param  list<array<string, mixed>>  $rows  one per ad format
+     */
+    public static function createConcept(Campaign $campaign, array $rows): ?string
+    {
+        if ($rows === []) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($campaign, $rows) {
+            // Serialises the decision between concurrent jobs for this campaign.
+            Campaign::withoutGlobalScopes()
+                ->whereKey($campaign->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (static::conceptsForCampaign($campaign) >= static::capForCampaign($campaign)) {
+                return null;
+            }
+
+            // Generated here rather than by the caller, so deciding there is
+            // room and naming the picture cannot come apart.
+            $key = (string) Str::uuid();
+
+            foreach ($rows as $row) {
+                static::create($row + ['concept_key' => $key]);
+            }
+
+            return $key;
+        });
     }
 
     /**

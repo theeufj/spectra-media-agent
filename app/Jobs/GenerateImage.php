@@ -18,7 +18,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Intervention\Image\Laravel\Facades\Image;
 
 class GenerateImage implements ShouldQueue
@@ -312,16 +311,23 @@ class GenerateImage implements ShouldQueue
                  * happened to return. That is how one campaign ended up with
                  * eight pictures and another with four from the same code.
                  */
+                /*
+                 * A cheap check before spending on uploads. It is not the gate
+                 * — three of these jobs run at once, so any read-then-write is
+                 * a race — but it stops the obvious case without a lock. The
+                 * real decision is made inside createConcept() below.
+                 */
                 $written = ImageCollateral::conceptsForCampaign($this->campaign);
+
                 if ($written >= ImageCollateral::capForCampaign($this->campaign)) {
                     Log::info("Image cap reached for campaign {$this->campaign->id}; stopping at {$written} pictures");
 
                     break;
                 }
 
-                // The three format rows below are one photograph. Without this
-                // they are three unrelated cards on the collateral page.
-                $conceptKey = (string) Str::uuid();
+                // Collected, not written: the rows go in together under one
+                // lock once every format has been uploaded.
+                $pendingRows = [];
 
                 foreach ($adFormats as $format => $spec) {
                     [$targetW, $targetH] = $spec['size'];
@@ -402,25 +408,63 @@ class GenerateImage implements ShouldQueue
                     $storagePath = "collateral/images/{$this->campaign->id}/{$filename}";
                     [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $encoded, $imageData['mimeType']);
 
-                    ImageCollateral::create([
+                    $pendingRows[] = [
                         'campaign_id' => $this->campaign->id,
                         'strategy_id' => $this->strategy->id,
                         'platform' => $this->strategy->platform,
                         's3_path' => $s3Path,
                         'cloudfront_url' => $cloudFrontUrl,
                         'format' => $format,
-                        'concept_key' => $conceptKey,
-                    ]);
+                    ];
 
                     Log::info("Image uploaded [{$format}]: {$s3Path}");
+                }
+
+                // The cap is enforced here, not above: this is the only point
+                // where reading the count and writing the rows happen together.
+                $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows);
+
+                if ($conceptKey === null) {
+                    Log::info("Image cap reached for campaign {$this->campaign->id} while uploading; discarding this picture");
+
+                    break;
                 }
 
                 $successfulUploads++;
             }
 
+            $existing = $this->strategy->collateral_errors ?? [];
+
+            if ($successfulUploads === 0) {
+                /*
+                 * Nothing was produced, and that is a failure however calmly
+                 * the loop arrived here.
+                 *
+                 * This line used to read "Successfully generated and stored 0
+                 * image(s)" and then clear collateral_errors['image'] — wiping
+                 * the record of the failure on the way past. The job completed,
+                 * so the queue recorded success, nothing reached failed_jobs,
+                 * and the customer sat on "Generating your collateral... this
+                 * usually takes 1-2 minutes" indefinitely. Both image providers
+                 * were down at once (OpenRouter 402, Gemini 429) and the only
+                 * place that fact existed was a log line nobody reads.
+                 */
+                Log::error("GenerateImage produced no images for Strategy ID: {$this->strategy->id}", [
+                    'campaign_id' => $this->campaign->id,
+                    'prompts' => count($prompts),
+                ]);
+
+                $existing['image'] = 'We could not generate images just now — the image service is unavailable. Nothing else about your campaign is affected, and you can try again from this page.';
+                $this->strategy->update(['collateral_errors' => $existing]);
+
+                // Reaches the admin dashboard, which a Log::error alone does not.
+                report(new \RuntimeException("GenerateImage produced no images for strategy {$this->strategy->id}"));
+
+                return;
+            }
+
             Log::info("Successfully generated and stored {$successfulUploads} image(s) for Strategy ID: {$this->strategy->id}");
 
-            $existing = $this->strategy->collateral_errors ?? [];
             unset($existing['image']);
             $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
 
@@ -555,9 +599,21 @@ class GenerateImage implements ShouldQueue
 
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
             if ($attempt > 1) {
-                $waitTime = pow(2, $attempt - 1);
-                Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
-                sleep($waitTime);
+                /*
+                 * Base delay is configurable so the suite does not sleep.
+                 *
+                 * Two tests covering the both-providers-down path took 28
+                 * seconds each, entirely in backoff — half again on the whole
+                 * suite to wait for something the test is not measuring.
+                 * Zeroed in phpunit.xml; unchanged in production.
+                 */
+                $base = (int) config('ai.image_retry_base_delay', 2);
+                $waitTime = $base > 0 ? pow($base, $attempt - 1) : 0;
+
+                if ($waitTime > 0) {
+                    Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
+                    sleep($waitTime);
+                }
             }
 
             $imageData = null;

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiCost;
 use App\Support\BillingAlert;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -27,9 +28,43 @@ class OpenRouterService
      * Generate one image. Returns ['data' => base64, 'mimeType' => ...] to
      * match GeminiService::generateImage(), or null.
      */
+    /**
+     * Cache key marking the account as unusable, and for how long.
+     *
+     * A 402 means the balance is empty, and no number of retries adds credit.
+     * Without this the caller kept asking: three attempts per aspect, three
+     * aspects, five scenes, three concurrent jobs — about 135 calls in two
+     * minutes, each one failing instantly and falling through to Gemini. That
+     * is what drove the image fallback into 429 RESOURCE_EXHAUSTED: not our
+     * Gemini quota being small, but every Grok call becoming a Gemini call at
+     * three times the intended rate.
+     *
+     * Short enough that topping up the balance is picked up within the quarter
+     * hour without anyone clearing a cache.
+     */
+    private const UNAVAILABLE_KEY = 'openrouter:unavailable';
+
+    private const UNAVAILABLE_MINUTES = 15;
+
+    /**
+     * Whether the account is known to be out of credit right now.
+     *
+     * Callers check this to route straight to the fallback instead of paying
+     * for a round trip that cannot succeed.
+     */
+    public static function isUnavailable(): bool
+    {
+        return (bool) Cache::get(self::UNAVAILABLE_KEY, false);
+    }
+
     public function generateImage(string $prompt, array $context = [], string $size = '1024x1024'): ?array
     {
         if (! $this->isConfigured()) {
+            return null;
+        }
+
+        // Already known to be out of credit — do not spend a round trip.
+        if (self::isUnavailable()) {
             return null;
         }
 
@@ -54,6 +89,22 @@ class OpenRouterService
                 ]);
 
                 BillingAlert::check('OpenRouter', $response->body(), $response->status());
+
+                /*
+                 * 402 is not a blip. The balance is empty and every subsequent
+                 * call this run will fail the same way, so stop asking rather
+                 * than letting the caller's retry loop multiply the fallback's
+                 * load. 429 is included because hammering a rate limit is how
+                 * a rate limit stays hit.
+                 */
+                if (in_array($response->status(), [402, 429], true)) {
+                    Cache::put(self::UNAVAILABLE_KEY, true, now()->addMinutes(self::UNAVAILABLE_MINUTES));
+
+                    Log::warning('OpenRouterService: marking provider unavailable', [
+                        'status' => $response->status(),
+                        'minutes' => self::UNAVAILABLE_MINUTES,
+                    ]);
+                }
 
                 return null;
             }

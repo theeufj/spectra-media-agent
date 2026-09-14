@@ -11,6 +11,14 @@
 return [
 
     /*
+     * Seconds to back off between image generation retries, as a base for
+     * exponential growth (2 -> 2s, 4s). Zero disables the wait entirely, which
+     * is what the test suite sets: two tests of the both-providers-down path
+     * spent 28 seconds each sleeping for something they were not measuring.
+     */
+    'image_retry_base_delay' => env('AI_IMAGE_RETRY_BASE_DELAY', 2),
+
+    /*
      * Guardrails for the seasonal strategy job. new_daily_budget may come from an
      * LLM, so budgets are clamped to a band around the campaign's current daily
      * budget and hard-capped by these absolute ceilings.
