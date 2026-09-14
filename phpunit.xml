@@ -47,6 +47,19 @@
             suite unusable. Pinned off here (force overrides .env); use
             phpunit.integration.xml to run them deliberately.
         -->
+
+        <!--
+            Same shape, found the same way. StorageHelper picks S3 whenever a
+            bucket and key are configured, so a developer .env holding real
+            credentials sent `Storage::fake('public')` straight past and made
+            the email-asset upload test PUT an object into the production
+            bucket. It passed in CI only because CI has no AWS vars, which
+            means the suite's result depended on whose machine ran it.
+        -->
+        <env name="AWS_BUCKET" value="" force="true"/>
+        <env name="AWS_ACCESS_KEY_ID" value="" force="true"/>
+        <env name="AWS_SECRET_ACCESS_KEY" value="" force="true"/>
+
         <env name="RUN_INTEGRATION_TESTS" value="false" force="true"/>
         <env name="RUN_GOOGLE_ADS_INTEGRATION_TESTS" value="false" force="true"/>
         <env name="RUN_FACEBOOK_INTEGRATION_TESTS" value="false" force="true"/>
