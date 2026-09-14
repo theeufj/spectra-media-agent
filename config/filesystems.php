@@ -55,6 +55,19 @@ return [
             'bucket' => env('AWS_BUCKET') ?: env('S3_BUCKET'),
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
+
+            /*
+             * Per-object ACL, or null to send none.
+             *
+             * Not every S3-compatible provider has them. Cloudflare R2 — what
+             * a Forge bucket is — has no object-level ACLs at all: access is a
+             * property of the bucket, which is either public on its own domain
+             * or it is not. Sending 'public-read' there is at best ignored.
+             *
+             * So it is opt-in rather than assumed. DigitalOcean Spaces needs
+             * it (AWS_OBJECT_ACL=public-read); R2 must not be sent it.
+             */
+            'acl' => env('AWS_OBJECT_ACL'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
