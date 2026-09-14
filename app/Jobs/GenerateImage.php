@@ -454,11 +454,30 @@ class GenerateImage implements ShouldQueue
                     'prompts' => count($prompts),
                 ]);
 
+                // Reaches the admin dashboard, which a Log::error alone does not.
+                // Recorded whether or not the customer sees anything: a slot
+                // that produced nothing is worth knowing about even when its
+                // siblings covered for it.
+                report(new \RuntimeException("GenerateImage produced no images for strategy {$this->strategy->id}"));
+
+                /*
+                 * Only tell the customer when they actually have nothing.
+                 *
+                 * Three of these jobs run per strategy. On the first run of
+                 * this check, two succeeded and one did not, and the page
+                 * showed nine perfectly good images above "We could not
+                 * generate images just now" — which is worse than either
+                 * outcome on its own, because it makes the page look broken
+                 * when it is not.
+                 */
+                if (ImageCollateral::where('campaign_id', $this->campaign->id)->where('is_active', true)->exists()) {
+                    Log::info("Strategy {$this->strategy->id} already has images from another slot; not reporting a failure to the customer");
+
+                    return;
+                }
+
                 $existing['image'] = 'We could not generate images just now — the image service is unavailable. Nothing else about your campaign is affected, and you can try again from this page.';
                 $this->strategy->update(['collateral_errors' => $existing]);
-
-                // Reaches the admin dashboard, which a Log::error alone does not.
-                report(new \RuntimeException("GenerateImage produced no images for strategy {$this->strategy->id}"));
 
                 return;
             }

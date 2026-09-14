@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\GenerateImage;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -73,5 +74,37 @@ class CollateralFailureVisibleTest extends TestCase
         // that had just failed to produce anything.
         $this->assertArrayHasKey('image', $errors);
         $this->assertSame('unrelated', $errors['video'], 'an unrelated error was collateral damage');
+    }
+
+    public function test_it_stays_quiet_when_another_slot_already_produced_images(): void
+    {
+        $strategy = $this->strategy();
+
+        // Three of these jobs run per strategy. Two succeeded here.
+        foreach (['square', 'landscape', 'mrec'] as $format) {
+            ImageCollateral::create([
+                'campaign_id' => $strategy->campaign_id,
+                'strategy_id' => $strategy->id,
+                'platform' => 'Google Ads (SEM)',
+                's3_path' => 'collateral/images/x-'.$format.'.jpeg',
+                'cloudfront_url' => 'https://example.test/'.$format.'.jpeg',
+                'format' => $format,
+                'concept_key' => 'shared-key',
+            ]);
+        }
+
+        Http::fake(['*' => Http::response(['error' => ['message' => 'Insufficient credits.']], 402)]);
+
+        app()->call([new GenerateImage($strategy->campaign, $strategy, 2), 'handle']);
+
+        /*
+           The first version of this check was per-job, so one failing slot
+           printed "We could not generate images just now" above nine perfectly
+           good pictures — worse than either outcome alone, because it makes a
+           working page look broken.
+        */
+        $errors = $strategy->fresh()->collateral_errors ?? [];
+
+        $this->assertArrayNotHasKey('image', $errors);
     }
 }
