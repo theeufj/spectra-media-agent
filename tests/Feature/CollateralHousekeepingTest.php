@@ -63,28 +63,39 @@ class CollateralHousekeepingTest extends TestCase
         }
     }
 
-    public function test_a_paid_plans_image_allowance_actually_binds(): void
+    public function test_a_plan_allowance_smaller_than_the_ceiling_still_binds(): void
     {
-        [, $campaign] = $this->campaignOnPlan(imageAllowance: 10);
+        [, $campaign] = $this->campaignOnPlan(imageAllowance: 3);
 
-        $this->addImages($campaign, 9);
+        $this->addImages($campaign, 2);
         $this->assertTrue(ImageCollateral::canGenerateForCampaign($campaign));
 
         $this->addImages($campaign, 1);
 
-        // Ten sold, ten generated. "Paid accounts have no per-campaign limit"
-        // is how twenty-seven happened.
+        // Three sold, three generated. "Paid accounts have no per-campaign
+        // limit" is how twenty-seven happened.
         $this->assertFalse(ImageCollateral::canGenerateForCampaign($campaign));
     }
 
-    public function test_a_generous_plan_is_still_generous(): void
+    public function test_the_ceiling_binds_even_on_a_generous_plan(): void
     {
         [, $campaign] = $this->campaignOnPlan(imageAllowance: 150);
-        $this->addImages($campaign, 20);
 
-        // Enforcing the allowance must not turn into a tight cap for the plans
-        // that genuinely bought headroom.
+        $this->addImages($campaign, ImageCollateral::MAX_CONCEPTS_PER_CAMPAIGN - 1);
         $this->assertTrue(ImageCollateral::canGenerateForCampaign($campaign));
+
+        $this->addImages($campaign, 1);
+
+        /*
+           This test used to assert the opposite — that a 150-image plan kept
+           its headroom per campaign — and that was the right rule when the
+           allowance was the only limit. It is not what a person wants in front
+           of them: one campaign generated eight scenes, stored as 24 cards,
+           and nobody reviews 24 creatives. The allowance is now what the
+           account may generate in total; six is what any single campaign puts
+           on the page.
+        */
+        $this->assertFalse(ImageCollateral::canGenerateForCampaign($campaign));
     }
 
     public function test_regeneration_clears_what_it_generated_and_keeps_what_the_customer_uploaded(): void

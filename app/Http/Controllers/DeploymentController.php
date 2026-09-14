@@ -59,7 +59,21 @@ class DeploymentController extends Controller
             abort(400, 'Only images can be marked as AI seeds.');
         }
 
-        $collateral->update([$field => ! $collateral->{$field}]);
+        /*
+         * An explicit value, when the caller has one.
+         *
+         * A card on the collateral page is one photograph stored in three ad
+         * sizes, and approving it approves all three at once. Flipping each row
+         * independently is wrong there: if the three had drifted out of step,
+         * one flip per row preserves the drift instead of resolving it, and the
+         * campaign deploys with some sizes missing. Toggling stays the default
+         * so every existing caller behaves exactly as before.
+         */
+        $value = array_key_exists('value', $validated)
+            ? (bool) $validated['value']
+            : ! $collateral->{$field};
+
+        $collateral->update([$field => $value]);
 
         return back();
     }

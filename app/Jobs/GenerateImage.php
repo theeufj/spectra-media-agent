@@ -18,6 +18,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Intervention\Image\Laravel\Facades\Image;
 
 class GenerateImage implements ShouldQueue
@@ -302,6 +303,26 @@ class GenerateImage implements ShouldQueue
                 $brandName = $customer->name ?? '';
                 $tagline = $isSubscribed ? $this->taglineFor($adCopy, $brandGuidelines) : null;
 
+                /*
+                 * The cap is checked here, per scene, and not before dispatch.
+                 *
+                 * GenerateStrategyCollateral consulted it three times in a row
+                 * before a single row existed, so it always passed — and each
+                 * of the three jobs then wrote as many scenes as the splitter
+                 * happened to return. That is how one campaign ended up with
+                 * eight pictures and another with four from the same code.
+                 */
+                $written = ImageCollateral::conceptsForCampaign($this->campaign);
+                if ($written >= ImageCollateral::capForCampaign($this->campaign)) {
+                    Log::info("Image cap reached for campaign {$this->campaign->id}; stopping at {$written} pictures");
+
+                    break;
+                }
+
+                // The three format rows below are one photograph. Without this
+                // they are three unrelated cards on the collateral page.
+                $conceptKey = (string) Str::uuid();
+
                 foreach ($adFormats as $format => $spec) {
                     [$targetW, $targetH] = $spec['size'];
 
@@ -388,6 +409,7 @@ class GenerateImage implements ShouldQueue
                         's3_path' => $s3Path,
                         'cloudfront_url' => $cloudFrontUrl,
                         'format' => $format,
+                        'concept_key' => $conceptKey,
                     ]);
 
                     Log::info("Image uploaded [{$format}]: {$s3Path}");

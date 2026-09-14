@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { money, count } from '@/utils/format';
+import { groupConcepts, FORMAT_LABELS } from '@/utils/collateral';
 import { useCurrency } from '@/hooks/useCurrency';
 import RefineImageModal from '@/Components/RefineImageModal';
 import ExtendVideoModal from '@/Components/ExtendVideoModal';
@@ -315,6 +316,29 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             onError: (errors) => {
                 console.error('Failed to toggle collateral status:', errors);
             },
+        });
+    };
+
+    /**
+     * A card is one photograph stored in three ad sizes, so approving it has
+     * to approve all three. Toggling only the square deployed a campaign with
+     * its landscape and display sizes silently left behind.
+     */
+    const handleToggleConcept = (conceptGroup, field = 'should_deploy') => {
+        const next = field === 'should_deploy' ? ! conceptGroup.deployed : ! conceptGroup.cover[field];
+
+        setCollateral(prev => ({
+            ...prev,
+            imageCollaterals: prev.imageCollaterals.map(img =>
+                conceptGroup.ids.includes(img.id) ? { ...img, [field]: next } : img
+            ),
+        }));
+
+        conceptGroup.ids.forEach(id => {
+            router.post(route('deployment.toggle-collateral'), { type: 'image', id, field, value: next }, {
+                preserveScroll: true,
+                onError: (errors) => console.error('Failed to toggle collateral status:', errors),
+            });
         });
     };
 
@@ -1086,13 +1110,18 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     a white band under the short one — the picture is whole,
                                                     the card around it is not. */}
                                                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-start">
-                                                {collateral.imageCollaterals.map((image) => (
+                                                {groupConcepts(collateral.imageCollaterals).map((concept) => {
+                                                    // One card is one photograph. Its other ad sizes are the
+                                                    // same picture and ride along with it.
+                                                    const image = concept.cover;
+
+                                                    return (
                                                     <div
-                                                        key={image.id}
-                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
+                                                        key={concept.key}
+                                                        className={`border-2 ${concept.deployed ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
                                                         {...approvalToggle({
-                                                            checked: Boolean(image.should_deploy),
-                                                            onToggle: () => handleToggleCollateral('image', image.id),
+                                                            checked: concept.deployed,
+                                                            onToggle: () => handleToggleConcept(concept),
                                                             label: 'Include this image in deployment',
                                                         })}
                                                     >
@@ -1101,15 +1130,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             the thin white strip under every card. */}
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="block w-full h-auto" />
                                                         {/* Checkbox */}
-                                                        <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${image.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
-                                                            {image.should_deploy && (
+                                                        <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${concept.deployed ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                            {concept.deployed && (
                                                                 <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                                             )}
                                                         </div>
                                                         {/* Format + source badges */}
                                                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleToggleCollateral('image', image.id, 'is_seed'); }}
+                                                                onClick={(e) => { e.stopPropagation(); handleToggleConcept(concept, 'is_seed'); }}
                                                                 title={image.is_seed
                                                                     ? 'This image guides the AI as visual reference. Click to stop using it as a seed.'
                                                                     : 'Use this image as visual reference for AI-generated creatives.'}
@@ -1119,9 +1148,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             >
                                                                 {image.is_seed ? '✦ AI Seed' : '✦ Use as AI seed'}
                                                             </button>
-                                                            {image.format && image.format !== 'square' && (
-                                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white">
-                                                                    {image.format === 'landscape' ? '1200×628' : image.format === 'mrec' ? '300×250' : image.format}
+                                                            {/* The sizes this picture exists in, rather than which
+                                                                row the card happens to be — they are all the same
+                                                                photograph and all deploy together. */}
+                                                            {concept.formats.length > 1 && (
+                                                                <span
+                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white"
+                                                                    title={concept.formats.map(f => FORMAT_LABELS[f] || f).join(' · ')}
+                                                                >
+                                                                    {concept.formats.length} sizes
                                                                 </span>
                                                             )}
                                                             {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
@@ -1173,7 +1208,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             )}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                );
+                                                })}
                                                 </div>
                                             </>
                                         )}

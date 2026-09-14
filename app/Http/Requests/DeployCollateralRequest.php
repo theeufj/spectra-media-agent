@@ -19,6 +19,9 @@ class DeployCollateralRequest extends FormRequest
             // should_deploy (default) flips deployment; is_seed marks an
             // image as AI reference material — images only.
             'field' => 'nullable|string|in:should_deploy,is_seed',
+            // Optional. Absent means "flip it", which is what every caller did
+            // before one card started standing for three rows at once.
+            'value' => 'nullable|boolean',
         ];
     }
 }
