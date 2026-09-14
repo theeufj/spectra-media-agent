@@ -37,8 +37,9 @@ class CreativeVariant
         null,
 
         'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
-        'pull much further back. Show the whole room or street and its light, with the person small in the frame '.
-        'or out of it entirely. No face fills this picture; the place is the subject.',
+        'step back to take in the whole room and its light, from across that room rather than across the street. '.
+        'The person stays clearly readable at roughly a third of the frame; the space around them is the point. '.
+        'Stay inside the room — no exteriors, no shooting through a window or doorway from outside.',
 
         'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
         'move in close on hands and the object they are working with — no face in shot at all. '.

@@ -69,8 +69,14 @@ class CreativeVariantTest extends TestCase
            "The same person in the same room from a different angle" is the
            failure mode, so the set has to reach for distance, for detail, for a
            different person, and for no person at all.
+
+           Distance, though, not abandonment: the first wording said "pull much
+           further back... the person small in the frame or out of it entirely"
+           and got a shopfront photographed from the far side of the street,
+           the subject a smudge behind glass. True to the words and useless as
+           an advertisement.
         */
-        $this->assertStringContainsString('pull much further back', $all);
+        $this->assertStringContainsString('step back to take in the whole room', $all);
         $this->assertStringContainsString('no face in shot', $all);
         $this->assertStringContainsString('different person', $all);
         $this->assertStringContainsString('no people at all', $all);
@@ -92,7 +98,7 @@ class CreativeVariantTest extends TestCase
 
         $this->assertSame(3, count(array_unique($asked)));
         $this->assertStringNotContainsString('VARIATION', $asked[0]);
-        $this->assertStringContainsString('pull much further back', $asked[1]);
+        $this->assertStringContainsString('step back to take in the whole room', $asked[1]);
         $this->assertStringContainsString('no face in shot', $asked[2]);
     }
 }

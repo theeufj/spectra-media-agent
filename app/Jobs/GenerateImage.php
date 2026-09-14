@@ -217,7 +217,17 @@ class GenerateImage implements ShouldQueue
                 $lens = $this->slot + $index;
                 $scene = CreativeVariant::apply($prompt, $lens);
 
-                $imagePrompt = (new ImagePrompt($scene, $brandGuidelines, $productContext, $adText))->getPrompt();
+                $imagePrompt = (new ImagePrompt(
+                    $scene,
+                    $brandGuidelines,
+                    $productContext,
+                    $adText,
+                    // The banner is only composited for paying accounts, and
+                    // reserving space for one that never arrives is what put a
+                    // flat navy band across the bottom of a free account's
+                    // creative.
+                    bannerComposited: $this->campaign->customer->isOnPaidPlan(),
+                ))->getPrompt();
 
                 /*
                    One line per creative, readable without reassembling it.

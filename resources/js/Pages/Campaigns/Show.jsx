@@ -112,6 +112,23 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
 
     const isSignedOff = !!strategy.signed_off_at;
 
+    /*
+       What was produced, as one phrase.
+
+       Three coloured pills — blue for copy, green for images, purple for video
+       — said the same thing in more space and more colours, and the colours
+       carried no meaning: nothing distinguishes an image from a video that a
+       reader needs a palette for.
+    */
+    const collateralSummary = [
+        [strategy.ad_copies_count, 'ad copy', 'ad copies'],
+        [strategy.image_collaterals_count, 'image', 'images'],
+        [strategy.video_collaterals_count, 'video', 'videos'],
+    ]
+        .filter(([n]) => n > 0)
+        .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`)
+        .join(', ');
+
     return (
         <div className={`p-6 rounded-xl shadow-sm border ${isSignedOff ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'}`}>
             <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
@@ -146,6 +163,37 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                         <PrimaryButton disabled={processing}>Save Changes</PrimaryButton>
                     </div>
                 </form>
+            ) : isSignedOff ? (
+                /*
+                   Signed off, so the brief steps out of the way.
+                   
+                   These three paragraphs are instructions to the model, and
+                   they are worth reading once — before approving them. After
+                   approval the thing the customer came for is the creative, and
+                   leaving a wall of strategy prose above it buries the work
+                   under its own brief. Still one click away, because someone
+                   checking why a creative looks the way it does needs it.
+                */
+                <details className="group">
+                    <summary className="cursor-pointer list-none text-sm text-gray-500 hover:text-gray-700 transition">
+                        <span className="group-open:hidden">Show the brief this was built from</span>
+                        <span className="hidden group-open:inline">Hide the brief</span>
+                    </summary>
+                    <div className="mt-4 space-y-5">
+                        <div>
+                            <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>✍️</span>Ad Copy Strategy</h4>
+                            <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.ad_copy_strategy}</p>
+                        </div>
+                        <div className="pt-5 border-t border-gray-100">
+                            <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🖼️</span>Imagery Strategy</h4>
+                            <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.imagery_strategy}</p>
+                        </div>
+                        <div className="pt-5 border-t border-gray-100">
+                            <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🎬</span>Video Strategy</h4>
+                            <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.video_strategy}</p>
+                        </div>
+                    </div>
+                </details>
             ) : (
                 <div className="space-y-5">
                     <div>
@@ -164,30 +212,33 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
             )}
 
             {isSignedOff ? (
-                <div className="mt-6 space-y-3">
-                    {/* Collateral counts */}
-                    {(strategy.ad_copies_count > 0 || strategy.image_collaterals_count > 0 || strategy.video_collaterals_count > 0) && (
-                        <div className="flex gap-2 justify-center text-sm">
-                            {strategy.ad_copies_count > 0 && (
-                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{strategy.ad_copies_count} Ad Copies</span>
-                            )}
-                            {strategy.image_collaterals_count > 0 && (
-                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded">{strategy.image_collaterals_count} Images</span>
-                            )}
-                            {strategy.video_collaterals_count > 0 && (
-                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{strategy.video_collaterals_count} Videos</span>
-                            )}
-                        </div>
-                    )}
-                    <div className="p-2 text-center bg-green-100 text-green-800 rounded-lg">
-                        Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
-                        <Link
-                            href={route('campaigns.collateral.show', { campaign: campaignUuid, strategy: strategy.uuid })}
-                            className="ml-4 px-3 py-1 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition"
-                        >
-                            View Collateral
-                        </Link>
+                /*
+                   A quiet status line, not a green slab.
+                   
+                   bg-green-100 across the full width, centred, with the button
+                   sitting inside the tint — nothing else in the application
+                   looks like that, which is exactly why it read as unfinished.
+                   Approval is the unremarkable case here; every strategy on
+                   this page is signed off, so colouring each one as a success
+                   banner spends emphasis on the status quo. A check, the date,
+                   what was produced, and the one action worth taking.
+                */
+                <div className="mt-6 pt-5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>
+                            Approved {new Date(strategy.signed_off_at).toLocaleDateString()}
+                            {collateralSummary ? ` · ${collateralSummary}` : ''}
+                        </span>
                     </div>
+                    <Link
+                        href={route('campaigns.collateral.show', { campaign: campaignUuid, strategy: strategy.uuid })}
+                        className="px-4 py-2 text-sm font-medium bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition whitespace-nowrap"
+                    >
+                        View collateral
+                    </Link>
                 </div>
             ) : (
                 <div className="mt-6 pt-5 border-t border-gray-100">
