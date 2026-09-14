@@ -8,6 +8,7 @@ import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import ForecastPanel from '@/Components/ForecastPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
 import { useJobWatch } from '@/hooks/useJobWatch';
+import { usePolling } from '@/hooks/usePolling';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 // Collateral Summary Card Component
@@ -370,6 +371,42 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             setCampaign(watchData);
         }
     }, [watchData]);
+
+    /*
+       Keep watching for the collateral, not just the strategies.
+
+       isPolling covered strategy generation only, so it switched itself off the
+       moment strategies existed — which is the moment collateral generation
+       starts. The card underneath then sat on "Generating your collateral…"
+       until the customer thought to refresh, on the screen they had just been
+       told to wait on. Same defect as the collateral page had, one page over.
+
+       A signed-off strategy with nothing attached to it is work still arriving.
+       The endpoint already returns the counts; nothing was asking for them.
+    */
+    const awaitingCollateral = (campaigns.strategies || []).some(
+        s => s.signed_off_at
+            && ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) === 0
+    );
+
+    const { data: collateralPoll } = usePolling(
+        awaitingCollateral ? route('api.campaigns.show', { campaign: campaigns.uuid }) : null,
+        {
+            interval: 8000,
+            // Stops itself the moment anything lands, rather than running on
+            // until a timeout nobody is watching.
+            until: (d) => (d?.strategies || []).every(
+                s => ! s.signed_off_at
+                    || ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) > 0
+            ),
+        }
+    );
+
+    useEffect(() => {
+        if (collateralPoll) {
+            setCampaign(collateralPoll);
+        }
+    }, [collateralPoll]);
 
     useEffect(() => {
         if (['done', 'failed', 'timeout', 'disconnected'].includes(watchPhase)) {

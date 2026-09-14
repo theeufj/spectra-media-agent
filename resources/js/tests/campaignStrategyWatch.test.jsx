@@ -113,3 +113,37 @@ describe('campaign strategy watch', () => {
         expect(getByTestId('phase').textContent).toBe('failed');
     });
 });
+
+/** Mirrors awaitingCollateral and its until() in Pages/Campaigns/Show.jsx. */
+const items = (s) => (s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0);
+const awaitingCollateral = (strategies) => strategies.some(s => s.signed_off_at && items(s) === 0);
+const collateralDone = (d) => (d?.strategies || []).every(s => ! s.signed_off_at || items(s) > 0);
+
+describe('waiting for collateral on the strategy page', () => {
+    it('keeps watching a signed-off strategy that has nothing attached yet', () => {
+        /*
+           isPolling covered strategy generation only, so it switched off the
+           moment strategies existed — which is the moment collateral generation
+           starts. The card underneath then sat on "Generating your collateral…"
+           until the customer refreshed, on the screen they had just been told
+           to wait on.
+        */
+        expect(awaitingCollateral([{ signed_off_at: '2026-09-14', ad_copies_count: 0, image_collaterals_count: 0 }])).toBe(true);
+    });
+
+    it('does not watch a strategy nobody has signed off', () => {
+        // Nothing is coming for it, so polling would never end.
+        expect(awaitingCollateral([{ signed_off_at: null, image_collaterals_count: 0 }])).toBe(false);
+    });
+
+    it('stops as soon as the collateral lands', () => {
+        expect(collateralDone({ strategies: [{ signed_off_at: '2026-09-14', image_collaterals_count: 9 }] })).toBe(true);
+        expect(collateralDone({ strategies: [{ signed_off_at: '2026-09-14', image_collaterals_count: 0 }] })).toBe(false);
+    });
+
+    it('counts ad copy on its own as collateral having arrived', () => {
+        // Ad copy generates before the images, and the card has something real
+        // to show the moment it does.
+        expect(collateralDone({ strategies: [{ signed_off_at: '2026-09-14', ad_copies_count: 1 }] })).toBe(true);
+    });
+});
