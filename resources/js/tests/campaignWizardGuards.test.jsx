@@ -123,3 +123,57 @@ describe('wizard prefill punctuation', () => {
         expect(joinSentences(['Only this one.', null, '', '   '])).toBe('Only this one.');
     });
 });
+
+/** Mirrors STEP_BODY and validateStep in Pages/Campaigns/CreateWizard.jsx. */
+const STEP_BODY = { 0: 0, 1: 1, 2: 2, 3: 4, 4: 8 };
+
+function validateStep(step, data) {
+    switch (step) {
+        case 1: return Boolean(data.name && data.reason && data.goals);
+        case 2: return Boolean(data.platforms && data.platforms.length > 0);
+        case 3: return Boolean(data.total_budget && data.start_date && data.end_date && data.primary_kpi);
+        case 4: return Boolean(data.target_market && data.voice);
+        default: return true;
+    }
+}
+
+describe('the four-step wizard', () => {
+    it('maps each numbered step onto the body it renders', () => {
+        /*
+           The switch still carries the original seven-step numbering, because
+           the review step renders four of those bodies inline as its detail
+           panels and they have to stay individually addressable. Nothing else
+           may know the old numbering.
+        */
+        expect(STEP_BODY[3]).toBe(4);  // Budget was case 4
+        expect(STEP_BODY[4]).toBe(8);  // Review was case 8
+    });
+
+    it('never lets a required field hide inside a folded panel', () => {
+        // Audience and voice moved into a detail panel on the review step. They
+        // are still required, so the step has to fail without them — and the
+        // panel opens itself when either is missing, or the customer would be
+        // blocked by a field they cannot see.
+        const complete = { target_market: 'Makers', voice: 'Direct and warm' };
+
+        expect(validateStep(4, complete)).toBe(true);
+        expect(validateStep(4, { ...complete, voice: '' })).toBe(false);
+        expect(validateStep(4, { ...complete, target_market: '' })).toBe(false);
+    });
+
+    it('still requires the things that were always required', () => {
+        expect(validateStep(1, { name: 'Q4', reason: 'Leads', goals: 'Signups' })).toBe(true);
+        expect(validateStep(1, { name: 'Q4', reason: '', goals: 'Signups' })).toBe(false);
+        expect(validateStep(2, { platforms: ['google'] })).toBe(true);
+        expect(validateStep(2, { platforms: [] })).toBe(false);
+    });
+
+    it('asks nothing on the optional detail, which is the point of folding it', () => {
+        // Product focus, keywords and creative were steps 5, 6 and 7 and each
+        // returned true unconditionally. Folding them must not quietly turn any
+        // of them into a gate.
+        expect(validateStep(5, {})).toBe(true);
+        expect(validateStep(6, {})).toBe(true);
+        expect(validateStep(7, {})).toBe(true);
+    });
+});

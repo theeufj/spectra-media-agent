@@ -116,6 +116,20 @@ function joinSentences(parts) {
         .concat('.');
 }
 
+/*
+   Four steps, not seven.
+
+   Three of the old seven were marked optional in their own headings and two
+   more arrived fully prefilled from the brand profile — but "Step 1 of 8" told
+   a customer none of that before they started, and the product's whole pitch is
+   that it does this work for them. The detail is not gone: audience, product
+   focus, keywords and creative all still exist, folded into the review step
+   where somebody who wants that control can open them and everyone else can
+   walk past.
+
+   Index 0 is the template picker and is deliberately not numbered — it is a
+   choice about how to start rather than a step through the form.
+*/
 const WIZARD_STEPS = [
     {
         id: 'method',
@@ -133,35 +147,15 @@ const WIZARD_STEPS = [
         description: 'Where to advertise'
     },
     {
-        id: 'audience',
-        title: 'Target Audience',
-        description: 'Who to reach'
-    },
-    {
         id: 'budget',
         title: 'Budget & Schedule',
         description: 'Investment & timing'
     },
     {
-        id: 'products',
-        title: 'Product Focus',
-        description: 'What to promote'
-    },
-    {
-        id: 'keywords',
-        title: 'Keywords',
-        description: 'Search terms'
-    },
-    {
-        id: 'assets',
-        title: 'Images & Videos',
-        description: 'Creative assets'
-    },
-    {
         id: 'review',
         title: 'Review & Create',
-        description: 'Final check'
-    }
+        description: 'Detail & final check'
+    },
 ];
 
 // TextArea Component
@@ -409,24 +403,27 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         setCurrentStep(1);
     };
 
+    /**
+     * Which of the original case bodies each numbered step renders.
+     *
+     * The switch below still carries the seven-step numbering because the
+     * review step renders four of those bodies inline as its detail panels —
+     * they have to stay individually addressable. This map is the only place
+     * that knows the four-step layout.
+     */
+    const STEP_BODY = { 0: 0, 1: 1, 2: 2, 3: 4, 4: 8 };
+
     const validateStep = (step) => {
         switch (step) {
             case 1: // Basics
                 return data.name && data.reason && data.goals;
             case 2: // Platforms
                 return data.platforms && data.platforms.length > 0;
-            case 3: // Audience
-                return data.target_market && data.voice;
-            case 4: // Budget
+            case 3: // Budget
                 return data.total_budget && data.start_date && data.end_date && data.primary_kpi;
-            case 5: // Products
-                return true; // Optional step
-            case 6: // Keywords
-                return true; // Optional step
-            case 7: // Assets
-                return true; // Optional step
-            case 8: // Review
-                return true;
+            case 4: // Review — audience and voice are required and live in a
+                // detail panel here, which opens itself when either is missing.
+                return data.target_market && data.voice;
             default:
                 return true;
         }
@@ -521,8 +518,14 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     }, [currentStep]);
     
     // Render Step Content
-    const renderStepContent = () => {
-        switch (currentStep) {
+    /*
+       The case numbers below are the original seven-step layout and are left
+       alone on purpose: the review step renders four of them inline as its
+       detail sections, so they have to stay addressable individually.
+       STEP_BODY is the only thing that knows the new numbering.
+    */
+    const renderStepBody = (step) => {
+        switch (step) {
             case 0: // Method Selection
                 // Method selection screen
                 return (
@@ -1176,34 +1179,34 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         </div>
                         
                         <div className="bg-white rounded-lg border border-gray-200 divide-y">
-                            <ReviewSection title="Campaign Basics" step={1} onEdit={() => goToStep(1)}>
+                            <ReviewSection title="Campaign Basics" onEdit={() => goToStep(1)}>
                                 <ReviewItem label="Name" value={data.name} />
                                 <ReviewItem label="Reason" value={data.reason} />
                                 <ReviewItem label="Goals" value={data.goals} />
                             </ReviewSection>
 
-                            <ReviewSection title="Platforms" step={2} onEdit={() => goToStep(2)}>
+                            <ReviewSection title="Platforms" onEdit={() => goToStep(2)}>
                                 <ReviewItem label="Selected Platforms" value={data.platforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ') || 'None'} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Target Audience" step={3} onEdit={() => goToStep(3)}>
+                            <ReviewSection title="Target Audience">
                                 <ReviewItem label="Target Market" value={data.target_market} />
                                 <ReviewItem label="Brand Voice" value={data.voice} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Budget & Schedule" step={4} onEdit={() => goToStep(4)}>
+                            <ReviewSection title="Budget & Schedule" onEdit={() => goToStep(3)}>
                                 <ReviewItem label="Total Budget" value={money(data.total_budget || 0, currency)} />
                                 <ReviewItem label="Primary KPI" value={data.primary_kpi} />
                                 <ReviewItem label="Duration" value={`${date(data.start_date)} to ${date(data.end_date)}`} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Product Focus" step={5} onEdit={() => goToStep(5)}>
+                            <ReviewSection title="Product Focus">
                                 <ReviewItem label="Product Focus" value={data.product_focus || 'Not specified'} />
                                 <ReviewItem label="Selected Pages" value={data.selected_pages?.length ? `${data.selected_pages.length} pages selected` : 'None'} />
                                 <ReviewItem label="Exclusions" value={data.exclusions || 'None'} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Keywords" step={6} onEdit={() => goToStep(6)}>
+                            <ReviewSection title="Keywords">
                                 <ReviewItem label="Keywords" value={data.keywords?.length ? `${data.keywords.length} keywords selected` : 'None (AI will choose)'} />
                                 {data.keywords?.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
@@ -1215,7 +1218,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 )}
                             </ReviewSection>
 
-                            <ReviewSection title="Images & Videos" step={7} onEdit={() => goToStep(7)}>
+                            <ReviewSection title="Images & Videos">
                                 {(() => {
                                     const seedCount = stagedImages.filter(s => s.isSeed).length;
                                     const regularCount = stagedImages.filter(s => !s.isSeed).length;
@@ -1251,6 +1254,43 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 </ul>
                             </div>
                         )}
+
+                        {/*
+                            The detail, for anyone who wants it.
+
+                            These were four separate steps on the way in — three
+                            of them labelled optional, two arriving fully
+                            prefilled — so everybody walked through them whether
+                            they had anything to add or not. Folded here they
+                            cost nothing to skip and are one click away for
+                            somebody who wants the control.
+
+                            A panel opens by default when something inside it is
+                            required and missing, so a customer is never blocked
+                            by a field they cannot see.
+                        */}
+                        <div className="mb-6 space-y-3">
+                            <h4 className="text-sm font-semibold text-gray-900">Want more control?</h4>
+                            <p className="text-sm text-gray-500 -mt-2">
+                                We fill these in from your website. Open any of them to change what we chose.
+                            </p>
+
+                            <DetailPanel title="Audience & voice" summary="Who to reach and how the ads should sound" defaultOpen={! data.target_market || ! data.voice}>
+                                {renderStepBody(3)}
+                            </DetailPanel>
+
+                            <DetailPanel title="Product focus" summary="What to promote and what to avoid">
+                                {renderStepBody(5)}
+                            </DetailPanel>
+
+                            <DetailPanel title="Keywords" summary="Leave this to us, or choose the search terms yourself">
+                                {renderStepBody(6)}
+                            </DetailPanel>
+
+                            <DetailPanel title="Your own images & videos" summary="We generate these — upload your own if you'd rather">
+                                {renderStepBody(7)}
+                            </DetailPanel>
+                        </div>
 
                         <div className="rounded-lg border p-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
                             <div className="flex">
@@ -1336,7 +1376,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             type="button"; this closes the keyboard path.
                         */}
                         <form onSubmit={submit} onKeyDown={handleFormKeyDown}>
-                            {renderStepContent()}
+                            {renderStepBody(STEP_BODY[currentStep] ?? currentStep)}
                             
                             {/* Navigation Buttons */}
                             {currentStep > 0 && (
@@ -1393,17 +1433,58 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 }
 
 // Helper Components
-const ReviewSection = ({ title, step, onEdit, children }) => (
+/**
+ * One folded section of campaign detail on the review step.
+ *
+ * These were four separate wizard steps. Three said "optional" in their own
+ * headings and two arrived fully prefilled, but every customer walked through
+ * all of them regardless — on a product whose pitch is that it does this work
+ * for them.
+ *
+ * defaultOpen exists so a required field can never hide: the audience panel
+ * opens itself when the brand extraction had nothing to prefill it with.
+ */
+const DetailPanel = ({ title, summary, defaultOpen = false, children }) => {
+    const [open, setOpen] = useState(defaultOpen);
+
+    return (
+        <div className="rounded-lg border border-gray-200 bg-white">
+            <button
+                type="button"
+                onClick={() => setOpen(v => ! v)}
+                aria-expanded={open}
+                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50"
+            >
+                <span>
+                    <span className="block text-sm font-medium text-gray-900">{title}</span>
+                    <span className="block text-sm text-gray-500">{summary}</span>
+                </span>
+                <span className="text-sm font-medium text-brand-dark flex-shrink-0">
+                    {open ? 'Close' : 'Open'}
+                </span>
+            </button>
+
+            {open && <div className="border-t border-gray-100 p-4">{children}</div>}
+        </div>
+    );
+};
+
+const ReviewSection = ({ title, onEdit, children }) => (
     <div className="p-4">
         <div className="flex justify-between items-center mb-3">
             <h3 className="font-semibold text-gray-900">{title}</h3>
-            <button 
-                type="button"
-                onClick={onEdit}
-                className="text-sm text-brand-dark hover:text-brand-darker"
-            >
-                Edit
-            </button>
+            {/* Only the sections that still live on an earlier step get an Edit
+                link. The rest are open on this page, and a link that scrolls you
+                to a panel you are already looking at is noise. */}
+            {onEdit && (
+                <button
+                    type="button"
+                    onClick={onEdit}
+                    className="text-sm text-brand-dark hover:text-brand-darker"
+                >
+                    Edit
+                </button>
+            )}
         </div>
         <div className="space-y-2">
             {children}
