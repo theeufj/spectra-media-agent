@@ -75,3 +75,41 @@ describe('polling conventions', () => {
         expect(stillHandRolled).toEqual(KNOWN_UNMIGRATED);
     });
 });
+
+/**
+ * Mirrors the two waiting conditions added to Campaigns/Show.jsx and
+ * KnowledgeBase/Index.jsx.
+ */
+const items = (s) => (s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0);
+const readyStrategy = (strategies) => strategies.find(s => s.signed_off_at && items(s) > 0);
+const anyProcessing = (rows) => rows.some(kb => ! kb.content);
+
+describe('pages that show a waiting state', () => {
+    it('sends you to the collateral once it exists, rather than making you click', () => {
+        /*
+           Sign off, a modal, this page, "Generating your collateral", and then
+           a second click to go and look at it. Standing there was only ever
+           about seeing the creative — three separate pages had this shape, and
+           it is what makes a two-minute wait feel broken rather than busy.
+        */
+        const ready = readyStrategy([
+            { uuid: 'a', signed_off_at: '2026-09-14', image_collaterals_count: 0 },
+            { uuid: 'b', signed_off_at: '2026-09-14', image_collaterals_count: 9 },
+        ]);
+
+        expect(ready?.uuid).toBe('b');
+    });
+
+    it('does not send you anywhere when nothing has arrived', () => {
+        expect(readyStrategy([{ uuid: 'a', signed_off_at: '2026-09-14', image_collaterals_count: 0 }])).toBeUndefined();
+    });
+
+    it('keeps the knowledge base refreshing while a page is still empty', () => {
+        // Crawled rows arrive with no content and fill in behind the scenes.
+        expect(anyProcessing([{ content: 'Real text' }, { content: null }])).toBe(true);
+    });
+
+    it('stops refreshing the knowledge base once every page has content', () => {
+        expect(anyProcessing([{ content: 'Real text' }, { content: 'More text' }])).toBe(false);
+    });
+});

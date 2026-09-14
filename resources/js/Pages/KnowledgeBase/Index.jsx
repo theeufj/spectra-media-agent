@@ -7,6 +7,20 @@ import { useToast } from '@/Components/Toast';
 import { MagnifyingGlassIcon, TrashIcon, PlusIcon, GlobeAltIcon, DocumentTextIcon, DocumentIcon } from '@heroicons/react/24/outline';
 
 export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
+    /*
+       A page that says "Processing content…" has to find out when it stops.
+
+       Crawled pages arrive with no content and fill in behind the scenes, and
+       this rendered that state from a prop set at page load — so the animated
+       dots ran until the customer thought to refresh. Same defect as the
+       strategy and collateral pages had; it is the shape that makes the whole
+       product feel stuck rather than busy.
+
+       Inertia's partial reload rather than a JSON poll: this page has no
+       polling endpoint, and reloading only the knowledgeBases prop is both
+       cheaper than a full visit and keeps the customer's scroll and filters.
+    */
+
     const { props } = usePage();
     const [deleting, setDeleting] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -141,6 +155,18 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
         const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
         return new Date(dateString).toLocaleDateString('en-US', options);
     };
+
+    const anyProcessing = (paginatedData?.data || []).some(kb => ! kb.content);
+
+    useEffect(() => {
+        if (! anyProcessing) return;
+
+        const id = setInterval(() => {
+            router.reload({ only: ['knowledgeBases'], preserveScroll: true, preserveState: true });
+        }, 8000);
+
+        return () => clearInterval(id);
+    }, [anyProcessing]);
 
     return (
         <AuthenticatedLayout

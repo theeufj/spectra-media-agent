@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
@@ -407,6 +407,41 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             setCampaign(collateralPoll);
         }
     }, [collateralPoll]);
+
+    /*
+       When the wait is over, go where they were waiting to get to.
+
+       Signing off leads to a modal, then this page, then a card that says
+       "Generating your collateral" — and then, once it had arrived, a second
+       click to go and look at it. Standing here was only ever about seeing the
+       creative; making that last step manual is what turns a two-minute wait
+       into something that feels broken.
+
+       Only after an actual wait. The ref is set while polling is live, so
+       opening this page for a campaign whose collateral finished last week
+       leaves you on the page you asked for.
+    */
+    const waitedForCollateralRef = useRef(false);
+
+    useEffect(() => {
+        if (awaitingCollateral) {
+            waitedForCollateralRef.current = true;
+
+            return;
+        }
+
+        if (! waitedForCollateralRef.current) return;
+
+        const ready = (campaigns.strategies || []).find(
+            s => s.signed_off_at
+                && ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) > 0
+        );
+
+        if (! ready) return;
+
+        waitedForCollateralRef.current = false;
+        router.visit(route('campaigns.collateral.show', { campaign: campaigns.uuid, strategy: ready.uuid }));
+    }, [awaitingCollateral, campaigns.strategies, campaigns.uuid]);
 
     useEffect(() => {
         if (['done', 'failed', 'timeout', 'disconnected'].includes(watchPhase)) {
