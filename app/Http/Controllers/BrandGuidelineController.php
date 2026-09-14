@@ -152,7 +152,23 @@ class BrandGuidelineController extends Controller
                 ->orderBy('id')
                 ->first();
 
-            if ($autoCampaign && $autoCampaign->strategies()->exists()) {
+            /*
+             * The campaign existing is enough; its strategies need not have
+             * landed yet.
+             *
+             * This also required strategies()->exists(), and the two are
+             * written 40-odd seconds apart — measured on customer 45: the
+             * campaign row and auto_generated_at at 11:30:22, the strategy at
+             * 11:31:03. Confirming inside that window sent the customer to the
+             * wizard to build a campaign that had already been built for them,
+             * and the duplicate is the one they would have kept.
+             *
+             * The guard was presumably there to avoid landing on an empty
+             * page. It no longer can: Show seeds isPolling from
+             * strategy_generation_started_at and narrates the wait, which is a
+             * far better answer than a template chooser.
+             */
+            if ($autoCampaign) {
                 // Pass the model, not its id: the route key is the uuid now, and an id
                 // here produced a URL that resolved but leaked the count.
                 return redirect()->route('campaigns.show', $autoCampaign)

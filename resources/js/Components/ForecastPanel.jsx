@@ -114,12 +114,26 @@ function OrderValuePrompt({ currency, monthlyBudget, campaignId, onSaved }) {
      */
     return (
         <div className="mt-4 rounded-md border border-dashed border-gray-300 bg-gray-50 p-4">
+            {/*
+                Lifetime, not one order.
+
+                This asked "what's one customer worth to you?", and for a
+                subscription business the honest answer to that question is one
+                month's price — which is the wrong number by an order of
+                magnitude. A A$35/mo product entered as A$35 forecast a 0.49x
+                return and a A$689 loss; the same customer at twelve months is
+                A$420 and the same forecast returns 5.9x. The panel was not
+                wrong, it was asking about the wrong unit, and the customer had
+                no way to know that from the question.
+            */}
             <label htmlFor="forecast-order-value" className="block text-sm font-medium text-gray-900">
-                What's one customer worth to you?
+                What's a customer worth to you over their lifetime?
             </label>
             <p className="mt-1 text-xs text-gray-600">
-                Roughly what you earn from one sale or enquiry. We'll turn the forecast above into
-                revenue — and use it to shift budget toward whatever earns most.
+                Everything you earn from one customer, not just their first order — for anything
+                recurring, that's the monthly price times how many months they usually stay. We'll
+                turn the forecast above into revenue, and use it to shift budget toward whatever
+                earns most.
             </p>
 
             <div className="mt-3 flex flex-wrap items-start gap-2">
@@ -296,8 +310,27 @@ export default function ForecastPanel({
                             {money(framed.net, currency, { maximumFractionDigits: 0 })}
                         </span>{' '}
                         {framed.net < 0
-                            ? `short of covering ad spend, at ${money(framed.order_value, currency)} per customer. Worth a higher order value, a better conversion rate, or a lower budget.`
+                            ? `short of covering ad spend, at ${money(framed.order_value, currency)} per customer.`
                             : `left after ad spend, at ${money(framed.order_value, currency)} per customer.`}
+                        {framed.net < 0 && (framed.break_even_order_value || framed.break_even_conversion_rate) && (
+                            /*
+                               A bare "-A$689" is a number nobody can act on.
+                               These say what the gap is: what a customer would
+                               need to be worth at today's conversion rate, or
+                               the rate needed at today's customer value.
+                            */
+                            <>
+                                {' '}To break even you'd need{' '}
+                                {framed.break_even_order_value
+                                    ? `${money(framed.break_even_order_value, currency)} per customer`
+                                    : null}
+                                {framed.break_even_order_value && framed.break_even_conversion_rate ? ', or ' : null}
+                                {framed.break_even_conversion_rate
+                                    ? `a ${(framed.break_even_conversion_rate * 100).toFixed(1)}% conversion rate at today's value`
+                                    : null}
+                                .
+                            </>
+                        )}
                     </p>
                 )}
 

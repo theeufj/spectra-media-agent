@@ -147,6 +147,37 @@ class CustomerMarketForecast
         $forecast['net'] = round($revenue - $cost, 2);
         $forecast['roas'] = $cost > 0 ? round($revenue / $cost, 2) : null;
 
+        /*
+         * What would have to be true for this to pay.
+         *
+         * A forecast that says "-A$689" and stops is a number a customer can
+         * do nothing with. These two say what the gap actually is: the amount
+         * a customer would need to be worth at today's conversion rate, and
+         * the rate they would need at today's customer value. Both are
+         * arithmetic on figures already on the panel, not new predictions.
+         *
+         * Note what is NOT offered as a remedy: a smaller budget. Conversions
+         * scale with clicks and clicks scale with spend, so halving the budget
+         * halves the loss and leaves the return exactly where it was. Saying
+         * otherwise would be advice that cannot work.
+         */
+        $clicks = (float) ($forecast['clicks'] ?? 0);
+        $rate = (float) ($forecast['conversion_rate'] ?? 0);
+
+        // Per-customer value that makes revenue meet spend.
+        $forecast['break_even_order_value'] = $conversions > 0
+            ? round($cost / $conversions, 2)
+            : null;
+
+        // Conversion rate that makes revenue meet spend at today's value.
+        $forecast['break_even_conversion_rate'] = ($clicks > 0 && $orderValue > 0)
+            ? round($cost / ($clicks * $orderValue), 4)
+            : null;
+
+        // Only worth showing when it is actually out of reach today.
+        $forecast['below_break_even'] = $revenue < $cost;
+        $forecast['conversion_rate'] = $rate;
+
         return $forecast;
     }
 }

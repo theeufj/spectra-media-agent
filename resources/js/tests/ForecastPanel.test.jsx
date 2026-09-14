@@ -111,9 +111,17 @@ describe('ForecastPanel', () => {
 
         render(<ForecastPanel monthlyBudget={1500} />);
 
-        await waitFor(() => expect(screen.getByText(/one customer worth to you/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/worth to you over their lifetime/i)).toBeInTheDocument());
 
-        // The absence is the point: no invented money figure anywhere.
+        /*
+           It asks for lifetime value, not one order. Asked "what's one
+           customer worth?", the honest answer for a A$35/mo product is A$35 —
+           wrong by an order of magnitude, and it forecast a 0.49x return where
+           the same customer over a year returns 5.9x.
+        */
+        expect(screen.getByText(/not just their first order/i)).toBeInTheDocument();
+
+        // The absence is still the point: no invented money figure anywhere.
         expect(screen.queryByText(/\$0\.00/)).not.toBeInTheDocument();
         expect(screen.getByText(/needs your order value/i)).toBeInTheDocument();
     });
