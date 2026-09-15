@@ -73,4 +73,21 @@ class ImagePromptBannerTest extends TestCase
         $this->assertStringContainsString('no exteriors', $wide);
         $this->assertStringNotContainsString('out of it entirely', $wide);
     }
+
+    public function test_the_headline_must_fit_inside_the_frame(): void
+    {
+        /*
+           Making the headline mandatory made the margin rule load-bearing, and
+           it was not strong enough: one creative came back reading "Build a
+           Store in 5 Minute" with the B and the s cropped off at the frame
+           edges. The composition section already asked for a 10% margin; a
+           model sizing type to fill the width does not read that as being
+           about the type.
+        */
+        $prompt = $this->prompt(true);
+
+        $this->assertStringContainsString('must fit inside the frame', $prompt);
+        $this->assertStringContainsString('first and last letters cropped off is worse than no headline', $prompt);
+        $this->assertStringContainsString('break it across two lines', $prompt);
+    }
 }

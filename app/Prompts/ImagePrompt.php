@@ -88,7 +88,9 @@ class ImagePrompt
                "{{brand_context}}{{product_context}}\n".
                "**THE ONLY WORDS THAT MAY APPEAR IN THE ARTWORK:**\n".
                "<<<\n{{ad_text}}\n>>>\n".
-               "Set exactly one of those lines as a headline in the picture, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here. Shorten the line if it helps the layout. Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
+               "Set exactly one of those lines as a headline in the picture, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n".
+               "The whole headline must fit inside the frame with clear space around it — every letter of the first word and the last word fully visible, none of it touching or running past any edge. If the line does not fit at the size you have chosen, set it smaller, break it across two lines, or choose a shorter line from between the markers. A headline with its first and last letters cropped off is worse than no headline at all.\n".
+               "Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
                "**COMPOSITION:**\n".
                "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
                "- The scene fills the frame. Any solid colour panel is a restrained accent — a corner, an edge, a band behind the headline — and never more than a quarter of the picture.\n".
