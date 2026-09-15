@@ -18,7 +18,15 @@ class CollateralController extends Controller
      * What GenerateStrategyCollateral dispatches. Kept in step with it by the
      * test that pins both.
      */
-    private const IMAGES_PER_STRATEGY = 3;
+    /**
+     * How long after sign-off the image set is still plausibly arriving.
+     *
+     * Bounds the "more is coming" state so a set that stopped early — a format
+     * skipped because its aspect failed to generate, which is now normal —
+     * does not leave a spinner turning for ever. Generation takes two to three
+     * minutes; ten is generous and still finite.
+     */
+    private const IMAGE_GENERATION_WINDOW_MINUTES = 10;
 
     /**
      * Display the collateral generation page for a specific campaign strategy.
@@ -139,8 +147,31 @@ class CollateralController extends Controller
             return false;
         }
 
-        return $strategy->adCopies()->count() < 1
-            || $strategy->imageCollaterals()->count() < self::IMAGES_PER_STRATEGY;
+        if ($strategy->adCopies()->count() < 1) {
+            return true;
+        }
+
+        /*
+         * Counted in pictures against the campaign's cap, not in rows.
+         *
+         * This compared imageCollaterals()->count() to three, which was the
+         * number of images a strategy got when one image meant one row. One
+         * picture is now three rows — square, landscape and MREC — so the very
+         * first concept satisfied the old test and generation was declared
+         * finished with three more concepts still to come. The page stopped
+         * watching, showed one creative out of four, and never updated.
+         */
+        $campaign = $strategy->campaign;
+
+        if (! $campaign) {
+            return false;
+        }
+
+        $expected = ImageCollateral::capForCampaign($campaign);
+        $have = ImageCollateral::conceptsForCampaign($campaign);
+
+        return $have < $expected
+            && $strategy->signed_off_at->gt(now()->subMinutes(self::IMAGE_GENERATION_WINDOW_MINUTES));
     }
 
     /**

@@ -11,6 +11,7 @@ import DeploymentDisabledModal from '@/Components/DeploymentDisabledModal';
 import AdSpendSetupModal from '@/Components/AdSpendSetupModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
+import CreativeSizesModal from '@/Components/CreativeSizesModal';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 import { usePolling } from '@/hooks/usePolling';
@@ -61,6 +62,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
     const [collateralError, setCollateralError] = useState(null);
+
+    // Which concept is open in the size viewer, if any.
+    const [viewingConcept, setViewingConcept] = useState(null);
     const [showDeployModal, setShowDeployModal] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
     const [showDeploymentDisabledModal, setShowDeploymentDisabledModal] = useState(false);
@@ -1152,12 +1156,23 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 row the card happens to be — they are all the same
                                                                 photograph and all deploy together. */}
                                                             {concept.formats.length > 1 && (
-                                                                <span
-                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white"
-                                                                    title={concept.formats.map(f => FORMAT_LABELS[f] || f).join(' · ')}
+                                                                /*
+                                                                   The pill opens them.
+
+                                                                   It named three sizes that existed and
+                                                                   could not be looked at — the card shows
+                                                                   the square only. Clicking the card itself
+                                                                   is already how approval works, so the
+                                                                   label that makes the promise is the thing
+                                                                   that keeps it.
+                                                                */
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setViewingConcept(concept); }}
+                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/70 transition"
+                                                                    title={`View all sizes: ${concept.formats.map(f => FORMAT_LABELS[f] || f).join(' · ')}`}
                                                                 >
                                                                     {concept.formats.length} sizes
-                                                                </span>
+                                                                </button>
                                                             )}
                                                             {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
                                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
@@ -1395,6 +1410,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     </div>
                 </div>
             </div>
+
+            <CreativeSizesModal
+                concept={viewingConcept}
+                show={Boolean(viewingConcept)}
+                onClose={() => setViewingConcept(null)}
+            />
 
             {editingImage && (
                 <RefineImageModal

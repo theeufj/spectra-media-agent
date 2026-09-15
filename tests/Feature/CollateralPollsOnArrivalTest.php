@@ -81,14 +81,30 @@ class CollateralPollsOnArrivalTest extends TestCase
             'descriptions' => ['Launch in five minutes with AI.'],
         ]);
 
-        // The three the dispatcher sends.
-        foreach (range(1, 3) as $i) {
-            $strategy->imageCollaterals()->create([
-                'campaign_id' => $strategy->campaign_id,
-                'platform' => $strategy->platform ?? 'Google Ads (SEM)',
-                'cloudfront_url' => "https://example.test/{$i}.jpeg",
-                's3_path' => "collateral/images/{$i}.jpeg",
-            ]);
+        /*
+           Filled to the campaign's cap.
+
+           This used to create three rows, because three images per strategy was
+           the shape when one image meant one row. One picture is now three rows
+           — square, landscape and MREC — and the page counts pictures against
+           the cap, so three rows is one or three pictures and never a finished
+           set.
+        */
+        $cap = \App\Models\ImageCollateral::capForCampaign($strategy->campaign);
+
+        foreach (range(1, $cap) as $i) {
+            $key = (string) \Illuminate\Support\Str::uuid();
+
+            foreach (['square', 'landscape', 'mrec'] as $format) {
+                $strategy->imageCollaterals()->create([
+                    'campaign_id' => $strategy->campaign_id,
+                    'platform' => $strategy->platform ?? 'Google Ads (SEM)',
+                    'cloudfront_url' => "https://example.test/{$i}-{$format}.jpeg",
+                    's3_path' => "collateral/images/{$i}-{$format}.jpeg",
+                    'format' => $format,
+                    'concept_key' => $key,
+                ]);
+            }
         }
 
         // Everything asked for has arrived, so the page has nothing to wait on
