@@ -217,6 +217,22 @@ class GenerateImage implements ShouldQueue
                 $lens = $this->slot + $index;
                 $scene = CreativeVariant::apply($prompt, $lens);
 
+                /*
+                 * A different approved headline on each creative.
+                 *
+                 * Given all five and asked for "one of those lines", the model
+                 * picked the same one four times: four photographs of a single
+                 * message. Five headlines were written, approved and paid for
+                 * precisely so the account can find out which of them works —
+                 * and Google cannot learn that from four copies of one.
+                 *
+                 * Keyed on the lens, so the thing that makes each creative
+                 * visually distinct also makes it say something distinct. The
+                 * full set still goes in the markers: it is the vocabulary the
+                 * model may draw from, and this is which line leads.
+                 */
+                $headline = $this->headlineForLens($adCopy, $lens);
+
                 $imagePrompt = (new ImagePrompt(
                     $scene,
                     $brandGuidelines,
@@ -227,6 +243,7 @@ class GenerateImage implements ShouldQueue
                     // flat navy band across the bottom of a free account's
                     // creative.
                     bannerComposited: $this->campaign->customer->isOnPaidPlan(),
+                    headline: $headline,
                 ))->getPrompt();
 
                 /*
@@ -547,6 +564,28 @@ class GenerateImage implements ShouldQueue
      * @return string empty when there is no approved copy — the template's
      *                rules then produce a composition with no words at all
      */
+    /**
+     * Which approved headline this creative leads with.
+     *
+     * Rotates through the approved set by lens, so a set of four creatives
+     * carries four different messages rather than four pictures of one. Null
+     * when there is no approved copy, which leaves the choice to the model as
+     * before — there is nothing to nominate.
+     */
+    private function headlineForLens(?\App\Models\AdCopy $adCopy, int $lens): ?string
+    {
+        $headlines = array_values(array_filter(array_map(
+            fn ($line) => trim((string) $line),
+            $adCopy->headlines ?? [],
+        )));
+
+        if ($headlines === []) {
+            return null;
+        }
+
+        return $headlines[$lens % count($headlines)];
+    }
+
     private function renderableCopy(?\App\Models\AdCopy $adCopy): string
     {
         if (! $adCopy) {

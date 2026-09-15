@@ -33,13 +33,25 @@ class ImagePrompt
      */
     private bool $bannerComposited;
 
-    public function __construct(string $strategyContent, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null, string $adText = '', bool $bannerComposited = true)
+    /**
+     * The approved headline this particular creative should lead with.
+     *
+     * Null leaves the choice to the model, which is right when there is no
+     * approved copy to nominate from. When there is, the caller rotates
+     * through the set: given all five and asked for "one of those lines", the
+     * model chose the same one four times, and four photographs of a single
+     * message cannot tell an account which message works.
+     */
+    private ?string $headline;
+
+    public function __construct(string $strategyContent, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null, string $adText = '', bool $bannerComposited = true, ?string $headline = null)
     {
         $this->strategyContent = $strategyContent;
         $this->brandGuidelines = $brandGuidelines;
         $this->productContext = $productContext;
         $this->adText = $adText;
         $this->bannerComposited = $bannerComposited;
+        $this->headline = $headline;
     }
 
     /**
@@ -88,7 +100,7 @@ class ImagePrompt
                "{{brand_context}}{{product_context}}\n".
                "**THE ONLY WORDS THAT MAY APPEAR IN THE ARTWORK:**\n".
                "<<<\n{{ad_text}}\n>>>\n".
-               "Set exactly one of those lines as a headline in the picture, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n".
+               '{{headline_instruction}}'.
                "The whole headline must fit inside the frame with clear space around it — every letter of the first word and the last word fully visible, none of it touching or running past any edge. If the line does not fit at the size you have chosen, set it smaller, break it across two lines, or choose a shorter line from between the markers. A headline with its first and last letters cropped off is worse than no headline at all.\n".
                "Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
                "**COMPOSITION:**\n".
@@ -152,7 +164,17 @@ class ImagePrompt
             ? "- Leave the bottom sixth quieter than the rest: a brand banner is composited there afterwards, and a busy strip underneath it makes both unreadable.\n"
             : "- The photograph runs to all four edges. Do not leave an empty band, bar or block of flat colour anywhere in the frame.\n";
 
+        /*
+         * Nominated rather than chosen, when the caller has nominated one.
+         * The markers still carry the whole approved set — that is the
+         * vocabulary the artwork may use — and this says which line leads.
+         */
+        $headlineInstruction = $this->headline !== null && trim($this->headline) !== ''
+            ? 'Set this exact line as the headline in the picture: "'.trim($this->headline)."\". Use it word for word, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n"
+            : "Set exactly one of those lines as a headline in the picture, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n";
+
         return strtr(self::activeTemplate(), [
+            '{{headline_instruction}}' => $headlineInstruction,
             '{{banner_reservation}}' => $bannerReservation,
             '{{brand_context}}' => $brandContext,
             '{{product_context}}' => $productContextString,

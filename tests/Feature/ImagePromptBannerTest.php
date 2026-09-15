@@ -26,9 +26,9 @@ class ImagePromptBannerTest extends TestCase
 
     private const SCENE = 'A maker in a sunlit studio.';
 
-    private function prompt(bool $banner): string
+    private function prompt(bool $banner, ?string $headline = null): string
     {
-        return (new ImagePrompt(self::SCENE, null, null, "Build a Store in 5 Minutes\nAll-In-One for \$35/Mo", $banner))->getPrompt();
+        return (new ImagePrompt(self::SCENE, null, null, "Build a Store in 5 Minutes\nAll-In-One for \$35/Mo", $banner, $headline))->getPrompt();
     }
 
     public function test_space_is_reserved_only_when_a_banner_is_coming(): void
@@ -89,5 +89,38 @@ class ImagePromptBannerTest extends TestCase
         $this->assertStringContainsString('must fit inside the frame', $prompt);
         $this->assertStringContainsString('first and last letters cropped off is worse than no headline', $prompt);
         $this->assertStringContainsString('break it across two lines', $prompt);
+    }
+
+    public function test_a_nominated_headline_is_named_word_for_word(): void
+    {
+        /*
+           Given all five approved headlines and asked for "one of those
+           lines", the model set the same one on all four creatives. Five were
+           written and approved precisely so the account can find out which
+           works, and four copies of one message cannot answer that.
+        */
+        $prompt = $this->prompt(true, 'All-In-One for $35/Mo');
+
+        $this->assertStringContainsString('Set this exact line as the headline in the picture: "All-In-One for $35/Mo"', $prompt);
+        $this->assertStringContainsString('word for word', $prompt);
+    }
+
+    public function test_the_whole_approved_set_still_reaches_the_model(): void
+    {
+        // The nomination says which line leads; the markers stay the full
+        // vocabulary the artwork is allowed to draw from.
+        $prompt = $this->prompt(true, 'All-In-One for $35/Mo');
+
+        $this->assertStringContainsString('Build a Store in 5 Minutes', $prompt);
+    }
+
+    public function test_without_a_nomination_the_model_still_chooses(): void
+    {
+        // No approved copy to nominate from is a real case, and the older
+        // wording is right for it.
+        $prompt = $this->prompt(true);
+
+        $this->assertStringContainsString('Set exactly one of those lines', $prompt);
+        $this->assertStringNotContainsString('Set this exact line', $prompt);
     }
 }
