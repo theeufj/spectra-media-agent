@@ -402,7 +402,24 @@ class GenerateImage implements ShouldQueue
 
                     try {
                         $img = Image::read($decodedImage);
-                        $img->cover($targetW, $targetH);
+
+                        /*
+                         * Scaled to the slot, not cropped into it.
+                         *
+                         * cover() fills the slot and throws away the overflow:
+                         * 6.2% of the height reaching 1200x628, 6.7% of the
+                         * width reaching 300x250, and 47.7% when a
+                         * wrong-shaped base was substituted. None of it was
+                         * measured and all of it was content somebody briefed.
+                         *
+                         * resize() keeps the whole photograph and stretches it
+                         * to fit instead. That is only honest while the
+                         * mismatch is small, which is why the sizes requested
+                         * now match the slots and why nearestBase refuses a
+                         * substitute whose shape is too far off — a 6% stretch
+                         * is invisible, a 48% one would be a funhouse mirror.
+                         */
+                        $img->resize($targetW, $targetH);
 
                         $w = $img->width();
                         $h = $img->height();
@@ -586,6 +603,15 @@ class GenerateImage implements ShouldQueue
      * and 4:3 remain the closest it offers and those two still cost the few
      * per cent above.
      */
+    /**
+     * How far a base may be stretched to fill a slot it was not generated for.
+     *
+     * The slot is filled by scaling now rather than cropping, so the cost of a
+     * mismatch is distortion instead of lost picture. Around twelve per cent
+     * it stops being invisible and starts showing on a face.
+     */
+    private const MAX_STRETCH = 0.12;
+
     private const GROK_SIZES = [
         '1:1' => '1024x1024',
         // 1.911, matching 1200x628.
@@ -827,7 +853,7 @@ class GenerateImage implements ShouldQueue
 
         $targetRatio = $targetW / $targetH;
         $best = null;
-        $bestLoss = null;
+        $bestStretch = null;
         $bestAspect = 'unknown';
 
         foreach ($bases as $aspect => $base) {
@@ -837,18 +863,22 @@ class GenerateImage implements ShouldQueue
                 continue;
             }
 
-            // What cover() will throw away reaching this slot.
-            $scale = max($targetW / $size[0], $targetH / $size[1]);
-            $loss = 1 - ($targetW * $targetH) / (($size[0] * $scale) * ($size[1] * $scale));
+            /*
+             * How far this base would have to be stretched, now that the slot
+             * is filled by scaling rather than cropping. Symmetric, so
+             * squashing by a third and stretching by a third score alike.
+             */
+            $ratio = $size[0] / $size[1];
+            $stretch = abs(1 - ($ratio / $targetRatio));
 
-            if ($bestLoss === null || $loss < $bestLoss) {
+            if ($bestStretch === null || $stretch < $bestStretch) {
                 $best = $base;
-                $bestLoss = $loss;
+                $bestStretch = $stretch;
                 $bestAspect = $aspect;
             }
         }
 
-        if ($best === null || $bestLoss === null) {
+        if ($best === null || $bestStretch === null) {
             return null;
         }
 
@@ -856,12 +886,16 @@ class GenerateImage implements ShouldQueue
             'strategy_id' => $this->strategy->id,
             'wanted' => $wanted,
             'target_ratio' => round($targetRatio, 3),
-            'discarded_percent' => round($bestLoss * 100, 1),
+            'stretch_percent' => round($bestStretch * 100, 1),
         ]);
 
-        // A third is the point past which the composition is gone rather than
-        // tightened.
-        return $bestLoss > 0.34 ? null : $best;
+        /*
+         * Twelve per cent is about where a stretch stops being invisible and
+         * starts showing on a face. Past it the honest answer is that this
+         * shape is not that shape, and the format goes unfilled rather than
+         * shipping a creative of visibly elongated people.
+         */
+        return $bestStretch > self::MAX_STRETCH ? null : $best;
     }
 
     /**

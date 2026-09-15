@@ -8,15 +8,18 @@ use App\Models\Strategy;
 use Tests\TestCase;
 
 /**
- * How much of the photograph survives reaching each ad slot.
+ * Filling an ad slot without throwing the picture away.
  *
- * cover() scales and then crops away whatever does not fit, and the difference
- * was being thrown away unmeasured. Two of the three slots cost a few per cent,
- * which the brief's 10% safe margin absorbs. The expensive case is
- * substitution: when one aspect fails to generate, the code took the first base
- * it had — so the square went into the 1200x628 slot and cover() discarded
- * 47.7% of its height. Half the picture, silently, and increasingly often while
- * the image providers are rate-limiting.
+ * cover() scaled and then cropped off whatever did not fit: 6.2% of the height
+ * reaching 1200x628, 6.7% of the width reaching 300x250, and 47.7% when a
+ * wrong-shaped base was substituted — the square into the landscape slot,
+ * which the old code took because it was simply the first base in the array.
+ * None of it was measured and all of it was content somebody briefed.
+ *
+ * The slot is filled by scaling now, so nothing is discarded and the cost of a
+ * mismatch is distortion instead. That is only honest while the mismatch is
+ * small, which is what MAX_STRETCH is for: a 6% stretch is invisible, and past
+ * about 12% it shows on a face.
  */
 class CreativeCropTest extends TestCase
 {
@@ -50,20 +53,32 @@ class CreativeCropTest extends TestCase
     public function test_the_square_is_refused_for_the_landscape_slot(): void
     {
         /*
-           1024x1024 into 1200x628 is a 47.7% crop of the height. The old code
-           took it without comment because it was simply the first base in the
-           array.
+           1024x1024 (1.000) into a 1.911 slot is a 48% stretch — people half
+           as wide as they should be. The old code took it without comment
+           because it was simply the first base in the array.
         */
         $this->assertNull($this->nearest(['1:1' => $this->base(1024, 1024)], '16:9', 1200, 628));
     }
 
-    public function test_a_near_enough_shape_is_still_used(): void
+    public function test_a_small_stretch_is_accepted_rather_than_leaving_a_gap(): void
     {
-        // 16:9 into a 1.911 slot costs ~6%, which the safe margin absorbs.
-        // Refusing that would leave the ad set short a size for no gain.
-        $bases = ['16:9' => $this->base(1344, 768)];
+        // 1376x768 (1.792) into 1.911 is a 6% stretch: invisible, and better
+        // than an ad set missing a size.
+        $this->assertNotNull($this->nearest(['16:9' => $this->base(1376, 768)], '4:3', 1200, 628));
+    }
 
-        $this->assertNotNull($this->nearest($bases, '4:3', 1200, 628));
+    public function test_a_stretch_past_the_limit_leaves_the_format_unfilled(): void
+    {
+        /*
+           A 4:3 base (1.333) into the 300x250 slot (1.200) is 11% — allowed.
+           The same base into 1200x628 (1.911) is 30% — refused, because the
+           people in it would be visibly elongated and that is a worse ad than
+           no ad.
+        */
+        $bases = ['4:3' => $this->base(1152, 896)];
+
+        $this->assertNotNull($this->nearest($bases, '1:1', 300, 250));
+        $this->assertNull($this->nearest($bases, '1:1', 1200, 628));
     }
 
     public function test_the_closest_of_several_is_chosen_not_the_first(): void
