@@ -437,7 +437,8 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
     */
     const awaitingCollateral = (campaigns.strategies || []).some(
         s => s.signed_off_at
-            && ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) === 0
+            && (s.image_collaterals_count || 0) === 0
+            && ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) === 0
     );
 
     const { data: collateralPoll } = usePolling(
@@ -448,7 +449,8 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             // until a timeout nobody is watching.
             until: (d) => (d?.strategies || []).every(
                 s => ! s.signed_off_at
-                    || ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) > 0
+                    || (s.image_collaterals_count || 0) > 0
+                    || ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) > 0
             ),
         }
     );
@@ -472,6 +474,26 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
        opening this page for a campaign whose collateral finished last week
        leaves you on the page you asked for.
     */
+    /*
+       Whether pictures are probably still on their way.
+
+       Derived from how long ago the strategy was signed off rather than from a
+       flag, because there is no server field that means this and inventing one
+       would be a schema change to answer a question the timestamps already
+       answer. Images take a couple of minutes; past IMAGE_WAIT_MS nothing more
+       is coming, and a strategy that will never have images — video-only, or
+       an exhausted allowance — must not strand anyone watching for one.
+    */
+    const IMAGE_WAIT_MS = 5 * 60 * 1000;
+
+    const stillGeneratingImages = (s) => {
+        if ((s.image_collaterals_count || 0) > 0) return false;
+
+        const signedOff = new Date(s.signed_off_at).getTime();
+
+        return Number.isFinite(signedOff) && (Date.now() - signedOff) < IMAGE_WAIT_MS;
+    };
+
     const waitedForCollateralRef = useRef(false);
 
     useEffect(() => {
@@ -483,9 +505,25 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
 
         if (! waitedForCollateralRef.current) return;
 
+        /*
+           Wait for a picture, not for anything at all.
+
+           This matched on the sum of all three counts, and ad copy is written
+           first and fastest — so it fired the moment the copy landed and
+           dropped the customer onto a collateral page with no creative on it.
+           They came to see the ads; arriving before any exist is barely better
+           than the spinner it replaced.
+
+           A strategy that will never have images (video-only, or an exhausted
+           allowance) still advances on whatever it does have, so this cannot
+           strand anyone waiting for something that is not coming.
+        */
         const ready = (campaigns.strategies || []).find(
+            s => s.signed_off_at && (s.image_collaterals_count || 0) > 0
+        ) || (campaigns.strategies || []).find(
             s => s.signed_off_at
-                && ((s.ad_copies_count || 0) + (s.image_collaterals_count || 0) + (s.video_collaterals_count || 0)) > 0
+                && ! stillGeneratingImages(s)
+                && ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) > 0
         );
 
         if (! ready) return;

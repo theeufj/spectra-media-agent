@@ -113,3 +113,62 @@ describe('pages that show a waiting state', () => {
         expect(anyProcessing([{ content: 'Real text' }, { content: 'More text' }])).toBe(false);
     });
 });
+
+/**
+ * Arriving at the collateral page before any creative exists.
+ *
+ * The auto-advance matched on the sum of all three counts, and ad copy is
+ * written first and fastest — so it fired the moment the copy landed and
+ * dropped the customer onto a page with no pictures on it. They came to see
+ * the ads.
+ */
+const IMAGE_WAIT_MS = 5 * 60 * 1000;
+
+const stillGeneratingImages = (s) => {
+    if ((s.image_collaterals_count || 0) > 0) return false;
+
+    const signedOff = new Date(s.signed_off_at).getTime();
+
+    return Number.isFinite(signedOff) && (Date.now() - signedOff) < IMAGE_WAIT_MS;
+};
+
+const readyForCollateral = (strategies) =>
+    strategies.find(s => s.signed_off_at && (s.image_collaterals_count || 0) > 0)
+    || strategies.find(s => s.signed_off_at
+        && ! stillGeneratingImages(s)
+        && ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) > 0);
+
+const justNow = () => new Date().toISOString();
+const longAgo = () => new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+describe('when to leave the strategy page', () => {
+    it('does not leave on ad copy alone while images are still coming', () => {
+        const ready = readyForCollateral([
+            { uuid: 'a', signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 0 },
+        ]);
+
+        expect(ready).toBeUndefined();
+    });
+
+    it('leaves as soon as the first picture lands', () => {
+        const ready = readyForCollateral([
+            { uuid: 'a', signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 3 },
+        ]);
+
+        expect(ready?.uuid).toBe('a');
+    });
+
+    it('still leaves for a strategy that will never have images', () => {
+        /*
+           A video-only strategy, or one whose image allowance is spent, has
+           nothing more coming — waiting for a picture there would strand the
+           customer watching for something that is not on its way. Ten minutes
+           after sign-off, nothing more is arriving.
+        */
+        const ready = readyForCollateral([
+            { uuid: 'a', signed_off_at: longAgo(), ad_copies_count: 1, image_collaterals_count: 0 },
+        ]);
+
+        expect(ready?.uuid).toBe('a');
+    });
+});

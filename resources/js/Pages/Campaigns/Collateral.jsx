@@ -1210,6 +1210,30 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     </div>
                                                 );
                                                 })}
+
+                                                {/*
+                                                    A tile where the next picture will appear.
+
+                                                    The set arrives one concept at a time over a
+                                                    couple of minutes, and a grid that simply stops
+                                                    growing looks finished. Standing a placeholder
+                                                    in the next slot says the opposite: more is
+                                                    coming, here, shortly — which is the difference
+                                                    between waiting and wondering whether it broke.
+                                                */}
+                                                {(isPolling || generatingImage) && (
+                                                    <div
+                                                        className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-3 aspect-square bg-gray-50"
+                                                        aria-live="polite"
+                                                    >
+                                                        <svg className="w-8 h-8 text-brand-dark animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                        </svg>
+                                                        <p className="text-sm font-medium text-gray-600">Generating the next image</p>
+                                                        <p className="text-xs text-gray-500">It appears here as soon as it is ready</p>
+                                                    </div>
+                                                )}
                                                 </div>
                                             </>
                                         )}
