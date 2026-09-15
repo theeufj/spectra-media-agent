@@ -361,6 +361,48 @@ class GenerateImage implements ShouldQueue
                     continue;
                 }
 
+                /*
+                 * A second pass for whatever did not come back.
+                 *
+                 * Some slots can only be filled by their own aspect. Measured
+                 * across every combination: the 1200x628 landscape slot takes a
+                 * 16:9 base or nothing — a square stretched into it is 47.7%
+                 * wrong and a 4:3 is 37.2%, both far past what is honest — and
+                 * the square slot is equally stranded without a 1:1. So a
+                 * single failed generation does not cost a few per cent of
+                 * quality, it costs the whole format, and a set ships that
+                 * cannot serve that placement at all.
+                 *
+                 * That failure is almost always transient: a 429 while three
+                 * jobs generate at once, or a provider blip. By the time the
+                 * other aspects have finished, seconds have passed and the
+                 * pressure that caused it has usually eased. One more attempt
+                 * is far cheaper than an ad set with a hole in it.
+                 */
+                $missing = array_values(array_diff(
+                    array_unique(array_column($adFormats, 'aspect')),
+                    array_keys($bases)
+                ));
+
+                foreach ($missing as $aspect) {
+                    Log::info("Retrying the {$aspect} base, which no format can be substituted for", [
+                        'strategy_id' => $this->strategy->id,
+                        'have' => array_keys($bases),
+                    ]);
+
+                    $generated = $this->generateAtAspect(
+                        $imagePrompt,
+                        $aspect,
+                        $seedContextImages,
+                        $creativeContext,
+                        $geminiService
+                    );
+
+                    if ($generated) {
+                        $bases[$aspect] = $generated;
+                    }
+                }
+
                 // Identical for every format — computed once per prompt.
                 $customer = $this->campaign->customer;
                 // Asked whether some person on the account was paying. A paid

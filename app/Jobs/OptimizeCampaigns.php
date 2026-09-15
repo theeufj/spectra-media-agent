@@ -110,6 +110,22 @@ class OptimizeCampaigns implements ShouldQueue
 
                     // Store lower-confidence recommendations for human review
                     foreach ($needsReview as $rec) {
+                        /*
+                         * Not the same suggestion twice.
+                         *
+                         * This runs nightly and re-derives its recommendations
+                         * from the same performance data, so a campaign nobody
+                         * has triaged for a fortnight collected fourteen copies
+                         * of the same advice. The list a human is meant to make
+                         * decisions from became the list they scroll past.
+                         */
+                        $type = $rec['type'] ?? 'general';
+                        $target = $rec['target_entity'] ?? $rec['target'] ?? null;
+
+                        if (Recommendation::alreadyPending($campaign->id, $type, is_array($target) ? $target : null)) {
+                            continue;
+                        }
+
                         Recommendation::create([
                             'campaign_id' => $campaign->id,
                             'type' => $rec['type'] ?? 'general',
