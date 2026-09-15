@@ -79,7 +79,19 @@ export default function SetupProgressNav() {
             </div>
 
             {/* Steps */}
-            <div className="flex flex-col sm:flex-row gap-2">
+            {/*
+                Six steps that wrap rather than one row that clips.
+
+                This was a single sm:flex-row, and each step is sm:flex-1 with
+                no min-w-0 of its own — so the icon plus the label set a floor
+                the items could not shrink past, and the sixth ran off the edge
+                of the card. "Add a payment method" rendered as "Add a paym"
+                against the boundary, on a laptop, not a phone.
+
+                Wrapping keeps all six readable: a step nobody can read is not a
+                smaller step, it is a missing one.
+            */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                 {steps.map((step, index) => {
                     /*
                        Not every step is somewhere you can go.
@@ -94,7 +106,8 @@ export default function SetupProgressNav() {
                        that screen on the redirect back from paying.
                     */
                     const className = `
-                        sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
+                        flex min-w-0 items-center space-x-2 px-3 py-2 rounded-lg text-xs
+                        sm:flex-1 sm:basis-44
                         transition-all duration-200
                         ${stepClasses(step, step.key === currentKey, isBlocked(index))}
                     `;
