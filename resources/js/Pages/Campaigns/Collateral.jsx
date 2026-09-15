@@ -1120,25 +1120,36 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     const image = concept.cover;
 
                                                     return (
+                                                    /*
+                                                       The artwork carries nothing on top of it.
+
+                                                       The approval checkbox sat at top-left and the
+                                                       size pill at top-right, and the headline is
+                                                       composited across the upper band of the
+                                                       picture — so both corners covered the words.
+                                                       On one creative the checkbox hid the B of
+                                                       "Build an Online Store with AI", which reads
+                                                       as a cropped headline rather than as a
+                                                       control in the way.
+
+                                                       The controls live under the picture now. The
+                                                       whole card is still the approve target, so
+                                                       clicking the image works as it always did.
+                                                    */
                                                     <div
                                                         key={concept.key}
-                                                        className={`border-2 ${concept.deployed ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
+                                                        className={`border-2 ${concept.deployed ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
                                                         {...approvalToggle({
                                                             checked: concept.deployed,
                                                             onToggle: () => handleToggleConcept(concept),
                                                             label: 'Include this image in deployment',
                                                         })}
                                                     >
+                                                    <div className="relative">
                                                         {/* block: an inline <img> sits on the text baseline and
                                                             leaves a few pixels of background beneath it, which is
                                                             the thin white strip under every card. */}
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="block w-full h-auto" />
-                                                        {/* Checkbox */}
-                                                        <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${concept.deployed ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
-                                                            {concept.deployed && (
-                                                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                            )}
-                                                        </div>
                                                         {/* Format + source badges */}
                                                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                                                             <button
@@ -1152,28 +1163,6 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             >
                                                                 {image.is_seed ? '✦ AI Seed' : '✦ Use as AI seed'}
                                                             </button>
-                                                            {/* The sizes this picture exists in, rather than which
-                                                                row the card happens to be — they are all the same
-                                                                photograph and all deploy together. */}
-                                                            {concept.formats.length > 1 && (
-                                                                /*
-                                                                   The pill opens them.
-
-                                                                   It named three sizes that existed and
-                                                                   could not be looked at — the card shows
-                                                                   the square only. Clicking the card itself
-                                                                   is already how approval works, so the
-                                                                   label that makes the promise is the thing
-                                                                   that keeps it.
-                                                                */
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setViewingConcept(concept); }}
-                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/70 transition"
-                                                                    title={`View all sizes: ${concept.formats.map(f => FORMAT_LABELS[f] || f).join(' · ')}`}
-                                                                >
-                                                                    {concept.formats.length} sizes
-                                                                </button>
-                                                            )}
                                                             {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
                                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
                                                                     {image.refinement_depth}/{creativeUsage.max_refinements_per_item} edits
@@ -1222,6 +1211,41 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 </a>
                                                             )}
                                                         </div>
+                                                    </div>
+
+                                                    {/* Under the artwork, where nothing can obscure it. */}
+                                                    <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-white px-3 py-2">
+                                                        <span className="flex items-center gap-2 text-sm text-gray-700">
+                                                            <span
+                                                                className={`flex h-5 w-5 items-center justify-center rounded border-2 ${concept.deployed ? 'border-green-500 bg-green-500' : 'border-gray-300 bg-white'}`}
+                                                                aria-hidden="true"
+                                                            >
+                                                                {concept.deployed && (
+                                                                    <svg className="h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                                )}
+                                                            </span>
+                                                            {concept.deployed ? 'Will deploy' : 'Not deploying'}
+                                                        </span>
+
+                                                        {concept.formats.length > 1 && (
+                                                            /*
+                                                               The pill opens them.
+
+                                                               It named three sizes that existed and could
+                                                               not be looked at — the card shows the square
+                                                               only. Clicking the card is already how
+                                                               approval works, so the label that makes the
+                                                               promise is the thing that keeps it.
+                                                            */
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setViewingConcept(concept); }}
+                                                                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                                                title={`View all sizes: ${concept.formats.map(f => FORMAT_LABELS[f] || f).join(' · ')}`}
+                                                            >
+                                                                {concept.formats.length} sizes
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     </div>
                                                 );
                                                 })}
