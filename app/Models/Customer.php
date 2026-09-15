@@ -379,7 +379,20 @@ class Customer extends Model
         $prices = \DB::table('subscriptions')
             ->whereIn('user_id', $userIds)
             ->whereIn('stripe_status', ['active', 'trialing'])
-            ->whereNull('ends_at')
+            /*
+               A cancellation is not an ending.
+
+               Cashier records "cancel at period end" by setting ends_at while
+               leaving the status active — the customer has paid through that
+               date and keeps everything until it. whereNull('ends_at') dropped
+               them the instant they clicked cancel: a Starter customer who
+               cancelled on the 15th would have lost their video allowance that
+               afternoon, a month before the month they paid for was over. Seen
+               within minutes of shipping it, by cancelling.
+            */
+            ->where(function ($q) {
+                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
+            })
             ->pluck('stripe_price')
             ->filter()
             ->unique();

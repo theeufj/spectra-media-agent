@@ -49,7 +49,7 @@ class SubscribedPlanEntitlementTest extends TestCase
         return [$user, $customer->fresh()];
     }
 
-    private function subscribe(User $user, string $price, string $status = 'active'): void
+    private function subscribe(User $user, string $price, string $status = 'active', $endsAt = null): void
     {
         DB::table('subscriptions')->insert([
             'user_id' => $user->id,
@@ -58,6 +58,7 @@ class SubscribedPlanEntitlementTest extends TestCase
             'stripe_status' => $status,
             'stripe_price' => $price,
             'quantity' => 1,
+            'ends_at' => $endsAt,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -141,6 +142,34 @@ class SubscribedPlanEntitlementTest extends TestCase
         $this->subscribe($user, 'price_something_retired');
 
         // A retired price must not resolve to an arbitrary plan.
+        $this->assertSame('free', $customer->fresh()->resolvePlan()->slug);
+    }
+
+    public function test_cancelling_keeps_the_plan_until_the_period_ends(): void
+    {
+        $this->plan('starter', 14900, 'price_starter', ['image_generations' => 50, 'video_generations' => 10]);
+
+        [$user, $customer] = $this->account();
+
+        /*
+           Cashier records "cancel at period end" by setting ends_at and
+           leaving the status active. The customer has paid through that date.
+           Dropping them on the day they cancel takes away a month they already
+           bought — and is what the first version of this did.
+        */
+        $this->subscribe($user, 'price_starter', 'active', now()->addDays(30));
+
+        $this->assertSame('starter', $customer->fresh()->resolvePlan()->slug);
+    }
+
+    public function test_the_plan_goes_once_the_paid_period_is_over(): void
+    {
+        $this->plan('starter', 14900, 'price_starter', ['image_generations' => 50, 'video_generations' => 10]);
+
+        [$user, $customer] = $this->account();
+        $this->subscribe($user, 'price_starter', 'active', now()->subDay());
+
+        // Past ends_at there is nothing left to honour.
         $this->assertSame('free', $customer->fresh()->resolvePlan()->slug);
     }
 }
