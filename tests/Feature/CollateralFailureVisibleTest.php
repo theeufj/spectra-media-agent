@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\GenerateImage;
+use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\ImageCollateral;
@@ -37,11 +38,22 @@ class CollateralFailureVisibleTest extends TestCase
         $user->customers()->attach($customer->id, ['role' => 'owner']);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
 
-        return Strategy::factory()->create([
+        $strategy = Strategy::factory()->create([
             'campaign_id' => $campaign->id,
             'signed_off_at' => now(),
             'imagery_strategy' => 'A maker in a sunlit studio.',
         ]);
+
+        // Without copy the job releases to wait for it rather than generating,
+        // which is correct and is not what these tests are about.
+        AdCopy::create([
+            'strategy_id' => $strategy->id,
+            'platform' => 'Google Ads (SEM)',
+            'headlines' => ['Build a Store in 5 Minutes'],
+            'descriptions' => ['Launch in five minutes.'],
+        ]);
+
+        return $strategy;
     }
 
     public function test_a_run_that_generates_nothing_records_the_failure(): void

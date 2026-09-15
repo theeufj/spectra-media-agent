@@ -156,6 +156,38 @@ class GenerateImage implements ShouldQueue
                allowed to use.
             */
             $adCopy = $this->strategy->adCopies()->first();
+
+            /*
+             * Wait for the copy rather than draw a picture with no words on it.
+             *
+             * GenerateStrategyCollateral dispatches GenerateAdCopy five seconds
+             * after sign-off and the image jobs ten seconds after, and that is
+             * a race the image jobs can lose: on campaign 44 the copy landed at
+             * 08:51:13 and the first image job had already read this line at
+             * about 08:51:10. The headline is composited from that copy, so
+             * losing the race does not mean a slightly worse ad — it means a
+             * stock photograph with nothing written on it, which is not an
+             * advertisement and is not what the customer approved.
+             *
+             * Releasing costs twenty seconds. Generating a creative nobody can
+             * run costs the whole slot.
+             */
+            if (! $adCopy && $this->attempts() < self::COPY_WAIT_ATTEMPTS) {
+                Log::info("Ad copy not written yet for strategy {$this->strategy->id}; releasing image slot {$this->slot}", [
+                    'attempt' => $this->attempts(),
+                ]);
+
+                $this->release(self::COPY_WAIT_SECONDS);
+
+                return;
+            }
+
+            if (! $adCopy) {
+                // Out of patience: a picture with no headline is still better
+                // than no creative, and the copy has clearly failed elsewhere.
+                Log::warning("Generating images without ad copy for strategy {$this->strategy->id} after {$this->attempts()} attempts");
+            }
+
             $adText = $this->renderableCopy($adCopy);
 
             $successfulUploads = 0;
@@ -380,7 +412,8 @@ class GenerateImage implements ShouldQueue
                      * often while the providers are rate-limiting. It now takes
                      * the nearest shape available and says what that costs.
                      */
-                    $imageData = $this->nearestBase($bases, $spec['aspect'], $targetW, $targetH, $format);
+                    $fill = $this->nearestBase($bases, $spec['aspect'], $targetW, $targetH, $format);
+                    $imageData = $fill['base'] ?? null;
 
                     if ($imageData === null) {
                         Log::warning("No usable base for format {$format}; skipping it rather than shipping a severe crop", [
@@ -419,7 +452,12 @@ class GenerateImage implements ShouldQueue
                          * substitute whose shape is too far off — a 6% stretch
                          * is invisible, a 48% one would be a funhouse mirror.
                          */
-                        $img->resize($targetW, $targetH);
+                        if (($fill['mode'] ?? 'scale') === 'scale') {
+                            $img->resize($targetW, $targetH);
+                        } else {
+                            // Too far off to stretch without it showing.
+                            $img->cover($targetW, $targetH);
+                        }
 
                         $w = $img->width();
                         $h = $img->height();
@@ -610,7 +648,26 @@ class GenerateImage implements ShouldQueue
      * mismatch is distortion instead of lost picture. Around twelve per cent
      * it stops being invisible and starts showing on a face.
      */
+    /**
+     * How long an image job waits for the ad copy it draws its headline from.
+     *
+     * Six attempts at twenty seconds is two minutes — comfortably longer than
+     * GenerateAdCopy takes, and bounded so a copy job that has genuinely failed
+     * does not hold the creative hostage for ever.
+     */
+    private const COPY_WAIT_ATTEMPTS = 6;
+
+    private const COPY_WAIT_SECONDS = 20;
+
     private const MAX_STRETCH = 0.12;
+
+    /**
+     * How much of a substituted picture may be cropped away to save a format.
+     *
+     * Only reached when the shape is too far off to scale without the stretch
+     * showing. Past a third the composition is gone rather than tightened.
+     */
+    private const MAX_CROP = 0.34;
 
     private const GROK_SIZES = [
         '1:1' => '1024x1024',
@@ -833,13 +890,13 @@ class GenerateImage implements ShouldQueue
     /**
      * The generated base closest in shape to the slot being filled.
      *
-     * Returns null when even the closest would lose more than a third of the
-     * picture, because a creative that has had half its height cut off is not
-     * a smaller version of the ad — it is a different, worse one, and shipping
-     * it silently is how nobody notices.
+     * Returns the base and how to fit it: 'scale' while the stretch is
+     * invisible, 'crop' when the shape is too far off to stretch but a tighter
+     * composition still beats no creative, and null when even cropping would
+     * take the picture rather than tighten it.
      *
      * @param  array<string, array{data: string, mimeType: string}>  $bases
-     * @return array{data: string, mimeType: string}|null
+     * @return array{base: array{data: string, mimeType: string}, mode: string}|null
      */
     private function nearestBase(array $bases, string $wanted, int $targetW, int $targetH, string $format): ?array
     {
@@ -848,7 +905,7 @@ class GenerateImage implements ShouldQueue
         }
 
         if (isset($bases[$wanted])) {
-            return $bases[$wanted];
+            return ['base' => $bases[$wanted], 'mode' => 'scale'];
         }
 
         $targetRatio = $targetW / $targetH;
@@ -890,12 +947,31 @@ class GenerateImage implements ShouldQueue
         ]);
 
         /*
-         * Twelve per cent is about where a stretch stops being invisible and
-         * starts showing on a face. Past it the honest answer is that this
-         * shape is not that shape, and the format goes unfilled rather than
-         * shipping a creative of visibly elongated people.
+         * Scale while the stretch is invisible; crop rather than lose the slot.
+         *
+         * Refusing everything past twelve per cent was too strict in practice.
+         * One 4:3 generation failing left a campaign with three rows across two
+         * concepts — an ad set that cannot serve the display placements at all,
+         * which is worse for the customer than a tighter crop of a 300x250
+         * banner. A square into the MREC slot is a 16.7% stretch, visible on a
+         * face, but only a 16.7% crop of the height, and the brief already
+         * keeps subjects clear of the outer 10%.
          */
-        return $bestStretch > self::MAX_STRETCH ? null : $best;
+        if ($bestStretch <= self::MAX_STRETCH) {
+            return ['base' => $best, 'mode' => 'scale'];
+        }
+
+        $size = @getimagesizefromstring(base64_decode($best['data'], true) ?: '');
+        $cropLoss = 1.0;
+
+        if ($size && $size[0] > 0 && $size[1] > 0) {
+            $scale = max($targetW / $size[0], $targetH / $size[1]);
+            $cropLoss = 1 - ($targetW * $targetH) / (($size[0] * $scale) * ($size[1] * $scale));
+        }
+
+        // A third is where tightening the composition becomes destroying it.
+        // The square into 1200x628 is 47.7%, and still goes unfilled.
+        return $cropLoss > self::MAX_CROP ? null : ['base' => $best, 'mode' => 'crop'];
     }
 
     /**

@@ -35,6 +35,7 @@ class CreativeCropTest extends TestCase
         return ['data' => base64_encode($bytes), 'mimeType' => 'image/jpeg'];
     }
 
+    /** @return array{base: array{data: string, mimeType: string}, mode: string}|null */
     private function nearest(array $bases, string $wanted, int $tw, int $th): ?array
     {
         $job = new GenerateImage(Campaign::factory()->make(), new Strategy);
@@ -47,15 +48,20 @@ class CreativeCropTest extends TestCase
     {
         $bases = ['1:1' => $this->base(1024, 1024), '16:9' => $this->base(1376, 720)];
 
-        $this->assertSame($bases['16:9'], $this->nearest($bases, '16:9', 1200, 628));
+        $fill = $this->nearest($bases, '16:9', 1200, 628);
+
+        $this->assertSame($bases['16:9'], $fill['base']);
+        $this->assertSame('scale', $fill['mode'], 'an exact match must never be cropped');
     }
 
     public function test_the_square_is_refused_for_the_landscape_slot(): void
     {
         /*
            1024x1024 (1.000) into a 1.911 slot is a 48% stretch — people half
-           as wide as they should be. The old code took it without comment
-           because it was simply the first base in the array.
+           as wide as they should be — and a 47.7% crop, which is half the
+           photograph. Neither is an ad, so the slot goes unfilled. The old
+           code took it without comment because it was simply the first base in
+           the array.
         */
         $this->assertNull($this->nearest(['1:1' => $this->base(1024, 1024)], '16:9', 1200, 628));
     }
@@ -64,7 +70,7 @@ class CreativeCropTest extends TestCase
     {
         // 1376x768 (1.792) into 1.911 is a 6% stretch: invisible, and better
         // than an ad set missing a size.
-        $this->assertNotNull($this->nearest(['16:9' => $this->base(1376, 768)], '4:3', 1200, 628));
+        $this->assertSame('scale', $this->nearest(['16:9' => $this->base(1376, 768)], '4:3', 1200, 628)['mode']);
     }
 
     public function test_a_stretch_past_the_limit_leaves_the_format_unfilled(): void
@@ -77,8 +83,16 @@ class CreativeCropTest extends TestCase
         */
         $bases = ['4:3' => $this->base(1152, 896)];
 
-        $this->assertNotNull($this->nearest($bases, '1:1', 300, 250));
-        $this->assertNull($this->nearest($bases, '1:1', 1200, 628));
+        // 11% into the MREC slot: scaled, because the stretch is invisible.
+        $this->assertSame('scale', $this->nearest($bases, '1:1', 300, 250)['mode']);
+
+        /*
+           30% into the landscape slot. Too far to stretch without it showing
+           on a face, so it is cropped instead — which costs 23% of the width
+           and is still an ad, where an elongated one is not and a missing one
+           cannot serve the placement at all.
+        */
+        $this->assertSame('crop', $this->nearest($bases, '1:1', 1200, 628)['mode']);
     }
 
     public function test_the_closest_of_several_is_chosen_not_the_first(): void
@@ -93,7 +107,7 @@ class CreativeCropTest extends TestCase
             '16:9' => $this->base(1376, 720),
         ];
 
-        $this->assertSame($bases['16:9'], $this->nearest($bases, '4:3', 1200, 628));
+        $this->assertSame($bases['16:9'], $this->nearest($bases, '4:3', 1200, 628)['base']);
     }
 
     public function test_nothing_generated_means_nothing_shipped(): void

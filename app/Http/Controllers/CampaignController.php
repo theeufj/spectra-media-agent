@@ -904,7 +904,21 @@ class CampaignController extends Controller
             abort(403, 'You do not have access to this campaign.');
         }
 
-        $campaign->load('strategies');
+        /*
+         * With the counts, because this endpoint exists to answer "has the
+         * collateral arrived yet".
+         *
+         * It loaded bare strategies, so every strategy came back with no
+         * *_count fields at all. The page reads them as zero, concludes the
+         * work is still running, and polls forever: a campaign whose images had
+         * finished minutes earlier sat on "Generating your collateral... this
+         * usually takes 1-2 minutes" indefinitely, and the auto-advance to the
+         * collateral page never fired because its condition could never be met.
+         *
+         * The Inertia endpoint for this page has always loaded them, which is
+         * how the server render looked right and only the polling was wrong.
+         */
+        $campaign->load(['strategies' => fn ($q) => $q->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals'])]);
 
         // Add generation status to response
         $campaignData = $campaign->toArray();
