@@ -321,6 +321,29 @@ class Customer extends Model
            customers who already paid are covered too, and so an admin setting
            plan_id explicitly still wins — the branch above returns first.
         */
+        /*
+           A subscription the account is actually paying for.
+
+           Entitlement lives on the customer, but Cashier records subscriptions
+           against the user — so buying Starter left plan_id NULL and this
+           method returned free. Seen live: an active subscription to the $149
+           price, and a collateral page reading "0 video generations remaining"
+           to someone who had just bought ten of them. The purchase worked; the
+           entitlement never arrived.
+
+           Matched on stripe_price_id, so an account gets exactly the plan it
+           pays for and nothing else. Resolved here rather than written to
+           plan_id on payment for the same two reasons the setup-only branch
+           gives: everyone who has already paid is covered without a backfill,
+           and an admin setting plan_id explicitly still wins, because the
+           branch above returns first.
+        */
+        $subscribed = $this->subscribedPlan();
+
+        if ($subscribed) {
+            return $subscribed;
+        }
+
         if ($this->isPaidSetupOnly()) {
             $plan = Plan::where('slug', 'setup_only')->first();
 
@@ -331,6 +354,44 @@ class Customer extends Model
 
         return Plan::where('slug', 'free')->first()
             ?? new Plan(['slug' => 'free', 'name' => 'Free']);
+    }
+
+    /**
+     * The plan behind an active subscription held by one of this account's users.
+     *
+     * Cashier stores subscriptions against the user, and a business may have
+     * several users, so the account is entitled to whatever any of its members
+     * is paying for. Where more than one is active — a team where two people
+     * subscribed, or someone mid-upgrade — the more expensive plan wins, which
+     * is the one they are actually being charged for.
+     *
+     * Trialing counts. A trial is a subscription whose invoice has not landed
+     * yet, and refusing the allowances during it is refusing the trial.
+     */
+    public function subscribedPlan(): ?Plan
+    {
+        $userIds = $this->users()->pluck('users.id');
+
+        if ($userIds->isEmpty()) {
+            return null;
+        }
+
+        $prices = \DB::table('subscriptions')
+            ->whereIn('user_id', $userIds)
+            ->whereIn('stripe_status', ['active', 'trialing'])
+            ->whereNull('ends_at')
+            ->pluck('stripe_price')
+            ->filter()
+            ->unique();
+
+        if ($prices->isEmpty()) {
+            return null;
+        }
+
+        return Plan::whereNotNull('stripe_price_id')
+            ->whereIn('stripe_price_id', $prices->all())
+            ->orderByDesc('price_cents')
+            ->first();
     }
 
     /**

@@ -1177,15 +1177,49 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {isSubscribed ? (
                                                                 <div className="flex gap-2 flex-wrap justify-center px-2">
-                                                                    {image.source !== 'uploaded' && (
-                                                                        <button
-                                                                            onClick={(e) => { e.stopPropagation(); setEditingImage(image); }}
-                                                                            disabled={creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item}
-                                                                            className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                        >
-                                                                            {creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item ? 'Max Edits' : 'Edit'}
-                                                                        </button>
-                                                                    )}
+                                                                    {image.source !== 'uploaded' && (() => {
+                                                                        /*
+                                                                           "Max Edits" was told to people who had never
+                                                                           edited anything.
+
+                                                                           The label flipped whenever depth >=
+                                                                           max_refinements_per_item, and that allowance is
+                                                                           zero on the free plan — so 0 >= 0 was true on a
+                                                                           freshly generated image and every free account
+                                                                           was informed it had exhausted a limit it never
+                                                                           had. Running out of edits and never having any
+                                                                           are different facts and deserve different words:
+                                                                           one is a limit reached, the other is an upsell.
+                                                                        */
+                                                                        const allowance = creativeUsage?.max_refinements_per_item ?? null;
+                                                                        const used = image.refinement_depth ?? 0;
+                                                                        const notOnPlan = allowance === 0;
+                                                                        const exhausted = allowance !== null && allowance > 0 && used >= allowance;
+
+                                                                        if (notOnPlan) {
+                                                                            return (
+                                                                                <a
+                                                                                    href={route('subscription.pricing')}
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
+                                                                                    title="Editing a generated image is available on a paid plan"
+                                                                                >
+                                                                                    Upgrade to edit
+                                                                                </a>
+                                                                            );
+                                                                        }
+
+                                                                        return (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); setEditingImage(image); }}
+                                                                                disabled={exhausted}
+                                                                                className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                                title={exhausted ? `This image has had all ${allowance} of its edits` : 'Edit this image'}
+                                                                            >
+                                                                                {exhausted ? `No edits left (${used}/${allowance})` : 'Edit'}
+                                                                            </button>
+                                                                        );
+                                                                    })()}
                                                                     <a
                                                                         href={image.cloudfront_url}
                                                                         download
