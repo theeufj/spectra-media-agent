@@ -63,6 +63,13 @@ class FeatureRecorder
                 DB::table('feature_usage_daily')->upsert(
                     [[
                         'customer_id' => $customerId,
+                        // The same value, with no foreign key on it. Deleting a
+                        // customer nulls customer_id, and the unique index is
+                        // NULLS NOT DISTINCT — so without a column deletion
+                        // leaves alone, every one of that customer's rows
+                        // becomes a duplicate of the others and the DELETE
+                        // aborts. This is the column the index is built on.
+                        'customer_key' => $customerId,
                         'user_id' => $userId,
                         'feature' => $feature->value,
                         'action' => $action,
@@ -72,7 +79,7 @@ class FeatureRecorder
                         'created_at' => $now,
                         'updated_at' => $now,
                     ]],
-                    ['customer_id', 'user_id', 'feature', 'action', 'day'],
+                    ['customer_key', 'user_id', 'feature', 'action', 'day'],
                     [
                         // Increment in SQL rather than read-modify-write: two
                         // concurrent requests from the same user would otherwise

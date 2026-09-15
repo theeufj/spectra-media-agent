@@ -24,6 +24,7 @@ class FeatureUsageDaily extends Model
 
     protected $fillable = [
         'customer_id',
+        'customer_key',
         'user_id',
         'feature',
         'action',

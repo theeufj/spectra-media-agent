@@ -100,6 +100,19 @@ class ExtractBrandGuidelines implements ShouldQueue
                 'guideline_id' => $existing->id,
             ]);
 
+            /*
+             * Except the first campaign, which is cheap to ask for again.
+             *
+             * "Another copy already completed the whole chain" is true of the
+             * emails and the asset harvest, and it was assumed of the campaign
+             * — but the winning copy only dispatched that job if the customer
+             * qualified at the instant it finished, which is before the crawl
+             * has necessarily written the content qualification counts. The
+             * job refuses when a campaign exists, so asking again costs
+             * nothing and covers the case where the winner did not ask.
+             */
+            GenerateFirstCampaign::dispatch($this->customer);
+
             return;
         }
 
@@ -135,9 +148,32 @@ class ExtractBrandGuidelines implements ShouldQueue
                 // their onboarding. It sends its own email when it succeeds, so
                 // the crawl notice below is only for accounts that do not
                 // qualify.
-                if (GenerateFirstCampaign::qualifies($this->customer)) {
-                    GenerateFirstCampaign::dispatch($this->customer);
+                /*
+                 * Dispatched regardless, and dispatched twice.
+                 *
+                 * The job re-checks qualification at run time — it says so
+                 * itself, because a queued job runs minutes after it was
+                 * queued. Gating the dispatch on the same check made that
+                 * pointless and lost the campaign outright: qualifies() counts
+                 * knowledge base rows above a content threshold, and this runs
+                 * the moment extraction finishes, which is not the moment the
+                 * crawl has finished writing content into them.
+                 *
+                 * Seen live on customer 52: brand guideline written,
+                 * qualifies() true a minute later, campaigns zero for ever.
+                 * The customer confirmed their brand profile and was dropped
+                 * into the wizard to build by hand the campaign that should
+                 * have been waiting for them.
+                 *
+                 * The second dispatch catches content that lands late. Both
+                 * are safe: the job refuses when a campaign already exists.
+                 */
+                GenerateFirstCampaign::dispatch($this->customer);
+                GenerateFirstCampaign::dispatch($this->customer)->delay(now()->addSeconds(90));
 
+                if (GenerateFirstCampaign::qualifies($this->customer)) {
+                    // It sends its own mail when it succeeds, so the crawl
+                    // notice below is only for accounts that will not get one.
                     return;
                 }
 
