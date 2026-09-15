@@ -19,6 +19,11 @@ class ImagePrompt
 
     private ?array $productContext;
 
+    /**
+     * Retained for the admin override template, which may still reference
+     * {{ad_text}}. The built-in template no longer does: the artwork carries
+     * no words at all.
+     */
     private string $adText;
 
     /**
@@ -58,64 +63,68 @@ class ImagePrompt
      * The built-in prompt template. Placeholders are substituted per
      * generation: {{brand_context}} (colour palette + visual style from the
      * brand guidelines), {{product_context}} (product details when the
-     * campaign sells specific products), {{ad_text}} (the strategy's approved
-     * ad copy — the only text allowed to appear in the image),
-     * {{creative_strategy}} (the strategy's imagery brief).
+     * campaign sells specific products), {{creative_strategy}} (the strategy's
+     * imagery brief), {{headline_instruction}} (where to leave room for the
+     * headline we composite), {{banner_reservation}} (whether to leave the
+     * bottom sixth for a brand banner).
      *
-     * Asks for a photograph carrying a headline, not a built graphic. The
-     * "avoid text in the image" rule dated from a model generation whose text
-     * rendering was unreliable; current image models set type accurately, and
-     * an ad with a headline outperforms a captionless photo.
+     * ASKS FOR A PHOTOGRAPH, NOT A BUILT GRAPHIC, AND NOT ONE WORD OF TEXT.
      *
-     * But "finished, designed composition — layout, typography and colour
-     * panels" was too much licence, and the model spent it on furniture: a
-     * navy slab over 40% of the canvas, three line icons in circles picked out
-     * of the scene rather than the product (a plant pot, a paintbrush), and
-     * dot grids in the corners. On a 300x250 that left almost no photograph.
-     * The panel is now capped at a quarter of the frame and the clip art is
-     * named and refused.
+     * It did ask for the headline for a while, on the reasoning that current
+     * image models set type accurately and an ad with a headline outperforms a
+     * captionless photo. The first half turned out not to be true of this one.
+     * Two revisions of "keep the headline inside the frame" both failed on the
+     * same creative — "Build a Store in 5 Minute", then "e a Chat, Get a S" —
+     * and the second revision drew a navy border around a different creative
+     * while trying to describe a safe area. A model sizing type to a
+     * composition has no reliable notion of one, and every attempt to describe
+     * it perturbs the rest of the frame.
      *
-     * The shape of this template matters as much as its content, because an
-     * image model does not reliably distinguish a brief from the copy it is
-     * briefing. A creative generated for a real estate customer came back
-     * carrying the phrases "(as approved ad text)" and "Muted readable
-     * subtext" set in type on the artwork — not strings from anywhere in this
-     * codebase, but the model's paraphrase of instructions it had been given
-     * and had read as content. The same image rendered a fake dashboard whose
-     * labels garbled into "Assisnanto image", "Perteats" and "Bunnse", beside
-     * an invented property price and floor area.
+     * So the words are composited afterwards, at a measured size, and this
+     * asks only for somewhere quiet to put them. That also fixes what the
+     * prompt could never do: the square, landscape and MREC crops of one
+     * picture now carry the same words in the same place, rather than three
+     * separate renderings of them.
      *
-     * Hence: the scene comes first, the renderable words are fenced between
-     * markers so "the only words allowed" is a property of a delimited block
-     * rather than a sentence that can itself be drawn, and the rules below say
-     * what the artwork may contain instead of narrating how to build it. The
-     * old wording asked for "fine print as abstract placeholder bars", and got
-     * exactly that: literal grey bars, drawn as a design element.
+     * The history behind the remaining rules, all of it earned:
+     *
+     * "Finished, designed composition — layout, typography and colour panels"
+     * was too much licence, and the model spent it on furniture: a navy slab
+     * over 40% of the canvas, three line icons in circles picked out of the
+     * scene rather than the product (a plant pot, a paintbrush), and dot grids
+     * in the corners. On a 300x250 that left almost no photograph.
+     *
+     * An image model does not reliably distinguish a brief from the copy it is
+     * briefing. A creative for a real estate customer came back carrying the
+     * phrases "(as approved ad text)" and "Muted readable subtext" set in type
+     * on the artwork — not strings from anywhere in this codebase, but the
+     * model's paraphrase of instructions it had read as content. The same
+     * image rendered a fake dashboard whose labels garbled into "Assisnanto
+     * image", "Perteats" and "Bunnse", beside an invented property price. That
+     * whole class of failure is why the no-text rule is now absolute rather
+     * than a permitted vocabulary: there is no longer any text for the model
+     * to misread a brief into.
      */
     public static function defaultTemplate(): string
     {
-        return "You are producing the artwork for one advertisement. The photograph is the ad. Brand colour supports it; it does not compete with it.\n\n".
+        return "You are producing the photograph for one advertisement. The photograph is the ad. Brand colour supports it; it does not compete with it.\n\n".
                "**SCENE TO DEPICT:**\n".
                "{{creative_strategy}}\n\n".
                "{{brand_context}}{{product_context}}\n".
-               "**THE ONLY WORDS THAT MAY APPEAR IN THE ARTWORK:**\n".
-               "<<<\n{{ad_text}}\n>>>\n".
+               "**NO WORDS AT ALL:**\n".
+               "This photograph carries no text of any kind. The advertisement's words are composited over it afterwards, at a measured size in the brand typeface, so anything you write here is duplicate text in the wrong face and anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
                '{{headline_instruction}}'.
-               "The whole headline must fit inside the frame with clear space around it — every letter of the first word and the last word fully visible, none of it touching or running past any edge. If the line does not fit at the size you have chosen, set it smaller, break it across two lines, or choose a shorter line from between the markers. A headline with its first and last letters cropped off is worse than no headline at all.\n".
-               "Every other glyph in the image must come from inside the markers or not exist. Nothing written anywhere else in this brief may be drawn: these are instructions to you, not copy for the page.\n\n".
                "**COMPOSITION:**\n".
                "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
-               "- The scene fills the frame. Any solid colour panel is a restrained accent — a corner, an edge, a band behind the headline — and never more than a quarter of the picture.\n".
-               "- Keep the headline and any subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
+               "- The photograph fills the frame edge to edge. No borders, no frames, no mattes, no coloured bars — the picture is not sitting inside anything.\n".
+               "- Keep the subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
                '{{banner_reservation}}'.
-               "- Brand palette for the accent and for the light; generous negative space\n".
+               "- Brand palette for the light and for whatever colour the scene naturally contains; generous negative space\n".
                "- Photorealistic subject matter, photographed rather than assembled\n\n".
                "**HARD RULES:**\n".
                "- No screens full of information: no dashboards, app windows, charts, tables, spreadsheets, forms or documents. A phone or laptop may appear in shot, but its screen carries only soft blocks of colour with no readable content whatsoever.\n".
-               "- No invented facts: no statistics, prices, measurements, addresses, review counts, star ratings, dates or awards, unless the characters appear between the markers above.\n".
+               "- No invented facts: no statistics, prices, measurements, addresses, review counts, star ratings, dates or awards.\n".
                "- No placeholder furniture: no lorem ipsum, no grey lines standing in for text, no empty label chips, no UI skeletons.\n".
-               "- Every rendered word must be a real, correctly spelled word. Fewer words beats risking a garbled one, and no text at all beats nonsense text.\n".
-               "- If nothing appears between the markers above, produce a composition with no words in it at all.\n".
                "- No decorative furniture: no icon sets, no line-art symbols in circles, no dot grids, no abstract blobs or swooshes. These read as clip art, they are chosen from the scene rather than from the product, and they cost the photograph the room it needs.\n".
                '- No watermarks, no third-party logos, no stock-photo clichés; keep it culturally sensitive and inclusive.';
     }
@@ -169,16 +178,27 @@ class ImagePrompt
          * The markers still carry the whole approved set — that is the
          * vocabulary the artwork may use — and this says which line leads.
          */
+        /*
+         * The headline is set by us, not by you.
+         *
+         * Two revisions of "keep the headline inside the frame" failed on the
+         * same creative — "Build a Store in 5 Minute", then "e a Chat, Get a
+         * S" — and the second drew a navy border around a different one while
+         * trying. A model sizing type has no notion of a safe area, so the
+         * words are composited afterwards at a measured size and this asks
+         * only for somewhere to put them.
+         */
         $headlineInstruction = $this->headline !== null && trim($this->headline) !== ''
-            ? 'Set this exact line as the headline in the picture: "'.trim($this->headline)."\". Use it word for word, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n"
-            : "Set exactly one of those lines as a headline in the picture, in clean legible type, positioned and sized like the headline of a printed advertisement. This is required: an advertisement without a headline is a stock photograph, and a stock photograph is not what is being made here.\n";
+            ? "**LEAVE ROOM FOR THE HEADLINE:**\n".
+              "A headline is added to the top of this picture after you produce it. Compose for that: keep the upper third calm and uncluttered — plain wall, sky, open floor, soft background — with no faces, no product and no detail that matters up there. Do not draw the headline yourself, and do not leave a coloured box, bar or panel for it; just leave that part of the photograph quiet.\n\n"
+            : '';
 
         return strtr(self::activeTemplate(), [
+            '{{ad_text}}' => $this->adText,
             '{{headline_instruction}}' => $headlineInstruction,
             '{{banner_reservation}}' => $bannerReservation,
             '{{brand_context}}' => $brandContext,
             '{{product_context}}' => $productContextString,
-            '{{ad_text}}' => $this->adText,
             '{{creative_strategy}}' => $this->strategyContent,
         ]);
     }

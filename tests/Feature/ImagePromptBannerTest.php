@@ -45,18 +45,52 @@ class ImagePromptBannerTest extends TestCase
         $this->assertStringContainsString('Do not leave an empty band', $free);
     }
 
-    public function test_the_headline_is_demanded_rather_than_suggested(): void
+    public function test_the_artwork_carries_no_text_at_all(): void
     {
         /*
-           "Set one short headline from inside those markers" was permission,
-           and Gemini read it as permission. The approved copy reached the
-           prompt and none of it was drawn, which is the difference between an
-           advertisement and a stock photograph.
+           It did ask for the headline, on the reasoning that current image
+           models set type accurately. Not this one: two revisions of "keep it
+           inside the frame" both failed on the same creative — "Build a Store
+           in 5 Minute", then "e a Chat, Get a S" — and the second drew a navy
+           border around a different creative while trying to describe a safe
+           area. The words are composited afterwards now, so there is no longer
+           any text for the model to crop, garble or misread a brief into.
         */
-        $prompt = $this->prompt(true);
+        $prompt = $this->prompt(true, 'Build a Store in 5 Minutes');
 
-        $this->assertStringContainsString('This is required', $prompt);
-        $this->assertStringContainsString('stock photograph is not what is being made', $prompt);
+        $this->assertStringContainsString('NO WORDS AT ALL', $prompt);
+        $this->assertStringContainsString('carries no text of any kind', $prompt);
+        $this->assertStringNotContainsString('Set this exact line', $prompt);
+    }
+
+    public function test_the_headline_text_is_never_shown_to_the_model(): void
+    {
+        // Naming it invites it onto the artwork, in the wrong typeface,
+        // alongside the one we composite.
+        $this->assertStringNotContainsString('Build a Store in 5 Minutes', $this->prompt(true, 'Build a Store in 5 Minutes'));
+    }
+
+    public function test_room_is_asked_for_where_the_headline_will_go(): void
+    {
+        $prompt = $this->prompt(true, 'Build a Store in 5 Minutes');
+
+        $this->assertStringContainsString('LEAVE ROOM FOR THE HEADLINE', $prompt);
+        $this->assertStringContainsString('keep the upper third calm and uncluttered', $prompt);
+
+        // A reserved panel is the failure this whole thread started with.
+        $this->assertStringContainsString('do not leave a coloured box, bar or panel', $prompt);
+    }
+
+    public function test_no_room_is_asked_for_when_there_is_no_headline(): void
+    {
+        $this->assertStringNotContainsString('LEAVE ROOM FOR THE HEADLINE', $this->prompt(true));
+    }
+
+    public function test_borders_and_mattes_are_refused(): void
+    {
+        // My own margin wording produced a navy frame drawn around an entire
+        // photograph, which is the model obeying "clear space around it".
+        $this->assertStringContainsString('No borders, no frames, no mattes', $this->prompt(true, 'Build a Store in 5 Minutes'));
     }
 
     public function test_the_wide_lens_stays_in_the_room(): void
@@ -72,55 +106,5 @@ class ImagePromptBannerTest extends TestCase
         $this->assertStringContainsString('rather than across the street', $wide);
         $this->assertStringContainsString('no exteriors', $wide);
         $this->assertStringNotContainsString('out of it entirely', $wide);
-    }
-
-    public function test_the_headline_must_fit_inside_the_frame(): void
-    {
-        /*
-           Making the headline mandatory made the margin rule load-bearing, and
-           it was not strong enough: one creative came back reading "Build a
-           Store in 5 Minute" with the B and the s cropped off at the frame
-           edges. The composition section already asked for a 10% margin; a
-           model sizing type to fill the width does not read that as being
-           about the type.
-        */
-        $prompt = $this->prompt(true);
-
-        $this->assertStringContainsString('must fit inside the frame', $prompt);
-        $this->assertStringContainsString('first and last letters cropped off is worse than no headline', $prompt);
-        $this->assertStringContainsString('break it across two lines', $prompt);
-    }
-
-    public function test_a_nominated_headline_is_named_word_for_word(): void
-    {
-        /*
-           Given all five approved headlines and asked for "one of those
-           lines", the model set the same one on all four creatives. Five were
-           written and approved precisely so the account can find out which
-           works, and four copies of one message cannot answer that.
-        */
-        $prompt = $this->prompt(true, 'All-In-One for $35/Mo');
-
-        $this->assertStringContainsString('Set this exact line as the headline in the picture: "All-In-One for $35/Mo"', $prompt);
-        $this->assertStringContainsString('word for word', $prompt);
-    }
-
-    public function test_the_whole_approved_set_still_reaches_the_model(): void
-    {
-        // The nomination says which line leads; the markers stay the full
-        // vocabulary the artwork is allowed to draw from.
-        $prompt = $this->prompt(true, 'All-In-One for $35/Mo');
-
-        $this->assertStringContainsString('Build a Store in 5 Minutes', $prompt);
-    }
-
-    public function test_without_a_nomination_the_model_still_chooses(): void
-    {
-        // No approved copy to nominate from is a real case, and the older
-        // wording is right for it.
-        $prompt = $this->prompt(true);
-
-        $this->assertStringContainsString('Set exactly one of those lines', $prompt);
-        $this->assertStringNotContainsString('Set this exact line', $prompt);
     }
 }

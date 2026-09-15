@@ -36,3 +36,4 @@ scripts/generate_google_ads_token_simple.php
 /generate_documentation.py
 /run_app.sh
 /google_ads_php.ini
+.artifact-creative-set/

@@ -129,26 +129,36 @@ class ImageryStrategyContractTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/\{\{[a-z_]+\}\}/', $prompt);
     }
 
-    public function test_approved_copy_is_the_only_thing_between_the_markers(): void
+    public function test_no_approved_copy_is_shown_to_the_image_model(): void
     {
+        /*
+           The markers are gone, and with them the whole class of failure they
+           existed to contain.
+
+           They fenced the approved copy so "the only words allowed" was a
+           property of a delimited block rather than a sentence the model could
+           itself draw. That worked as far as it went, but the model still had
+           to set the type — and it cropped it: "Build a Store in 5 Minute",
+           then "e a Chat, Get a S", two revisions apart. The headline is
+           composited afterwards at a measured size now, so the artwork is
+           asked for no words at all and the copy never reaches it.
+        */
         $prompt = (new ImagePrompt('A scene.', null, [], "Sell Your Home For More\nFree Appraisal"))->getPrompt();
 
-        $this->assertSame(
-            "Sell Your Home For More\nFree Appraisal",
-            $this->markerBlock($prompt)
-        );
+        $this->assertStringNotContainsString('Sell Your Home For More', $prompt);
+        $this->assertStringNotContainsString('Free Appraisal', $prompt);
+        $this->assertStringContainsString('NO WORDS AT ALL', $prompt);
     }
 
-    public function test_absent_ad_copy_leaves_the_markers_genuinely_empty(): void
+    public function test_the_artwork_is_refused_every_kind_of_lettering(): void
     {
-        // This slot used to be filled with "(none provided — do not render any
-        // text)" — a parenthetical direction dropped into the one place the
-        // template describes as the only words allowed in the artwork. The
-        // creative came back with "(as approved ad text)" set in type.
+        // Signage and screen text were the routes by which invented claims and
+        // garbled words ("Assisnanto image", "Perteats") reached creatives.
         $prompt = (new ImagePrompt('A scene.', null, [], ''))->getPrompt();
 
-        $this->assertSame('', $this->markerBlock($prompt));
-        $this->assertStringNotContainsString('none provided', $prompt);
+        foreach (['No headline', 'no logo', 'no signage', 'no writing on screens'] as $refusal) {
+            $this->assertStringContainsString($refusal, $prompt);
+        }
     }
 
     public function test_the_brand_palette_reaches_the_image_model_as_words_not_hex(): void
@@ -171,14 +181,6 @@ class ImageryStrategyContractTest extends TestCase
     {
         $this->assertStringContainsStringIgnoringCase('navy', (string) BrandGuideline::nameColour('#1e3a5f'));
         $this->assertNull(BrandGuideline::nameColour('not-a-colour'));
-    }
-
-    private function markerBlock(string $prompt): string
-    {
-        $this->assertMatchesRegularExpression('/<<<\n.*?\n>>>/s', $prompt, 'The ad-copy markers are missing.');
-        preg_match('/<<<\n(.*?)\n>>>/s', $prompt, $m);
-
-        return $m[1];
     }
 
     public function test_the_splitter_is_told_that_paraphrasing_is_a_failure(): void
@@ -225,7 +227,15 @@ class ImageryStrategyContractTest extends TestCase
         */
         $this->assertStringContainsString('no icon sets', $prompt);
         $this->assertStringContainsString('no dot grids', $prompt);
-        $this->assertStringContainsString('never more than a quarter of the picture', $prompt);
+
+        /*
+           The quarter-of-the-picture cap on colour panels went with the text:
+           with nothing to put in a panel, the rule to state is that there are
+           no panels. My own attempt at a margin instruction had the model draw
+           a navy frame around an entire photograph, so this is the refusal
+           that matters now.
+        */
+        $this->assertStringContainsString('No borders, no frames, no mattes', $prompt);
 
         // And the strip our own banner is composited onto has to stay quiet,
         // or the two fight each other.
