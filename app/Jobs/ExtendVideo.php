@@ -97,6 +97,28 @@ class ExtendVideo implements ShouldQueue
 
             Log::info("Video extension started successfully. Operation: {$operationName}");
 
+            /*
+             * A retry must not produce a second extension.
+             *
+             * The extension is a child of the source video, and nothing
+             * stopped this running twice: a worker that died after starting
+             * the generation but before writing the row, or any release back
+             * to the queue, produced two children of the same parent — two
+             * near-identical videos, two charges against a video allowance
+             * sold as a fixed number, and two CheckVideoStatus pollers.
+             *
+             * The parent plus the extension number is the natural key.
+             */
+            $alreadyExtended = VideoCollateral::where('parent_video_id', $this->sourceVideo->id)
+                ->where('extension_count', $extensionCount + 1)
+                ->exists();
+
+            if ($alreadyExtended) {
+                Log::info("Video {$this->sourceVideo->id} already has extension ".($extensionCount + 1).'; not creating a second');
+
+                return;
+            }
+
             // Create new VideoCollateral record for the extended video
             $extendedVideo = VideoCollateral::create([
                 'campaign_id' => $this->sourceVideo->campaign_id,

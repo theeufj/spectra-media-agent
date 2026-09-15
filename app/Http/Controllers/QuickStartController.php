@@ -9,6 +9,7 @@ use App\Services\Onboarding\WebsiteIdentity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class QuickStartController extends Controller
@@ -92,6 +93,39 @@ class QuickStartController extends Controller
         $tenantKey = $request->attributes->get('tenant')['key'] ?? $user->tenant_key;
         if ($tenantKey && ! $user->tenant_key) {
             $user->forceFill(['tenant_key' => $tenantKey])->save();
+        }
+
+        /*
+         * One business per website, however many times Go is pressed.
+         *
+         * This was an unconditional create, so a second submission built a
+         * second identical customer — seen live: two "Yourfirststore" rows a
+         * minute apart, each with its own half-finished crawl, and the
+         * knowledge base landing on whichever won. A double-click, a
+         * back-button retry, or an impatient second press all did it.
+         *
+         * Keyed on the resolved host rather than the string typed, because
+         * resolve() has already unwrapped shorteners by this point: a bit.ly
+         * link and the domain behind it are the same business and must not
+         * produce two.
+         *
+         * Returning the existing one is also the right answer for the
+         * customer — they get taken to the scan already in progress rather
+         * than starting a second one behind the first.
+         */
+        $existing = $user->customers()
+            ->whereRaw('lower(website) = ?', [mb_strtolower($url)])
+            ->first();
+
+        if ($existing) {
+            session(['active_customer_id' => $existing->id]);
+
+            Log::info('Quick start reused an existing business rather than creating a second', [
+                'customer_id' => $existing->id,
+                'website' => $url,
+            ]);
+
+            return redirect()->route('quick-start.scanning');
         }
 
         $customer = Customer::create([

@@ -86,6 +86,28 @@ class RefineImage implements ShouldQueue
 
             Log::info("Refined image uploaded at path: {$s3Path}");
 
+            /*
+             * A retry must not produce a second refinement.
+             *
+             * This job creates a child of the original, and nothing stopped it
+             * running twice: a worker that died after the upload but before
+             * the row, or any release back to the queue, produced two children
+             * of the same parent — two near-identical images on the collateral
+             * page, and two charges against a refinement allowance the
+             * customer is sold a fixed number of.
+             *
+             * The parent is the natural key: one live refinement per image.
+             */
+            $alreadyRefined = ImageCollateral::where('parent_id', $this->originalImage->id)
+                ->where('is_active', true)
+                ->exists();
+
+            if ($alreadyRefined) {
+                Log::info("Image {$this->originalImage->id} already has a refinement; not creating a second");
+
+                return;
+            }
+
             // Replace the original with the refinement — except seeds. A seed
             // is the customer's reference material, not a draft: refining one
             // produces a new deployable image while the seed keeps informing

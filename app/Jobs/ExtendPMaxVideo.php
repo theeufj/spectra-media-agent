@@ -76,6 +76,25 @@ class ExtendPMaxVideo implements ShouldQueue
             return;
         }
 
+        /*
+         * A retry must not produce a second extension.
+         *
+         * The extension is a child of the source video, and nothing stopped
+         * this running twice: a worker that died after starting the generation
+         * but before writing the row produced two children of the same parent
+         * — two near-identical videos, two charges against an allowance sold
+         * as a fixed number, and two CheckVideoStatus pollers.
+         */
+        $alreadyExtended = VideoCollateral::where('parent_video_id', $source->id)
+            ->where('extension_count', ($source->extension_count ?? 0) + 1)
+            ->exists();
+
+        if ($alreadyExtended) {
+            Log::info("ExtendPMaxVideo: source {$source->id} already has this extension; not creating a second");
+
+            return;
+        }
+
         // Retire the too-short source; the extended clip supersedes it.
         $source->update(['is_active' => false]);
 
