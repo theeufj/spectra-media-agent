@@ -172,3 +172,65 @@ describe('when to leave the strategy page', () => {
         expect(ready?.uuid).toBe('a');
     });
 });
+
+/**
+ * The wait, the poll and the jump must agree.
+ *
+ * They did not, and the disagreement froze the page. The wait and the poll
+ * both treated ad copy as "something arrived" while the jump insisted on a
+ * picture — so the moment ad copy landed, which is first and fastest, polling
+ * stopped and the jump refused. Campaign 48 sat on "Generating your
+ * collateral... this usually takes 1-2 minutes" over nine images that had
+ * finished two minutes earlier, with nothing left running to notice.
+ */
+const stillWaiting = (s) => Boolean(s.signed_off_at)
+    && ((s.image_collaterals_count || 0) === 0)
+    && (stillGeneratingImages(s) || ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) === 0);
+
+describe('the wait, the poll and the jump', () => {
+    it('keeps waiting when only the ad copy has arrived', () => {
+        // The exact state that froze campaign 48.
+        const s = { signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 0 };
+
+        expect(stillWaiting(s)).toBe(true);
+        expect(readyForCollateral([s])).toBeUndefined();
+    });
+
+    it('stops waiting the moment a picture lands', () => {
+        const s = { signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 3 };
+
+        expect(stillWaiting(s)).toBe(false);
+        expect(readyForCollateral([s])).toBe(s);
+    });
+
+    it('gives up on images once the window has passed', () => {
+        // Otherwise a strategy that will never have one waits for ever.
+        const s = { signed_off_at: longAgo(), ad_copies_count: 1, image_collaterals_count: 0 };
+
+        expect(stillWaiting(s)).toBe(false);
+        expect(readyForCollateral([s])).toBe(s);
+    });
+
+    it('never stops polling before the jump would fire', () => {
+        /*
+           The invariant the freeze violated: if the page would still not
+           navigate, something must still be watching for the thing it is
+           waiting on.
+        */
+        const cases = [
+            { signed_off_at: justNow(), ad_copies_count: 0, image_collaterals_count: 0 },
+            { signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 0 },
+            { signed_off_at: justNow(), ad_copies_count: 1, image_collaterals_count: 2 },
+            { signed_off_at: longAgo(), ad_copies_count: 1, image_collaterals_count: 0 },
+            { signed_off_at: longAgo(), ad_copies_count: 0, image_collaterals_count: 0 },
+        ];
+
+        cases.forEach((s) => {
+            const willNavigate = Boolean(readyForCollateral([s]));
+
+            if (! willNavigate) {
+                expect(stillWaiting(s)).toBe(true);
+            }
+        });
+    });
+});

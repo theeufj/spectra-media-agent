@@ -435,23 +435,52 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
        A signed-off strategy with nothing attached to it is work still arriving.
        The endpoint already returns the counts; nothing was asking for them.
     */
-    const awaitingCollateral = (campaigns.strategies || []).some(
-        s => s.signed_off_at
-            && (s.image_collaterals_count || 0) === 0
-            && ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) === 0
-    );
+    /*
+       Whether pictures are probably still on their way.
+
+       Derived from how long ago the strategy was signed off rather than from a
+       flag, because there is no server field that means this and the
+       timestamps already answer it. Images take a couple of minutes; past
+       IMAGE_WAIT_MS nothing more is coming, and a strategy that will never
+       have images — video-only, or an exhausted allowance — must not strand
+       anyone watching for one.
+    */
+    const IMAGE_WAIT_MS = 5 * 60 * 1000;
+
+    const stillGeneratingImages = (s) => {
+        if ((s.image_collaterals_count || 0) > 0) return false;
+
+        const signedOff = new Date(s.signed_off_at).getTime();
+
+        return Number.isFinite(signedOff) && (Date.now() - signedOff) < IMAGE_WAIT_MS;
+    };
+
+    /*
+       One definition, used by all three of the wait, the poll and the jump.
+
+       They disagreed, and the disagreement froze the page. The wait and the
+       poll both counted ad copy as "something arrived" while the jump insisted
+       on a picture — so the moment ad copy landed, which is first and fastest,
+       polling stopped and the jump refused. The card sat on "Generating your
+       collateral... this usually takes 1-2 minutes" over nine images that had
+       finished two minutes earlier, and nothing would ever move it.
+
+       The question every one of them is asking is the same: is this strategy
+       still waiting for something?
+    */
+    const stillWaiting = (s) => Boolean(s.signed_off_at)
+        && ((s.image_collaterals_count || 0) === 0)
+        && (stillGeneratingImages(s) || ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) === 0);
+
+    const awaitingCollateral = (campaigns.strategies || []).some(stillWaiting);
 
     const { data: collateralPoll } = usePolling(
         awaitingCollateral ? route('api.campaigns.show', { campaign: campaigns.uuid }) : null,
         {
             interval: 8000,
-            // Stops itself the moment anything lands, rather than running on
-            // until a timeout nobody is watching.
-            until: (d) => (d?.strategies || []).every(
-                s => ! s.signed_off_at
-                    || (s.image_collaterals_count || 0) > 0
-                    || ((s.ad_copies_count || 0) + (s.video_collaterals_count || 0)) > 0
-            ),
+            // Stops when nothing is still waiting — the same question the
+            // page and the jump ask, so they cannot disagree about the answer.
+            until: (d) => ! (d?.strategies || []).some(stillWaiting),
         }
     );
 
@@ -474,26 +503,6 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
        opening this page for a campaign whose collateral finished last week
        leaves you on the page you asked for.
     */
-    /*
-       Whether pictures are probably still on their way.
-
-       Derived from how long ago the strategy was signed off rather than from a
-       flag, because there is no server field that means this and inventing one
-       would be a schema change to answer a question the timestamps already
-       answer. Images take a couple of minutes; past IMAGE_WAIT_MS nothing more
-       is coming, and a strategy that will never have images — video-only, or
-       an exhausted allowance — must not strand anyone watching for one.
-    */
-    const IMAGE_WAIT_MS = 5 * 60 * 1000;
-
-    const stillGeneratingImages = (s) => {
-        if ((s.image_collaterals_count || 0) > 0) return false;
-
-        const signedOff = new Date(s.signed_off_at).getTime();
-
-        return Number.isFinite(signedOff) && (Date.now() - signedOff) < IMAGE_WAIT_MS;
-    };
-
     const waitedForCollateralRef = useRef(false);
 
     useEffect(() => {
