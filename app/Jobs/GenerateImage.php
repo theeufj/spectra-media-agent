@@ -369,10 +369,27 @@ class GenerateImage implements ShouldQueue
                 foreach ($adFormats as $format => $spec) {
                     [$targetW, $targetH] = $spec['size'];
 
-                    // One aspect failing while the other succeeded still
-                    // yields a usable ad — cropped, as it was before, but
-                    // present rather than missing.
-                    $imageData = $bases[$spec['aspect']] ?? reset($bases);
+                    /*
+                     * One aspect failing still yields a usable ad, but not at
+                     * any price.
+                     *
+                     * This was `?? reset($bases)` — the first base generated,
+                     * whatever shape it was. Substituting the square into the
+                     * 1200x628 slot means cover() discards 47.7% of the
+                     * height: half the photograph, silently, and increasingly
+                     * often while the providers are rate-limiting. It now takes
+                     * the nearest shape available and says what that costs.
+                     */
+                    $imageData = $this->nearestBase($bases, $spec['aspect'], $targetW, $targetH, $format);
+
+                    if ($imageData === null) {
+                        Log::warning("No usable base for format {$format}; skipping it rather than shipping a severe crop", [
+                            'strategy_id' => $this->strategy->id,
+                            'available' => array_keys($bases),
+                        ]);
+
+                        continue;
+                    }
 
                     $decodedImage = base64_decode($imageData['data'], true);
                     if ($decodedImage === false) {
@@ -555,10 +572,26 @@ class GenerateImage implements ShouldQueue
      */
     private const TAGLINE_MAX_CHARS = 32;
 
+    /**
+     * Pixel sizes requested from Grok, keyed by the ratio Gemini is asked for.
+     *
+     * The values match the AD FORMAT each ratio serves, not the ratio's own
+     * name, because cover() crops whatever does not fit and the difference was
+     * being thrown away: a 1344x768 source (1.778) trimmed to a 1200x628 slot
+     * (1.911) lost 6.2% of its height, and 1152x896 (1.333) trimmed to 300x250
+     * (1.200) lost 6.7% of its width. Asking for the slot's own proportions
+     * makes the same call a pure downscale.
+     *
+     * Gemini takes a ratio from a fixed set rather than a pixel size, so 16:9
+     * and 4:3 remain the closest it offers and those two still cost the few
+     * per cent above.
+     */
     private const GROK_SIZES = [
         '1:1' => '1024x1024',
-        '16:9' => '1344x768',
-        '4:3' => '1152x896',
+        // 1.911, matching 1200x628.
+        '16:9' => '1376x720',
+        // 1.200, matching 300x250 exactly.
+        '4:3' => '1200x1000',
     ];
 
     /**
@@ -771,6 +804,66 @@ class GenerateImage implements ShouldQueue
      * Resolve a usable font path for Intervention Image text rendering.
      * Falls back through a chain of common system font locations.
      */
+    /**
+     * The generated base closest in shape to the slot being filled.
+     *
+     * Returns null when even the closest would lose more than a third of the
+     * picture, because a creative that has had half its height cut off is not
+     * a smaller version of the ad — it is a different, worse one, and shipping
+     * it silently is how nobody notices.
+     *
+     * @param  array<string, array{data: string, mimeType: string}>  $bases
+     * @return array{data: string, mimeType: string}|null
+     */
+    private function nearestBase(array $bases, string $wanted, int $targetW, int $targetH, string $format): ?array
+    {
+        if ($bases === []) {
+            return null;
+        }
+
+        if (isset($bases[$wanted])) {
+            return $bases[$wanted];
+        }
+
+        $targetRatio = $targetW / $targetH;
+        $best = null;
+        $bestLoss = null;
+        $bestAspect = 'unknown';
+
+        foreach ($bases as $aspect => $base) {
+            $size = @getimagesizefromstring(base64_decode($base['data'], true) ?: '');
+
+            if (! $size || $size[0] <= 0 || $size[1] <= 0) {
+                continue;
+            }
+
+            // What cover() will throw away reaching this slot.
+            $scale = max($targetW / $size[0], $targetH / $size[1]);
+            $loss = 1 - ($targetW * $targetH) / (($size[0] * $scale) * ($size[1] * $scale));
+
+            if ($bestLoss === null || $loss < $bestLoss) {
+                $best = $base;
+                $bestLoss = $loss;
+                $bestAspect = $aspect;
+            }
+        }
+
+        if ($best === null || $bestLoss === null) {
+            return null;
+        }
+
+        Log::warning("Substituting a {$bestAspect} base for the {$format} slot", [
+            'strategy_id' => $this->strategy->id,
+            'wanted' => $wanted,
+            'target_ratio' => round($targetRatio, 3),
+            'discarded_percent' => round($bestLoss * 100, 1),
+        ]);
+
+        // A third is the point past which the composition is gone rather than
+        // tightened.
+        return $bestLoss > 0.34 ? null : $best;
+    }
+
     /**
      * Fit a headline into a width, exactly, by measuring it.
      *
