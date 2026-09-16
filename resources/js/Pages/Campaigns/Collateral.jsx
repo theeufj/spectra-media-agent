@@ -48,6 +48,35 @@ function approvalToggle({ checked, onToggle, label, enabled = true }) {
     };
 }
 
+/**
+ * What an account that cannot download yet is asked to do about it.
+ *
+ * Every one of these said "Upgrade" and pointed at the monthly plans. A
+ * setup-only customer has already chosen "one payment, nothing recurring" and
+ * paid or intends to pay US$999 — sending them to a menu of subscriptions
+ * under a button marked Upgrade asks them to buy the thing they explicitly
+ * did not want, and hides the one they did. The $999 card is on that page, but
+ * being on the page is not the same as being what was asked for.
+ */
+export function UnlockAction({ setupOnly, label, className }) {
+    if (setupOnly) {
+        return (
+            <button
+                onClick={(e) => { e.stopPropagation(); router.post(route('setup-fee.checkout')); }}
+                className={className}
+            >
+                🔒 {label} — pay your US$999
+            </button>
+        );
+    }
+
+    return (
+        <a href={route('subscription.pricing')} onClick={(e) => e.stopPropagation()} className={className}>
+            🔒 Upgrade to {label.toLowerCase()}
+        </a>
+    );
+}
+
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
@@ -855,13 +884,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     📋 Copy All
                                                                 </button>
                                                             ) : (
-                                                                <a
-                                                                    href={route('subscription.pricing')}
-                                                                    onClick={(e) => e.stopPropagation()}
+                                                                <UnlockAction
+                                                                    setupOnly={setupOnly}
+                                                                    label="Export"
                                                                     className="px-3 py-1 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
-                                                                >
-                                                                    🔒 Upgrade to Export
-                                                                </a>
+                                                                />
                                                             )}
                                                         </div>
                                                     </div>
@@ -1171,7 +1198,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         </div>
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                                                                <p className="text-white text-xs font-medium">Preview - Upgrade to download</p>
+                                                                <p className="text-white text-xs font-medium">{setupOnly ? 'Preview — unlocks when your US$999 is paid' : 'Preview - Upgrade to download'}</p>
                                                             </div>
                                                         )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1198,14 +1225,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                                                         if (notOnPlan) {
                                                                             return (
-                                                                                <a
-                                                                                    href={route('subscription.pricing')}
-                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                <UnlockAction
+                                                                                    setupOnly={setupOnly}
+                                                                                    label="Edit"
                                                                                     className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
-                                                                                    title="Editing a generated image is available on a paid plan"
-                                                                                >
-                                                                                    Upgrade to edit
-                                                                                </a>
+                                                                                />
                                                                             );
                                                                         }
 
@@ -1236,13 +1260,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     </button>
                                                                 </div>
                                                             ) : (
-                                                                <a
-                                                                    href={route('subscription.pricing')}
-                                                                    onClick={(e) => e.stopPropagation()}
+                                                                <UnlockAction
+                                                                    setupOnly={setupOnly}
+                                                                    label="Download"
                                                                     className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
-                                                                >
-                                                                    🔒 Upgrade to Download
-                                                                </a>
+                                                                />
                                                             )}
                                                         </div>
                                                     </div>
