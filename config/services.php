@@ -42,6 +42,20 @@ return [
      */
     'billing_alert_email' => env('BILLING_ALERT_EMAIL', 'theeufj@gmail.com'),
 
+    /*
+     * xAI direct, rather than Grok resold through OpenRouter.
+     *
+     * One less party between us and the models we actually use. OpenRouter's
+     * prepaid balance running dry returned 402 on every image call and pushed
+     * the whole load onto Gemini until that rate-limited too; a direct account
+     * is one fewer balance to run dry and one fewer hop to debug.
+     */
+    'xai' => [
+        'api_key' => env('XAI_API_KEY'),
+        // Admins are alerted when the prepaid credit balance drops below this.
+        'low_credit_alert' => env('XAI_LOW_CREDIT_ALERT', 10),
+    ],
+
     'openrouter' => [
         'api_key' => env('OPENROUTER_API_KEY'),
         // Admins are alerted when the prepaid credit balance drops below this.

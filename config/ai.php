@@ -111,6 +111,18 @@ return [
          * A second vendor on a separate balance means one lapse is a cost
          * problem rather than an outage.
          */
+        /*
+         * xAI's own names, which are not OpenRouter's.
+         *
+         * OpenRouter namespaces every model ("x-ai/grok-4-fast"); xAI does
+         * not. Sending one to the other is a 404 at request time and nothing
+         * sooner, so the two providers keep separate keys rather than sharing
+         * one and hoping.
+         */
+        'text_xai' => env('AI_MODEL_TEXT_XAI', 'grok-4-fast'),
+        'image_xai' => env('AI_MODEL_IMAGE_XAI', 'grok-2-image-1212'),
+        'video_xai' => env('AI_MODEL_VIDEO_XAI', 'grok-imagine-video'),
+
         'text_grok' => env('AI_MODEL_TEXT_GROK', 'x-ai/grok-4-fast'),
         'image_grok' => env('AI_MODEL_IMAGE_GROK', 'x-ai/grok-imagine-image-2.0'),
         'video_grok' => env('AI_MODEL_VIDEO_GROK', 'x-ai/grok-imagine-video-1.5'),
@@ -217,6 +229,19 @@ return [
         // Per million tokens, OpenRouter's published rate. A model priced at
         // zero here has its spend recorded as zero, which is how twelve of them
         // went unnoticed.
+        /*
+         * xAI direct. The same models as the OpenRouter rows below, so the
+         * same rates until an invoice says otherwise — OpenRouter resells at
+         * list price rather than marking up.
+         *
+         * Present at all because a model named in code and missing here has
+         * its spend recorded as zero, which is how a provider's entire cost
+         * disappears from every per-customer view without anything failing.
+         */
+        'grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
+        'grok-2-image-1212' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
+        'grok-imagine-video' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
+
         'x-ai/grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
         'x-ai/grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'x-ai/grok-imagine-video-1.5' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
@@ -232,6 +257,8 @@ return [
         // Grok 1.5 via OpenRouter: $0.08/s at 480p, $0.25/s at 1080p; 720p
         // rate unpublished — estimated between the two.
         'x-ai/grok-imagine-video-1.5' => 0.15,
+        // The same model on xAI's own account, so the same rate.
+        'grok-imagine-video' => 0.15,
         'default' => 0.40,
     ],
 
@@ -242,6 +269,21 @@ return [
      * generation and image edits always use Gemini (reference-image
      * support), regardless of this setting.
      */
+    /*
+     * Who writes the words.
+     *
+     * Every text path — ad copy, strategy, brand extraction, the copilot, the
+     * public demo — goes through GeminiService::generateContent(), which is
+     * the one place that reads this. 'xai' sends them to Grok on xAI's own
+     * API and falls back to Gemini when it cannot answer; 'gemini' is the
+     * previous behaviour.
+     *
+     * The fallback is the point: two vendors on separate balances means one
+     * lapse is a cost problem rather than an outage, which is exactly what a
+     * single dry balance cost us before.
+     */
+    'text_provider' => env('AI_TEXT_PROVIDER', 'gemini'),
+
     'image_provider' => env('AI_IMAGE_PROVIDER', 'grok'),
     'video_provider' => env('AI_VIDEO_PROVIDER', 'grok'),
 

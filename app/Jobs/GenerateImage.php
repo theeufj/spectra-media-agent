@@ -888,15 +888,33 @@ class GenerateImage implements ShouldQueue
                     aspectRatio: $aspect
                 );
             } else {
-                if (config('ai.image_provider') === 'grok') {
-                    $imageData = app(\App\Services\OpenRouterService::class)->generateImage(
-                        $imagePrompt,
-                        $creativeContext,
-                        self::GROK_SIZES[$aspect] ?? self::GROK_SIZES['1:1']
-                    );
+                if (in_array(config('ai.image_provider'), ['grok', 'xai'], true)) {
+                    /*
+                     * xAI direct where configured, OpenRouter otherwise.
+                     *
+                     * Same models either way — 'xai' talks to api.x.ai on our
+                     * own account, 'grok' goes through OpenRouter's resale.
+                     * The two clients are interchangeable by design, so this
+                     * is a choice of vendor rather than a change of behaviour,
+                     * and either falls through to Gemini below when it cannot
+                     * answer.
+                     */
+                    $viaXai = config('ai.image_provider') === 'xai';
+
+                    $imageData = $viaXai
+                        ? app(\App\Services\XaiService::class)->generateImage(
+                            $imagePrompt,
+                            $creativeContext,
+                            self::GROK_SIZES[$aspect] ?? self::GROK_SIZES['1:1']
+                        )
+                        : app(\App\Services\OpenRouterService::class)->generateImage(
+                            $imagePrompt,
+                            $creativeContext,
+                            self::GROK_SIZES[$aspect] ?? self::GROK_SIZES['1:1']
+                        );
 
                     if ($imageData) {
-                        $usedProvider = 'grok';
+                        $usedProvider = $viaXai ? 'xai' : 'grok';
                     } else {
                         Log::warning('Grok image generation failed — falling back to Gemini.', [
                             'strategy_id' => $this->strategy->id,

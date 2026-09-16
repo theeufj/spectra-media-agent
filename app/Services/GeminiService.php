@@ -241,6 +241,36 @@ class GeminiService
         $maxRetries = $maxRetries ?? $this->maxRetries;
         $startTime = hrtime(true);
 
+        /*
+           Grok first, when that is what the account is configured for.
+
+           Every text path in the product — ad copy, strategy, brand
+           extraction, the copilot, the public demo — arrives here, so this is
+           the one place the decision can be made without touching 53 files
+           that inject this class by name. The class keeps its name for the
+           same reason; renaming it is a separate change to a great many
+           imports, and a misleading name is a smaller problem than a risky
+           sweep.
+
+           Falls through to the Gemini chain below when xAI cannot answer,
+           which is the whole reason for having two vendors on two balances:
+           one lapse is a cost problem rather than an outage. That is not
+           hypothetical — a dry Google balance took strategy, brand
+           extraction, creative, the copilot and the demo down together for a
+           day.
+        */
+        if ($this->shouldUseXai($imageBase64, $enableGoogleSearch)) {
+            $viaXai = app(XaiService::class)->generateText($prompt, $config, $systemInstruction, $context);
+
+            if ($viaXai !== null) {
+                return $viaXai;
+            }
+
+            Log::warning('GeminiService: xAI could not answer; falling through to Gemini', [
+                'task_type' => $context['task_type'] ?? null,
+            ]);
+        }
+
         $result = $this->attemptGenerate(
             $model, $prompt, $config, $systemInstruction,
             $enableThinking, $enableGoogleSearch, $maxRetries,
@@ -286,6 +316,34 @@ class GeminiService
         }
 
         return $result;
+    }
+
+    /**
+     * Whether this particular call can be served by xAI.
+     *
+     * Two kinds cannot, and silently degrading them would be worse than
+     * ignoring the setting:
+     *
+     * An image in the prompt is a vision call, and this client sends text
+     * only — routing one there would drop the picture and answer confidently
+     * about nothing.
+     *
+     * Google Search grounding is Gemini's own feature. A caller asking for it
+     * wants answers checked against the live web, and a model that cannot do
+     * that returns something fluent and unchecked, which is the failure mode
+     * grounding exists to prevent.
+     */
+    private function shouldUseXai(?string $imageBase64, bool $enableGoogleSearch): bool
+    {
+        if (config('ai.text_provider') !== 'xai') {
+            return false;
+        }
+
+        if ($imageBase64 !== null || $enableGoogleSearch) {
+            return false;
+        }
+
+        return app(XaiService::class)->isConfigured();
     }
 
     private function attemptGenerate(
