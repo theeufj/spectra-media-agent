@@ -241,7 +241,7 @@ class XaiService
                 'model' => $model,
                 'input_tokens' => 0,
                 'output_tokens' => 0,
-                'total_cost' => $cost,
+                'cost' => $cost,
                 'duration_ms' => 0,
                 'task_type' => $context['task_type'] ?? null,
             ]);
@@ -281,7 +281,7 @@ class XaiService
                 'model' => $model,
                 'input_tokens' => $inputTokens,
                 'output_tokens' => $outputTokens,
-                'total_cost' => $cost,
+                'cost' => $cost,
                 'duration_ms' => $durationMs,
                 'task_type' => $context['task_type'] ?? null,
             ]);

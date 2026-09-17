@@ -140,4 +140,36 @@ class XaiRoutingTest extends TestCase
         $this->assertNull($service->generateText('Write more copy.'));
         Http::assertSentCount(1);
     }
+
+    public function test_every_call_records_what_it_cost(): void
+    {
+        config(['ai.text_provider' => 'xai']);
+
+        Http::fake([
+            'api.x.ai/*' => Http::response([
+                'choices' => [['message' => ['content' => 'Grok answered'], 'finish_reason' => 'stop']],
+                // A round million each way, so the expected figure is the
+                // published per-million rate itself rather than a rounding of it.
+                'usage' => ['prompt_tokens' => 1_000_000, 'completion_tokens' => 1_000_000],
+            ], 200),
+        ]);
+
+        app(GeminiService::class)->generateContent(config('ai.models.default'), 'Write three headlines.');
+
+        /*
+           This is the assertion that was missing, and its absence cost us
+           every xAI figure since the provider went live. The write named the
+           column 'total_cost'; the column is 'cost'. Eloquent drops an
+           unfillable key without complaint, Postgres then refuses the row for
+           a null cost, and the catch turns that into a log line — so the calls
+           succeeded, the spend was real, and the admin cost dashboard showed
+           xAI as costing nothing at all. A test that asserted routing but
+           never that a row landed could not see any of it.
+        */
+        $row = \App\Models\AiCost::where('service', 'xAI')->latest('id')->first();
+
+        $this->assertNotNull($row, 'an xAI call must leave a cost row behind');
+        $this->assertSame('grok-4-fast', $row->model);
+        $this->assertEqualsWithDelta(0.70, (float) $row->cost, 0.000001);
+    }
 }
