@@ -31,13 +31,6 @@ class GenerateImage implements ShouldQueue
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The number of times the job may be attempted.
-     *
-     * @var int
-     */
-    public $tries = 3;
-
-    /**
      * The number of seconds the job can run before timing out.
      *
      * @var int
@@ -59,6 +52,39 @@ class GenerateImage implements ShouldQueue
      * the lenses never reached the work at all. Three photographs of the same
      * woman in the same apron, which is exactly what came back.
      */
+    /**
+     * Fail after three genuine errors, not after three attempts.
+     *
+     * This job releases itself back to the queue while it waits for the ad
+     * copy its headline is composited from — and a release counts as an
+     * attempt. It carried $tries = 3 while being told to wait up to six times,
+     * so it died on the fourth with MaxAttemptsExceededException: no images at
+     * all, and a strategy left carrying "has been attempted too many times"
+     * where a customer should have had four creatives.
+     *
+     * CrawlPage and ExtractBrandGuidelines both replaced a $tries cap with
+     * this pairing for this exact reason, and both say so in their own
+     * comments. The wait was added without reading them.
+     *
+     * maxExceptions counts only attempts that threw, so waiting is free and
+     * only real failures spend the budget.
+     */
+    public int $maxExceptions = 3;
+
+    /**
+     * Paired with maxExceptions: bounds the waiting without bounding retries.
+     *
+     * A retryUntil() also suppresses the worker's maxTries check outright,
+     * which is what stops a release from retiring the job. Ten minutes covers
+     * six twenty-second waits for ad copy plus three image generations with
+     * their own backoff, and stops a job whose copy never arrives from
+     * circling for ever.
+     */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addMinutes(10);
+    }
+
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
