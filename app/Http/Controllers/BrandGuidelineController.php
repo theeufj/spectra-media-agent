@@ -32,7 +32,7 @@ class BrandGuidelineController extends Controller
 
         return Inertia::render('BrandGuidelines/Index', [
             'brandGuideline' => $brandGuideline,
-            'customer' => $customer->only(['id', 'name', 'website']),
+            'customer' => $customer->only(['id', 'uuid', 'name', 'website']),
             'canEdit' => true, // You can add permission logic here
         ]);
     }

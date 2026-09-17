@@ -19,7 +19,7 @@ class FacebookAdAccountController extends Controller
 
         return Inertia::render('Customers/Facebook/AdAccountSetup', [
             'customer' => $customer->only([
-                'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
+                'id', 'uuid', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
                 'facebook_page_id', 'facebook_page_name',
             ]),
             'bm_configured' => $this->bmService->isConfigured(),
@@ -51,7 +51,7 @@ class FacebookAdAccountController extends Controller
         return back()->with([
             'success' => 'Facebook ad account linked! Account: act_'.$result['account_id'].($result['name'] ? ' ('.$result['name'].')' : ''),
             'customer' => $customer->fresh()->only([
-                'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
+                'id', 'uuid', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
                 'facebook_page_id', 'facebook_page_name',
             ]),
         ]);
