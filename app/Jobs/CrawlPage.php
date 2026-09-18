@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Prompts\ChunkingPrompt;
 use App\Services\GeminiService;
 use App\Services\LandingPageCROAuditService;
+use App\Support\Embeddings;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -465,8 +466,20 @@ class CrawlPage implements ShouldQueue
                 return;
             }
 
-            // Step 5: Save the URL, all chunk contents, and all embeddings to the database.
-            // Store chunks and embeddings as JSON arrays.
+            // The row stores one vector for the whole page, so the chunk
+            // vectors are averaged into it. This used to pass $embedding — the
+            // foreach variable, holding whichever chunk ran last — so every
+            // row was indexed on the tail of its page, usually the footer and
+            // the terms link. $allEmbeddings was collected and only ever
+            // tested for emptiness.
+            $pageEmbedding = Embeddings::average($allEmbeddings);
+
+            if ($pageEmbedding === null) {
+                Log::warning("Chunk embeddings could not be combined for {$this->url}");
+
+                return;
+            }
+
             KnowledgeBase::updateOrCreate(
                 [
                     'user_id' => $this->user->id,
@@ -476,7 +489,7 @@ class CrawlPage implements ShouldQueue
                     'customer_id' => $this->customerId,
                     'content' => $cleanedContent,
                     'css_content' => $cssContent, // Save the combined CSS content.
-                    'embedding' => new Vector($embedding), // The pgvector package provides this handy Vector class.
+                    'embedding' => new Vector($pageEmbedding),
                     // Chunks are averaged into one vector, so the row is only
                     // in a single space if every chunk came from one model. A
                     // mixed row is recorded as such and skipped by vector

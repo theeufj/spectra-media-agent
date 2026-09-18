@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\CustomerPage;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
+use App\Support\Embeddings;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Pgvector\Laravel\Vector;
@@ -32,7 +33,10 @@ class RefreshEmbeddings extends Command
         }
 
         $only = $this->option('only');
-        $gemini = new GeminiService;
+        // Resolved rather than constructed, so a test can substitute the
+        // embedder. A command that can only be exercised against the live
+        // API is a command whose failures are found in production.
+        $gemini = app(GeminiService::class);
 
         $this->info("Target embedding model: {$model}");
 
@@ -135,9 +139,17 @@ class RefreshEmbeddings extends Command
 
     private function refreshKnowledgeBase(GeminiService $gemini, string $model, KnowledgeBase $kb): void
     {
-        $chunks = json_decode($kb->content, true);
+        /*
+           This read json_decode($kb->content) and returned early unless the
+           result was an array. The column holds the cleaned page text, not
+           JSON, and always has — so the guard was true for every row in the
+           table and the command re-embedded nothing, ever. It still advanced
+           the progress bar and still printed "Done.", which is why it read as
+           a working repair tool for as long as it existed.
+        */
+        $chunks = Embeddings::split((string) $kb->content);
 
-        if (! is_array($chunks) || $chunks === []) {
+        if ($chunks === []) {
             return;
         }
 
@@ -145,7 +157,7 @@ class RefreshEmbeddings extends Command
         $usedModels = [];
 
         foreach ($chunks as $chunk) {
-            if (! is_string($chunk) || trim($chunk) === '') {
+            if (trim($chunk) === '') {
                 continue;
             }
 
@@ -165,10 +177,21 @@ class RefreshEmbeddings extends Command
             return;
         }
 
+        // One vector per row, averaged — $allEmbeddings is a list of chunk
+        // vectors, and handing that to new Vector() builds a nested array
+        // where the column expects a flat one.
+        $averaged = Embeddings::average($allEmbeddings);
+
+        if ($averaged === null) {
+            $this->warn(" Chunk embeddings could not be combined for KB #{$kb->id}");
+
+            return;
+        }
+
         $kb->update([
             // new Vector(), matching every other write path — the column casts
             // to Vector and a raw array went in as a JSON-ish literal.
-            'embedding' => new Vector($allEmbeddings),
+            'embedding' => new Vector($averaged),
             // A file whose chunks fell back mid-run is not in a single space.
             'embedding_model' => count(array_unique(array_filter($usedModels))) === 1
                 ? reset($usedModels)
