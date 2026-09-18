@@ -130,6 +130,23 @@ return [
     ],
 
     /*
+     * Embedding calls allowed per minute, across every worker.
+     *
+     * Defaults to 4, a margin under the 5 RPM quota the preview embedding
+     * model is served under regionally. That limit shapes onboarding rather
+     * than merely pacing it: a 39-page site is roughly 120 embedding calls, so
+     * a crawl spends about half an hour inside this limiter, and any row whose
+     * wait passes 120s gives up without a vector. That is how production came
+     * to hold 283 rows with no embedding at all.
+     *
+     * Here rather than inline so a confirmed quota can be spent without a
+     * deploy. Raise it only to a number the account is actually entitled to —
+     * above the real quota every call returns 429 and the fallback model
+     * embeds into a different space, which is a worse failure than waiting.
+     */
+    'embedding_rpm' => (int) env('AI_EMBEDDING_RPM', 4),
+
+    /*
      * Embedding models served only from the regional Vertex host, via
      * :embedContent with a {content: {parts: []}} body. Everything else uses
      * :predict on the global host with {instances: [{content: ""}]}.

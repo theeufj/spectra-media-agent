@@ -811,11 +811,15 @@ class GeminiService
     public function embedContent(string $model, string $text, array $context = [], ?string &$usedModel = null): ?array
     {
         $usedModel = null;
-        // Throttle all embedding calls to 4 RPM across all workers (safe margin below the 5 RPM regional quota).
-        // Spin-wait in 500 ms increments until a slot is available. Shared via cache (Redis in production).
+        // Throttle every embedding call across all workers, at the rate the
+        // account is entitled to (config('ai.embedding_rpm'), default 4 — a
+        // margin under the preview model's 5 RPM regional quota). Spin-wait in
+        // 500 ms increments until a slot is free. Shared via cache (Redis in
+        // production).
         $throttleKey = 'gemini_embedding_rpm';
+        $perMinute = max(1, (int) config('ai.embedding_rpm', 4));
         $waited = 0;
-        while (! RateLimiter::attempt($throttleKey, 4, fn () => null, 60)) {
+        while (! RateLimiter::attempt($throttleKey, $perMinute, fn () => null, 60)) {
             if ($waited >= 120_000) {
                 Log::error('GeminiService: Embedding throttle wait exceeded 120s — aborting');
 
