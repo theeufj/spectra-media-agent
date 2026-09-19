@@ -108,9 +108,11 @@ class BudgetIntelligenceAgent
             } else {
                 $results['errors'][] = 'One or more platforms rejected the budget update.';
                 report(new \RuntimeException('Campaign '.$campaign->id.': platform budget reconciliation failed.'));
+                Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id]);
             }
         } catch (\Throwable $e) {
             report($e);
+            Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id, 'exception' => $e]);
             $results['errors'][] = $e->getMessage();
         }
 

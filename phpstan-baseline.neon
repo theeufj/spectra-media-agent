@@ -2070,18 +2070,6 @@ parameters:
 			path: tests/Unit/Agents/AudienceIntelligenceAgentTest.php
 
 		-
-			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:once\(\)\.$#'
-			identifier: method.notFound
-			count: 9
-			path: tests/Unit/Agents/BudgetIntelligenceAgentTest.php
-
-		-
-			message: '#^Call to an undefined method Mockery\\LegacyMockInterface\:\:optimize\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: tests/Unit/Agents/BudgetIntelligenceAgentTest.php
-
-		-
 			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Log\:\:shouldHaveReceived\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 1
