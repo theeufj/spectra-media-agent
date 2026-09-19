@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'renderer_url' => env('CRAWLER_RENDERER_URL'),
+    'renderer_token' => env('CRAWLER_RENDERER_TOKEN'),
     /*
     |--------------------------------------------------------------------------
     | Node Binary Path
@@ -38,8 +40,6 @@ return [
     |
     */
     'chrome_args' => [
-        'no-sandbox',
-        'disable-setuid-sandbox',
         'disable-dev-shm-usage',
 
         // We are reading text, not taking screenshots. Product pages on a

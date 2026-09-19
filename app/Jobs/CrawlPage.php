@@ -19,10 +19,8 @@ use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Pgvector\Laravel\Vector;
-use Spatie\Browsershot\Browsershot;
 use Spatie\Robots\RobotsTxt;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -173,7 +171,7 @@ class CrawlPage implements ShouldQueue
 
             $robotsTxtContent = Cache::remember("robots_txt_{$parsedUrl['host']}", 3600, function () use ($robotsUrl) {
                 try {
-                    $response = Http::get($robotsUrl);
+                    $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($robotsUrl);
 
                     return $response->successful() ? $response->body() : '';
                 } catch (\Throwable $e) {
@@ -206,15 +204,7 @@ class CrawlPage implements ShouldQueue
 
             // Step 1: Use a headless browser to get the fully rendered HTML.
             // This executes the JavaScript on the page, just like a real browser.
-            $html = Browsershot::url($this->url)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
-                // Thirty seconds lost ten of eleven pages on a re-crawl of two
-                // Shopify storefronts. The job itself allows 300, so the render
-                // was the binding constraint, not the queue.
-                ->timeout(config('browsershot.page_timeout', 90))
-                ->waitUntilDOMContentLoaded()
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($this->url);
 
             // Step 2: Extract meaningful text from the HTML.
             // We use the Symfony DomCrawler component for this.
@@ -355,7 +345,7 @@ class CrawlPage implements ShouldQueue
             $crawler->filter('link[rel="stylesheet"]')->each(function (Crawler $node) use (&$cssContent) {
                 $stylesheetUrl = $node->link()->getUri();
                 try {
-                    $cssResponse = Http::timeout(30)->get($stylesheetUrl);
+                    $cssResponse = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($stylesheetUrl);
                     if ($cssResponse->successful()) {
                         $cssContent .= $cssResponse->body()."\n\n";
                     }

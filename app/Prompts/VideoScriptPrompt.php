@@ -82,7 +82,7 @@ class VideoScriptPrompt
         $variationInstruction = $this->getVariationInstruction();
 
         return <<<PROMPT
-You are a creative and concise scriptwriter for short marketing videos.
+You are a direct-response advertising writer. Write a specific, natural spoken ad for this offer, not generic marketing narration.
 
 {$brandContext}
 {$productContextString}
@@ -94,17 +94,23 @@ Based on the following creative strategy, write a short, engaging voiceover scri
 - **HARD WORD BUDGET: 35 words maximum.** The video canvas is 15 seconds and narration runs ~2.4 words per second — a 36th word gets cut off or rushed. Count your words before answering; when in doubt, cut. 25 punchy words beat 35 crowded ones.
 - **Format:** Single paragraph of voiceover narration only
 - **Tone:** {$this->getBrandTone()}
-- **Structure:** Hook (~5 words) → Key Benefit (~18 words) → Call to Action (~7 words)
+- **Structure:** Immediate hook and brand/offer identification → ONE concrete benefit or demonstration → ONE next action
 - **Style:** Conversational, engaging, and impactful
 - **No:** Scene directions, camera angles, timestamps, or any non-voiceover text
 
 **VOICEOVER BEST PRACTICES:**
-- Start with an attention-grabbing hook or question
-- Focus on ONE primary benefit or value proposition
-- Use active, energetic language
-- End with a clear, compelling call to action
-- Ensure natural pacing and rhythm for spoken delivery
-- Avoid jargon unless it's part of the brand voice
+- Start with a specific observation, product action, useful contrast or desirable outcome.
+  Do not default to a rhetorical question, "Struggling with...?" or "In today's world".
+- Identify the supplied brand naturally in the opening sentence when its name is available;
+  otherwise identify the actual offer. Never invent a brand name. Branding counts in the word budget.
+- Focus on ONE supported reason to choose this offer. Use a concrete feature or mechanism
+  from the strategy, brand or product details instead of "transform", "unlock" or "game-changing".
+- Complement the visual action instead of describing every shot. No fabricated statistics,
+  savings, reviews, testimonials, guarantees or urgency; use prices only when supplied.
+- End with ONE specific, achievable next action. Do not invent a free trial, discount or demo.
+- Keep the close in the same conversational voice as the opening. Read it aloud mentally:
+  natural pauses must fit the 14-second narration window; fewer words are better than rushing.
+- Before answering, remove interchangeable marketing filler and count the spoken words.
 
 --- CREATIVE STRATEGY ---
 {$this->strategy}
@@ -116,10 +122,10 @@ PROMPT;
     private function getVariationInstruction(): string
     {
         if ($this->variationIndex === 0) {
-            return "**CREATIVE ANGLE — VARIATION A:**\nLead with the core problem the customer faces. Open with a pain point or frustration hook, then present the product as the direct solution. End with a benefit-driven call to action.";
+            return "**CREATIVE ANGLE — VARIATION A:**\nFollow the lead concept in the strategy. Open on its product action, distinctive feature or concrete benefit, then explain why it matters. A frustration hook is appropriate only when the brief specifically depends on it; it is not the default. Close with one supported next step.";
         }
 
-        return "**CREATIVE ANGLE — VARIATION B:**\nThis must be DISTINCTLY DIFFERENT from any other script written for this strategy. Lead with aspiration or a bold outcome — skip the problem framing entirely. Open with what life looks/feels like AFTER using the product. Use a different hook style, different sentence rhythm, and a different call to action from Variation A.";
+        return "**CREATIVE ANGLE — VARIATION B:**\nUse the Alternative angle from the strategy when supplied; otherwise lead with a concrete benefit in use. Change the selling emphasis and opening construction from the lead concept, not just the wording. Keep the benefit supported and the next action appropriate to the same offer; do not inflate an aspiration into a promised result.";
     }
 
     private function getBrandTone(): string

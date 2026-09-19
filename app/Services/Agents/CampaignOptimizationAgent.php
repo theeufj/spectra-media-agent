@@ -155,32 +155,21 @@ class CampaignOptimizationAgent
 
     public function applyRecommendation(Campaign $campaign, array $recommendation): array
     {
-        // Smart Bidding cooling-off: Google recommends at least 7 days between bid strategy changes.
-        // Downgrade bidding/budget mutations to the review queue if a change was applied recently.
-        $biddingTypes = ['adjust_bid', 'change_bid_strategy', 'adjust_target_cpa', 'adjust_target_roas', 'adjust_budget'];
-        $type = $recommendation['type'] ?? '';
-
-        if (in_array($type, $biddingTypes, true)) {
-            // last_optimized_at is a campaigns column; strategies has no such
-            // field, so this always read null and the cooling-off period below
-            // never applied — bid recommendations were auto-applied regardless of
-            // how recently we had already changed the bids.
-            $lastOptimized = $campaign->last_optimized_at;
-
-            if ($lastOptimized && \Carbon\Carbon::parse($lastOptimized)->diffInDays(now()) < 7) {
-                Log::info("CampaignOptimizationAgent: Cooling-off — last bid change was {$lastOptimized}, skipping auto-apply", [
-                    'campaign_id' => $campaign->id,
-                    'type' => $type,
-                ]);
-
-                return [
-                    'success' => false,
-                    'skipped' => true,
-                    'reason' => 'Smart Bidding cooling-off: last bidding change was less than 7 days ago. Recommendation queued for manual review.',
-                ];
-            }
+        $type = RecommendationScorer::canonicalType($recommendation['type'] ?? '');
+        $field = $type === 'BUDGET' ? 'last_budget_changed_at' : 'last_bidding_changed_at';
+        if (in_array($type, ['BUDGET', 'BIDDING'], true) && $campaign->$field?->greaterThan(now()->subDays(7))) {
+            return [
+                'applied' => false,
+                'requires_review' => true,
+                'message' => 'Budget and bidding changes require seven days between automatic adjustments.',
+                'recommendation' => $recommendation,
+            ];
+        }
+        $result = $this->applier->apply($campaign, $recommendation);
+        if (($result['applied'] ?? false) && in_array($type, ['BUDGET', 'BIDDING'], true)) {
+            $campaign->forceFill([$field => now()])->save();
         }
 
-        return $this->applier->apply($campaign, $recommendation);
+        return $result;
     }
 }

@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\GenerateImage;
-use App\Models\Campaign;
-use App\Models\Strategy;
 use Tests\TestCase;
 
 /**
@@ -24,7 +21,7 @@ class HeadlineFittingTest extends TestCase
 {
     private function font(): string
     {
-        $job = new GenerateImage(Campaign::factory()->make(), new Strategy);
+        $job = new \App\Services\Creative\ImageComposer;
         $m = new \ReflectionMethod($job, 'resolveFont');
         $path = $m->invoke($job);
 
@@ -38,7 +35,7 @@ class HeadlineFittingTest extends TestCase
     /** @return array{lines: list<string>, size: int}|null */
     private function fit(string $text, int $maxWidth, int $startSize, int $maxLines = 2): ?array
     {
-        $job = new GenerateImage(Campaign::factory()->make(), new Strategy);
+        $job = new \App\Services\Creative\ImageComposer;
         $m = new \ReflectionMethod($job, 'fitHeadline');
 
         return $m->invoke($job, $text, $this->font(), $maxWidth, $startSize, $maxLines);

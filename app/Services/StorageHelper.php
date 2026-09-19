@@ -110,7 +110,7 @@ class StorageHelper
     /**
      * Delete a file from wherever it's stored.
      */
-    public static function delete(string $path): void
+    public static function delete(string $path, bool $throwOnFailure = false): void
     {
         $s3Bucket = config('filesystems.disks.s3.bucket');
         $s3Key = config('filesystems.disks.s3.key');
@@ -124,6 +124,9 @@ class StorageHelper
                 ]);
             } catch (\Throwable $e) {
                 Log::warning("Failed to delete from S3: {$e->getMessage()}");
+                if ($throwOnFailure) {
+                    throw $e;
+                }
             }
 
             return;

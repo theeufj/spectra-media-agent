@@ -5,22 +5,7 @@ namespace Tests\Feature;
 use App\Prompts\CreativeVariant;
 use PHPUnit\Framework\TestCase;
 
-/**
- * A set of creatives has to look like a set, not like one picture printed
- * several times.
- *
- * The splitter is asked for three distinct scenes and told in as many words
- * that paraphrasing is a failure. It returns three versions of the same
- * picture anyway: a campaign whose strategy named a potter, a male creator at a
- * desk and hands packing a box came back as the same woman in the same studio
- * holding the same tablet, three times over, across two separate regenerations.
- *
- * Asking a model to vary its own output is a request. This is the guarantee:
- * each slot carries a lens that changes what the camera is doing and who is in
- * front of it, stated as an override so it wins wherever it contradicts the
- * scene. Three identical scenes through three lenses are still three different
- * photographs.
- */
+/** Different slots must test selling angles while preserving the supplied offer. */
 class CreativeVariantTest extends TestCase
 {
     private const SCENE = 'A boutique maker in a sunlit studio holding a tablet.';
@@ -61,25 +46,21 @@ class CreativeVariantTest extends TestCase
         }
     }
 
-    public function test_the_lenses_change_more_than_the_camera_angle(): void
+    public function test_the_lenses_change_the_selling_angle_without_forcing_people_or_rooms(): void
     {
-        $all = implode(' ', array_filter(CreativeVariant::LENSES));
+        $benefit = CreativeVariant::apply(self::SCENE, 1);
+        $demonstration = CreativeVariant::apply(self::SCENE, 2);
 
-        /*
-           "The same person in the same room from a different angle" is the
-           failure mode, so the set has to reach for distance, for detail, for a
-           different person, and for no person at all.
-
-           Distance, though, not abandonment: the first wording said "pull much
-           further back... the person small in the frame or out of it entirely"
-           and got a shopfront photographed from the far side of the street,
-           the subject a smudge behind glass. True to the words and useless as
-           an advertisement.
-        */
-        $this->assertStringContainsString('step back to take in the whole room', $all);
-        $this->assertStringContainsString('no face in shot', $all);
-        $this->assertStringContainsString('different person', $all);
-        $this->assertStringContainsString('no people at all', $all);
+        $this->assertStringContainsString('BENEFIT IN ACTION', $benefit);
+        $this->assertStringContainsString('Alternative angle', $benefit);
+        $this->assertStringContainsString('people are optional', $benefit);
+        $this->assertStringContainsString('DEMONSTRATION OR DETAIL', $demonstration);
+        $this->assertStringContainsString('do not invent a physical product', $demonstration);
+        foreach ([$benefit, $demonstration] as $prompt) {
+            $this->assertStringContainsString('placement constraints', $prompt);
+            $this->assertStringContainsString('visual medium', $prompt);
+            $this->assertStringNotContainsString('whole room', $prompt);
+        }
     }
 
     public function test_a_slot_beyond_the_lenses_falls_back_rather_than_repeating(): void
@@ -98,7 +79,7 @@ class CreativeVariantTest extends TestCase
 
         $this->assertSame(3, count(array_unique($asked)));
         $this->assertStringNotContainsString('VARIATION', $asked[0]);
-        $this->assertStringContainsString('step back to take in the whole room', $asked[1]);
-        $this->assertStringContainsString('no face in shot', $asked[2]);
+        $this->assertStringContainsString('BENEFIT IN ACTION', $asked[1]);
+        $this->assertStringContainsString('DEMONSTRATION OR DETAIL', $asked[2]);
     }
 }

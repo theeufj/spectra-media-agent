@@ -188,9 +188,7 @@ class SeoAuditService
             }
 
             try {
-                $response = Http::timeout(30)
-                    ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
-                    ->get($url);
+                $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
 
                 if (! $response->successful()) {
                     return null;
@@ -214,14 +212,7 @@ class SeoAuditService
     protected function renderWithBrowser(string $url): ?string
     {
         try {
-            return \Spatie\Browsershot\Browsershot::url($url)
-                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
-                ->userAgent('SpectraMediaBot/1.0 (SEO Audit)')
-                // Client-rendered pages need the JS to run and settle before the
-                // DOM is worth reading.
-                ->waitUntilNetworkIdle()
-                ->timeout(60)
-                ->bodyHtml();
+            return app(\App\Services\Crawling\WebsiteRenderer::class)->html($url);
         } catch (\Throwable $e) {
             Log::warning('SEO Audit: browser render failed, falling back to raw HTML', [
                 'url' => $url,
@@ -522,9 +513,7 @@ class SeoAuditService
         $headers = [];
 
         try {
-            $response = Http::timeout(15)
-                ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
-                ->get($url);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
 
             // Header names are case-insensitive; Laravel preserves the server's
             // casing, so normalise before looking anything up.
@@ -547,7 +536,7 @@ class SeoAuditService
     {
         try {
             $start = microtime(true);
-            $response = Http::timeout(10)->get($url);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
             $loadTime = (microtime(true) - $start) * 1000;
 
             return [

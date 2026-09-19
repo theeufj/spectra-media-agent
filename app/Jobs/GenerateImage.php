@@ -164,6 +164,8 @@ class GenerateImage implements ShouldQueue
                 $prompts = [$strategyPrompt];
                 Log::warning('Image prompt splitter returned no prompts. Falling back to the original strategy.');
             }
+            // Each dispatched slot owns one concept; three slots must not render nine concepts.
+            $prompts = [$prompts[$this->slot % count($prompts)]];
             // --- End Prompt Splitting ---
 
             /*
@@ -282,7 +284,8 @@ class GenerateImage implements ShouldQueue
                  * already holds gives each picture its own index, because a
                  * concept's rows are written before the next one is composed.
                  */
-                $lens = ImageCollateral::conceptsForCampaign($this->campaign);
+                $lens = $this->slot;
+                $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens);
                 $scene = CreativeVariant::apply($prompt, $lens);
 
                 /*
@@ -310,8 +313,8 @@ class GenerateImage implements ShouldQueue
                     // reserving space for one that never arrives is what put a
                     // flat navy band across the bottom of a free account's
                     // creative.
-                    bannerComposited: $this->campaign->customer->isOnPaidPlan(),
-                    headline: $headline,
+                    bannerComposited: false,
+                    headline: $layout === 'headline' ? $headline : null,
                 ))->getPrompt();
 
                 /*
@@ -527,68 +530,7 @@ class GenerateImage implements ShouldQueue
                             $img->cover($targetW, $targetH);
                         }
 
-                        $w = $img->width();
-                        $h = $img->height();
-
-                        /*
-                         * Drawn after the crop, so it is measured against the
-                         * pixels that will actually ship.
-                         *
-                         * Asking the model for it failed twice on the same
-                         * creative, and the second attempt to word the margin
-                         * rule drew a navy border around a different one. Set
-                         * here it cannot be cropped, and the square, landscape
-                         * and MREC crops of one picture carry the same words in
-                         * the same place instead of three separate renderings.
-                         */
-                        if ($headline !== null) {
-                            $this->drawHeadline($img, $headline, $this->resolveFont());
-                        }
-
-                        if ($isSubscribed) {
-                            $bannerH = (int) ($h * 0.18);
-                            $img->drawRectangle(0, $h - $bannerH, function ($draw) use ($w, $bannerH) {
-                                $draw->size($w, $bannerH);
-                                $draw->background('rgba(0, 0, 0, 0.65)');
-                            });
-
-                            $fontPath = $this->resolveFont();
-
-                            if ($brandName) {
-                                $img->text($brandName, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.38), function ($font) use ($fontPath, $bannerH) {
-                                    if ($fontPath) {
-                                        $font->filename($fontPath);
-                                    }
-                                    $font->size((int) ($bannerH * 0.38));
-                                    $font->color('ffffff');
-                                    $font->align('center');
-                                    $font->valign('middle');
-                                });
-                            }
-
-                            if ($tagline) {
-                                $img->text($tagline, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.72), function ($font) use ($fontPath, $bannerH) {
-                                    if ($fontPath) {
-                                        $font->filename($fontPath);
-                                    }
-                                    $font->size((int) ($bannerH * 0.22));
-                                    $font->color('rgba(220, 220, 220, 1)');
-                                    $font->align('center');
-                                    $font->valign('middle');
-                                });
-                            }
-                        } else {
-                            $fontPath = $this->resolveFont();
-                            $img->text('Preview', $w - 20, $h - 20, function ($font) use ($fontPath) {
-                                if ($fontPath) {
-                                    $font->filename($fontPath);
-                                }
-                                $font->size(24);
-                                $font->color('ffffff');
-                                $font->align('right');
-                                $font->valign('bottom');
-                            });
-                        }
+                        app(\App\Services\Creative\ImageComposer::class)->compose($img, $layout, $headline, $brandName);
 
                         $encoded = (string) $img->encode();
                     } catch (\Throwable $e) {
@@ -607,6 +549,14 @@ class GenerateImage implements ShouldQueue
                         's3_path' => $s3Path,
                         'cloudfront_url' => $cloudFrontUrl,
                         'format' => $format,
+                        'layout' => $layout,
+                        'generation_metadata' => ($imageData['provenance'] ?? []) + [
+                            'generation_id' => $this->strategy->generation_id,
+                            'slot' => $this->slot, 'concept' => $scene,
+                            'layout' => $layout,
+                            'reference_ids' => $seeds->modelKeys(),
+                            'references' => $seeds->map(fn ($seed) => ['type' => $seed->getMorphClass(), 'id' => $seed->getKey()])->all(),
+                        ],
                     ];
 
                     Log::info("Image uploaded [{$format}]: {$s3Path}");
@@ -614,7 +564,14 @@ class GenerateImage implements ShouldQueue
 
                 // The cap is enforced here, not above: this is the only point
                 // where reading the count and writing the rows happen together.
-                $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows);
+                $conceptKey = null;
+                try {
+                    $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows);
+                } finally {
+                    if ($conceptKey === null) {
+                        DeleteCollateralFiles::dispatch(array_column($pendingRows, 's3_path'));
+                    }
+                }
 
                 if ($conceptKey === null) {
                     Log::info("Image cap reached for campaign {$this->campaign->id} while uploading; discarding this picture");
@@ -863,7 +820,7 @@ class GenerateImage implements ShouldQueue
      *
      * @param  list<array{mime_type: string, data: string}>  $seedContextImages
      * @param  array<string, mixed>  $creativeContext
-     * @return array{data: string, mimeType: string}|null
+     * @return array{data: string, mimeType: string, provenance?: array}|null
      */
     private function generateAtAspect(
         string $imagePrompt,
@@ -960,6 +917,18 @@ class GenerateImage implements ShouldQueue
             if ($imageData && isset($imageData['data'], $imageData['mimeType'])) {
                 Log::info("Successfully generated {$aspect} image on attempt {$attempt} via {$usedProvider}");
 
+                $imageData['provenance'] = [
+                    'provider' => $usedProvider,
+                    'model' => config('ai.models.'.match ($usedProvider) {
+                        'grok' => 'image_grok', 'xai' => 'image_xai', default => 'image'
+                    }),
+                    'prompt_hash' => hash('sha256', $imagePrompt),
+                    'prompt' => $imagePrompt,
+                    'template_hash' => hash_file('sha256', app_path('Prompts/ImagePrompt.php')),
+                    'aspect_ratio' => $aspect,
+                    'generated_at' => now()->toIso8601String(),
+                ];
+
                 return $imageData;
             }
 
@@ -981,8 +950,8 @@ class GenerateImage implements ShouldQueue
      * composition still beats no creative, and null when even cropping would
      * take the picture rather than tighten it.
      *
-     * @param  array<string, array{data: string, mimeType: string}>  $bases
-     * @return array{base: array{data: string, mimeType: string}, mode: string}|null
+     * @param  array<string, array{data: string, mimeType: string, provenance?: array}>  $bases
+     * @return array{base: array{data: string, mimeType: string, provenance?: array}, mode: string}|null
      */
     private function nearestBase(array $bases, string $wanted, int $targetW, int $targetH, string $format): ?array
     {
@@ -1077,189 +1046,6 @@ class GenerateImage implements ShouldQueue
      *
      * @return array{lines: list<string>, size: int}|null
      */
-    private function fitHeadline(string $text, string $fontPath, int $maxWidth, int $startSize, int $maxLines = 2): ?array
-    {
-        $words = preg_split('/\s+/', trim($text)) ?: [];
-
-        if ($words === []) {
-            return null;
-        }
-
-        $widthAt = function (string $s, int $size) use ($fontPath): int {
-            $box = imagettfbbox($size, 0, $fontPath, $s);
-
-            return $box === false ? PHP_INT_MAX : (int) abs($box[2] - $box[0]);
-        };
-
-        // Shrink until the words can be arranged inside maxLines lines that
-        // each fit. Floor at a size that is still legible as a thumbnail;
-        // below it, no headline beats an unreadable one.
-        for ($size = $startSize; $size >= (int) ($startSize * 0.45); $size -= 2) {
-            $lines = [];
-            $current = '';
-
-            foreach ($words as $word) {
-                if ($widthAt($word, $size) > $maxWidth) {
-                    // A single word wider than the frame cannot be wrapped out
-                    // of trouble; only a smaller size helps.
-                    $lines = [];
-                    break;
-                }
-
-                $candidate = $current === '' ? $word : $current.' '.$word;
-
-                if ($widthAt($candidate, $size) <= $maxWidth) {
-                    $current = $candidate;
-
-                    continue;
-                }
-
-                $lines[] = $current;
-                $current = $word;
-            }
-
-            if ($lines === [] && $current === '') {
-                continue;
-            }
-
-            if ($current !== '') {
-                $lines[] = $current;
-            }
-
-            if (count($lines) <= $maxLines) {
-                return ['lines' => $lines, 'size' => $size];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Whether the area the headline will occupy is light or dark.
-     *
-     * The prompt asks for an uncluttered corner, not a white one, and the
-     * photographs come back with brick, glass, sunlight and shadow up there.
-     * Sampling decides the ink colour instead of guessing it: a fixed white
-     * headline disappears against a bright wall and a fixed dark one
-     * disappears against a shadow.
-     */
-    private function regionIsLight(\Intervention\Image\Interfaces\ImageInterface $img, int $x, int $y, int $w, int $h): bool
-    {
-        $total = 0;
-        $samples = 0;
-
-        // A coarse grid is plenty — this decides one bit.
-        for ($i = 1; $i <= 4; $i++) {
-            for ($j = 1; $j <= 3; $j++) {
-                $px = min($img->width() - 1, max(0, $x + (int) ($w * $i / 5)));
-                $py = min($img->height() - 1, max(0, $y + (int) ($h * $j / 4)));
-
-                try {
-                    $c = $img->pickColor($px, $py)->toArray();
-                } catch (\Throwable) {
-                    continue;
-                }
-
-                // Rec. 601 luma: green carries most of perceived brightness.
-                $total += 0.299 * ($c[0] ?? 0) + 0.587 * ($c[1] ?? 0) + 0.114 * ($c[2] ?? 0);
-                $samples++;
-            }
-        }
-
-        return $samples === 0 ? true : ($total / $samples) > 140;
-    }
-
-    /**
-     * Draw the approved headline onto the artwork.
-     *
-     * Set by us, at a measured size, inside a safe area — rather than asked
-     * for in the prompt and cropped by the model. It is also the same words in
-     * the same place across the square, landscape and MREC crops of one
-     * picture, which three separate renderings by the model could never be.
-     */
-    private function drawHeadline(\Intervention\Image\Interfaces\ImageInterface $img, string $headline, ?string $fontPath): void
-    {
-        if ($fontPath === null || ! function_exists('imagettfbbox')) {
-            return;
-        }
-
-        $w = $img->width();
-        $h = $img->height();
-
-        // The safe area the prompt reserves: inset from every edge, and clear
-        // of the bottom where a brand banner may be composited.
-        $margin = (int) ($w * 0.08);
-        $maxWidth = $w - ($margin * 2);
-
-        $fitted = $this->fitHeadline($headline, $fontPath, $maxWidth, (int) ($h * 0.085));
-
-        if ($fitted === null) {
-            Log::warning('Headline could not be fitted and was left off the creative', [
-                'headline' => $headline,
-                'width' => $w,
-            ]);
-
-            return;
-        }
-
-        $size = $fitted['size'];
-        $lineHeight = (int) ($size * 1.24);
-        $blockHeight = $lineHeight * count($fitted['lines']);
-        $top = (int) ($h * 0.075);
-
-        $light = $this->regionIsLight($img, $margin, $top, $maxWidth, $blockHeight);
-        $ink = $light ? '101828' : 'ffffff';
-        $shadow = $light ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.45)';
-
-        foreach ($fitted['lines'] as $i => $line) {
-            $y = $top + ($i * $lineHeight) + (int) ($size * 0.85);
-
-            // A soft counter-coloured offset keeps it readable where the
-            // photograph turns out busier than the brief asked for.
-            foreach ([[2, 2, $shadow], [0, 0, $ink]] as [$dx, $dy, $colour]) {
-                $img->text($line, $margin + $dx, $y + $dy, function ($font) use ($fontPath, $size, $colour) {
-                    $font->filename($fontPath);
-                    $font->size($size);
-                    $font->color($colour);
-                    $font->align('left');
-                    $font->valign('bottom');
-                });
-            }
-        }
-    }
-
-    private function resolveFont(): ?string
-    {
-        $candidates = [
-            /*
-             * Bundled first, so the typography is the same everywhere.
-             *
-             * This list was entirely system paths, so which face a headline
-             * was set in depended on what the box happened to have installed —
-             * and on a machine with none, the text was silently left off. It
-             * also meant the tests covering the fitting arithmetic skipped
-             * rather than ran, locally and in CI both, which is the same as
-             * not having them. DejaVu is freely redistributable; the system
-             * paths stay as a fallback.
-             */
-            public_path('fonts/DejaVuSans-Bold.ttf'),
-            public_path('fonts/Arial.ttf'),
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-            '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
-            '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
-        ];
-
-        foreach ($candidates as $path) {
-            if (file_exists($path)) {
-                return $path;
-            }
-        }
-
-        return null;
-    }
-
     /**
      * Get the file extension from a MIME type.
      */

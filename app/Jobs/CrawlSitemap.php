@@ -12,7 +12,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Sitemap\Sitemap;
 
@@ -60,9 +59,7 @@ class CrawlSitemap implements ShouldQueue
         Log::info("Starting CrawlSitemap job for URL: {$this->sitemapUrl}");
 
         try {
-            $response = Http::timeout(30)->withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            ])->get($this->sitemapUrl);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($this->sitemapUrl);
 
             if ($response->failed()) {
                 Log::error("CrawlSitemap: Failed to fetch sitemap: {$this->sitemapUrl}. Status: ".$response->status());

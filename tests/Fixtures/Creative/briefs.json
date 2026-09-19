@@ -1,0 +1,8 @@
+[
+  {"id":"saas-search","business":"Ad management software","offer":"Paste a website URL to prepare a campaign; transparent flat fee","placement":"google-search","must_show":"An offer-specific, credible product or benefit cue","avoid":"Tired owner, forehead rubbing, piles of invoices","video":false},
+  {"id":"saas-pmax","business":"Ad management software","offer":"Reallocate budget and inspect changes in one workspace","placement":"google-pmax","must_show":"A real product action or purposeful visual metaphor; no invented dashboard claims","avoid":"Generic glowing AI brain or unproven revenue chart","video":true},
+  {"id":"retail-pmax","business":"Independent ceramic studio","offer":"Handmade cups with visible glaze and texture","placement":"google-pmax","must_show":"Recognisable actual product, tactile detail and a distinct use occasion","avoid":"Three camera angles of the same styled countertop","video":true},
+  {"id":"service-meta","business":"Local garden maintenance","offer":"Book regular care for a small courtyard","placement":"meta-feed","must_show":"Specific service in use and a plausible maintained space","avoid":"Stock handshake or fabricated before/after result","video":true},
+  {"id":"property-search","business":"Residential property listing","offer":"Book an inspection of the supplied property","placement":"google-search","must_show":"Faithful supplied property photography","avoid":"Invented rooms, views or renovated features","video":false},
+  {"id":"clinic-meta","business":"Physiotherapy clinic","offer":"Book an initial appointment","placement":"meta-feed","must_show":"Credible clinic/service detail and welcoming setting","avoid":"Guaranteed medical outcome or personal health targeting","video":false}
+]

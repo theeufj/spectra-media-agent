@@ -610,7 +610,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
             show: true,
             title: force ? 'Force Regenerate Strategies' : 'Regenerate Strategies',
             message: force
-                ? 'This will revert all sign-offs, delete all generated collateral, and regenerate strategies from scratch. This cannot be undone.'
+                ? 'Your current strategy and creative stay available while a replacement is generated. After it succeeds, the new strategy replaces them and needs your approval.'
                 : 'This will delete all current strategies and generate new ones using AI. Are you sure?',
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });

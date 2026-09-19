@@ -3,54 +3,38 @@
 namespace App\Prompts;
 
 /**
- * One deliberate difference per creative in a set.
- *
- * The splitter is asked for three distinct scenes and told that paraphrasing is
- * a failure. It still returns three versions of the same picture: a campaign
- * whose strategy named a potter, a male creator at a desk, and hands packing a
- * box came back as the same woman in the same studio holding the same tablet,
- * three times. Asking a model to vary its own output is a request, and a
- * request is not a guarantee.
- *
- * So the variation is structural instead. Each slot in the set carries a lens —
- * a short directive that changes what the camera is doing and who is in front
- * of it — and the lens is stated as an override, so it wins wherever it
- * contradicts the scene it is applied to. Three identical scenes through these
- * three lenses are still three different photographs, which is the property
- * that matters: a person scrolling should not meet the same ad twice.
- *
- * The first slot is deliberately empty. The strategy's own scene is the one
- * that was briefed and approved, and it should appear as written at least once.
+ * Give each image or video slot a different selling angle, even when an upstream
+ * splitter repeats a scene. Preserve the approved offer and visual treatment.
  */
 class CreativeVariant
 {
-    /**
-     * Applied by position. Index 0 is the scene as briefed.
-     *
-     * Each lens changes at least two of subject, distance and framing, because
-     * changing one is how "a different camera angle" passes for variety and
-     * produces the set we already had.
-     *
-     * @var list<string|null>
-     */
+    /** @var list<string|null> Slot zero preserves the briefed concept. */
     public const LENSES = [
         null,
 
-        'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
-        'step back to take in the whole room and its light, from across that room rather than across the street. '.
-        'The person stays clearly readable at roughly a third of the frame; the space around them is the point. '.
-        'Stay inside the room — no exteriors, no shooting through a window or doorway from outside.',
+        'VARIATION FOR THIS CREATIVE — where this conflicts with the scene above, this wins: '.
+        'BENEFIT IN ACTION. Show a concrete, desirable use or outcome supported by this offer. '.
+        'If an Alternative angle is supplied, use that concept. Change the focal action and context, '.
+        'not just the camera angle; the product or service benefit must be recognisable at thumbnail size. '.
+        'Keep the subject prominent; no distant establishing view. Do not invent results or claims. '.
+        'Preserve the brand palette, visual medium and placement constraints; people are optional.',
 
-        'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
-        'move in close on hands and the object they are working with — no face in shot at all. '.
-        'Shallow depth of field, the work itself filling the frame.',
+        'VARIATION FOR THIS CREATIVE — where this conflicts with the scene above, this wins: '.
+        'DEMONSTRATION OR DETAIL. Make one supported feature, material or service action the hero. '.
+        'Use a tight, purposeful composition showing how it works or what makes it distinctive. '.
+        'For an intangible service, show a concrete action already supported by the brief; do not invent a physical product. '.
+        'Preserve the palette, visual medium and placement constraints. Hands appear only if they explain the benefit; '.
+        'no obligatory face, paperwork or device, and no fabricated interface or evidence.',
 
-        'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
-        'cast a different person from the one described. Change their age, their gender and the room they are in, '.
-        'while keeping the same trade, the same warmth and the same time of day.',
+        'VARIATION FOR THIS CREATIVE — where this conflicts with the scene above, this wins: '.
+        'DISTINCT USE OCCASION. Show another situation the supplied offer explicitly serves. '.
+        'Change the action and environment, retaining a prominent product or service subject and the brand treatment. '.
+        'Do not merely recast the same person or invent an audience, feature or customer result.',
 
-        'VARIATION FOR THIS IMAGE — where this conflicts with the scene above, this wins: '.
-        'no people at all. The finished work, the tools and the workspace, photographed on their own in natural light.',
+        'VARIATION FOR THIS CREATIVE — where this conflicts with the scene above, this wins: '.
+        'OBJECT-LED HERO. Build a bold, tactile composition around the actual product or objects central to the service. '.
+        'No people; deliberate light, material texture and brand colour make the selling idea clear. '.
+        'Stay within the approved medium and placement constraints; do not substitute decorative props for the offer.',
     ];
 
     /**
@@ -80,10 +64,10 @@ class CreativeVariant
         // cannot silently turn every label into 'unknown'.
         return match (true) {
             ! isset(self::LENSES[$index]) => 'none — the scene as briefed',
-            $index === 1 => 'wide — the place is the subject',
-            $index === 2 => 'close — hands and the work, no face',
-            $index === 3 => 'recast — a different person',
-            $index === 4 => 'still life — no people',
+            $index === 1 => 'benefit — a desirable use or outcome',
+            $index === 2 => 'demonstration — a feature or service action',
+            $index === 3 => 'occasion — another supported use',
+            $index === 4 => 'hero — the product or service objects',
             default => 'slot '.$index,
         };
     }

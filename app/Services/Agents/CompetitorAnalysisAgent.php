@@ -224,9 +224,7 @@ class CompetitorAnalysisAgent
             }
 
             // Fallback to simple HTTP + DOM parsing
-            $response = Http::withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (compatible; SpectraBot/1.0)',
-            ])->timeout(15)->get($url);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
 
             if (! $response->successful()) {
                 return $result;

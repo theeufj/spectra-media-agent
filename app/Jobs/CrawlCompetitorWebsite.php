@@ -8,7 +8,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class CrawlCompetitorWebsite implements ShouldQueue
@@ -63,7 +62,7 @@ class CrawlCompetitorWebsite implements ShouldQueue
         // 1. Check robots.txt
         try {
             $robotsUrl = rtrim($this->url, '/').'/robots.txt';
-            $response = Http::get($robotsUrl);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($robotsUrl);
 
             if ($response->successful()) {
                 preg_match('/Sitemap: (.*)/i', $response->body(), $matches);
@@ -79,7 +78,7 @@ class CrawlCompetitorWebsite implements ShouldQueue
         // 2. Fallback to common location
         try {
             $sitemapUrl = rtrim($this->url, '/').'/sitemap.xml';
-            $response = Http::head($sitemapUrl);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($sitemapUrl);
 
             if ($response->successful()) {
                 return $sitemapUrl;

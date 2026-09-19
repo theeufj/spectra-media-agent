@@ -14,6 +14,7 @@ import { fetchJson } from '@/utils/http';
  * @param {number}      options.interval  ms between polls (default 5000)
  * @param {boolean}     options.enabled   poll only while true (default true)
  * @param {(data: any) => boolean} options.until  return true to stop polling
+ * @param {(data: unknown) => any} options.parse validate the transport contract
  * @param {boolean}     options.immediate fetch once on mount (default true)
  */
 export function usePolling(url, options = {}) {
@@ -22,6 +23,7 @@ export function usePolling(url, options = {}) {
         enabled = true,
         until = () => false,
         immediate = true,
+        parse = (value) => value,
     } = options;
 
     const [data, setData] = useState(null);
@@ -35,6 +37,8 @@ export function usePolling(url, options = {}) {
 
     // Keep the stop predicate in a ref so callers can pass an inline arrow
     // without restarting the interval on every render.
+    const parseRef = useRef(parse);
+    parseRef.current = parse;
     const untilRef = useRef(until);
     untilRef.current = until;
 
@@ -61,7 +65,7 @@ export function usePolling(url, options = {}) {
             if (inFlight) return;
             inFlight = true;
             try {
-                const result = await fetchJson(url);
+                const result = parseRef.current(await fetchJson(url));
                 if (cancelled) return;
                 setData(result);
                 setError(null);

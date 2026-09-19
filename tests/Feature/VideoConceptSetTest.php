@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Models\VideoCollateral;
+use App\Prompts\StrategyPrompt;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -105,6 +106,25 @@ class VideoConceptSetTest extends TestCase
         Queue::assertNotPushed(GenerateVideo::class);
     }
 
+    public function test_the_search_example_in_the_prompt_does_not_dispatch_videos(): void
+    {
+        Queue::fake();
+        [$campaign, $strategy] = $this->signedOffCampaign(videoAllowance: 10);
+
+        // A prose explanation without the short N/A marker is treated as a
+        // creative brief by the dispatcher, even when generate_video is false.
+        $prompt = StrategyPrompt::build($campaign);
+        $this->assertSame(1, preg_match('/```json\s*(.*?)\s*```/s', $prompt, $matches));
+        $examples = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
+        $search = collect($examples['strategies'])->firstWhere('platform', 'Google Ads (SEM)');
+        $this->assertFalse($search['generate_video']);
+        $strategy->update(['video_strategy' => $search['video_strategy'], 'generate_video' => false]);
+
+        (new GenerateStrategyCollateral($campaign, $strategy, $campaign->customer->users()->first()->id))->handle();
+
+        Queue::assertNotPushed(GenerateVideo::class);
+    }
+
     public function test_videos_already_made_count_against_the_allowance(): void
     {
         Queue::fake();
@@ -130,5 +150,15 @@ class VideoConceptSetTest extends TestCase
 
         // 4 allowed, 1 genuinely used, so 3 remain — room for one concept.
         $this->assertSame([0, 0], $this->dispatchedConcepts());
+    }
+
+    public function test_video_reservations_distinguish_concepts_and_enforce_the_allowance(): void
+    {
+        [$campaign, $strategy] = $this->signedOffCampaign(videoAllowance: 2);
+        $attributes = ['platform' => 'Facebook Ads', 'variation_index' => 0, 'status' => 'pending', 'is_active' => true];
+        $this->assertNotNull(VideoCollateral::reserve($campaign, $attributes));
+        $this->assertNull(VideoCollateral::reserve($campaign, $attributes));
+        $this->assertNotNull(VideoCollateral::reserve($campaign, array_replace($attributes, ['variation_index' => 1])));
+        $this->assertNull(VideoCollateral::reserve($campaign, array_replace($attributes, ['variation_index' => 2])));
     }
 }

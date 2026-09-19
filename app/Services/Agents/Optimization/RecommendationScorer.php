@@ -14,6 +14,11 @@ class RecommendationScorer
 {
     // Gemini returns verbose type names — map them to internal categories
     private const TYPE_ALIASES = [
+        'ADJUST_BUDGET' => 'BUDGET',
+        'ADJUST_BID' => 'BIDDING',
+        'CHANGE_BID_STRATEGY' => 'BIDDING',
+        'ADJUST_TARGET_CPA' => 'BIDDING',
+        'ADJUST_TARGET_ROAS' => 'BIDDING',
         'NEGATIVE_KEYWORD_ADDITION' => 'NEGATIVE_KEYWORDS',
         'NEGATIVE_KEYWORDS' => 'NEGATIVE_KEYWORDS',
         'SEARCH_TERM_REVIEW' => 'NEGATIVE_KEYWORDS',

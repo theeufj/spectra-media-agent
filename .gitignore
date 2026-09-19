@@ -37,3 +37,6 @@ scripts/generate_google_ads_token_simple.php
 /run_app.sh
 /google_ads_php.ini
 .artifact-creative-set/
+
+# Python infrastructure checks
+__pycache__/

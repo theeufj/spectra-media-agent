@@ -80,6 +80,7 @@ class HourlyBudgetOptimization implements ShouldQueue
 
                 // 2. Apply budget multiplier
                 $results = $budgetAgent->optimize($campaign);
+                $summary['errors'] += count($results['errors'] ?? []);
                 $adjustments = array_filter(
                     $results['adjustments'] ?? [],
                     fn ($a) => $a['type'] === 'budget_updated'

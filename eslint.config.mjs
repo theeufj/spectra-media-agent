@@ -40,6 +40,7 @@ const browser = {
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
+    { ignores: ['vendor/**', 'node_modules/**', 'public/build/**'] },
     {
         files: ['resources/js/**/*.jsx', 'resources/js/**/*.js'],
         languageOptions: {
@@ -57,7 +58,11 @@ export default [
            about no-undef.
         */
         plugins: { 'react-hooks': reactHooks },
-        rules: { 'no-undef': 'error' },
+        rules: { 'no-undef': 'error', 'react-hooks/rules-of-hooks': 'error' },
+    },
+    {
+        files: ['resources/js/hooks/**/*.js'],
+        rules: { 'react-hooks/exhaustive-deps': 'error' },
     },
     {
         // Vitest runs on Node, where `global` exists.

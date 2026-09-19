@@ -40,20 +40,30 @@ class SafePublicUrl implements ValidationRule
      */
     public static function isSafe(?string $url): bool
     {
+        return self::publicAddresses($url) !== [];
+    }
+
+    /** @return list<string> */
+    public static function publicAddresses(?string $url): array
+    {
         $url = trim((string) $url);
 
         if ($url === '') {
-            return false;
+            return [];
         }
 
         $parts = parse_url($url);
 
         if (! is_array($parts) || ! isset($parts['host'])) {
-            return false;
+            return [];
         }
 
         if (! in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)) {
-            return false;
+            return [];
+        }
+
+        if (isset($parts['port']) && ! in_array($parts['port'], [80, 443], true)) {
+            return [];
         }
 
         // Credentials in the authority. `https://www.example.com@169.254.169.254/`
@@ -61,20 +71,20 @@ class SafePublicUrl implements ValidationRule
         // disagree with parse_url about where the host starts. Nothing we fetch
         // legitimately carries them.
         if (isset($parts['user']) || isset($parts['pass'])) {
-            return false;
+            return [];
         }
 
         $host = strtolower(trim($parts['host'], '[]'));
 
         if ($host === '') {
-            return false;
+            return [];
         }
 
         if (in_array($host, ['localhost', 'localhost.localdomain'], true)
             || str_ends_with($host, '.localhost')
             || str_ends_with($host, '.local')
             || str_ends_with($host, '.internal')) {
-            return false;
+            return [];
         }
 
         // An IP literal is judged as-is; a hostname by everything it resolves to.
@@ -82,16 +92,16 @@ class SafePublicUrl implements ValidationRule
 
         if ($addresses === []) {
             // Unresolvable: nothing to fetch, and nothing we can vouch for.
-            return false;
+            return [];
         }
 
         foreach ($addresses as $address) {
             if (! self::isPubliclyRoutable($address)) {
-                return false;
+                return [];
             }
         }
 
-        return true;
+        return $addresses;
     }
 
     /**

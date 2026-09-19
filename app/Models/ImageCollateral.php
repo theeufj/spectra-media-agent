@@ -19,6 +19,8 @@ class ImageCollateral extends Model
      */
     protected $fillable = [
         'campaign_id',
+        'generation_metadata',
+        'layout',
         'strategy_id',
         'platform',
         's3_path',
@@ -37,6 +39,7 @@ class ImageCollateral extends Model
      * The attributes that should be cast.
      */
     protected $casts = [
+        'generation_metadata' => 'array',
         'is_active' => 'boolean',
         'is_seed' => 'boolean',
         'should_deploy' => 'boolean',

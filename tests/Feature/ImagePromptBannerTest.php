@@ -93,18 +93,13 @@ class ImagePromptBannerTest extends TestCase
         $this->assertStringContainsString('No borders, no frames, no mattes', $this->prompt(true, 'Build a Store in 5 Minutes'));
     }
 
-    public function test_the_wide_lens_stays_in_the_room(): void
+    public function test_the_benefit_lens_keeps_the_subject_recognisable(): void
     {
-        /*
-           "Pull much further back... the person small in the frame or out of
-           it entirely" produced a shopfront photographed from the far side of
-           the street, the subject a smudge behind glass. True to the words,
-           useless as an ad.
-        */
-        $wide = CreativeVariant::apply(self::SCENE, 1);
+        // A distant establishing shot loses the offer at ad thumbnail sizes.
+        $benefit = CreativeVariant::apply(self::SCENE, 1);
 
-        $this->assertStringContainsString('rather than across the street', $wide);
-        $this->assertStringContainsString('no exteriors', $wide);
-        $this->assertStringNotContainsString('out of it entirely', $wide);
+        $this->assertStringContainsString('recognisable at thumbnail size', $benefit);
+        $this->assertStringContainsString('Keep the subject prominent', $benefit);
+        $this->assertStringContainsString('no distant establishing view', $benefit);
     }
 }

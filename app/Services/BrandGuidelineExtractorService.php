@@ -9,7 +9,6 @@ use App\Prompts\BrandGuidelineExtractionPrompt;
 use App\Services\Onboarding\PlaceholderSiteDetector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 
 class BrandGuidelineExtractorService
 {
@@ -103,13 +102,7 @@ class BrandGuidelineExtractorService
     public function renderedText(string $websiteUrl, int $limit = 20000): ?string
     {
         try {
-            $html = Browsershot::url($websiteUrl)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
-                ->waitUntilNetworkIdle()
-                ->windowSize(1440, 900)
-                ->timeout(30)
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($websiteUrl);
 
             $text = preg_replace('#<(script|style|noscript|svg)[^>]*>.*?</\1>#is', ' ', $html);
             // A space per tag, not strip_tags: adjacent elements have no
@@ -321,7 +314,7 @@ class BrandGuidelineExtractorService
 
                 $robotsTxtContent = \Illuminate\Support\Facades\Cache::remember("robots.txt.{$baseUrl}", 3600, function () use ($robotsUrl) {
                     try {
-                        $response = Http::timeout(5)->get($robotsUrl);
+                        $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($robotsUrl);
 
                         return $response->successful() ? $response->body() : '';
                     } catch (\Throwable $e) {
@@ -347,13 +340,7 @@ class BrandGuidelineExtractorService
 
             // Try Browsershot with Screenshot for Vision AI
             try {
-                $screenshot = Browsershot::url($websiteUrl)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
-                    ->waitUntilDOMContentLoaded()
-                    ->windowSize(1440, 900)
-                    ->timeout(30)
-                    ->base64Screenshot();
+                $screenshot = app(\App\Services\Crawling\WebsiteRenderer::class)->screenshot($websiteUrl);
 
                 Log::info('Screenshot captured, sending to Gemini Vision AI');
 
@@ -390,19 +377,14 @@ class BrandGuidelineExtractorService
 
             // Fallback to HTML scraping if Vision AI fails
             try {
-                $html = Browsershot::url($websiteUrl)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
-                    ->waitUntilDOMContentLoaded()
-                    ->timeout(20)
-                    ->bodyHtml();
+                $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($websiteUrl);
             } catch (\Throwable $e) {
                 report($e);
                 Log::warning('Browsershot HTML fetch failed, falling back to HTTP', [
                     'error' => $e->getMessage(),
                 ]);
                 // Fallback to simple HTTP request
-                $response = Http::timeout(15)->get($websiteUrl);
+                $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($websiteUrl);
                 $html = $response->successful() ? $response->body() : '';
             }
 

@@ -7,8 +7,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VideoCollateral extends Model
 {
+    /** Reserve quota and a concept slot together, before requesting a paid render. */
+    public static function reserve(Campaign $campaign, array $attributes): ?self
+    {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($campaign, $attributes) {
+            Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $exists = static::where('campaign_id', $campaign->id)
+                ->where('platform', $attributes['platform'])
+                ->where('variation_index', $attributes['variation_index'])
+                ->where('is_active', true)->whereIn('status', ['pending', 'generating', 'completed'])->exists();
+            if ($exists || static::remainingForCampaign($campaign) < 1) {
+                return null;
+            }
+
+            return static::create($attributes + ['campaign_id' => $campaign->id]);
+        });
+    }
+
     protected $fillable = [
         'campaign_id',
+        'generation_metadata',
+        'variation_index',
         'strategy_id',
         'platform',
         'script',
@@ -30,6 +49,7 @@ class VideoCollateral extends Model
     ];
 
     protected $casts = [
+        'generation_metadata' => 'array',
         'is_active' => 'boolean',
         'extension_count' => 'integer',
         'refinement_depth' => 'integer',

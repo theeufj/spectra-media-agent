@@ -137,57 +137,7 @@ class GenerateCampaignCollateral implements ShouldQueue
 
     private function buildJobsForStrategy(Strategy $strategy): array
     {
-        Log::info("Building collateral jobs for Strategy ID: {$strategy->id}, Platform: {$strategy->platform}");
-
-        $jobs = [];
-
-        // Ad copy (one job per strategy)
-        $jobs[] = new GenerateAdCopy($this->campaign, $strategy, $strategy->platform);
-
-        // 3 images per strategy
-        for ($i = 0; $i < 3; $i++) {
-            $jobs[] = new GenerateImage($this->campaign, $strategy);
-        }
-
-        // 2 videos per strategy — respect the AI's explicit decision when available,
-        // fall back to the heuristic for strategies generated before this field existed.
-        $shouldGenerateVideo = $strategy->generate_video ?? $this->hasActionableVideoContent($strategy->video_strategy);
-        if ($shouldGenerateVideo) {
-            for ($i = 0; $i < 2; $i++) {
-                $jobs[] = new GenerateVideo($this->campaign, $strategy, $strategy->platform, $i);
-            }
-        } else {
-            Log::info("Skipping video generation for Strategy ID: {$strategy->id} - generate_video=false");
-        }
-
-        return $jobs;
-    }
-
-    /**
-     * Quick check if video strategy has actionable content.
-     * Uses simpler logic than GenerateVideo job for early filtering.
-     */
-    private function hasActionableVideoContent(string $videoStrategy): bool
-    {
-        $content = trim($videoStrategy);
-
-        if (empty($content)) {
-            return false;
-        }
-
-        // Check if it's purely "N/A" or "Not Applicable"
-        if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
-            return false;
-        }
-
-        // If content is short and just says "N/A for [reason]" without alternatives
-        if (strlen($content) < 100 &&
-            stripos($content, 'n/a') !== false &&
-            ! preg_match('/\b(however|but|if|when|use|create|generate|show|feature|include)\b/i', $content)) {
-            return false;
-        }
-
-        return true;
+        return app(\App\Services\Campaigns\CollateralPlan::class)->forStrategy($this->campaign, $strategy);
     }
 
     /**

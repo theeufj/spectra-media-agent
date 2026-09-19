@@ -1,3 +1,4 @@
+import { budgetCents } from '@/contracts/campaign';
 import React, { useState } from 'react';
 import Modal from '@/Components/Modal';
 import { brandTint } from '@/Components/Marketing/Hero';
@@ -44,13 +45,12 @@ const useBudgetCalcs = (campaign) => {
 
     const calculateDailyBudget = () => {
         if (campaign?.daily_budget) {
-            const daily = Number(campaign.daily_budget);
-            if (!isNaN(daily) && daily > 0) return daily;
+            try { return budgetCents(campaign.daily_budget) / 100; } catch { /* Fall back to the campaign total. */ }
         }
         const totalBudget = Number(campaign?.total_budget);
         const durationDays = getCampaignDurationDays();
-        if (!isNaN(totalBudget) && totalBudget > 0 && durationDays > 0) {
-            return totalBudget / durationDays;
+        if (Number.isFinite(totalBudget) && totalBudget > 0 && durationDays > 0) {
+            return Math.round(totalBudget * 100 / durationDays) / 100;
         }
         return 50;
     };

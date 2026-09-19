@@ -143,7 +143,7 @@ class GenerateVideo implements ShouldQueue
         // Only active collaterals block regeneration — a retired video (e.g. one too
         // short for PMax that we deactivated) should not prevent a fresh attempt.
         $alreadyStarted = VideoCollateral::where('campaign_id', $this->campaign->id)
-            ->where('strategy_id', $this->strategy->id)
+            ->where('variation_index', $this->variationIndex)
             ->where('platform', $this->platform)
             ->where('is_active', true)
             ->whereIn('status', ['pending', 'generating', 'completed'])
@@ -156,6 +156,10 @@ class GenerateVideo implements ShouldQueue
                 'platform' => $this->platform,
             ]);
 
+            return;
+        }
+
+        if (! $this->force && ! app(\App\Services\Campaigns\CollateralPlan::class)->wantsVideo($this->campaign, $this->strategy)) {
             return;
         }
 
@@ -250,14 +254,29 @@ class GenerateVideo implements ShouldQueue
             // are what VideoCollateral::forStrategy shares with every
             // strategy. Stamping the generating strategy's id meant only that
             // strategy's Facebook deploy ever saw the video.
-            $videoCollateral = VideoCollateral::create([
+            $videoCollateral = VideoCollateral::reserve($this->campaign, [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => null,
                 'platform' => $this->platform,
                 'script' => $script,
+                'variation_index' => $this->variationIndex,
+                'generation_metadata' => [
+                    'generation_id' => $this->strategy->generation_id,
+                    'strategy_id' => $this->strategy->id,
+                    'concept' => $actionableContent,
+                    'script_model' => config('ai.models.default'),
+                    'script_prompt_hash' => hash('sha256', $scriptPrompt),
+                    'template_hash' => hash_file('sha256', app_path('Prompts/VideoFromScriptPrompt.php')),
+                ],
                 'status' => 'pending',
                 'is_active' => true,
             ]);
+
+            if (! $videoCollateral) {
+                Log::info('Video slot already reserved or plan allowance exhausted', ['campaign_id' => $this->campaign->id]);
+
+                return;
+            }
 
             // Step 3: Generate the final video prompt using the dedicated prompt class with actionable content
             // Note: VideoFromScriptPrompt might need update if we want to pass product context there too,
@@ -311,6 +330,7 @@ class GenerateVideo implements ShouldQueue
             );
 
             if (! $result) {
+                $videoCollateral->update(['status' => 'failed']);
                 // Don't hard-fail immediately — retry the job after a backoff delay
                 // to handle Veo quota limits when multiple strategies fire simultaneously
                 if ($this->attempts() < 3) {
@@ -327,6 +347,12 @@ class GenerateVideo implements ShouldQueue
             $videoCollateral->update([
                 'operation_name' => $result['operation_name'],
                 'provider' => $result['provider'],
+                'generation_metadata' => array_merge($videoCollateral->generation_metadata ?? [], [
+                    'provider' => $result['provider'],
+                    'model' => config('ai.models.'.($result['provider'] === 'veo' ? 'video' : 'video_grok')),
+                    'prompt' => $promptForProvider($result['provider']),
+                    'prompt_hash' => hash('sha256', $promptForProvider($result['provider'])),
+                ]),
                 'status' => 'generating',
             ]);
 

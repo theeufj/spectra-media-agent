@@ -12,7 +12,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
 
 class GenerateProposal implements ShouldQueue
@@ -94,12 +93,7 @@ class GenerateProposal implements ShouldQueue
     protected function crawlWebsite(string $url): ?string
     {
         try {
-            $html = Browsershot::url($url)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->timeout(60)
-                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($url);
 
             $crawler = new Crawler($html, $url);
 

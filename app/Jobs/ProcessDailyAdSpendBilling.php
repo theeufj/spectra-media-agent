@@ -30,6 +30,8 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    private array $leaseTokens = [];
+
     public int $tries = 3;
 
     public int $backoff = 300; // 5 minutes between retries
@@ -77,74 +79,101 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         // customer and a second day's billing, held somewhere a Redis flush,
         // failover, or an allkeys-lru eviction could silently drop it. The
         // unique index on ad_spend_billing_runs cannot be evicted.
-        $billingDate = now()->toDateString();
+        $technicalFailures = 0;
 
         foreach ($customers as $customer) {
-            if (! $this->claimBilling($customer, $billingDate)) {
+            if (DB::table('ad_spend_billing_runs')->where('customer_id', $customer->id)->where('status', 'awaiting_payment')->where('updated_at', '>', now()->subHours(20))->exists()) {
                 $results['skipped']++;
-                Log::info('ProcessDailyAdSpendBilling: Skipping already-billed customer', [
-                    'customer_id' => $customer->id,
-                    'billing_date' => $billingDate,
-                ]);
 
                 continue;
             }
-
-            // Queue workers have no session, so the exception reporter cannot
-            // work out who a failure belongs to. Say so explicitly for the
-            // duration of this customer's billing.
-            Context::add('customer_id', $customer->id);
-
+            $timezone = $customer->timezone ?: config('app.timezone');
             try {
-                $result = $billingService->processDailyBilling($customer);
+                $latestDate = now()->setTimezone($timezone)->subDay()->toDateString();
+            } catch (\Throwable $e) {
+                report($e);
+                $latestDate = now()->subDay()->toDateString();
+            }
+            $dates = DB::table('ad_spend_billing_runs')->where('customer_id', $customer->id)
+                ->whereIn('status', ['failed', 'processing', 'awaiting_payment'])->whereNotNull('spend_date')
+                ->where('spend_date', '<=', $latestDate)->orderBy('spend_date')->pluck('spend_date')
+                ->push($latestDate)->unique();
+            foreach ($dates as $billingDate) {
+                if (! $this->claimBilling($customer, $billingDate)) {
+                    $results['skipped']++;
+                    Log::info('ProcessDailyAdSpendBilling: Skipping already-billed customer', [
+                        'customer_id' => $customer->id,
+                        'billing_date' => $billingDate,
+                    ]);
 
-                $results['processed']++;
-
-                if ($result['success']) {
-                    $results['successful']++;
-                    $results['total_spend'] += $result['actual_spend'];
-                } else {
-                    $results['failed']++;
-
-                    if (($result['action_taken'] ?? null) === AdSpendBillingService::ACTION_ERROR) {
-                        // An exception inside processDailyBilling, not a decline.
-                        // That method catches \Throwable and returns, so the
-                        // catch below can never see one — and a spend read that
-                        // throws (Facebook Insights is a live call) deducted
-                        // nothing. Give the claim back or that day's spend is
-                        // never billed: the nightly run only ever looks at
-                        // yesterday, and ReconcileAdSpend is alert-only.
-                        $this->releaseBilling($customer, $billingDate);
-                    }
-                    // A failed charge is an expected business outcome (grace/pause flow),
-                    // not a reason to re-bill — keep the marker so we don't double-charge.
+                    continue;
                 }
 
-                Log::info('ProcessDailyAdSpendBilling: Processed customer', [
-                    'customer_id' => $customer->id,
-                    'result' => $result,
-                ]);
+                // Queue workers have no session, so the exception reporter cannot
+                // work out who a failure belongs to. Say so explicitly for the
+                // duration of this customer's billing.
+                Context::add('customer_id', $customer->id);
 
-            } catch (\Throwable $e) {
-                // \Throwable, not \Exception. The claim is taken before this try,
-                // so an \Error escaping the guard aborted the rest of the run and
-                // left this customer claimed but unbilled — skipped on retry, and
-                // therefore never billed for that day at all.
-                //
-                // Surface in the admin exception dashboard; the batch continues.
-                report($e);
-                $results['failed']++;
+                try {
+                    $result = $billingService->processBillingForDate($customer, $billingDate);
 
-                // Unexpected failure — release the claim so a retry reprocesses this customer.
-                $this->releaseBilling($customer, $billingDate);
+                    $results['processed']++;
 
-                Log::error('ProcessDailyAdSpendBilling: Customer billing failed', [
-                    'customer_id' => $customer->id,
-                    'error' => $e->getMessage(),
-                ]);
-            } finally {
-                Context::forget('customer_id');
+                    if ($result['success']) {
+                        $results['successful']++;
+                        $results['total_spend'] += $result['actual_spend'];
+                    } else {
+                        $results['failed']++;
+
+                        if (($result['action_taken'] ?? null) === AdSpendBillingService::ACTION_ERROR) {
+                            // An exception inside processDailyBilling, not a decline.
+                            // That method catches \Throwable and returns, so the
+                            // catch below can never see one — and a spend read that
+                            // throws (Facebook Insights is a live call) deducted
+                            // nothing. Give the claim back or that day's spend is
+                            // never billed: the nightly run only ever looks at
+                            // yesterday, and ReconcileAdSpend is alert-only.
+                            $technicalFailures++;
+                            $this->releaseBilling($customer, $billingDate);
+                        }
+                        // A failed charge is an expected business outcome (grace/pause flow),
+                        // not a reason to re-bill — keep the marker so we don't double-charge.
+                    }
+
+                    if ($result['success']) {
+                        $this->finishBilling($customer, $billingDate);
+                    } elseif (($result['action_taken'] ?? null) !== AdSpendBillingService::ACTION_ERROR) {
+                        $this->settlement($customer, $billingDate)->update(['status' => 'awaiting_payment', 'lease_expires_at' => null, 'updated_at' => now()]);
+                        break;
+                    }
+                    Log::info('ProcessDailyAdSpendBilling: Processed customer', [
+                        'customer_id' => $customer->id,
+                        'result' => $result,
+                    ]);
+
+                } catch (\Throwable $e) {
+                    // \Throwable, not \Exception. The claim is taken before this try,
+                    // so an \Error escaping the guard aborted the rest of the run and
+                    // left this customer claimed but unbilled — skipped on retry, and
+                    // therefore never billed for that day at all.
+                    //
+                    // Surface in the admin exception dashboard; the batch continues.
+                    report($e);
+                    $results['failed']++;
+
+                    // Unexpected failure — release the claim so a retry reprocesses this customer.
+                    $technicalFailures++;
+                    $this->releaseBilling($customer, $billingDate);
+
+                    Log::error('ProcessDailyAdSpendBilling: Customer billing failed', [
+                        'customer_id' => $customer->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                } finally {
+                    Context::forget('customer_id');
+                }
             }
+
         }
 
         Log::info('ProcessDailyAdSpendBilling: Completed daily billing run', $results);
@@ -162,6 +191,9 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         // as a run that deducts everything. The weekly reconciliation eventually
         // caught it; by then seven days had passed.
         $this->alertIfIdleWhileSpending($results);
+        if ($technicalFailures > 0) {
+            throw new \RuntimeException("{$technicalFailures} billing settlement(s) require retry.");
+        }
     }
 
     /**
@@ -172,23 +204,49 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
      */
     private function claimBilling(Customer $customer, string $billingDate): bool
     {
-        return DB::table('ad_spend_billing_runs')->insertOrIgnore([
-            'customer_id' => $customer->id,
-            'billing_date' => $billingDate,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]) > 0;
+        DB::table('ad_spend_billing_runs')->insertOrIgnore([
+            'customer_id' => $customer->id, 'billing_date' => $billingDate,
+            'spend_date' => $billingDate, 'status' => 'pending',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $token = (string) \Illuminate\Support\Str::uuid();
+        $claimed = DB::table('ad_spend_billing_runs')
+            ->where('customer_id', $customer->id)->where('spend_date', $billingDate)
+            ->where(function ($query) {
+                $query->whereIn('status', ['pending', 'failed'])
+                    ->orWhere(fn ($q) => $q->where('status', 'awaiting_payment')->where('updated_at', '<=', now()->subHours(20)))
+                    ->orWhere(fn ($q) => $q->where('status', 'processing')->where('lease_expires_at', '<=', now()));
+            })->update([
+                'status' => 'processing', 'lease_token' => $token,
+                'lease_expires_at' => now()->addMinutes(30),
+                'attempts' => DB::raw('attempts + 1'), 'updated_at' => now(),
+            ]) > 0;
+        if ($claimed) {
+            $this->leaseTokens[$customer->id.':'.$billingDate] = $token;
+        }
+
+        return $claimed;
     }
 
-    /**
-     * Give the claim back so a retry can reprocess this customer.
-     */
     private function releaseBilling(Customer $customer, string $billingDate): void
     {
-        DB::table('ad_spend_billing_runs')
-            ->where('customer_id', $customer->id)
-            ->where('billing_date', $billingDate)
-            ->delete();
+        $this->settlement($customer, $billingDate)->update([
+            'status' => 'failed', 'lease_expires_at' => null, 'updated_at' => now(),
+        ]);
+    }
+
+    private function finishBilling(Customer $customer, string $billingDate): void
+    {
+        $this->settlement($customer, $billingDate)->update([
+            'status' => 'completed', 'completed_at' => now(), 'lease_expires_at' => null, 'updated_at' => now(),
+        ]);
+    }
+
+    private function settlement(Customer $customer, string $billingDate): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('ad_spend_billing_runs')->where('customer_id', $customer->id)
+            ->where('spend_date', $billingDate)
+            ->where('lease_token', $this->leaseTokens[$customer->id.':'.$billingDate] ?? 'not-owned');
     }
 
     /**
@@ -201,10 +259,11 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
     {
         return Customer::whereHas('adSpendCredit')
             ->where(function ($query) use ($recoverableStatuses) {
-                $query->whereHas('campaigns', function ($q) {
-                    $q->where('status', 'active')
-                        ->orWhere('platform_status', 'ENABLED');
-                })
+                $query->whereExists(fn ($pending) => $pending->selectRaw('1')->from('ad_spend_billing_runs')->whereColumn('customer_id', 'customers.id')->whereIn('status', ['failed', 'processing', 'awaiting_payment']))
+                    ->orWhereHas('campaigns', function ($q) {
+                        $q->where('status', 'active')
+                            ->orWhere('platform_status', 'ENABLED');
+                    })
                     ->orWhereHas('adSpendCredit', function ($q) use ($recoverableStatuses) {
                         $q->whereIn('payment_status', $recoverableStatuses);
                     });

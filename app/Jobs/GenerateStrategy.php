@@ -292,53 +292,69 @@ class GenerateStrategy implements ShouldQueue
 
             Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found ".count($strategyData['strategies']).' strategies');
 
-            // Step 4: Parse the response and save the platform-specific strategies.
-            Log::info("Creating strategy records for campaign {$this->campaign->id}");
-            foreach ($strategyData['strategies'] as $index => $strategy) {
-                Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
+            $document = \App\Services\Campaigns\StrategyDocument::fromArray(
+                $strategyData, $enabledPlatforms, (float) $this->campaign->daily_budget
+            );
+            $strategyData['strategies'] = $document->strategies;
+            \Illuminate\Support\Facades\DB::transaction(function () use ($strategyData) {
+                Campaign::whereKey($this->campaign->id)->lockForUpdate()->firstOrFail();
+                $oldIds = $this->campaign->strategies()->pluck('id');
+                $generationId = (string) \Illuminate\Support\Str::uuid();
+                // Step 4: Parse the response and save the platform-specific strategies.
+                Log::info("Creating strategy records for campaign {$this->campaign->id}");
+                foreach ($strategyData['strategies'] as $index => $strategy) {
+                    Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
 
-                // Inject landing_page_url into bidding_strategy to avoid schema changes
-                if (isset($strategy['landing_page_url'])) {
-                    $strategy['bidding_strategy']['landing_page_url'] = $strategy['landing_page_url'];
-                }
-
-                try {
-                    $newStrategy = $this->campaign->strategies()->create([
-                        'platform' => $strategy['platform'],
-                        'ad_copy_strategy' => is_array($strategy['ad_copy_strategy']) ? implode("\n\n", $strategy['ad_copy_strategy']) : ($strategy['ad_copy_strategy'] ?? ''),
-                        'imagery_strategy' => is_array($strategy['imagery_strategy']) ? implode("\n\n", $strategy['imagery_strategy']) : ($strategy['imagery_strategy'] ?? ''),
-                        'video_strategy' => is_array($strategy['video_strategy']) ? implode("\n\n", $strategy['video_strategy']) : ($strategy['video_strategy'] ?? ''),
-                        'bidding_strategy' => $strategy['bidding_strategy'],
-                        'cpa_target' => $this->cpaTargetMicros($strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null),
-                        'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
-                        // Never for a campaign nobody asked for — see
-                        // Campaign::allowsAutomaticVideo().
-                        'generate_video' => $this->campaign->allowsAutomaticVideo()
-                            ? ($strategy['generate_video'] ?? true)
-                            : false,
-                    ]);
-
-                    // Create TargetingConfig if targeting data is present
-                    if (isset($strategy['targeting'])) {
-                        $targeting = $strategy['targeting'];
-                        $newStrategy->targetingConfig()->create([
-                            'interests' => $targeting['interests'] ?? [],
-                            'behaviors' => $targeting['behaviors'] ?? [],
-                            'age_min' => $targeting['age_min'] ?? 18,
-                            'age_max' => $targeting['age_max'] ?? 65,
-                            'genders' => $targeting['genders'] ?? ['all'],
-                            'geo_locations' => $targeting['geo_locations'] ?? [],
-                            'platform' => $strategy['platform'],
-                        ]);
-                        Log::info("Created targeting config for strategy {$newStrategy->id}");
+                    // Inject landing_page_url into bidding_strategy to avoid schema changes
+                    if (isset($strategy['landing_page_url'])) {
+                        $strategy['bidding_strategy']['landing_page_url'] = $strategy['landing_page_url'];
                     }
 
-                    Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
-                } catch (\Throwable $e) {
-                    Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: ".$e->getMessage());
-                    throw $e;
+                    try {
+                        $newStrategy = $this->campaign->strategies()->create([
+                            'platform' => $strategy['platform'],
+                            'daily_budget' => $strategy['daily_budget'],
+                            'generation_id' => $generationId,
+                            'ad_extensions' => $strategy['ad_extensions'] ?? [],
+                            'conversion_goals' => $strategy['conversion_goals'] ?? [],
+                            'ad_copy_strategy' => is_array($strategy['ad_copy_strategy']) ? implode("\n\n", $strategy['ad_copy_strategy']) : ($strategy['ad_copy_strategy'] ?? ''),
+                            'imagery_strategy' => is_array($strategy['imagery_strategy']) ? implode("\n\n", $strategy['imagery_strategy']) : ($strategy['imagery_strategy'] ?? ''),
+                            'video_strategy' => is_array($strategy['video_strategy']) ? implode("\n\n", $strategy['video_strategy']) : ($strategy['video_strategy'] ?? ''),
+                            'bidding_strategy' => $strategy['bidding_strategy'],
+                            'cpa_target' => $this->cpaTargetMicros($strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null),
+                            'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
+                            // Never for a campaign nobody asked for — see
+                            // Campaign::allowsAutomaticVideo().
+                            'generate_video' => $this->campaign->allowsAutomaticVideo()
+                                ? ($strategy['generate_video'] ?? true)
+                                : false,
+                        ]);
+
+                        // Create TargetingConfig if targeting data is present
+                        if (isset($strategy['targeting'])) {
+                            $targeting = $strategy['targeting'];
+                            $newStrategy->targetingConfig()->create([
+                                'interests' => $targeting['interests'] ?? [],
+                                'behaviors' => $targeting['behaviors'] ?? [],
+                                'age_min' => $targeting['age_min'] ?? 18,
+                                'age_max' => $targeting['age_max'] ?? 65,
+                                'genders' => $targeting['genders'] ?? ['all'],
+                                'geo_locations' => $targeting['geo_locations'] ?? [],
+                                'platform' => $strategy['platform'],
+                            ]);
+                            Log::info("Created targeting config for strategy {$newStrategy->id}");
+                        }
+
+                        Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
+                    } catch (\Throwable $e) {
+                        Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: ".$e->getMessage());
+                        throw $e;
+                    }
                 }
-            }
+
+                app(\App\Services\Creative\RetireCampaignCollateral::class)->retire($this->campaign);
+                $this->campaign->strategies()->whereIn('id', $oldIds)->delete();
+            });
 
             Log::info("Successfully generated and saved strategies for campaign {$this->campaign->id}");
 

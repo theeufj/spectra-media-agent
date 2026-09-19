@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { trackConversion } from '@/utils/conversions';
 
 /**
@@ -12,7 +12,8 @@ import { trackConversion } from '@/utils/conversions';
  * @param {boolean} condition Set to false to suppress (default: always fires)
  */
 export function useConversionEvent(event, condition = true) {
+    const initial = useRef({event, condition});
     useEffect(() => {
-        if (condition) trackConversion(event);
+        if (initial.current.condition) trackConversion(initial.current.event);
     }, []);
 }

@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Restore a PostgreSQL dump into a NEW isolated database and verify ledger invariants."""
+import argparse
+import gzip
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
+import uuid
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dump', type=pathlib.Path, help='Extracted .sql, .sql.gz or pg_dump custom dump')
+    parser.add_argument('--port', type=int, required=True, help='Port of a disposable LOCAL PostgreSQL instance')
+    parser.add_argument('--user', required=True)
+    args = parser.parse_args()
+    if not args.dump.is_file():
+        parser.error('Dump does not exist')
+    # No caller-controlled target DB and no production host. Do not inherit PG service settings.
+    env = {key: value for key, value in os.environ.items() if not key.startswith('PG')}
+    env.update(PGHOST='127.0.0.1', PGPORT=str(args.port), PGUSER=args.user)
+    if os.environ.get('RESTORE_PGPASSWORD'):
+        env['PGPASSWORD'] = os.environ['RESTORE_PGPASSWORD']
+    database = 'spectra_restore_'+uuid.uuid4().hex
+
+    def run(command, **kwargs):
+        return subprocess.run(command, env=env, check=True, **kwargs)
+
+    created = False
+    try:
+        run(['createdb', database], stdout=subprocess.DEVNULL)
+        created = True
+        with tempfile.TemporaryDirectory(prefix='spectra-restore-') as directory:
+            dump = args.dump
+            if dump.suffix == '.gz':
+                expanded = pathlib.Path(directory) / 'restore.sql'
+                with gzip.open(dump, 'rb') as source, expanded.open('wb') as target:
+                    shutil.copyfileobj(source, target)
+                dump = expanded
+            with dump.open('rb') as source:
+                custom = source.read(5) == b'PGDMP'
+            if custom:
+                run(['pg_restore', '--exit-on-error', '--no-owner', '--no-privileges', '--dbname', database, str(dump)], stdout=subprocess.DEVNULL)
+            else:
+                # Only use trusted app backup dumps. Plain SQL is executable database code.
+                run(['psql', '-X', '--set', 'ON_ERROR_STOP=1', '--dbname', database, '--file', str(dump)], stdout=subprocess.DEVNULL)
+        checks = """
+            SELECT COUNT(*) FROM migrations;
+            SELECT COUNT(*) FROM customers;
+            SELECT COUNT(*) FROM ad_spend_credits;
+            SELECT COUNT(*) FROM (
+                SELECT customer_id FROM ad_spend_credits GROUP BY customer_id HAVING COUNT(*) > 1
+            ) duplicates;
+            SELECT COUNT(*) FROM ad_spend_credits c WHERE ABS(c.current_balance - COALESCE(
+                (SELECT SUM(t.amount) FROM ad_spend_transactions t WHERE t.ad_spend_credit_id=c.id), 0
+            )) > 0.01;
+        """
+        values = run(['psql', '-X', '-At', '--dbname', database, '--command', checks], capture_output=True, text=True).stdout.splitlines()
+        if len(values) != 5 or int(values[0]) == 0 or any(int(value) for value in values[3:]):
+            raise RuntimeError('Restore completed but schema/account/ledger checks failed: '+str(values))
+        print('Restore verified; migrations, customer accounts and ledger balances checked. Temporary database removed on exit.')
+    finally:
+        if created:
+            run(['dropdb', database], stdout=subprocess.DEVNULL)
+
+
+if __name__ == '__main__':
+    main()

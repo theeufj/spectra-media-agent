@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Forge pre-deploy guard: require CI success for the exact SHA being released."""
+import argparse
+import json
+import os
+import re
+import sys
+import urllib.request
+
+
+def passed(runs, sha):
+    matching = [run for run in runs if run.get('head_sha') == sha
+                and run.get('head_branch') == 'master' and run.get('event') == 'push'
+                and run.get('path') == '.github/workflows/ci.yml']
+    latest = max(matching, key=lambda run: (run['id'], run.get('run_attempt', 1)), default=None)
+    return bool(latest and latest.get('status') == 'completed' and latest.get('conclusion') == 'success')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('sha', help='Full 40-character SHA that Forge will check out')
+    parser.add_argument('--repo', default='theeufj/spectra-media-agent')
+    args = parser.parse_args()
+    if not re.fullmatch(r'[0-9a-f]{40}', args.sha) or not re.fullmatch(r'[\w.-]+/[\w.-]+', args.repo):
+        parser.error('An exact commit SHA and owner/repository are required')
+    token = os.environ.get('GH_TOKEN')
+    if not token:
+        sys.exit('GH_TOKEN with read-only Actions access is required; refusing deployment.')
+    request = urllib.request.Request(
+        f'https://api.github.com/repos/{args.repo}/actions/workflows/ci.yml/runs?head_sha={args.sha}&event=push&per_page=100',
+        headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            runs = json.load(response)['workflow_runs']
+    except Exception:
+        sys.exit('Could not verify CI; refusing deployment.')
+    if not passed(runs, args.sha):
+        sys.exit('The exact deployment commit has no completed, successful CI run; refusing deployment.')
+    print(f'CI passed for {args.sha}')
+
+
+if __name__ == '__main__':
+    main()

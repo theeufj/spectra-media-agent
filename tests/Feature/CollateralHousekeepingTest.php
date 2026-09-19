@@ -10,6 +10,8 @@ use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Strategy;
 use App\Models\User;
+use App\Models\VideoCollateral;
+use App\Services\Creative\RetireCampaignCollateral;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -121,20 +123,36 @@ class CollateralHousekeepingTest extends TestCase
             ->post(route('campaigns.regenerate-strategies', $campaign), ['force' => 1])
             ->assertRedirect();
 
-        /*
-           The dialog promises "delete all generated collateral". Strategy rows
-           cascade their own images, but images belonging to the campaign rather
-           than to a surviving strategy did not go anywhere, and neither did any
-           of the files behind them — a bill that never stops.
-        */
-        $remaining = ImageCollateral::where('campaign_id', $campaign->id)->get();
+        // Queuing a replacement must not delete reviewed work. The successful
+        // generation transaction retires old assets only after every new row validates.
+        $this->assertSame(5, ImageCollateral::where('campaign_id', $campaign->id)->count());
+        $this->assertSame(1, AdCopy::where('strategy_id', $strategy->id)->count());
+        $this->assertNotNull($strategy->fresh()->signed_off_at);
+    }
 
-        $this->assertCount(2, $remaining, 'generated collateral survived a force regeneration');
-        $this->assertSame(
-            ['uploaded', 'uploaded'],
-            $remaining->pluck('source')->all(),
-            "the customer's own uploads are not ours to delete",
-        );
-        $this->assertSame(0, AdCopy::where('strategy_id', $strategy->id)->count());
+    public function test_successful_replacement_preserves_uploaded_images_and_videos_attached_to_the_old_strategy(): void
+    {
+        [, $campaign] = $this->campaignOnPlan(imageAllowance: 10);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id]);
+        $attributes = [
+            'campaign_id' => $campaign->id,
+            'strategy_id' => $strategy->id,
+            'platform' => 'Google Ads (Performance Max)',
+            'source' => 'uploaded',
+        ];
+        $image = ImageCollateral::create($attributes + ['s3_path' => 'collateral/uploaded.jpg', 'cloudfront_url' => 'https://example.test/uploaded.jpg']);
+        $video = VideoCollateral::create($attributes + ['status' => 'completed']);
+        $generated = ImageCollateral::create(array_replace($attributes, [
+            'source' => 'generated', 's3_path' => 'collateral/generated.jpg', 'cloudfront_url' => 'https://example.test/generated.jpg',
+        ]));
+
+        app(RetireCampaignCollateral::class)->retire($campaign);
+        $strategy->delete();
+
+        $this->assertNotNull($image->fresh());
+        $this->assertNull($image->fresh()->strategy_id);
+        $this->assertNotNull($video->fresh());
+        $this->assertNull($video->fresh()->strategy_id);
+        $this->assertNull($generated->fresh());
     }
 }

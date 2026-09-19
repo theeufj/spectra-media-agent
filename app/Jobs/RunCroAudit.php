@@ -13,7 +13,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Spatie\Browsershot\Browsershot;
 
 class RunCroAudit implements ShouldQueue
 {
@@ -41,11 +40,7 @@ class RunCroAudit implements ShouldQueue
         try {
             Log::info('RunCroAudit: Rendering page', ['url' => $this->url]);
 
-            $html = Browsershot::url($this->url)
-                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
-                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
-                ->timeout(60)
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($this->url);
 
             $service = new LandingPageCROAuditService(new GeminiService);
             $audit = $service->auditPage($customer, $this->url, $html);

@@ -274,36 +274,25 @@ class ImageryStrategyContractTest extends TestCase
         $this->assertStringContainsString('icon-driven and typography-focused', $prompt);
     }
 
-    public function test_the_scene_must_be_one_no_other_business_could_use(): void
+    public function test_the_concepts_are_grounded_in_the_brands_offer(): void
     {
         $prompt = $this->builtStrategyPrompt();
 
-        /*
-           Every rule in this block governed form — name a subject, plain
-           visual English, no hex codes, one or two sentences, add "Also
-           suits:" — and a stock caption satisfies all of them. A live
-           customer's strategy came back as "A startup founder sitting at a
-           clean desk in a modern, well-lit office, focused on a laptop
-           screen", which is fully compliant and describes nobody. Nothing
-           asked for the scene to be about this business.
-        */
-        $this->assertStringContainsString('UNUSABLE BY ANY OTHER BUSINESS', $prompt);
-        $this->assertStringContainsString('swapping a single noun', $prompt);
+        $this->assertStringContainsString('START WITH A REASON TO CHOOSE THE BRAND', $prompt);
+        $this->assertStringContainsString('swapping a single', $prompt);
+        $this->assertStringContainsString('BRAND GUIDELINES and KNOWLEDGE BASE', $prompt);
     }
 
-    public function test_a_software_business_is_shown_how_to_photograph_the_problem(): void
+    public function test_software_is_not_forced_into_problem_photography(): void
     {
         $prompt = $this->builtStrategyPrompt();
 
-        /*
-           All three worked examples were businesses whose customer does
-           something physical — a letting agent in a front room, a tradesperson
-           at a kerbside, friends over coffee. A company whose product is
-           software had no demonstrated route to a specific picture, so the
-           model reached for the only thing it knew: a person at a screen.
-        */
-        $this->assertStringContainsString('PHOTOGRAPH THE PROBLEM, NOT THE PRODUCT', $prompt);
-        $this->assertStringContainsString('unphotographable', $prompt);
+        $this->assertStringNotContainsString('PHOTOGRAPH THE PROBLEM, NOT THE PRODUCT', $prompt);
+        $this->assertStringNotContainsString('unphotographable', $prompt);
+        $this->assertStringContainsString('SOFTWARE AND SERVICES CAN HAVE A VISUAL IDEA', $prompt);
+        $this->assertStringContainsString('supplied authentic asset', $prompt);
+        $this->assertStringContainsString('simple visual metaphor', $prompt);
+        $this->assertStringContainsString('not a requirement to depict unhappy customers', $prompt);
     }
 
     public function test_the_examples_are_not_offered_as_a_library_to_copy_from(): void
@@ -323,21 +312,15 @@ class ImageryStrategyContractTest extends TestCase
         $this->assertStringContainsString("somebody else's customer", $prompt);
     }
 
-    public function test_the_stock_caption_is_shown_only_as_the_thing_not_to_write(): void
+    public function test_search_and_discovery_have_distinct_creative_directions(): void
     {
         $prompt = $this->builtStrategyPrompt();
 
-        // Quoted verbatim from a live strategy, and it must never sit behind
-        // a "Good:" — an example teaches far harder than a rule, which is how
-        // the media-planning prose got in here in the first place.
-        $this->assertStringContainsString(
-            'Bad: "A startup founder sitting at a clean desk',
-            $prompt,
-        );
-        $this->assertStringNotContainsString(
-            'Good: "A startup founder sitting at a clean desk',
-            $prompt,
-        );
+        $this->assertStringContainsString('For Google Search image assets', $prompt);
+        $this->assertStringContainsString('matches the query and landing page', $prompt);
+        $this->assertStringContainsString('Search can use image assets', $prompt);
+        $this->assertStringContainsString('For Performance Max, Display and social discovery', $prompt);
+        $this->assertStringNotContainsString('N/A — text ads only', $prompt);
     }
 
     public function test_the_imagery_rules_point_at_the_pain_points_already_in_the_prompt(): void

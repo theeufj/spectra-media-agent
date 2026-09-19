@@ -580,12 +580,6 @@ parameters:
 			path: app/Jobs/CheckVideoStatus.php
 
 		-
-			message: '#^Call to an undefined method Spatie\\Browsershot\\Browsershot\:\:waitUntilDOMContentLoaded\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Jobs/CrawlPage.php
-
-		-
 			message: '#^Property App\\Jobs\\CrawlPage\:\:\$customerId \(string\) does not accept int\|null\.$#'
 			identifier: assign.propertyType
 			count: 1
@@ -1300,12 +1294,6 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: app/Services/Attribution/AttributionService.php
-
-		-
-			message: '#^Call to an undefined method Spatie\\Browsershot\\Browsershot\:\:waitUntilDOMContentLoaded\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: app/Services/BrandGuidelineExtractorService.php
 
 		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'

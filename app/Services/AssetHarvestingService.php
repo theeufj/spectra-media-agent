@@ -6,7 +6,6 @@ use App\Models\Customer;
 use App\Models\CustomerPage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
 
 class AssetHarvestingService
@@ -95,17 +94,12 @@ class AssetHarvestingService
 
         // Try to re-fetch the page HTML for image extraction
         try {
-            $html = Browsershot::url($page->url)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->timeout(30)
-                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($page->url);
         } catch (\Throwable $e) {
             report($e);
             // Fallback to HTTP fetch
             try {
-                $response = Http::timeout(15)->get($page->url);
+                $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($page->url);
                 $html = $response->successful() ? $response->body() : null;
             } catch (\Throwable $e2) {
                 report($e2);
@@ -239,9 +233,7 @@ class AssetHarvestingService
     public function downloadAndValidate(string $url): ?array
     {
         try {
-            $response = Http::timeout(15)
-                ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; SiteToSpend/1.0)'])
-                ->get($url);
+            $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
 
             if (! $response->successful()) {
                 return null;

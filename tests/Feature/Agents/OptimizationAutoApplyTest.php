@@ -34,7 +34,7 @@ class OptimizationAutoApplyTest extends TestCase
         $this->assertEquals(50, $campaign->fresh()->daily_budget);
     }
 
-    public function test_budget_is_clamped_to_the_allowed_range_before_it_reaches_the_platform(): void
+    public function test_budget_above_the_approved_envelope_requires_review(): void
     {
         config(['services.facebook.system_user_token' => 'test-token']);
         Http::fake(['graph.facebook.com/*' => Http::response(['success' => true])]);
@@ -46,10 +46,10 @@ class OptimizationAutoApplyTest extends TestCase
             'suggested_value' => 500, // 10x — a hallucinated number
         ]);
 
-        $this->assertTrue($result['applied']);
-        $this->assertEquals(100, $campaign->fresh()->daily_budget);
-
-        Http::assertSent(fn ($request) => (int) $request['daily_budget'] === 10000); // cents
+        $this->assertFalse($result['applied']);
+        $this->assertTrue($result['requires_review']);
+        $this->assertEquals(50, $campaign->fresh()->daily_budget);
+        Http::assertNothingSent();
     }
 
     public function test_an_aliased_type_still_reaches_its_applier(): void
@@ -60,6 +60,7 @@ class OptimizationAutoApplyTest extends TestCase
         $campaign = Campaign::factory()->create([
             'customer_id' => $customer->id,
             'daily_budget' => 40,
+            'approved_daily_budget' => 60,
         ]);
 
         $result = app(RecommendationApplier::class)->apply($campaign, [
@@ -95,6 +96,7 @@ class OptimizationAutoApplyTest extends TestCase
         $campaign = Campaign::factory()->create([
             'customer_id' => $customer->id,
             'daily_budget' => 40,
+            'approved_daily_budget' => 60,
         ]);
 
         $result = app(RecommendationApplier::class)->apply($campaign, [

@@ -11,7 +11,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 
 /**
  * ScrapeCustomerWebsite Job
@@ -140,11 +139,7 @@ class ScrapeCustomerWebsite implements ShouldQueue
 
             // Try using Browsershot for JavaScript-heavy sites
             try {
-                $htmlContent = Browsershot::url($url)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->timeout($this->timeout)
-                    ->bodyHtml();
+                $htmlContent = app(\App\Services\Crawling\WebsiteRenderer::class)->html($url);
 
                 return $htmlContent;
             } catch (\Throwable $browserShotException) {
@@ -155,11 +150,7 @@ class ScrapeCustomerWebsite implements ShouldQueue
                 ]);
 
                 // Fallback to simple HTTP request
-                $response = Http::withHeaders([
-                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                ])
-                    ->timeout($this->timeout)
-                    ->get($url);
+                $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($url);
 
                 if ($response->successful()) {
                     return $response->body();

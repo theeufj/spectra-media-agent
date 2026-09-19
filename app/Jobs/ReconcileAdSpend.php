@@ -49,38 +49,43 @@ class ReconcileAdSpend implements ShouldQueue
 
         Customer::whereHas('adSpendCredit')
             ->with('adSpendCredit')
-            ->chunkById(100, function ($customers) use ($spendStart, $spendEnd, $dedStart, $dedEnd, &$discrepancies) {
+            ->chunkById(100, function ($customers) use ($spendStart, $spendEnd, &$discrepancies) {
                 foreach ($customers as $customer) {
-                    $campaignIds = $customer->campaigns()->pluck('id');
-                    if ($campaignIds->isEmpty()) {
-                        continue;
-                    }
+                    try {
+                        $campaignIds = $customer->campaigns()->pluck('id');
+                        if ($campaignIds->isEmpty()) {
+                            continue;
+                        }
 
-                    $platformSpend = $this->platformSpend($campaignIds, $spendStart, $spendEnd);
-                    $deductions = $this->deductions($customer->adSpendCredit, $dedStart, $dedEnd);
+                        $platformSpend = $this->platformSpend($campaignIds, $spendStart, $spendEnd);
+                        $deductions = $this->deductions($customer->adSpendCredit, $spendStart, $spendEnd);
 
-                    // Nothing happened either side — not a discrepancy worth flagging.
-                    if ($platformSpend <= 0 && $deductions <= 0) {
-                        continue;
-                    }
+                        // Nothing happened either side — not a discrepancy worth flagging.
+                        if ($platformSpend <= 0 && $deductions <= 0) {
+                            continue;
+                        }
 
-                    $discrepancy = abs($platformSpend - $deductions);
-                    $basis = max($platformSpend, $deductions);
-                    $relative = $basis > 0 ? $discrepancy / $basis : 0.0;
+                        $discrepancy = abs($platformSpend - $deductions);
+                        $basis = max($platformSpend, $deductions);
+                        $relative = $basis > 0 ? $discrepancy / $basis : 0.0;
 
-                    if ($discrepancy > self::ABS_THRESHOLD && $relative > self::REL_THRESHOLD) {
-                        $entry = [
-                            'customer_id' => $customer->id,
-                            'customer' => $customer->name,
-                            'currency' => $customer->adSpendCredit->currency ?? $customer->billingCurrency(),
-                            'platform_spend' => round($platformSpend, 2),
-                            'deductions' => round($deductions, 2),
-                            'discrepancy' => round($discrepancy, 2),
-                            'relative' => round($relative, 4),
-                        ];
-                        $discrepancies[] = $entry;
+                        if ($discrepancy > self::ABS_THRESHOLD && $relative > self::REL_THRESHOLD) {
+                            $entry = [
+                                'customer_id' => $customer->id,
+                                'customer' => $customer->name,
+                                'currency' => $customer->adSpendCredit->currency ?? $customer->billingCurrency(),
+                                'platform_spend' => round($platformSpend, 2),
+                                'deductions' => round($deductions, 2),
+                                'discrepancy' => round($discrepancy, 2),
+                                'relative' => round($relative, 4),
+                            ];
+                            $discrepancies[] = $entry;
 
-                        Log::error('ReconcileAdSpend: discrepancy detected', $entry);
+                            Log::error('ReconcileAdSpend: discrepancy detected', $entry);
+                        }
+                    } catch (\Throwable $e) {
+                        report($e);
+                        Log::error('ReconcileAdSpend: customer failed', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
                     }
                 }
             });
@@ -128,7 +133,10 @@ class ReconcileAdSpend implements ShouldQueue
         return (float) abs(
             AdSpendTransaction::where('ad_spend_credit_id', $credit->id)
                 ->where('type', 'deduction')
-                ->whereBetween('created_at', [$start, $end])
+                ->where(function ($query) use ($start, $end) {
+                    $query->whereBetween('billed_for', [$start, $end])
+                        ->orWhere(fn ($legacy) => $legacy->whereNull('billed_for')->whereBetween('created_at', [\Carbon\Carbon::parse($start)->addDay()->startOfDay(), \Carbon\Carbon::parse($end)->addDay()->endOfDay()]));
+                })
                 ->sum('amount')
         );
     }

@@ -13,7 +13,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
 
 class DiscoverNavigationUrls implements ShouldQueue
@@ -62,12 +61,7 @@ class DiscoverNavigationUrls implements ShouldQueue
         ]);
 
         try {
-            $html = Browsershot::url($websiteUrl)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
-                ->timeout(60)
-                ->bodyHtml();
+            $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($websiteUrl);
         } catch (\Throwable $e) {
             report($e);
             Log::warning('DiscoverNavigationUrls: Browsershot failed, trying HTTP fallback', [

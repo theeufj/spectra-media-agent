@@ -114,74 +114,78 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}{$croContext}{$abTestContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+Each platform object must have the following keys: "platform", "daily_budget", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+
+**Budget allocation:**
+Return each platform's share as a positive numeric "daily_budget" in the account currency.
+All shares together must equal the campaign daily budget. Do not assign the full campaign
+budget independently to every platform.
 
 **Imagery Strategy:**
-"imagery_strategy" is fed almost verbatim to an image-generation model. Write it as a
-description of a PICTURE, not as a brief for a human designer. That distinction is the
-whole job:
+"imagery_strategy" is fed almost verbatim to an image-generation model. Write concrete,
+art-directed pictures that sell THIS offer, with one clear visual idea per image.
 
-- THE SCENE MUST BE UNUSABLE BY ANY OTHER BUSINESS. This is the first test, and the one
-  most often failed. Before writing, take one concrete thing from the BRAND GUIDELINES
-  above — a pain point, a USP, the makeshift thing this customer uses today instead of
-  the product — and put it physically in the frame. Then read the sentence back: if
-  swapping a single noun would make it serve a company in another industry, you have
-  written a stock caption, not a strategy. "A founder at a laptop in a modern office"
-  describes every software company that has ever advertised.
-- PHOTOGRAPH THE PROBLEM, NOT THE PRODUCT. Software is the hardest case, because the
-  product itself is unphotographable and the reflex is a person at a screen — which is
-  the emptiest picture there is. The ad is not of the software; it is of the life the
-  customer has without it, or the relief of the moment it is solved. The pain points in
-  the brand material are the picture. Use them.
-- Describe the SUBJECT and the SCENE: who or what is in frame, where, doing what, in what
-  light and mood. If a strategy cannot name a subject, it is not an imagery strategy.
-- Write plain visual English. NO hex codes (an image model cannot honour "#1e3a5f" — say
-  "deep navy"), NO ad-format names ("Responsive Display Ads", "MREC", "carousel"), NO
-  marketing abstractions ("authoritative visual hierarchy", "trust badges", "social
-  proof"), and NO instructions about text, headlines, logos or calls-to-action — those are
-  composed separately from the approved ad copy.
-- Never ask for a screenshot, dashboard, app window, chart or any interface with readable
-  labels. Image models garble small text, and a fake UI full of invented words is the most
-  common way a generated ad becomes unusable. A device in shot is fine; its screen must be
-  describable as simple shapes and colour.
-- Say what to avoid in positive terms. "Eschewing generic stock photography" tells the
-  model to draw stock photography; "a specific, lived-in room with real clutter" does not.
-- One or two sentences. A long strategy produces a crowded, garbled image.
-- NAME ONE SCENE, THEN NAME THE RANGE IT SITS IN. A set of ads is generated from this, and
-  a single scene produces the same picture three times — one customer, one room, one pose,
-  repeated until a viewer sees the same ad wherever they scroll. So after the scene, add a
-  short sentence beginning "Also suits:" naming two other subjects the same offer speaks
-  to, at different distances. They can be people, a product, a workspace, or a pair of
-  hands; what matters is that a reader could not mistake one for another. If the business
-  serves several kinds of customer, this is where that shows.
+- START WITH A REASON TO CHOOSE THE BRAND. Take a specific product feature, service action,
+  benefit or differentiator from the BRAND GUIDELINES and KNOWLEDGE BASE. Make it visible
+  through a subject, an action or a purposeful arrangement of objects. If swapping a single
+  noun makes the idea work for an unrelated business, make the connection more specific.
+  The pain points in the brief are context, not a requirement to depict unhappy customers.
+- SELL THE PRODUCT, THE EXPERIENCE OR THE BENEFIT. Show what is desirable, useful or
+  distinctive about the offer. A problem-led image is an option only when it makes the
+  selling idea clearer. Do not default to a tired owner rubbing their forehead, invoices,
+  paperwork, an empty shop or a generic person at a laptop. Do not just replace stress
+  with a smiling stock-photo customer; show the actual reason their experience is better.
+- CHOOSE AN ART DIRECTION. Depending on the brand and placement, use a product hero,
+  a close demonstration, an editorial photograph of the service in action, a tactile
+  still life, or a single purposeful 3D/illustrated concept. Describe the focal subject,
+  framing, materials, light and colour contrast. "Premium", "modern" and "eye-catching"
+  alone are not art direction. People and office interiors are optional, not compulsory.
+- SOFTWARE AND SERVICES CAN HAVE A VISUAL IDEA. Show a real workflow action or a concrete
+  benefit in the customer's world. For discovery placements, a simple visual metaphor
+  can communicate a specific mechanism, but it must read immediately without an explanation.
+  Do not invent a physical version of software, a fake dashboard, customer results or
+  an interface with readable labels. No generic robots, glowing brains or sci-fi networks
+  as shorthand for AI. If real UI is needed, it requires a supplied authentic asset and
+  separate composition; never ask the image model to fabricate it.
+- MATCH THE PLACEMENT. For Google Search image assets, favour a clear, directly relevant
+  product or service image that matches the query and landing page; avoid conceptual
+  metaphors, collages and text/graphic overlays. Search can use image assets even though
+  it does not use these video creatives. For Performance Max, Display and social discovery,
+  test distinct product, demonstration and benefit ideas suited to that brand. These are
+  individual image assets, not finished banners: ad copy and logos are handled separately.
+- DESIGN FOR A SMALL FRAME. One dominant subject, decisive contrast, deliberate cropping,
+  a recognisable offer at thumbnail size and important details inside the central 80%.
+  Use a purposeful background with only the breathing room the composition needs.
+  Do not turn every idea into a dark room, an empty background or a wide establishing shot.
+- Write plain visual English: NO hex codes, ad-format names inside the scene descriptions,
+  typography directions, headlines, logos, buttons or calls-to-action. No tiny text,
+  diagrams, charts, invented claims or decorative icon collections.
+- WRITE THREE DISTINCT CONCEPTS in a compact paragraph (about 80–120 words): a lead scene,
+  then "Also suits:" with two alternatives. Each alternative needs a different selling
+  idea as well as a different subject, setting or visual treatment. Moving the camera
+  around one person produces the same picture three times. Keep a coherent brand palette,
+  but allow the set to include a product hero, a demonstration and a benefit in context.
+  Each concept must stand alone; never put all three into one image.
 
-Good: "A letting agent in her thirties standing in the bright front room of a terraced
-house, phone in hand, warm afternoon light through a bay window, deep navy and warm gold
-in the furnishings."
-Bad: "For Responsive Display Ads, utilize deep navy (#1E3A5F) backgrounds to establish an
-authoritative visual hierarchy, paired with crisp white typography and warm gold trust
-badges, highlighting clean platform interfaces."
+Example method for a weatherproof commuter bag, ONLY if those features are supported:
+"The bag fills the frame on wet terracotta steps, rain beading on its fabric, its distinctive
+folded closure picked out by crisp side light. Also suits: a close overhead view into its
+organised compartments with commuting essentials fitted neatly inside; a cyclist lifting
+the bag from a bicycle rack outside a station, its profile clear against a pale stone wall."
+The three ideas are weather protection, useful organisation and everyday portability.
 
-A software business, where the pull toward a person-at-a-screen is strongest. This one
-sells shift rostering to restaurants, and its pain point is last-minute staff cover:
+Example method for restaurant scheduling software with a confirmed shift-swap feature:
+show a server passing an apron to a colleague at the start of service, a purposeful handover
+in a vivid, tightly framed restaurant scene. For a discovery alternative, a carefully lit
+arrangement of blank place-setting pieces with one piece sliding neatly into a gap can
+suggest a shift covered. It is a simple illustration of the mechanism, not product evidence.
+Another route could show a well-coordinated service action. Choose only what the actual
+brand and offer support; an unrelated keyboard close-up communicates none of these benefits.
 
-Good: "A duty manager at the pass of a small restaurant just before service, a paper roster
-covered in crossings-out pinned beside her, phone to her ear as she finds cover for a
-no-show. Also suits: a close detail of a thumb scrolling a contacts list against a steel
-counter; a wide shot of a half-set dining room at dusk with one table still unlaid."
-Bad: "A startup founder sitting at a clean desk in a modern, well-lit office, focused on a
-laptop screen, early morning light casting soft shadows, professional and approachable."
-
-Note what is wrong with that second one. It names a subject, it is plain visual English,
-it carries no hex codes and no format names, it is a single sentence — it satisfies every
-other rule on this list. It is still worthless, because it is a picture of nobody in
-particular and would serve a payroll product, a CRM or a bank without changing a word.
-
-Every example above is an illustration of the method, not a library to draw from. None of
-them is about the business you are writing for. Reusing one — the restaurant pass, the
-terraced house, the kerbside van — is the same failure as the stock caption, arrived at
-from the other direction: a picture of somebody else's customer. Write the scene from the
-brand material in THIS prompt.
+These examples teach a method, not a library to draw from. Copying their objects or scenes
+for an unrelated brand would produce a picture of somebody else's customer.
+Before returning the JSON, silently check each concept: what is being sold, why choose it,
+what catches the eye, and how does this image differ from the others? Rewrite vague answers.
 
 **Targeting Configuration:**
 You MUST include a "targeting" object for each strategy that defines the audience targeting.
@@ -207,8 +211,30 @@ You MUST include a boolean "generate_video" field for every platform strategy.
 - Set "generate_video": true ONLY when ALL of the following are true: (1) the platform supports video (Facebook, Instagram, YouTube, LinkedIn Video, Performance Max), (2) the campaign duration is 7+ days, and (3) the daily budget is ≥ $20.
 - Set "generate_video": false for pure Search campaigns, low-budget campaigns (< $20/day), or text-focused verticals (legal, finance, insurance) where compliance risk outweighs video value.
 
-If "generate_video" is true, describe the video concept in "video_strategy".
+If "generate_video" is true, write "video_strategy" as a concrete short advertising film
+brief (about 80–120 words), not "create an engaging video" or a list of production adjectives:
+- Name ONE supported selling idea, the actual brand/product and a specific visual treatment.
+- Opening 0–3 seconds: start with the product, an intriguing action or a benefit in progress.
+  Establish the offer immediately; no slow establishing shot, logo-only intro or obligatory
+  "Struggling with...?" setup. Identify the brand naturally in the first few seconds through
+  the spoken script; do not depend on generated logos or lettering.
+- Middle 3–10 seconds: demonstrate the mechanism or product experience with one or two
+  connected actions. Give the viewer a concrete reason to believe the benefit. No invented
+  reviews, testimonials, performance graphs or guaranteed outcomes.
+- Close 10–15 seconds: resolve the action on a clear product/benefit image and ONE spoken
+  next step supported by the offer. Keep the visual story understandable without sound.
+- Specify the subject, action, framing, colour/light and useful sound cue. Pick a treatment
+  suited to the brand: a crisp demonstration, tactile product film, candid service moment,
+  or simple animation. Polished does not always mean cinematic camera movement.
+- Add a brief "Alternative angle:" using a different hook and selling idea from the same
+  offer, not the same footage with different narration. This is a separate concept, not
+  another scene to squeeze into the first film.
+- Keep the concept feasible in 15 seconds and adaptable to landscape and portrait with the
+  subject clear of edges. No on-screen text, fake interfaces or invented claims. The script
+  is written separately and has a maximum of 35 spoken words.
 If "generate_video" is false, still populate "video_strategy" with a brief explanation of why video is not applicable.
+Start that explanation with "N/A" and keep it under 90 characters, with no alternative creative instructions.
+For pure Search, write exactly: "N/A — video is not applicable to this Search strategy."
 
 If the platform is "Video" or "YouTube", the "video_strategy" object MUST include:
 - "youtube_video_id": A placeholder string (e.g., "INSERT_VIDEO_ID") or a real ID if known.
@@ -246,9 +272,10 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
   "strategies": [
     {
       "platform": "Facebook Ads",
+      "daily_budget": 30,
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
-      "imagery_strategy": "Two friends laughing over coffee at a sunlit kitchen table, the product open between them, shot from across the table in soft morning light. Also suits: a close detail of the product in one hand against a plain wall; a wide shot of a busy weekend market stall at first light.",
-      "video_strategy": "Create short, engaging video clips...",
+      "imagery_strategy": "A coral linen shirt caught in a sea breeze, its weave and relaxed shape sharply lit against a cobalt wall. Also suits: a close view of the cuff being rolled, showing its soft texture; a person wearing the shirt while walking along a sunlit promenade, fabric moving freely and the shirt filling most of the frame.",
+      "video_strategy": "Open on the coral linen shirt moving in a sea breeze against cobalt, with the supplied brand name spoken immediately. Cut to fingers rolling a cuff, then the wearer stepping into sunlight: texture, ease and movement tell one story in three tight shots. Natural fabric sounds under a light rhythm; finish on the shirt in motion with a spoken invitation to shop the collection. Keep the garment central and all surfaces free of text. Alternative angle: begin with the tactile cuff detail and follow the wearer dressing for an afternoon out, selling everyday versatility.",
       "generate_video": true,
       "bidding_strategy": {
         "name": "MaximizeConversions",
@@ -277,9 +304,10 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     },
     {
       "platform": "Google Ads (SEM)",
+      "daily_budget": 20,
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
-      "imagery_strategy": "A tradesperson in a van at the kerbside checking a phone before a job, early light, tools visible behind the seat, warm and unstaged. Also suits: a close detail of worn hands writing in a job book on a tailgate; a wide shot of a quiet suburban street at dawn with one van parked outside a house.",
-      "video_strategy": "For Search campaigns: N/A — text ads only.",
+      "imagery_strategy": "The actual running shoe in crisp side profile on a track, mesh and sole construction clearly visible in raking morning light. Also suits: a close view of a runner tightening its laces before a run; the same shoe in use as a foot lifts from the track, a tight crop with the product sharp and the background soft.",
+      "video_strategy": "N/A — video is not applicable to this Search strategy.",
       "generate_video": false,
       "bidding_strategy": {
         "name": "TargetCpa",

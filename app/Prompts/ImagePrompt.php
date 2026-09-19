@@ -68,64 +68,36 @@ class ImagePrompt
      * headline we composite), {{banner_reservation}} (whether to leave the
      * bottom sixth for a brand banner).
      *
-     * ASKS FOR A PHOTOGRAPH, NOT A BUILT GRAPHIC, AND NOT ONE WORD OF TEXT.
-     *
-     * It did ask for the headline for a while, on the reasoning that current
-     * image models set type accurately and an ad with a headline outperforms a
-     * captionless photo. The first half turned out not to be true of this one.
-     * Two revisions of "keep the headline inside the frame" both failed on the
-     * same creative — "Build a Store in 5 Minute", then "e a Chat, Get a S" —
-     * and the second revision drew a navy border around a different creative
-     * while trying to describe a safe area. A model sizing type to a
-     * composition has no reliable notion of one, and every attempt to describe
-     * it perturbs the rest of the frame.
-     *
-     * So the words are composited afterwards, at a measured size, and this
-     * asks only for somewhere quiet to put them. That also fixes what the
-     * prompt could never do: the square, landscape and MREC crops of one
-     * picture now carry the same words in the same place, rather than three
-     * separate renderings of them.
-     *
-     * The history behind the remaining rules, all of it earned:
-     *
-     * "Finished, designed composition — layout, typography and colour panels"
-     * was too much licence, and the model spent it on furniture: a navy slab
-     * over 40% of the canvas, three line icons in circles picked out of the
-     * scene rather than the product (a plant pot, a paintbrush), and dot grids
-     * in the corners. On a 300x250 that left almost no photograph.
-     *
-     * An image model does not reliably distinguish a brief from the copy it is
-     * briefing. A creative for a real estate customer came back carrying the
-     * phrases "(as approved ad text)" and "Muted readable subtext" set in type
-     * on the artwork — not strings from anywhere in this codebase, but the
-     * model's paraphrase of instructions it had read as content. The same
-     * image rendered a fake dashboard whose labels garbled into "Assisnanto
-     * image", "Perteats" and "Bunnse", beside an invented property price. That
-     * whole class of failure is why the no-text rule is now absolute rather
-     * than a permitted vocabulary: there is no longer any text for the model
-     * to misread a brief into.
+     * Generate the artwork only. Typography and banners are composited at a
+     * measured size afterwards. Preserve the brief's visual medium instead of
+     * forcing product renders and illustrations into lifestyle photography.
      */
     public static function defaultTemplate(): string
     {
-        return "You are producing the photograph for one advertisement. The photograph is the ad. Brand colour supports it; it does not compete with it.\n\n".
+        return "You are an advertising art director producing one distinctive image asset. Make the supplied selling idea immediately visible through one dominant subject, deliberate colour and a purposeful composition.\n\n".
                "**SCENE TO DEPICT:**\n".
                "{{creative_strategy}}\n\n".
                "{{brand_context}}{{product_context}}\n".
                "**NO WORDS AT ALL:**\n".
-               "This photograph carries no text of any kind. The advertisement's words are composited over it afterwards, at a measured size in the brand typeface, so anything you write here is duplicate text in the wrong face and anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
+               "This artwork carries no text of any kind. The advertisement's words are composited over it afterwards, at a measured size in the brand typeface, so anything you write here is duplicate text in the wrong face and anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
                '{{headline_instruction}}'.
                "**COMPOSITION:**\n".
                "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
-               "- The photograph fills the frame edge to edge. No borders, no frames, no mattes, no coloured bars — the picture is not sitting inside anything.\n".
+               "- The artwork fills the frame edge to edge. No borders, no frames, no mattes, no coloured bars — the picture is not sitting inside anything.\n".
                "- Keep the subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
                '{{banner_reservation}}'.
-               "- Brand palette for the light and for whatever colour the scene naturally contains; generous negative space\n".
-               "- Photorealistic subject matter, photographed rather than assembled\n\n".
+               "- Use the brand palette deliberately in the subject, materials, background and light; reserve only the breathing room the composition needs\n".
+               "- Honour the specified visual medium: product photography, editorial photography, tactile still life, illustration or purposeful 3D. Do not convert every concept into a lifestyle photograph\n\n".
+               "**ART DIRECTION:**\n".
+               "- Preserve the actual product, feature or service action that makes this concept specific to the offer. A generic attractive scene is insufficient.\n".
+               "- Use precise lighting, material texture, scale and colour contrast to lead the eye. Keep one selling idea readable at thumbnail size.\n".
+               "- People, desks and devices are optional. Do not add an office worker, a tired owner or piles of paperwork to make an abstract offer look real.\n".
+               "- A simple conceptual object is allowed only when the brief calls for it; avoid unrelated metaphors or decorative filler. Keep any Search-specific requirement for a directly relevant product/service image.\n\n".
                "**HARD RULES:**\n".
                "- No screens full of information: no dashboards, app windows, charts, tables, spreadsheets, forms or documents. A phone or laptop may appear in shot, but its screen carries only soft blocks of colour with no readable content whatsoever.\n".
                "- No invented facts: no statistics, prices, measurements, addresses, review counts, star ratings, dates or awards.\n".
                "- No placeholder furniture: no lorem ipsum, no grey lines standing in for text, no empty label chips, no UI skeletons.\n".
-               "- No decorative furniture: no icon sets, no line-art symbols in circles, no dot grids, no abstract blobs or swooshes. These read as clip art, they are chosen from the scene rather than from the product, and they cost the photograph the room it needs.\n".
+               "- No decorative furniture: no icon sets, no line-art symbols in circles, no dot grids, no abstract blobs or swooshes. These read as clip art, they are chosen from the scene rather than from the product, and they distract from the focal subject.\n".
                '- No watermarks, no third-party logos, no stock-photo clichés; keep it culturally sensitive and inclusive.';
     }
 
@@ -171,7 +143,7 @@ class ImagePrompt
          */
         $bannerReservation = $this->bannerComposited
             ? "- Leave the bottom sixth quieter than the rest: a brand banner is composited there afterwards, and a busy strip underneath it makes both unreadable.\n"
-            : "- The photograph runs to all four edges. Do not leave an empty band, bar or block of flat colour anywhere in the frame.\n";
+            : "- The artwork runs to all four edges. Do not leave an empty band, bar or block of flat colour anywhere in the frame.\n";
 
         /*
          * Nominated rather than chosen, when the caller has nominated one.
@@ -190,7 +162,7 @@ class ImagePrompt
          */
         $headlineInstruction = $this->headline !== null && trim($this->headline) !== ''
             ? "**LEAVE ROOM FOR THE HEADLINE:**\n".
-              "A headline is added to the top of this picture after you produce it. Compose for that: keep the upper third calm and uncluttered — plain wall, sky, open floor, soft background — with no faces, no product and no detail that matters up there. Do not draw the headline yourself, and do not leave a coloured box, bar or panel for it; just leave that part of the photograph quiet.\n\n"
+              "A headline is added to the top of this picture after you produce it. Compose for that: keep the upper third calm and uncluttered — plain wall, sky, open floor, soft background — with no faces, no product and no detail that matters up there. Do not draw the headline yourself, and do not leave a coloured box, bar or panel for it; just leave that part of the artwork quiet.\n\n"
             : '';
 
         return strtr(self::activeTemplate(), [

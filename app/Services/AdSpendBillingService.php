@@ -15,6 +15,7 @@ use App\Models\Notification;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Cashier\Exceptions\IncompletePayment;
@@ -40,6 +41,18 @@ use Stripe\Exception\CardException;
  */
 class AdSpendBillingService
 {
+    private ?string $spendDateOverride = null;
+
+    public function processBillingForDate(Customer $customer, string $spendDate): array
+    {
+        $this->spendDateOverride = $spendDate;
+        try {
+            return $this->processDailyBilling($customer);
+        } finally {
+            $this->spendDateOverride = null;
+        }
+    }
+
     protected BudgetIntelligenceAgent $budgetAgent;
 
     public function __construct(?BudgetIntelligenceAgent $budgetAgent = null)
@@ -98,26 +111,34 @@ class AdSpendBillingService
                 throw new \Exception('Failed to charge initial ad spend credit: '.$chargeResult['error']);
             }
 
-            // Create the credit account
-            $credit = AdSpendCredit::create([
-                'customer_id' => $customer->id,
-                'initial_credit_amount' => $initialCredit,
-                'current_balance' => $initialCredit,
-                'currency' => $customer->billingCurrency(),
-                'status' => AdSpendCredit::STATUS_ACTIVE,
-                'payment_status' => AdSpendCredit::PAYMENT_CURRENT,
-                'last_successful_charge_at' => now(),
-                'stripe_payment_method_id' => $chargeResult['payment_method_id'] ?? null,
-            ]);
+            $credit = DB::transaction(function () use ($customer, $initialCredit, $daysToCharge, $chargeResult) {
+                Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
+                if ($existing = $customer->adSpendCredit()->first()) {
+                    return $existing;
+                }
+                // Create the credit account
+                $credit = AdSpendCredit::create([
+                    'customer_id' => $customer->id,
+                    'initial_credit_amount' => $initialCredit,
+                    'current_balance' => $initialCredit,
+                    'currency' => $customer->billingCurrency(),
+                    'status' => AdSpendCredit::STATUS_ACTIVE,
+                    'payment_status' => AdSpendCredit::PAYMENT_CURRENT,
+                    'last_successful_charge_at' => now(),
+                    'stripe_payment_method_id' => $chargeResult['payment_method_id'] ?? null,
+                ]);
 
-            // Record the initial credit transaction
-            $credit->transactions()->create([
-                'type' => AdSpendTransaction::TYPE_CREDIT,
-                'amount' => $initialCredit,
-                'balance_after' => $initialCredit,
-                'description' => "Initial ad spend credit ({$daysToCharge} days prepaid)",
-                'stripe_charge_id' => $chargeResult['charge_id'] ?? null,
-            ]);
+                // Record the initial credit transaction
+                $credit->transactions()->create([
+                    'type' => AdSpendTransaction::TYPE_CREDIT,
+                    'amount' => $initialCredit,
+                    'balance_after' => $initialCredit,
+                    'description' => "Initial ad spend credit ({$daysToCharge} days prepaid)",
+                    'stripe_charge_id' => $chargeResult['charge_id'] ?? null,
+                ]);
+
+                return $credit;
+            });
 
             Log::info('AdSpendBilling: Initialized credit account', [
                 'customer_id' => $customer->id,
@@ -136,6 +157,12 @@ class AdSpendBillingService
      * Called by the scheduled job each day.
      */
     public function processDailyBilling(Customer $customer): array
+    {
+        return Cache::lock("adspend-settlement:{$customer->id}", 600)->block(10,
+            fn () => $this->settleDailyBilling($customer));
+    }
+
+    private function settleDailyBilling(Customer $customer): array
     {
         $result = [
             'customer_id' => $customer->id,
@@ -156,7 +183,11 @@ class AdSpendBillingService
 
             // If campaigns are already paused, check if we should try to recover
             if ($credit->payment_status === AdSpendCredit::PAYMENT_PAUSED) {
-                return $this->attemptPaymentRecovery($customer, $credit);
+                $recovery = $this->attemptPaymentRecovery($customer, $credit);
+                if (! $recovery['success']) {
+                    return $recovery;
+                }
+                $credit->refresh();
             }
 
             // Get actual ad spend from yesterday
@@ -599,16 +630,15 @@ class AdSpendBillingService
                 $params['customer'] = $user->stripe_id;
             }
 
-            $payment = new \Laravel\Cashier\Payment(
-                \Laravel\Cashier\Cashier::stripe()->paymentIntents->create(
-                    $params,
-                    ['idempotency_key' => $idempotencyKey],
-                )
-            );
+            $intent = app(\App\Services\Billing\AdSpendPaymentGateway::class)->collect($customer, $params, $idempotencyKey);
+            $payment = new \Laravel\Cashier\Payment($intent);
 
             // charge() did this for us; keep it so IncompletePayment still
             // surfaces requires_action the way the callers below expect.
             $payment->validate();
+            if ($intent->status !== 'succeeded' || $intent->amount !== $amountCents || strtolower($intent->currency) !== strtolower($customer->billingCurrency())) {
+                throw new \RuntimeException('Payment is not settled for the expected amount and currency.');
+            }
 
             return [
                 'success' => true,
@@ -680,6 +710,9 @@ class AdSpendBillingService
 
     protected function billingDate(Customer $customer): string
     {
+        if ($this->spendDateOverride !== null) {
+            return $this->spendDateOverride;
+        }
         $timezone = $customer->timezone ?: config('app.timezone');
 
         try {
@@ -912,17 +945,31 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
-                if (! $campaign->google_ads_campaign_id && ! $campaign->facebook_ads_campaign_id) {
+                if (! $campaign->google_ads_campaign_id && ! $campaign->facebook_ads_campaign_id
+                    && ! $campaign->microsoft_ads_campaign_id && ! $campaign->linkedin_campaign_id) {
                     continue;
                 }
+                $campaign->update(['billing_budget_multiplier' => max(0, min(1, $multiplier))]);
                 $newBudget = round(($campaign->daily_budget ?? 0) * $multiplier, 2);
-                $this->budgetAgent->updateCampaignBudgetPublic($customer, $campaign, $newBudget);
+                if (! $this->budgetAgent->updateCampaignBudgetPublic($customer, $campaign, $newBudget)) {
+                    throw new \RuntimeException('Platform rejected the billing budget limit.');
+                }
             } catch (\Throwable $e) {
                 report($e);
                 Log::error('AdSpendBilling: Failed to reduce budget', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);
+                if ($multiplier < 1) {
+                    try {
+                        $paused = app(DeactivateCustomerService::class)->pauseCampaign($customer, $campaign);
+                        if (is_string($paused)) {
+                            report(new \RuntimeException($paused));
+                        }
+                    } catch (\Throwable $pauseError) {
+                        report($pauseError);
+                    }
+                }
             }
         }
     }

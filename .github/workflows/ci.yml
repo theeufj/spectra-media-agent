@@ -89,6 +89,12 @@ jobs:
       # CLAUDE.md's pre-commit checklist has always listed `npm test`; CI built
       # the frontend and never ran its suite, so the nine vitest files only ran
       # when someone remembered.
+      - name: Crawler boundary and deployment gate checks
+        run: |
+          python3 -m unittest discover -s infrastructure/crawler -p 'test_*.py'
+          python3 -m unittest discover -s tests/Infrastructure -p 'test_*.py'
+          node --check infrastructure/crawler/server.cjs
+
       - name: Frontend tests
         run: npm test
 

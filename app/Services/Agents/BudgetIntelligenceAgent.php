@@ -8,10 +8,8 @@ use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
-use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class BudgetIntelligenceAgent
@@ -61,7 +59,8 @@ class BudgetIntelligenceAgent
             'errors' => [],
         ];
 
-        if (! $campaign->customer) {
+        if (! $campaign->customer || ! \Laravel\Pennant\Feature::for($campaign->customer)->active(\App\Features\AutoOptimization::class)
+            || $campaign->customer->adSpendCredit()->value('payment_status') === \App\Models\AdSpendCredit::PAYMENT_PAUSED) {
             return $results;
         }
 
@@ -98,221 +97,24 @@ class BudgetIntelligenceAgent
             'source' => $this->learnedHourlyMultipliers ? 'learned' : 'static',
         ];
 
-        // If multiplier is 1.0, no adjustment needed
-        if ($combinedMultiplier === 1.0) {
-            return $results;
-        }
-
-        // Optimize Google Ads campaign
-        if ($hasGoogle) {
-            $results['platform'] = 'google_ads';
-            $this->optimizeGoogleAdsCampaign($campaign, $combinedMultiplier, $timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier, $results);
-        }
-
-        // Optimize Facebook Ads campaign
-        if ($hasFacebook) {
-            $results['platform'] = $hasGoogle ? 'multi_platform' : 'facebook_ads';
-            $this->optimizeFacebookAdsCampaign($campaign, $combinedMultiplier, $timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier, $results);
-        }
-
-        // Optimize Microsoft Ads campaign
-        if ($hasMicrosoft) {
-            $results['platform'] = ($hasGoogle || $hasFacebook) ? 'multi_platform' : 'microsoft_ads';
-            $this->optimizeMicrosoftAdsCampaign($campaign, $combinedMultiplier, $results);
-        }
-
-        // Optimize LinkedIn Ads campaign
-        if ($hasLinkedIn) {
-            $results['platform'] = ($hasGoogle || $hasFacebook || $hasMicrosoft) ? 'multi_platform' : 'linkedin_ads';
-            $this->optimizeLinkedInAdsCampaign($campaign, $combinedMultiplier, $results);
+        // A neutral hour must restore the base after an earlier reduction. Every
+        // writer shares the approved envelope and the persistent billing limit.
+        $results['platform'] = 'multi_platform';
+        try {
+            $writer = new \App\Services\Campaigns\CampaignBudgetService($this->ads());
+            $target = min($writer->ceiling($campaign), (float) $campaign->daily_budget * max(0, $combinedMultiplier));
+            if ($writer->apply($campaign, $target)) {
+                $results['adjustments'][] = ['type' => 'budget_updated', 'adjusted_budget' => $target];
+            } else {
+                $results['errors'][] = 'One or more platforms rejected the budget update.';
+                report(new \RuntimeException('Campaign '.$campaign->id.': platform budget reconciliation failed.'));
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $results['errors'][] = $e->getMessage();
         }
 
         return $results;
-    }
-
-    protected function optimizeMicrosoftAdsCampaign(Campaign $campaign, float $combinedMultiplier, array &$results): void
-    {
-        $baseDailyBudget = $campaign->daily_budget ?? 0;
-        if ($baseDailyBudget <= 0) {
-            return;
-        }
-
-        $adjustedBudget = round($baseDailyBudget * $combinedMultiplier, 2);
-
-        try {
-            $service = new \App\Services\MicrosoftAds\CampaignService($campaign->customer);
-            $ok = $service->updateBudget($campaign->microsoft_ads_campaign_id, $adjustedBudget);
-
-            if ($ok) {
-                $results['adjustments'][] = [
-                    'type' => 'budget_updated',
-                    'platform' => 'microsoft_ads',
-                    'base_budget' => $baseDailyBudget,
-                    'adjusted_budget' => $adjustedBudget,
-                    'multiplier' => $combinedMultiplier,
-                ];
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'Microsoft Ads budget update failed: '.$e->getMessage();
-        }
-    }
-
-    protected function optimizeLinkedInAdsCampaign(Campaign $campaign, float $combinedMultiplier, array &$results): void
-    {
-        $baseDailyBudget = $campaign->daily_budget ?? 0;
-        if ($baseDailyBudget <= 0) {
-            return;
-        }
-
-        // LinkedIn minimum daily budget is $10
-        $adjustedBudget = max(10.0, round($baseDailyBudget * $combinedMultiplier, 2));
-
-        try {
-            $service = new \App\Services\LinkedInAds\CampaignService($campaign->customer);
-            $ok = $service->updateBudget($campaign->linkedin_campaign_id, $adjustedBudget);
-
-            if ($ok) {
-                $results['adjustments'][] = [
-                    'type' => 'budget_updated',
-                    'platform' => 'linkedin_ads',
-                    'base_budget' => $baseDailyBudget,
-                    'adjusted_budget' => $adjustedBudget,
-                    'multiplier' => $combinedMultiplier,
-                ];
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'LinkedIn Ads budget update failed: '.$e->getMessage();
-        }
-    }
-
-    /**
-     * Apply budget adjustment to a Google Ads campaign.
-     */
-    protected function optimizeGoogleAdsCampaign(
-        Campaign $campaign,
-        float $combinedMultiplier,
-        float $timeMultiplier,
-        float $effectiveDayMultiplier,
-        float $seasonalMultiplier,
-        array &$results
-    ): void {
-        $baseDailyBudget = $campaign->daily_budget ?? 0;
-        $adjustedBudget = $baseDailyBudget * $combinedMultiplier;
-        $adjustedBudgetMicros = (int) round($adjustedBudget * 1_000_000);
-        $adjustedBudgetMicros = (int) (round($adjustedBudgetMicros / 10_000) * 10_000);
-
-        $customer = $campaign->customer;
-        $customerId = $customer->google_ads_customer_id;
-        $campaignResourceName = $campaign->googleAdsResourceName();
-
-        try {
-            $success = $this->ads()->budgets($customer)
-                ->updateDailyBudget($customerId, $campaignResourceName, $adjustedBudgetMicros);
-
-            if ($success) {
-                $results['adjustments'][] = [
-                    'type' => 'budget_updated',
-                    'platform' => 'google_ads',
-                    'base_budget' => $baseDailyBudget,
-                    'adjusted_budget' => $adjustedBudget,
-                    'reason' => $this->getAdjustmentReason($timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier),
-                ];
-
-                Log::info('BudgetIntelligenceAgent: Google Ads budget adjusted', [
-                    'campaign_id' => $campaign->id,
-                    'base' => $baseDailyBudget,
-                    'adjusted' => $adjustedBudget,
-                    'multiplier' => $combinedMultiplier,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'Google Ads: Failed to update budget: '.$e->getMessage();
-            Log::error('BudgetIntelligenceAgent: Failed to update Google Ads budget', [
-                'campaign_id' => $campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * Apply budget adjustment to Facebook Ads campaign ad sets.
-     * Facebook budgets are managed at the ad set level (or campaign level with CBO).
-     */
-    protected function optimizeFacebookAdsCampaign(
-        Campaign $campaign,
-        float $combinedMultiplier,
-        float $timeMultiplier,
-        float $effectiveDayMultiplier,
-        float $seasonalMultiplier,
-        array &$results
-    ): void {
-        $customer = $campaign->customer;
-
-        try {
-            $adSetService = new FacebookAdSetService($customer);
-            $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id);
-
-            if (empty($adSets)) {
-                $results['adjustments'][] = [
-                    'type' => 'facebook_no_adsets',
-                    'platform' => 'facebook_ads',
-                    'message' => 'No ad sets found for Facebook campaign (may be using CBO)',
-                ];
-
-                return;
-            }
-
-            foreach ($adSets as $adSet) {
-                $adSetId = $adSet['id'];
-                $currentBudget = ($adSet['daily_budget'] ?? 0) / 100; // Facebook stores budget in cents
-
-                if ($currentBudget <= 0) {
-                    // Ad set may use lifetime budget or campaign-level CBO — skip
-                    continue;
-                }
-
-                $baseDailyBudget = $campaign->daily_budget ?? $currentBudget;
-                $adjustedBudget = $baseDailyBudget * $combinedMultiplier;
-
-                // Facebook enforces minimum $5/day
-                $adjustedBudget = max(5.0, $adjustedBudget);
-                $adjustedBudgetCents = (int) round($adjustedBudget * 100);
-
-                $success = $adSetService->updateAdSet($adSetId, [
-                    'daily_budget' => $adjustedBudgetCents,
-                ]);
-
-                if ($success) {
-                    $results['adjustments'][] = [
-                        'type' => 'budget_updated',
-                        'platform' => 'facebook_ads',
-                        'adset_id' => $adSetId,
-                        'adset_name' => $adSet['name'] ?? $adSetId,
-                        'base_budget' => $baseDailyBudget,
-                        'adjusted_budget' => $adjustedBudget,
-                        'reason' => $this->getAdjustmentReason($timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier),
-                    ];
-
-                    Log::info('BudgetIntelligenceAgent: Facebook ad set budget adjusted', [
-                        'campaign_id' => $campaign->id,
-                        'adset_id' => $adSetId,
-                        'base' => $baseDailyBudget,
-                        'adjusted' => $adjustedBudget,
-                        'multiplier' => $combinedMultiplier,
-                    ]);
-                }
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'Facebook Ads: Failed to update budget: '.$e->getMessage();
-            Log::error('BudgetIntelligenceAgent: Failed to update Facebook Ads budget', [
-                'campaign_id' => $campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
     }
 
     /**
@@ -582,73 +384,13 @@ class BudgetIntelligenceAgent
                     'reason' => 'Shift budget from underperforming campaign (ROAS: '.round($loser['roas'], 2).') to top performer',
                 ];
 
-                // Auto-execute small reallocation (≤10%) when confidence is high
-                // Winner ROAS must be ≥2x loser ROAS and shift ≤ auto-execute threshold
-                $confidenceHigh = $winner['roas'] >= ($loser['roas'] * 2) && $winner['conversions'] >= 10;
-                if ($shiftPercent <= $autoExecuteThreshold && $confidenceHigh) {
-                    $executed = $this->executeReallocation(
-                        $loser['campaign'], $winner['campaign'],
-                        $shiftAmount, $customer
-                    );
-                    $recommendation['auto_executed'] = $executed;
-
-                    if ($executed) {
-                        Log::info('BudgetIntelligenceAgent: Auto-executed budget reallocation', [
-                            'from' => $loser['campaign']->name,
-                            'to' => $winner['campaign']->name,
-                            'amount' => $shiftAmount,
-                        ]);
-                    }
-                }
-
+                // Moving money between two remote campaigns has no atomic API.
+                // Keep the proposed transfer for review until both sides can be verified.
                 $recommendations[] = $recommendation;
             }
         }
 
         return $recommendations;
-    }
-
-    /**
-     * Execute a budget reallocation: reduce loser's budget by $amount, increase winner's by $amount.
-     */
-    protected function executeReallocation(
-        Campaign $fromCampaign,
-        Campaign $toCampaign,
-        float $shiftAmount,
-        Customer $customer
-    ): bool {
-        try {
-            $fromBudget = $fromCampaign->daily_budget ?? 0;
-            $toBudget = $toCampaign->daily_budget ?? 0;
-
-            $newFromBudget = max(5.0, $fromBudget - $shiftAmount);
-            $newToBudget = $toBudget + $shiftAmount;
-
-            // Wrap DB writes in a transaction so both campaigns update atomically.
-            // API calls happen after so a DB failure rolls back local state.
-            return DB::transaction(function () use ($fromCampaign, $toCampaign, $customer, $newFromBudget, $newToBudget) {
-                $fromCampaign->update(['daily_budget' => $newFromBudget]);
-                $toCampaign->update(['daily_budget' => $newToBudget]);
-
-                $fromSuccess = $this->updateCampaignBudget($fromCampaign, $customer, $newFromBudget);
-                $toSuccess = $this->updateCampaignBudget($toCampaign, $customer, $newToBudget);
-
-                if (! $fromSuccess || ! $toSuccess) {
-                    throw new \RuntimeException('API budget update failed during reallocation');
-                }
-
-                return true;
-            });
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('BudgetIntelligenceAgent: Failed to execute reallocation', [
-                'from' => $fromCampaign->id,
-                'to' => $toCampaign->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
     }
 
     /**
@@ -781,34 +523,6 @@ class BudgetIntelligenceAgent
 
     protected function updateCampaignBudget(Campaign $campaign, Customer $customer, float $newDailyBudget): bool
     {
-        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
-            $customerId = $customer->google_ads_customer_id;
-            $resourceName = $campaign->googleAdsResourceName();
-
-            return $this->ads()->budgets($customer)
-                ->updateDailyBudget($customerId, $resourceName, $newDailyBudget * 1000000);
-        }
-
-        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
-            $adSetService = new FacebookAdSetService($customer);
-            $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id);
-            if (! empty($adSets)) {
-                // Apply proportionally across ad sets
-                $totalAdSetBudget = collect($adSets)->sum(fn ($as) => ($as['daily_budget'] ?? 0) / 100);
-                foreach ($adSets as $adSet) {
-                    $currentBudget = ($adSet['daily_budget'] ?? 0) / 100;
-                    if ($currentBudget <= 0 || $totalAdSetBudget <= 0) {
-                        continue;
-                    }
-                    $proportion = $currentBudget / $totalAdSetBudget;
-                    $newAdSetBudget = max(500, (int) round($newDailyBudget * $proportion * 100)); // min $5 in cents
-                    $adSetService->updateAdSet($adSet['id'], ['daily_budget' => $newAdSetBudget]);
-                }
-
-                return true;
-            }
-        }
-
-        return false;
+        return (new \App\Services\Campaigns\CampaignBudgetService($this->ads()))->apply($campaign, $newDailyBudget);
     }
 }

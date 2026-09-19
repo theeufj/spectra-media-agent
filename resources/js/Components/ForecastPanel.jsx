@@ -211,7 +211,6 @@ export default function ForecastPanel({
         // monthlyBudget deliberately absent: re-framing is done in the browser
         // from figures already fetched, and refetching per keystroke would
         // spend a pair of Keyword Planner calls each time.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [campaignId]);
 
     useEffect(() => {

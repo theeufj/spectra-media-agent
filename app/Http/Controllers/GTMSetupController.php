@@ -161,16 +161,11 @@ class GTMSetupController extends Controller
         try {
             // domcontentloaded is enough to see the GTM snippet; networkidle0 never
             // settles on pages with live analytics/ads and burns the whole timeout.
-            $htmlContent = \Spatie\Browsershot\Browsershot::url($customer->website)
-                ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->timeout(20)
-                ->setOption('waitUntil', 'domcontentloaded')
-                ->bodyHtml();
+            $htmlContent = app(\App\Services\Crawling\WebsiteRenderer::class)->html($customer->website);
         } catch (\Throwable $e) {
             report($e);
             Log::warning('GTMSetupController: Browsershot failed, falling back to HTTP', ['error' => $e->getMessage()]);
-            $htmlContent = @file_get_contents($customer->website);
+            $htmlContent = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($customer->website)->throw()->body();
         }
 
         if (! $htmlContent) {

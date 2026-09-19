@@ -6,7 +6,6 @@ use App\Features\AutoOptimization;
 use App\Models\AgentActivity;
 use App\Models\Audience;
 use App\Models\Campaign;
-use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\CreateCallAsset;
@@ -20,12 +19,10 @@ use App\Services\GoogleAds\CommonServices\RemoveKeyword;
 use App\Services\GoogleAds\CommonServices\SetAdSchedule;
 use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
 use App\Services\GoogleAds\CommonServices\SetLocationBidAdjustment;
-use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignNetworkSettings;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use App\Services\MicrosoftAds\AdGroupService as MicrosoftAdGroupService;
-use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
@@ -133,51 +130,17 @@ class RecommendationApplier
             ), 2);
         }
 
-        $customer = $campaign->customer;
-        $pushed = null; // null = nothing deployed yet, so there is nothing to push
-
-        if ($campaign->google_ads_campaign_id && $customer) {
-            $resource = $campaign->googleAdsResourceName();
-            try {
-                $pushed = $resource !== null && (new UpdateCampaignBudget($customer))(
-                    $customer->cleanGoogleCustomerId(),
-                    $resource,
-                    (int) round($newBudget * 1_000_000)
-                );
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('RecommendationApplier: Google budget API update failed: '.$e->getMessage());
-                $pushed = false;
-            }
-        } elseif ($campaign->facebook_ads_campaign_id && $customer) {
-            try {
-                $pushed = (new FacebookCampaignService($customer))->updateCampaign($campaign->facebook_ads_campaign_id, [
-                    'daily_budget' => (int) round($newBudget * 100), // Facebook uses cents
-                ]);
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('RecommendationApplier: Facebook budget API update failed: '.$e->getMessage());
-                $pushed = false;
-            }
-        } elseif ($campaign->microsoft_ads_campaign_id && $customer) {
-            try {
-                $pushed = (new MicrosoftCampaignService($customer))->updateBudget(
-                    (string) $campaign->microsoft_ads_campaign_id,
-                    $newBudget
-                );
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('RecommendationApplier: Microsoft budget API update failed: '.$e->getMessage());
-                $pushed = false;
-            }
+        $ceiling = (float) ($campaign->approved_daily_budget ?? $oldBudget);
+        if ($newBudget > $ceiling) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'The requested budget exceeds the customer-approved daily budget.', 'recommendation' => $rec];
         }
-
-        if ($pushed === false) {
-            return ['applied' => false, 'message' => "Platform rejected the budget change to {$newBudget}", 'recommendation' => $rec];
+        // Persist the desired budget; hourly reconciliation retries partial API failures.
+        $campaign->update(['daily_budget' => $newBudget]);
+        $deployed = $campaign->google_ads_campaign_id || $campaign->facebook_ads_campaign_id
+            || $campaign->microsoft_ads_campaign_id || $campaign->linkedin_campaign_id;
+        if ($deployed && ! app(\App\Services\Campaigns\CampaignBudgetService::class)->apply($campaign, $newBudget)) {
+            return ['applied' => false, 'message' => 'Budget saved; a platform update failed and will be retried.', 'recommendation' => $rec];
         }
-
-        $campaign->daily_budget = $newBudget;
-        $campaign->save();
 
         $message = "Budget adjusted from {$oldBudget} to {$newBudget}";
 
