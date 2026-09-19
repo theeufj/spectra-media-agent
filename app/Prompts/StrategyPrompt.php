@@ -162,14 +162,13 @@ Bad: "For Responsive Display Ads, utilize deep navy (#1E3A5F) backgrounds to est
 authoritative visual hierarchy, paired with crisp white typography and warm gold trust
 badges, highlighting clean platform interfaces."
 
-A software business, where the pull toward a person-at-a-screen is strongest. Say the
-pain point is that offers arrive scattered across email, chat and spreadsheets:
+A software business, where the pull toward a person-at-a-screen is strongest. This one
+sells shift rostering to restaurants, and its pain point is last-minute staff cover:
 
-Good: "A founder at a kitchen table late at night, the table covered in printed offers and
-sticky notes, holding one page up to the lamp with the beginnings of relief on her face.
-Also suits: a close detail of a hand ruling a line through an item on a printed list; a
-wide shot of a two-person office at dusk with three laptops open and a whiteboard covered
-in half-erased names."
+Good: "A duty manager at the pass of a small restaurant just before service, a paper roster
+covered in crossings-out pinned beside her, phone to her ear as she finds cover for a
+no-show. Also suits: a close detail of a thumb scrolling a contacts list against a steel
+counter; a wide shot of a half-set dining room at dusk with one table still unlaid."
 Bad: "A startup founder sitting at a clean desk in a modern, well-lit office, focused on a
 laptop screen, early morning light casting soft shadows, professional and approachable."
 
@@ -177,6 +176,12 @@ Note what is wrong with that second one. It names a subject, it is plain visual 
 it carries no hex codes and no format names, it is a single sentence — it satisfies every
 other rule on this list. It is still worthless, because it is a picture of nobody in
 particular and would serve a payroll product, a CRM or a bank without changing a word.
+
+Every example above is an illustration of the method, not a library to draw from. None of
+them is about the business you are writing for. Reusing one — the restaurant pass, the
+terraced house, the kerbside van — is the same failure as the stock caption, arrived at
+from the other direction: a picture of somebody else's customer. Write the scene from the
+brand material in THIS prompt.
 
 **Targeting Configuration:**
 You MUST include a "targeting" object for each strategy that defines the audience targeting.

@@ -306,6 +306,23 @@ class ImageryStrategyContractTest extends TestCase
         $this->assertStringContainsString('unphotographable', $prompt);
     }
 
+    public function test_the_examples_are_not_offered_as_a_library_to_copy_from(): void
+    {
+        $prompt = $this->builtStrategyPrompt();
+
+        /*
+           The first version of the software example described a founder at a
+           night-time kitchen table strewn with printed offers — which was
+           close enough to the customer it was written for that the model
+           returned it word for word rather than writing anything. An example
+           teaches harder than a rule, and it teaches whatever it actually
+           shows. So the worked example is now a business nothing like the ones
+           being written for, and reuse is named as a failure in its own right.
+        */
+        $this->assertStringContainsString('not a library to draw from', $prompt);
+        $this->assertStringContainsString("somebody else's customer", $prompt);
+    }
+
     public function test_the_stock_caption_is_shown_only_as_the_thing_not_to_write(): void
     {
         $prompt = $this->builtStrategyPrompt();
