@@ -1,6 +1,6 @@
 import { CAMPAIGN_TEMPLATES } from './campaignTemplates';
 import { TextArea, Tooltip, HelpText, PreflightBanner } from './WizardFields';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { money, date } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -101,6 +101,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [creationMode, setCreationMode] = useState(null); // 'template'
+    const kpiInputRef = useRef(null);
     // active_customer is the full model, so the uuid is already in the props.
     const customerUuid = auth.user?.active_customer?.uuid;
     
@@ -235,7 +236,10 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         }
     };
     
-    const nextStep = () => {
+    const nextStep = (event) => {
+        // Advancing can render the submit button during this same click. Never
+        // let the browser's default action submit the newly rendered review.
+        event.preventDefault();
         if (validateStep(currentStep)) {
             setCurrentStep(prev => Math.min(prev + 1, WIZARD_STEPS.length - 1));
         }
@@ -351,6 +355,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             {visibleTemplates.map((template) => (
                                 <button
                                     key={template.id}
+                                    type="button"
                                     onClick={() => applyTemplate(template)}
                                     className={`
                                         p-6 rounded-lg border-2 text-left transition-all duration-200
@@ -679,7 +684,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             <div>
                                 <InputLabel htmlFor="primary_kpi" value="What would make this campaign worth it?" />
                                 <HelpText text="The one number you'd judge it on. The agents optimise towards whatever you put here." />
-                                <div className="mt-2 flex flex-wrap gap-2">
+                                <p className="mt-2 text-xs text-gray-500">Choose a starting target, then edit the wording below.</p>
+                                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested campaign targets">
                                     {[
                                         { label: 'Leads under a set cost', fill: 'Leads for under $50 each' },
                                         { label: 'Sales worth more than the spend', fill: 'At least $4 of sales for every $1 spent' },
@@ -688,15 +694,24 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         <button
                                             key={option.label}
                                             type="button"
-                                            onClick={() => setData('primary_kpi', option.fill)}
-                                            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-brand-dark hover:bg-brand-tint-10 hover:text-brand-darker"
+                                            aria-pressed={data.primary_kpi === option.fill}
+                                            aria-controls="primary_kpi"
+                                            onClick={() => {
+                                                setData('primary_kpi', option.fill);
+                                                kpiInputRef.current?.focus();
+                                            }}
+                                            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 ${data.primary_kpi === option.fill
+                                                ? 'border-brand-dark bg-brand-tint-10 text-brand-darker'
+                                                : 'border-gray-300 bg-white text-gray-700 hover:border-brand-dark hover:bg-brand-tint-10 hover:text-brand-darker'}`}
                                         >
+                                            {data.primary_kpi === option.fill && <span aria-hidden="true" className="mr-1">✓</span>}
                                             {option.label}
                                         </button>
                                     ))}
                                 </div>
                                 <TextInput
                                     id="primary_kpi"
+                                    ref={kpiInputRef}
                                     className="mt-2 block w-full"
                                     value={data.primary_kpi}
                                     onChange={(e) => setData('primary_kpi', e.target.value)}
@@ -1197,6 +1212,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     
                                     {currentStep < WIZARD_STEPS.length - 1 ? (
                                         <PrimaryButton 
+                                            key="continue"
                                             type="button"
                                             onClick={nextStep}
                                             disabled={!validateStep(currentStep)}
@@ -1215,6 +1231,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                          * treatment including its contrast fix.
                                          */
                                         <PrimaryButton
+                                            key="generate-strategy"
                                             type="submit"
                                             disabled={processing}
                                         >

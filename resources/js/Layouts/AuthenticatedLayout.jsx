@@ -475,6 +475,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                     onClose={() => setMobileOpen(false)}
                 >
                     <TransitionChild
+                        as="div"
                         className="fixed inset-0 bg-black/30 backdrop-blur-sm"
                         enter="transition-opacity duration-300"
                         enterFrom="opacity-0"
