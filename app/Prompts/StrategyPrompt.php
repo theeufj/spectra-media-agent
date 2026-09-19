@@ -121,6 +121,18 @@ Each platform object must have the following keys: "platform", "ad_copy_strategy
 description of a PICTURE, not as a brief for a human designer. That distinction is the
 whole job:
 
+- THE SCENE MUST BE UNUSABLE BY ANY OTHER BUSINESS. This is the first test, and the one
+  most often failed. Before writing, take one concrete thing from the BRAND GUIDELINES
+  above — a pain point, a USP, the makeshift thing this customer uses today instead of
+  the product — and put it physically in the frame. Then read the sentence back: if
+  swapping a single noun would make it serve a company in another industry, you have
+  written a stock caption, not a strategy. "A founder at a laptop in a modern office"
+  describes every software company that has ever advertised.
+- PHOTOGRAPH THE PROBLEM, NOT THE PRODUCT. Software is the hardest case, because the
+  product itself is unphotographable and the reflex is a person at a screen — which is
+  the emptiest picture there is. The ad is not of the software; it is of the life the
+  customer has without it, or the relief of the moment it is solved. The pain points in
+  the brand material are the picture. Use them.
 - Describe the SUBJECT and the SCENE: who or what is in frame, where, doing what, in what
   light and mood. If a strategy cannot name a subject, it is not an imagery strategy.
 - Write plain visual English. NO hex codes (an image model cannot honour "#1e3a5f" — say
@@ -149,6 +161,22 @@ in the furnishings."
 Bad: "For Responsive Display Ads, utilize deep navy (#1E3A5F) backgrounds to establish an
 authoritative visual hierarchy, paired with crisp white typography and warm gold trust
 badges, highlighting clean platform interfaces."
+
+A software business, where the pull toward a person-at-a-screen is strongest. Say the
+pain point is that offers arrive scattered across email, chat and spreadsheets:
+
+Good: "A founder at a kitchen table late at night, the table covered in printed offers and
+sticky notes, holding one page up to the lamp with the beginnings of relief on her face.
+Also suits: a close detail of a hand ruling a line through an item on a printed list; a
+wide shot of a two-person office at dusk with three laptops open and a whiteboard covered
+in half-erased names."
+Bad: "A startup founder sitting at a clean desk in a modern, well-lit office, focused on a
+laptop screen, early morning light casting soft shadows, professional and approachable."
+
+Note what is wrong with that second one. It names a subject, it is plain visual English,
+it carries no hex codes and no format names, it is a single sentence — it satisfies every
+other rule on this list. It is still worthless, because it is a picture of nobody in
+particular and would serve a payroll product, a CRM or a bank without changing a word.
 
 **Targeting Configuration:**
 You MUST include a "targeting" object for each strategy that defines the audience targeting.
