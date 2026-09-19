@@ -53,9 +53,66 @@ class AdCopyPrompt
         $this->competitors = $competitors;
     }
 
+    /**
+     * The platform's limits as instructions, not as a config dump.
+     *
+     * These used to reach the model as json_encode() of the rules array — a
+     * block of keys and numbers under a "PLATFORM RULES" heading, with no
+     * sentence anywhere telling it to obey them. Counting characters is
+     * already the thing a language model is worst at, and it was being asked
+     * to infer the requirement from "description_max_length": 90.
+     *
+     * It did not. A live run produced descriptions of 98, 102 and 99
+     * characters against a 90 limit, and the validator rejected all ten
+     * attempts. The numbers were in the prompt the whole time.
+     */
+    private function formatRules(): string
+    {
+        if (empty($this->rules)) {
+            return 'No specific rules provided.';
+        }
+
+        $r = $this->rules;
+        $lines = ['Copy that breaks any of these is rejected automatically, so check each line before returning it:'];
+
+        if (isset($r['headline_count'], $r['headline_max_length'])) {
+            $min = $r['headline_min_length'] ?? 1;
+            $lines[] = "- Write exactly {$r['headline_count']} headlines. Each must be between {$min} and {$r['headline_max_length']} characters, counting spaces and punctuation. Aim for a few characters under the maximum — one character over and the headline is thrown out.";
+        }
+
+        if (isset($r['description_count'], $r['description_max_length'])) {
+            $min = $r['description_min_length'] ?? 1;
+            $lines[] = "- Write exactly {$r['description_count']} descriptions. Each must be between {$min} and {$r['description_max_length']} characters, counting spaces and punctuation. A description of {$r['description_max_length']}+1 characters is rejected whole, not trimmed.";
+        }
+
+        if (isset($r['max_exclamations_per_element'])) {
+            $lines[] = "- At most {$r['max_exclamations_per_element']} exclamation mark per headline or description.";
+        }
+
+        if (array_key_exists('allow_consecutive_exclamations', $r) && ! $r['allow_consecutive_exclamations']) {
+            $lines[] = '- Never two exclamation marks in a row.';
+        }
+
+        // Anything the cases above do not name still has to reach the model,
+        // or a rule added to config would be silently dropped from the prompt.
+        $named = [
+            'headline_count', 'headline_min_length', 'headline_max_length',
+            'description_count', 'description_min_length', 'description_max_length',
+            'max_exclamations_per_element', 'allow_consecutive_exclamations',
+        ];
+
+        $rest = array_diff_key($r, array_flip($named));
+
+        if ($rest !== []) {
+            $lines[] = '- Also: '.json_encode($rest);
+        }
+
+        return implode("\n", $lines);
+    }
+
     public function getPrompt(): string
     {
-        $rulesString = ! empty($this->rules) ? json_encode($this->rules, JSON_PRETTY_PRINT) : 'No specific rules provided.';
+        $rulesString = $this->formatRules();
 
         // Include brand guidelines if available
         $brandContext = $this->brandGuidelines
@@ -119,7 +176,12 @@ class AdCopyPrompt
                       "--- MARKETING STRATEGY ---\n{$this->strategyContent}";
 
         if (! empty($this->feedback)) {
-            $feedbackString = json_encode($this->feedback, JSON_PRETTY_PRINT);
+            // Unescaped: the model reads this, and "62\/100 \u2014 76 or above"
+            // is harder to act on than the sentence it was written as.
+            $feedbackString = json_encode(
+                $this->feedback,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            );
             $basePrompt .= "\n\n--- CRITICAL CORRECTIONS REQUIRED ---\n".
                            "The previous ad copy you generated was REJECTED because it violated the platform's rules. You MUST fix the following errors:\n".
                            $feedbackString."\n\n".

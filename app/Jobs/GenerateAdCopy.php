@@ -95,6 +95,19 @@ class GenerateAdCopy implements ShouldQueue
             $strategyContent = $this->strategy->ad_copy_strategy;
             $maxAttempts = 10; // Increased to ensure compliance with rules
             $approvedAdCopyData = null;
+            /*
+               The best copy that passed the hard rules, even if the reviewer
+               scored it below the approval bar. overall_status fails on either
+               programmatic validation OR a subjective score above 75, and on
+               attempt 10 of a live run the copy was programmatically valid —
+               the reviewer's own notes read "all descriptions are well under
+               the 90-character limit" — and scored 62. It was discarded, the
+               job failed, and the campaign got no copy at all, which meant its
+               creatives were composited with no headline. Copy a rubric calls
+               unexciting beats no copy.
+            */
+            $bestCompliantData = null;
+            $bestCompliantScore = -1;
             $lastFeedback = null;
             // Why each attempt bailed. Without this, a total Gemini outage and a
             // genuine compliance rejection produced the same final message.
@@ -174,15 +187,56 @@ class GenerateAdCopy implements ShouldQueue
                     $approvedAdCopyData = $adCopyData;
                     break;
                 } else {
+                    $programmaticFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
+                    $reviewerFeedback = $reviewResults['gemini_feedback']['feedback'] ?? [];
+                    $score = (int) ($reviewResults['gemini_feedback']['overall_score'] ?? 0);
+
                     Log::warning("Ad copy not approved on attempt {$attempt}.", [
                         'overall_status' => $reviewResults['overall_status'] ?? 'unknown',
-                        'feedback' => $reviewResults['programmatic_validation']['feedback'] ?? [],
+                        'is_valid' => $reviewResults['programmatic_validation']['is_valid'] ?? null,
+                        'overall_score' => $score,
+                        'feedback' => $programmaticFeedback,
+                        'reviewer_feedback' => $reviewerFeedback,
                         'violations' => $reviewResults['programmatic_validation']['violations'] ?? [],
                     ]);
-                    // Store the feedback for the next attempt.
-                    $lastFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
+
+                    // Copy that breaks no hard rule is usable. Keep the best
+                    // such attempt so a run that never clears the score bar
+                    // still ends with something to publish.
+                    if (($reviewResults['programmatic_validation']['is_valid'] ?? false) && $score > $bestCompliantScore) {
+                        $bestCompliantData = $adCopyData;
+                        $bestCompliantScore = $score;
+                    }
+
+                    /*
+                       Both halves of the verdict, not just the programmatic
+                       one. A rejection on score alone leaves the programmatic
+                       feedback empty, so the next attempt was told "REJECTED,
+                       you MUST fix the following errors" followed by
+                       {"headlines":[],"descriptions":[],"general":[]} — ten
+                       times, while the notes that would have fixed it ("no
+                       headlines include a direct call to action") sat unread
+                       in the reviewer's own feedback.
+                    */
+                    $lastFeedback = array_filter([
+                        'rule_violations' => $programmaticFeedback,
+                        'reviewer_notes' => $reviewerFeedback,
+                        'reviewer_score' => $score > 0 ? "{$score}/100 — 76 or above is required" : null,
+                    ]);
+
                     $attemptFailures[] = 'not_approved';
                 }
+            }
+
+            if (is_null($approvedAdCopyData) && ! is_null($bestCompliantData)) {
+                Log::warning('Ad copy never cleared the reviewer score; publishing the best rule-compliant attempt instead of failing.', [
+                    'campaign_id' => $this->campaign->id,
+                    'strategy_id' => $this->strategy->id,
+                    'platform' => $this->platform,
+                    'score' => $bestCompliantScore,
+                ]);
+
+                $approvedAdCopyData = $bestCompliantData;
             }
 
             if (is_null($approvedAdCopyData)) {
