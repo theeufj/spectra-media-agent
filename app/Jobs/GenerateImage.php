@@ -888,7 +888,7 @@ class GenerateImage implements ShouldQueue
                         ? app(\App\Services\XaiService::class)->generateImage(
                             $imagePrompt,
                             $creativeContext,
-                            self::GROK_SIZES[$aspect] ?? self::GROK_SIZES['1:1']
+                            $aspect
                         )
                         : app(\App\Services\OpenRouterService::class)->generateImage(
                             $imagePrompt,

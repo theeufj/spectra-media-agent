@@ -18,6 +18,13 @@ return [
      */
     'image_retry_base_delay' => env('AI_IMAGE_RETRY_BASE_DELAY', 2),
 
+    // Shared pacing applies to both new and reference images, across workers.
+    'gemini_images' => [
+        'interval_seconds' => (int) env('AI_GEMINI_IMAGE_INTERVAL_SECONDS', 15),
+        'max_wait_seconds' => (int) env('AI_GEMINI_IMAGE_MAX_WAIT_SECONDS', 120),
+        'cooldown_seconds' => (int) env('AI_GEMINI_IMAGE_COOLDOWN_SECONDS', 60),
+    ],
+
     /*
      * Guardrails for the seasonal strategy job. new_daily_budget may come from an
      * LLM, so budgets are clamped to a band around the campaign's current daily
@@ -120,7 +127,7 @@ return [
          * one and hoping.
          */
         'text_xai' => env('AI_MODEL_TEXT_XAI', 'grok-4-fast'),
-        'image_xai' => env('AI_MODEL_IMAGE_XAI', 'grok-2-image-1212'),
+        'image_xai' => env('AI_MODEL_IMAGE_XAI', 'grok-imagine-image-2.0'),
         'video_xai' => env('AI_MODEL_VIDEO_XAI', 'grok-imagine-video'),
 
         'text_grok' => env('AI_MODEL_TEXT_GROK', 'x-ai/grok-4-fast'),
@@ -257,6 +264,7 @@ return [
          */
         'grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
         'grok-2-image-1212' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
+        'grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'grok-imagine-video' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
 
         'x-ai/grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],

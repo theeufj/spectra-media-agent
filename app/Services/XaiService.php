@@ -143,7 +143,7 @@ class XaiService
      * @param  array<string, mixed>  $context
      * @return array{data: string, mimeType: string}|null
      */
-    public function generateImage(string $prompt, array $context = [], string $size = '1024x1024'): ?array
+    public function generateImage(string $prompt, array $context = [], string $aspectRatio = '1:1'): ?array
     {
         if (! $this->isConfigured() || self::isUnavailable()) {
             return null;
@@ -157,10 +157,8 @@ class XaiService
                 ->post(self::BASE.'/images/generations', [
                     'model' => $model,
                     'prompt' => $prompt,
-                    // Requested at the target aspect rather than always square:
-                    // filling a 1200x628 slot from a square is a 48% distortion
-                    // and the format is dropped instead.
-                    'size' => $size,
+                    // xAI accepts aspect_ratio, not OpenAI's pixel-based size.
+                    'aspect_ratio' => $aspectRatio,
                     'response_format' => 'b64_json',
                     'n' => 1,
                 ]);

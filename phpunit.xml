@@ -57,6 +57,8 @@
             means the suite's result depended on whose machine ran it.
         -->
         <env name="AI_IMAGE_RETRY_BASE_DELAY" value="0" force="true"/>
+        <env name="AI_GEMINI_IMAGE_INTERVAL_SECONDS" value="0" force="true"/>
+        <env name="AI_GEMINI_IMAGE_MAX_WAIT_SECONDS" value="0" force="true"/>
 
         <env name="AWS_BUCKET" value="" force="true"/>
         <env name="AWS_ACCESS_KEY_ID" value="" force="true"/>

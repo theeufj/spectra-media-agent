@@ -1021,11 +1021,23 @@ class GeminiService
         $startTime = hrtime(true);
 
         try {
-            $response = Http::withHeaders($this->authHeaders())
+            $headers = $this->authHeaders();
+            $pacer = app(GeminiImagePacer::class);
+            if (! $pacer->awaitTurn($model)) {
+                Log::warning('GeminiService: image request deferred by shared rate limit', ['model' => $model]);
+
+                return null;
+            }
+
+            $response = Http::withHeaders($headers)
                 ->timeout(600)
                 ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
             if ($response->failed()) {
+                if ($response->status() === 429) {
+                    $pacer->coolDown($model, $response);
+                }
+
                 $errorBody = $response->json();
                 $errorCode = $errorBody[0]['error']['code'] ?? $response->status();
                 $errorMessage = $errorBody[0]['error']['message'] ?? $response->body();
