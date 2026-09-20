@@ -13,7 +13,7 @@ import { SUBMIT } from '@/Components/Forms';
  * and the glyph floated on white. And the page's only heading was an <h2>, on a
  * page with no <h1> above it.
  */
-export default function VerifyEmail({ status }) {
+export default function VerifyEmail({ status, auth }) {
     const { post, processing } = useForm({});
 
     const submit = (e) => {
@@ -35,8 +35,9 @@ export default function VerifyEmail({ status }) {
 
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">Check your email</h1>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-gray-600">
-                    We've sent you a verification link. Click it and we'll take you straight to setting up
-                    your first campaign.
+                    We've sent a verification link to{' '}
+                    <strong className="break-all font-semibold">{auth?.user?.email || 'your email address'}</strong>.
+                    {' '}Click it and we'll take you straight to setting up your first campaign.
                 </p>
 
                 {status === 'verification-link-sent' && (
@@ -56,6 +57,7 @@ export default function VerifyEmail({ status }) {
 
                 <p className="mt-4 text-xs leading-relaxed text-gray-500">
                     Not there? It can take a minute, and it sometimes lands in spam.
+                    {' '}If the address above has a typo, sign out below and use the correct address.
                 </p>
 
                 <div className="mt-6 border-t border-gray-200 pt-4">
