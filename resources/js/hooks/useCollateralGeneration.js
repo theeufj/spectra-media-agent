@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import { parseCollateral } from '@/contracts/campaign';
 
-export function useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending }) {
+export function useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview }) {
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [generatingVideo, setGeneratingVideo] = useState(false);
-    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
+    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals, creativeReview });
     const [isPolling, setIsPolling] = useState(generationPending);
     const [collateralError, setCollateralError] = useState(null);
     // Refs for values accessed inside the polling interval to avoid stale closures
@@ -81,6 +81,8 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
             return;
         }
 
+        setCollateral(prev => ({ ...prev, creativeReview: data.creativeReview }));
+
         // Update all collateral data
         const hasNewAdCopy = data.adCopy && (!current.adCopy || data.adCopy.updated_at !== current.adCopy?.updated_at);
         const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(current.imageCollaterals);
@@ -127,10 +129,10 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
             setGeneratingAdCopy(false);
             setGeneratingImage(false);
             setGeneratingVideo(false);
-        }, 300000);
+        }, currentStrategy.creative_candidates ? 1800000 : 300000);
 
         return () => clearTimeout(timeout);
-    }, [isPolling, currentStrategy.id]);
+    }, [isPolling, currentStrategy.id, currentStrategy.creative_candidates]);
 
     return { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, isPolling, setIsPolling, collateralError, setCollateralError };
 }

@@ -34,22 +34,28 @@ class CollateralPlan
         return $text !== '' && ! preg_match('/^(?:n\/a|none|not applicable)\b|(?:pure |for )?search campaigns?.*(?:text.ads.only|not applicable)/i', $text);
     }
 
-    /** @return list<GenerateAdCopy|GenerateImage|GenerateVideo> */
-    public function forStrategy(Campaign $campaign, Strategy $strategy): array
+    /** @return list<GenerateAdCopy|GenerateImage|GenerateVideo|\App\Jobs\ReviewCreativeSet> */
+    public function forStrategy(Campaign $campaign, Strategy $strategy, bool $includeVideo = true): array
     {
         if (! $strategy->signed_off_at) {
             return [];
         }
+        $runId = null;
+        $imageCount = min(self::IMAGE_CONCEPTS_PER_STRATEGY, max(0, ImageCollateral::capForCampaign($campaign) - ImageCollateral::conceptsForCampaign($campaign)));
+        if ($strategy->creative_candidates) {
+            $runId = (string) \Illuminate\Support\Str::uuid();
+            $strategy->update(['creative_review' => ['run_id' => $runId, 'status' => 'pending', 'started_at' => now()->toIso8601String(), 'retried_slots' => [], 'expected_images' => $imageCount]]);
+        }
         $jobs = [(new GenerateAdCopy($campaign, $strategy, $strategy->platform))->delay(now()->addSeconds(5))];
         if (ImageCollateral::canGenerateForCampaign($campaign)) {
-            for ($slot = 0; $slot < self::IMAGE_CONCEPTS_PER_STRATEGY; $slot++) {
-                $jobs[] = (new GenerateImage($campaign, $strategy, $slot))->delay(now()->addSeconds(10 + $slot * 10));
+            for ($slot = 0; $slot < $imageCount; $slot++) {
+                $jobs[] = (new GenerateImage($campaign, $strategy, $slot, $runId))->delay(now()->addSeconds(10 + $slot * 30));
             }
         }
         // Select the first eligible strategy, not the first Search strategy.
         $owner = $campaign->strategies()->whereNotNull('signed_off_at')->orderBy('id')->get()
             ->first(fn (Strategy $candidate) => $this->wantsVideo($campaign, $candidate));
-        if ($owner?->id === $strategy->id) {
+        if ($includeVideo && $owner?->id === $strategy->id) {
             $concepts = min(max(1, (int) config('ai.video_concepts_per_campaign', 2)), intdiv(VideoCollateral::remainingForCampaign($campaign), 2));
             for ($concept = 0; $concept < $concepts; $concept++) {
                 foreach (['Google Ads (Performance Max)', 'Facebook Ads'] as $shape => $platform) {
@@ -57,6 +63,10 @@ class CollateralPlan
                         ->delay(now()->addSeconds(120 + ($strategy->id % 8) * 45 + $concept * 480 + $shape * 240));
                 }
             }
+        }
+
+        if ($runId) {
+            $jobs[] = (new \App\Jobs\ReviewCreativeSet($strategy, $runId))->delay(now()->addMinutes(2));
         }
 
         return $jobs;

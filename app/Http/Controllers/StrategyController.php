@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\GenerateAdCopy;
-use App\Jobs\GenerateImage;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -105,6 +103,8 @@ class StrategyController extends Controller
         if ($strategy->imagery_strategy !== $validated['imagery_strategy']) {
             // A manually rewritten image brief supersedes the generated concept set.
             $validated['creative_concepts'] = null;
+            $validated['creative_candidates'] = null;
+            $validated['creative_review'] = null;
         }
 
         $strategy->update($validated);
@@ -121,15 +121,8 @@ class StrategyController extends Controller
                 $img->delete();
             });
 
-            GenerateAdCopy::dispatch($campaign, $strategy, $strategy->platform)
-                ->delay(now()->addSeconds(3));
-
-            // $i is the slot, and the slot picks the lens. Without it all three
-            // jobs generate the scene as briefed and the set is one picture
-            // three times — the same miss as GenerateStrategyCollateral had.
-            for ($i = 0; $i < 3; $i++) {
-                GenerateImage::dispatch($campaign, $strategy, $i)
-                    ->delay(now()->addSeconds(10 + ($i * 10)));
+            foreach (app(\App\Services\Campaigns\CollateralPlan::class)->forStrategy($campaign, $strategy, includeVideo: false) as $job) {
+                dispatch($job);
             }
 
             return back()->with('success', 'Strategy updated — regenerating ad copy and images.');

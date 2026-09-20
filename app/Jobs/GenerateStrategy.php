@@ -293,7 +293,7 @@ class GenerateStrategy implements ShouldQueue
             Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found ".count($strategyData['strategies']).' strategies');
 
             $document = \App\Services\Campaigns\StrategyDocument::fromArray(
-                $strategyData, $enabledPlatforms, (float) $this->campaign->daily_budget
+                $strategyData, $enabledPlatforms, (float) $this->campaign->daily_budget, requireCreativeCandidates: true
             );
             $strategyData['strategies'] = $document->strategies;
             \Illuminate\Support\Facades\DB::transaction(function () use ($strategyData) {
@@ -315,6 +315,7 @@ class GenerateStrategy implements ShouldQueue
                             'platform' => $strategy['platform'],
                             'campaign_type' => $strategy['campaign_type'],
                             'creative_concepts' => $strategy['creative_concepts'] ?? null,
+                            'creative_candidates' => $strategy['creative_candidates'] ?? null,
                             'daily_budget' => $strategy['daily_budget'],
                             'generation_id' => $generationId,
                             'ad_extensions' => $strategy['ad_extensions'] ?? [],

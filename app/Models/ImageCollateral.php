@@ -178,20 +178,34 @@ class ImageCollateral extends Model
      *
      * @param  list<array<string, mixed>>  $rows  one per ad format
      */
-    public static function createConcept(Campaign $campaign, array $rows): ?string
+    public static function createConcept(Campaign $campaign, array $rows, ?string $replaceKey = null, ?int $strategyId = null, ?string $runId = null): ?string
     {
         if ($rows === []) {
             return null;
         }
 
-        return DB::transaction(function () use ($campaign, $rows) {
+        return DB::transaction(function () use ($campaign, $rows, $replaceKey, $strategyId, $runId) {
             // Serialises the decision between concurrent jobs for this campaign.
             Campaign::withoutGlobalScopes()
                 ->whereKey($campaign->id)
                 ->lockForUpdate()
                 ->first();
 
-            if (static::conceptsForCampaign($campaign) >= static::capForCampaign($campaign)) {
+            if ($runId) {
+                $strategy = Strategy::whereKey($strategyId)->lockForUpdate()->first();
+                if (($strategy?->creative_review['run_id'] ?? null) !== $runId) {
+                    return null;
+                }
+            }
+            $old = collect();
+            if ($replaceKey) {
+                $old = static::where('campaign_id', $campaign->id)->where('strategy_id', $strategyId)
+                    ->where('concept_key', $replaceKey)->lockForUpdate()->get();
+                if ($old->isEmpty() || array_diff($old->pluck('format')->all(), array_column($rows, 'format')) !== []) {
+                    return null; // Keep the original if a replacement is missing a size.
+                }
+            }
+            if (! $replaceKey && static::conceptsForCampaign($campaign) >= static::capForCampaign($campaign)) {
                 return null;
             }
 
@@ -201,6 +215,11 @@ class ImageCollateral extends Model
 
             foreach ($rows as $row) {
                 static::create($row + ['concept_key' => $key]);
+            }
+
+            if ($old->isNotEmpty()) {
+                static::whereIn('id', $old->pluck('id')->all())->delete();
+                \App\Jobs\DeleteCollateralFiles::dispatch($old->pluck('s3_path')->all())->afterCommit();
             }
 
             return $key;

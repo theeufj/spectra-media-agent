@@ -133,6 +133,7 @@ class CollateralController extends Controller
                genuinely failed does not poll for ever.
             */
             'generationPending' => $this->generationPending($strategy),
+            'creativeReview' => $strategy->creative_review,
         ]);
     }
 
@@ -151,8 +152,19 @@ class CollateralController extends Controller
 
         // Long enough for a staggered set plus a Veo chain, short enough that a
         // strategy whose generation failed months ago does not poll on load.
-        if ($strategy->signed_off_at->lt(now()->subMinutes(30))) {
+        $startedAt = isset($strategy->creative_review['started_at'])
+            ? \Carbon\Carbon::parse($strategy->creative_review['started_at']) : $strategy->signed_off_at;
+        if ($startedAt->lt(now()->subMinutes(30))) {
             return false;
+        }
+
+        if (in_array($strategy->creative_review['status'] ?? '', ['pending', 'reviewing', 'revising'], true)) {
+            return true;
+        }
+
+        if (in_array($strategy->creative_review['status'] ?? '', ['passed', 'needs_review'], true)) {
+            return $strategy->supportsVideo() && VideoCollateral::forStrategy($strategy)
+                ->where('is_active', true)->whereIn('status', ['pending', 'generating'])->exists();
         }
 
         if ($strategy->adCopies()->count() < 1) {
@@ -203,6 +215,7 @@ class CollateralController extends Controller
             'videoCollaterals' => $videoCollaterals,
             'collateralErrors' => $this->liveCollateralErrors($strategy, $adCopy, $imageCollaterals, $videoCollaterals),
             'generationPending' => $this->generationPending($strategy),
+            'creativeReview' => $strategy->creative_review,
         ]);
     }
 

@@ -88,7 +88,10 @@ class GenerateImage implements ShouldQueue
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
-        protected int $slot = 0
+        protected int $slot = 0,
+        protected ?string $creativeRunId = null,
+        protected ?string $replaceConceptKey = null,
+        protected ?string $reviewFeedback = null
     ) {}
 
     /**
@@ -99,8 +102,22 @@ class GenerateImage implements ShouldQueue
         Log::info("Starting image generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
         try {
+            $this->strategy->refresh();
+            if ($this->creativeRunId && ($this->strategy->creative_review['run_id'] ?? null) !== $this->creativeRunId) {
+                return; // A newer generation owns this strategy now.
+            }
+            $replacement = $this->replaceConceptKey && $this->strategy->imageCollaterals()
+                ->where('concept_key', $this->replaceConceptKey)->exists();
+            if ($this->replaceConceptKey && ! $replacement) {
+                return; // Already replaced, or not this strategy's concept.
+            }
+            if (! $replacement && $this->creativeRunId && $this->strategy->imageCollaterals()
+                ->where('generation_metadata->creative_run_id', $this->creativeRunId)
+                ->where('generation_metadata->slot', $this->slot)->exists()) {
+                return; // A retried queue delivery must not render the same slot twice.
+            }
             // Check free-tier image limit before generating
-            if (! ImageCollateral::canGenerateForCampaign($this->campaign)) {
+            if (! $replacement && ! ImageCollateral::canGenerateForCampaign($this->campaign)) {
                 Log::info("Image limit reached for Campaign ID: {$this->campaign->id}, skipping generation");
 
                 return;
@@ -136,6 +153,15 @@ class GenerateImage implements ShouldQueue
 
             // Defer before AI review or splitting: waiting must not spend provider calls.
             $adCopy = $this->strategy->adCopies()->first();
+
+            if (! $adCopy && $this->creativeRunId) {
+                if ($this->attempts() >= 45 || ! empty($this->strategy->collateral_errors['ad_copy'])) {
+                    throw new \RuntimeException('Approved ad copy is unavailable; image generation stopped before rendering incomplete ads.');
+                }
+                $this->release(20);
+
+                return;
+            }
 
             // Image prompts use approved copy as their source for any permitted text.
             // Copy generation starts first but may take longer than the initial delay.
@@ -210,6 +236,7 @@ class GenerateImage implements ShouldQueue
                allowed to use.
             */
             $adText = $this->renderableCopy($adCopy);
+            $approvedDescriptions = $adCopy->descriptions ?? [];
 
             $successfulUploads = 0;
 
@@ -278,8 +305,14 @@ class GenerateImage implements ShouldQueue
                  * concept's rows are written before the next one is composed.
                  */
                 $lens = $this->slot;
-                $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens);
+                $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens, $this->strategy->campaign_type, isset($concept['visual_style']) ? $concept : null);
                 $scene = $concept ? $prompt : CreativeVariant::apply($prompt, $lens);
+                if (isset($concept['visual_style'])) {
+                    $scene .= "\nVisual medium: {$concept['visual_style']}. Composition: {$concept['composition']}. Dominant subject: {$concept['subject']}.";
+                }
+                if ($this->reviewFeedback) {
+                    $scene .= "\nCorrection after reviewing the first render (retain this approved selling idea): ".$this->reviewFeedback;
+                }
 
                 /*
                  * A different approved headline on each creative.
@@ -309,6 +342,10 @@ class GenerateImage implements ShouldQueue
                     bannerComposited: false,
                     headline: $layout === 'headline' ? $headline : null,
                 ))->getPrompt();
+
+                if (in_array($layout, ['statement', 'editorial'], true)) {
+                    $imagePrompt .= "\nCOMPOSE FOR THE FINISHED AD: keep the focal subject fully in the upper half. We add a solid copy panel across the lower half after generation. Do not draw that panel, any lettering or a button. Keep this background natural.";
+                }
 
                 /*
                    One line per creative, readable without reassembling it.
@@ -452,7 +489,7 @@ class GenerateImage implements ShouldQueue
                  */
                 $written = ImageCollateral::conceptsForCampaign($this->campaign);
 
-                if ($written >= ImageCollateral::capForCampaign($this->campaign)) {
+                if (! $replacement && $written >= ImageCollateral::capForCampaign($this->campaign)) {
                     Log::info("Image cap reached for campaign {$this->campaign->id}; stopping at {$written} pictures");
 
                     break;
@@ -523,11 +560,14 @@ class GenerateImage implements ShouldQueue
                             $img->cover($targetW, $targetH);
                         }
 
-                        app(\App\Services\Creative\ImageComposer::class)->compose($img, $layout, $headline, $brandName);
+                        app(\App\Services\Creative\ImageComposer::class)->compose($img, $layout, $headline, $brandName, $approvedDescriptions[$lens % max(1, count($approvedDescriptions))] ?? null, brandColour: (string) ($brandGuidelines?->color_palette['primary_colors'][0] ?? '#16324f'));
 
                         $encoded = (string) $img->encode();
                     } catch (\Throwable $e) {
                         Log::warning("Failed to apply overlay for format {$format}: ".$e->getMessage());
+                        if (in_array($layout, ['statement', 'editorial'], true)) {
+                            throw $e; // Do not silently ship a wordless finished ad.
+                        }
                         $encoded = $decodedImage;
                     }
 
@@ -545,6 +585,10 @@ class GenerateImage implements ShouldQueue
                         'layout' => $layout,
                         'generation_metadata' => ($imageData['provenance'] ?? []) + [
                             'generation_id' => $this->strategy->generation_id,
+                            'creative_run_id' => $this->creativeRunId,
+                            'candidate_id' => $concept['candidate_id'] ?? null,
+                            'brief' => $concept,
+                            'review_revision' => $this->replaceConceptKey ? 1 : 0,
                             'slot' => $this->slot, 'concept' => $scene,
                             'layout' => $layout,
                             'reference_ids' => $seeds->modelKeys(),
@@ -559,7 +603,7 @@ class GenerateImage implements ShouldQueue
                 // where reading the count and writing the rows happen together.
                 $conceptKey = null;
                 try {
-                    $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows);
+                    $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows, $replacement ? $this->replaceConceptKey : null, $this->strategy->id, $this->creativeRunId);
                 } finally {
                     if ($conceptKey === null) {
                         DeleteCollateralFiles::dispatch(array_column($pendingRows, 's3_path'));

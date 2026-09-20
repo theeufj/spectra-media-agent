@@ -9,6 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property array<int, array<string, mixed>>|null $creative_concepts
+ * @property array<int, array<string, mixed>>|null $creative_candidates
+ * @property array<string, mixed>|null $creative_review
+ */
 class Strategy extends Model
 {
     use HasFactory, HasPublicUuid;
@@ -62,6 +67,8 @@ class Strategy extends Model
         'ad_copy_strategy',
         'imagery_strategy',
         'creative_concepts',
+        'creative_candidates',
+        'creative_review',
         'video_strategy',
         'signed_off_at',
         'bidding_strategy',
@@ -88,6 +95,8 @@ class Strategy extends Model
         'deployed_at' => 'datetime',
         'bidding_strategy' => 'array',
         'creative_concepts' => 'array',
+        'creative_candidates' => 'array',
+        'creative_review' => 'array',
         'ad_extensions' => 'array',
         'conversion_goals' => 'array',
         'execution_plan' => 'array',

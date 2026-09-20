@@ -79,12 +79,12 @@ class ImagePrompt
                "{{creative_strategy}}\n\n".
                "{{brand_context}}{{product_context}}\n".
                "**NO WORDS AT ALL:**\n".
-               "This artwork carries no text of any kind. The advertisement's words are composited over it afterwards, at a measured size in the brand typeface, so anything you write here is duplicate text in the wrong face and anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
+               "This artwork carries no text of any kind. Where the placement permits a designed ad, approved words are typeset separately. Search and responsive image assets remain free of added text. Anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
                '{{headline_instruction}}'.
                "**COMPOSITION:**\n".
-               "- Square 1:1, 1024x1024, mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
+               "- Use the aspect ratio requested by the generation API; mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
                "- The artwork fills the frame edge to edge. No borders, no frames, no mattes, no coloured bars — the picture is not sitting inside anything.\n".
-               "- Keep the subject clear of the outer 10% on every side — this artwork is also trimmed to other ad sizes, and anything hard against an edge is lost\n".
+               "- Keep the subject clear of the outer 10% on every side — each size must preserve the focal subject, and anything hard against an edge is lost\n".
                '{{banner_reservation}}'.
                "- Use the brand palette deliberately in the subject, materials, background and light; reserve only the breathing room the composition needs\n".
                "- Honour the specified visual medium: product photography, editorial photography, tactile still life, illustration or purposeful 3D. Do not convert every concept into a lifestyle photograph\n\n".

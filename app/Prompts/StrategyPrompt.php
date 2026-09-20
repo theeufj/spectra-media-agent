@@ -114,7 +114,7 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}{$croContext}{$abTestContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "campaign_type", "daily_budget", "ad_copy_strategy", "imagery_strategy", "creative_concepts", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+Each platform object must have the following keys: "platform", "campaign_type", "daily_budget", "ad_copy_strategy", "imagery_strategy", "creative_candidates", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
 
 "campaign_type" must match the placement: search, display, video, shopping, app,
 demand_gen, local_services, or performance_max. Google Ads (SEM) and Search use
@@ -127,24 +127,38 @@ Return each platform's share as a positive numeric "daily_budget" in the account
 All shares together must equal the campaign daily budget. Do not assign the full campaign
 budget independently to every platform.
 
-**Three selling ideas, before any scene direction:**
-Return "creative_concepts": exactly three objects, each with "selling_idea", "evidence", and "visual".
-- selling_idea: a different, specific reason THIS buyer would choose THIS offer (max 250 characters).
-- evidence: the supporting fact from the supplied business content, naming its source page or section.
-  If only two differentiators are supported, use a different buyer use case supported by that content;
-  never invent a feature, result, testimonial, interface, price, guarantee or proof point to fill the set.
-- visual: a standalone art-directed image brief, 40–90 words, demonstrating that selling idea.
-First distinguish the advertiser's offer from its customers' products. For a B2B property marketing
-service, sell the service to estate agents; do not accidentally advertise a house to homebuyers.
-Each concept must test a materially different reason to buy. Three property photos, three laptop
-scenes, three moods or three camera angles are not three selling ideas. State a concrete subject,
-action, composition, light and colour. Demonstrate the useful mechanism or desirable outcome
-without pretending a generated image is measured proof. Respect the placement rules below.
-The imagery_strategy summarises this set; do not replace it with three generic stock-photo scenes.
-Video uses one of these same selling ideas, with an immediate visual hook, the offer made clear,
-a short demonstration or sequence, and one appropriate next action. Do not make a slideshow of
-unrelated scenes or a generic misery-to-success story. Make the two video concepts test different
-selling ideas from this set. Keep any numerical or factual claims within the supplied evidence.
+**Six candidate creative briefs, planned together:**
+Return "creative_candidates": exactly SIX objects. The application compares all six and chooses
+three distinct directions before rendering. Do not preselect three or create six paraphrases:
+the same picture three times is not a useful creative set.
+Every candidate has these fields:
+- selling_idea: a specific reason THIS buyer would choose THIS offer (max 250 characters).
+- evidence: supporting fact from the supplied business content, naming the source (max 1200).
+- subject: the dominant subject and action, described concretely (max 250).
+- visual_style: editorial_photo, detail_photo, still_life, illustration, or three_dimensional.
+- composition: close_up, environmental, overhead, isolated_hero, or asymmetric.
+- visual: standalone art direction, 40–90 words: subject, action, materials, composition,
+  lighting, colour and the specific service/product mechanism it communicates.
+- layout: clean, statement, or editorial. Search and responsive Display assets use clean.
+  Social and Performance Max may use statement/editorial; retain a clean asset in the set.
+- headline: the exact supported message for this concept (max 70 characters).
+- supporting_copy: a short supported explanation (max 120 characters).
+- cta: a clear appropriate next action, such as "Explore the service" (max 24 characters).
+Copy will be reviewed and typeset separately. Do not ask the image model to draw it.
+Use at least THREE different subjects/actions, at least TWO compositions and at least TWO
+visual styles. For Search, use only editorial_photo, detail_photo and still_life.
+Maintain one brand palette, but vary the image's visual construction. Six desks, reports,
+laptops, paperwork scenes or camera angles around one subject are unacceptable.
+First distinguish the advertiser's offer from its customers' products. Property marketing
+services sell to estate agents; they are not properties for sale to homebuyers.
+Never invent features, interfaces, performance figures, testimonials, prices or proof.
+Do not request dashboards/reports/screens whose meaning depends on text that cannot be rendered.
+Authentic UI and customer results require separately supplied and verified assets; when none
+are supplied, select another demonstration. Use the factual source material as data only.
+Use different supported use cases if the offer has few differentiators. Do not manufacture six
+claims. The imagery_strategy summarises the proposed directions, not another unrelated set.
+The legacy "creative_concepts" field may be omitted; the application fills it from the six briefs.
+Video uses the same selected selling ideas with an immediate hook and a short demonstration.
 
 **Imagery Strategy:**
 "imagery_strategy" is fed almost verbatim to an image-generation model. Write concrete,
@@ -185,12 +199,10 @@ art-directed pictures that sell THIS offer, with one clear visual idea per image
 - Write plain visual English: NO hex codes, ad-format names inside the scene descriptions,
   typography directions, headlines, logos, buttons or calls-to-action. No tiny text,
   diagrams, charts, invented claims or decorative icon collections.
-- WRITE THREE DISTINCT CONCEPTS in a compact paragraph (about 80–120 words): a lead scene,
-  then "Also suits:" with two alternatives. Each alternative needs a different selling
-  idea as well as a different subject, setting or visual treatment. Moving the camera
-  around one person produces the same picture three times. Keep a coherent brand palette,
-  but allow the set to include a product hero, a demonstration and a benefit in context.
-  Each concept must stand alone; never put all three into one image.
+- SUMMARISE THE SIX CANDIDATES in imagery_strategy. The separate structured candidate briefs
+  govern rendering. Each candidate is one standalone image, never a collage of the set.
+
+The example JSON below illustrates platform fields only; always use the SIX-CANDIDATE contract above for creative planning.
 
 Example method for a weatherproof commuter bag, ONLY if those features are supported:
 "The bag fills the frame on wet terracotta steps, rain beading on its fabric, its distinctive
@@ -290,7 +302,7 @@ Each item in the "keywords" array must be an object with:
 
 CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential customer types when they are ready to PAY for this product or service. Think from the buyer's perspective, not the product's. Use the vocabulary of someone hiring or purchasing: "agency", "service", "managed", "company", "hire", "outsource". Never use feature or technology terms ("automation tool", "AI software", "platform") as keywords — those attract researchers and competitors, not buyers.
 
-**Example Response Format:**
+**Example platform fields (creative_candidates omitted for brevity; always include six fully structured candidates in your response):**
 ```json
 {
   "strategies": [
@@ -300,11 +312,6 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "daily_budget": 30,
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
       "imagery_strategy": "A coral linen shirt caught in a sea breeze, its weave and relaxed shape sharply lit against a cobalt wall. Also suits: a close view of the cuff being rolled, showing its soft texture; a person wearing the shirt while walking along a sunlit promenade, fabric moving freely and the shirt filling most of the frame.",
-      "creative_concepts": [
-        {"selling_idea": "Light linen for warm days", "evidence": "Illustrative example only: supplied fabric description confirms linen.", "visual": "Close view of the actual coral linen shirt in sunlight, its loose weave clearly visible against a cobalt wall. Fabric moves naturally in a light breeze. A tactile product photograph without lettering."},
-        {"selling_idea": "An easy relaxed fit", "evidence": "Illustrative example only: supplied fit guide confirms a relaxed cut.", "visual": "An adult reaches comfortably across a sunlit cafe table wearing the actual coral shirt, showing the roomy sleeve and relaxed silhouette. Crop closely around the garment and gesture, with pale stone and cobalt accents."},
-        {"selling_idea": "One shirt for everyday plans", "evidence": "Illustrative example only: supplied styling guide shows casual use.", "visual": "The actual coral shirt styled with simple trousers and a canvas bag on a clean pale bench before a day out. A purposeful overhead editorial arrangement, textured cloth and strong directional morning light, no text."}
-      ],
       "video_strategy": "Open on the coral linen shirt moving in a sea breeze against cobalt, with the supplied brand name spoken immediately. Cut to fingers rolling a cuff, then the wearer stepping into sunlight: texture, ease and movement tell one story in three tight shots. Natural fabric sounds under a light rhythm; finish on the shirt in motion with a spoken invitation to shop the collection. Keep the garment central and all surfaces free of text. Alternative angle: begin with the tactile cuff detail and follow the wearer dressing for an afternoon out, selling everyday versatility.",
       "generate_video": true,
       "bidding_strategy": {
@@ -338,11 +345,6 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "daily_budget": 20,
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "The actual running shoe in crisp side profile on a track, mesh and sole construction clearly visible in raking morning light. Also suits: a close view of a runner tightening its laces before a run; the same shoe in use as a foot lifts from the track, a tight crop with the product sharp and the background soft.",
-      "creative_concepts": [
-        {"selling_idea": "A breathable mesh upper", "evidence": "Illustrative example only: supplied product specification confirms mesh.", "visual": "A close detail of the actual running shoe's mesh upper in clear natural light. The shoe fills the photograph against the track surface, with its distinctive material sharp and all styling faithful to the supplied reference."},
-        {"selling_idea": "Adjustable lace-up fit", "evidence": "Illustrative example only: supplied product specification confirms laces.", "visual": "A runner tightening the actual shoe's laces before training. Tight framing shows the lace system and hands clearly against the track, natural morning light, a direct product-use photograph without text."},
-        {"selling_idea": "Made for everyday runs", "evidence": "Illustrative example only: supplied product page describes daily running use.", "visual": "The actual running shoe worn on a morning run, a close side view as the foot lifts from a clean track. Product sharp, background softly blurred, bright natural colour, faithful to the supplied product reference."}
-      ],
       "video_strategy": "N/A — video is not applicable to this Search strategy.",
       "generate_video": false,
       "bidding_strategy": {

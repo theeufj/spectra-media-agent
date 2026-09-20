@@ -71,8 +71,26 @@ class ImageCollateralController extends Controller
             ]);
         }
 
-        // Dispatch the job to handle the image generation in the background.
-        GenerateImage::dispatch($campaign, $strategy);
+        $slot = $strategy->imageCollaterals()->pluck('concept_key')->unique()->count();
+        $runId = null;
+        if ($strategy->creative_candidates && $strategy->creative_review) {
+            $runId = $strategy->creative_review['run_id'];
+            $filled = $strategy->imageCollaterals()->where('generation_metadata->creative_run_id', $runId)
+                ->pluck('generation_metadata')->pluck('slot')->all();
+            $remaining = array_values(array_diff([0, 1, 2], $filled));
+            if ($remaining === []) {
+                return back()->with('flash', ['type' => 'info', 'message' => 'All three planned concepts are ready. Edit an image or revise the creative direction to make a different set.']);
+            }
+            $slot = $remaining[0];
+            if (in_array($strategy->creative_review['status'] ?? '', ['passed', 'needs_review'], true)) {
+                $strategy->update(['creative_review' => array_merge($strategy->creative_review, [
+                    'status' => 'pending', 'started_at' => now()->toIso8601String(), 'expected_images' => 3,
+                    'message' => null, 'results' => null, 'finished_at' => null,
+                ])]);
+                \App\Jobs\ReviewCreativeSet::dispatch($strategy, $runId)->delay(now()->addMinutes(2));
+            }
+        }
+        GenerateImage::dispatch($campaign, $strategy, $slot, $runId);
 
         $quotaService->recordUsage($user, 'image');
 

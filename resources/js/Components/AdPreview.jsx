@@ -5,15 +5,16 @@ import React from 'react';
  */
 
 // Google Search Ad Preview
-export function GoogleSearchPreview({ headlines = [], descriptions = [], url = 'example.com' }) {
+export function GoogleSearchPreview({ headlines = [], descriptions = [], url = 'example.com', imageUrl = null }) {
     const displayUrl = url.replace(/^https?:\/\//, '').split('/')[0];
     
     return (
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 max-w-full sm:max-w-[400px] font-sans">
+        <div className="flow-root bg-white border border-gray-200 rounded-lg p-3 sm:p-4 max-w-full sm:max-w-[400px] font-sans">
             <div className="text-xs text-gray-500 mb-1">Ad · {displayUrl}</div>
             <h3 className="text-lg text-blue-800 hover:underline cursor-pointer leading-tight">
                 {headlines.slice(0, 3).join(' | ') || 'Your Ad Headline Here'}
             </h3>
+            {imageUrl && <img src={imageUrl} alt="Optional Search image asset" className="float-right ml-3 mt-2 h-20 w-20 rounded-lg object-cover" />}
             <p className="text-sm text-gray-700 mt-1 line-clamp-2">
                 {descriptions[0] || 'Your ad description will appear here. Make it compelling!'}
             </p>
@@ -229,7 +230,9 @@ export default function AdPreviewPanel({
                         headlines={headlines}
                         descriptions={descriptions}
                         url={websiteUrl}
+                        imageUrl={images.find(image => image.format === 'square' && (!image.layout || image.layout === 'clean'))?.cloudfront_url}
                     />
+                    {primaryImage && <p className="mt-2 max-w-[400px] text-xs text-gray-500">Image shown for illustration. Search images require account eligibility and attachment in Google Ads.</p>}
                 </div>
                 
                 }

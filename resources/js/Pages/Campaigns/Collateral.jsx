@@ -78,13 +78,13 @@ export function UnlockAction({ setupOnly, label, className }) {
     );
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {} }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
-    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending });
+    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview });
     const [editingImage, setEditingImage] = useState(null);
     const [extendingVideo, setExtendingVideo] = useState(null);
 
@@ -347,6 +347,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     const handleDeploy = async () => {
+        if (['pending', 'reviewing', 'revising'].includes(collateral.creativeReview?.status)) {
+            toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.');
+            return;
+        }
         // Check subscription first
         if (!hasActiveSubscription) {
             setShowSubscriptionModal(true);
@@ -447,6 +451,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
     const handleDeployPlatform = (strategy) => {
         setDeployDropdownOpen(false);
+
+        const review = strategy.id === currentStrategy.id ? collateral.creativeReview : strategy.creative_review;
+        if (['pending', 'reviewing', 'revising'].includes(review?.status)) {
+            toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.');
+            return;
+        }
 
         if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
         if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
@@ -598,6 +608,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             {setupOnly && ['deployed', 'verified'].includes(currentStrategy.deployment_status) && <Link href={route('dashboard')} className="mt-4 block text-sm font-semibold text-brand-dark underline">View your handover checklist</Link>}
                         </div>
                     </section>
+                    {collateral.creativeReview && <section role="status" className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+                        <h2 className="font-semibold text-gray-900">{({ pending: 'Preparing your creative set', reviewing: 'Reviewing the images together', revising: 'Refining selected creative', passed: 'Visual review complete', needs_review: 'Creative needs your review' })[collateral.creativeReview.status] || 'Creative review'}</h2>
+                        <p className="mt-2 text-sm text-gray-600">{collateral.creativeReview.message || 'Checking the selling idea, visual variety, legibility and placement. Each concept can receive one automatic correction.'}</p>
+                        {collateral.creativeReview.results?.filter(result => !result.passed).map(result => <p key={result.slot} className="mt-2 text-sm text-amber-800">Concept {result.slot + 1}: {result.feedback}</p>)}
+                    </section>}
                     {/* Runtime collateral generation failure banner */}
                     {collateralError && (
                         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -813,7 +828,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <hr className="my-8" />
 
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Image concepts</h3>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentStrategy.campaign_type === 'search' ? 'Supporting Search images' : 'Image concepts'}</h3>
                                         <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
                                         {strategyItem.campaign_type === 'search' && /google/i.test(strategyItem.platform) && (
                                             <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">

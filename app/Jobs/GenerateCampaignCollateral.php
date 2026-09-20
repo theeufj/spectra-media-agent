@@ -103,7 +103,7 @@ class GenerateCampaignCollateral implements ShouldQueue
                         Log::info("Collateral generation complete email sent to {$user->email} for Campaign ID: {$campaignId}");
 
                         // If user is not yet subscribed, send them the 'Ads Are Ready to Deploy' upsell email
-                        if (! $user->subscribed('default') && $user->subscription_status !== 'active') {
+                        if (! $campaign->customer->isPaidSetupOnly() && ! $user->subscribed('default') && $user->subscription_status !== 'active') {
                             $totalAssets = $campaign->strategies->sum('ad_copies_count') +
                                            $campaign->strategies->sum('image_collaterals_count') +
                                            $campaign->strategies->sum('video_collaterals_count');

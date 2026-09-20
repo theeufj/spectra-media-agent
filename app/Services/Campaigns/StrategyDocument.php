@@ -10,7 +10,7 @@ final readonly class StrategyDocument
 {
     private function __construct(public array $strategies) {}
 
-    public static function fromArray(array $document, array $enabledPlatforms, float $budget): self
+    public static function fromArray(array $document, array $enabledPlatforms, float $budget, bool $requireCreativeCandidates = false): self
     {
         Validator::make($document, [
             'strategies' => 'required|array|min:1|max:12',
@@ -19,6 +19,7 @@ final readonly class StrategyDocument
             'strategies.*.campaign_type' => 'sometimes|in:search,display,video,shopping,app,demand_gen,local_services,performance_max',
             'strategies.*.ad_copy_strategy' => 'required|string',
             'strategies.*.imagery_strategy' => 'required|string',
+            'strategies.*.creative_candidates' => ($requireCreativeCandidates ? 'required' : 'sometimes').'|array|size:6',
             'strategies.*.creative_concepts' => 'sometimes|array|size:3',
             'strategies.*.creative_concepts.*.selling_idea' => 'required|string|max:250',
             'strategies.*.creative_concepts.*.evidence' => 'required|string|max:1200',
@@ -65,6 +66,9 @@ final readonly class StrategyDocument
                 throw ValidationException::withMessages(['strategies' => 'A Search strategy must use the search campaign type.']);
             }
             $strategies[$index]['campaign_type'] = $type;
+            if (isset($strategy['creative_candidates'])) {
+                $strategies[$index]['creative_concepts'] = app(\App\Services\Creative\ConceptSelector::class)->select($strategy['creative_candidates'], $type);
+            }
             if ($type === 'search') {
                 $strategies[$index]['generate_video'] = false;
             }

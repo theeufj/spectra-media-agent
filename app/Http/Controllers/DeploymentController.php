@@ -114,6 +114,11 @@ class DeploymentController extends Controller
             ]);
         }
 
+        if ($campaign->strategies()->whereNotNull('signed_off_at')
+            ->whereIn('creative_review->status', ['pending', 'reviewing', 'revising'])->exists()) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Your creative is still being prepared and checked. Review the finished set before creating your ads.']);
+        }
+
         // 0. First launch requires a signed-off brand profile. Everything we
         //    deploy is written from the guidelines, so the user must have
         //    looked at them and confirmed they represent the business before
@@ -330,6 +335,10 @@ class DeploymentController extends Controller
         }
 
         $strategy = $campaign->strategies()->findOrFail($validated['strategy_id']);
+
+        if (in_array($strategy->creative_review['status'] ?? '', ['pending', 'reviewing', 'revising'], true)) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'Your creative is still being prepared and checked. Review the finished set before creating your ads.']);
+        }
 
         // Re-use the same subscription + deployment-enabled checks as the full deploy.
         if (! $user->hasSubscriptionAccess($customer)) {

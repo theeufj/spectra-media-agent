@@ -145,4 +145,22 @@ class CollateralGenerationPendingTest extends TestCase
 
         $this->assertTrue($this->pending($strategy));
     }
+
+    public function test_a_new_visual_review_is_polled_even_when_signoff_is_old(): void
+    {
+        $strategy = $this->strategy();
+        $strategy->update(['signed_off_at' => now()->subDay(), 'creative_review' => [
+            'status' => 'reviewing', 'started_at' => now()->toIso8601String(),
+        ]]);
+        $this->assertTrue($this->pending($strategy));
+    }
+
+    public function test_completed_image_review_does_not_hide_pending_video(): void
+    {
+        $strategy = $this->strategy();
+        $strategy->update(['platform' => 'Facebook Ads', 'campaign_type' => 'display', 'creative_review' => ['status' => 'passed']]);
+        \App\Models\VideoCollateral::create(['campaign_id' => $strategy->campaign_id, 'strategy_id' => $strategy->id, 'platform' => 'Facebook Ads',
+            'is_active' => true, 'status' => 'generating']);
+        $this->assertTrue($this->pending($strategy));
+    }
 }

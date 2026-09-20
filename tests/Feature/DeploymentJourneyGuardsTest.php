@@ -81,6 +81,20 @@ class DeploymentJourneyGuardsTest extends TestCase
         $this->assertNull($customer->fresh()->adSpendCredit);
     }
 
+    public function test_both_deployment_endpoints_wait_for_the_creative_review(): void
+    {
+        Queue::fake();
+        [$user, $customer] = $this->subscribedOwner();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'signed_off_at' => now(),
+            'creative_review' => ['status' => 'revising']]);
+        foreach (['deployment.deploy', 'deployment.deploy-platform'] as $route) {
+            $this->actingAs($user)->post(route($route), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id])
+                ->assertRedirect()->assertSessionHas('flash.message', 'Your creative is still being prepared and checked. Review the finished set before creating your ads.');
+        }
+        Queue::assertNotPushed(DeployCampaign::class);
+    }
+
     public function test_self_funded_customers_are_never_charged_prepay(): void
     {
         // google_ads_link_status active === the customer's own account, their

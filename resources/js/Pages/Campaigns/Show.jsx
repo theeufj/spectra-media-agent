@@ -69,7 +69,7 @@ const CollateralSummaryCard = ({ campaign }) => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-600 font-medium">Generating your collateral...</p>
-                            <p className="text-sm text-gray-500 mt-1">This usually takes 1-2 minutes</p>
+                            <p className="text-sm text-gray-500 mt-1">Your assets appear as each one is ready</p>
                         </div>
                     </div>
                 )}
@@ -145,7 +145,7 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                 )}
             </div>
 
-            {strategy.creative_concepts?.length > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-3">{strategy.creative_concepts.map((concept, index) => <div key={index} className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Concept {index + 1}</p><h4 className="mt-1 font-semibold text-gray-900">{concept.selling_idea}</h4><p className="mt-2 text-sm text-gray-600">{concept.evidence}</p></div>)}</div>}
+            {strategy.creative_concepts?.length > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-3">{strategy.creative_concepts.map((concept, index) => <div key={index} className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Concept {index + 1}</p><h4 className="mt-1 font-semibold text-gray-900">{concept.selling_idea}</h4><p className="mt-2 text-sm text-gray-600">{concept.evidence}</p>{concept.visual_style && <p className="mt-3 text-xs font-medium text-brand-dark">{concept.visual_style.replaceAll('_', ' ')} · {concept.composition.replaceAll('_', ' ')}</p>}<p className="mt-2 text-sm text-gray-600">{concept.visual}</p></div>)}</div>}
             {isEditing ? (
                 <form onSubmit={handleUpdate} className="space-y-4">
                     <div>

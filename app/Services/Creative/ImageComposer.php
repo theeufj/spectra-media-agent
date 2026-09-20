@@ -6,18 +6,33 @@ use Illuminate\Support\Facades\Log;
 
 class ImageComposer
 {
-    public function layout(string $platform, int $slot): string
+    public function layout(string $platform, int $slot, ?string $campaignType = null, ?array $concept = null): string
     {
         // Search image assets ship without graphic or text overlays.
-        if (preg_match('/search|sem|^google(?: ads)?$/i', trim($platform))) {
+        if ($campaignType === 'search' || ($campaignType === null && preg_match('/search|sem|^google(?: ads)?$/i', trim($platform)))) {
             return 'clean';
+        }
+
+        // Responsive Google/Microsoft ads assemble copy separately. Social and
+        // PMax can also use composed creative; retain one clean variant.
+        if ($concept !== null) {
+            if ($slot === 0 || ($campaignType === 'display' && preg_match('/google|microsoft|bing/i', $platform))) {
+                return 'clean';
+            }
+
+            return in_array($concept['layout'] ?? '', ['clean', 'statement', 'editorial'], true) ? $concept['layout'] : 'editorial';
         }
 
         return ['clean', 'headline', 'signature'][$slot % 3];
     }
 
-    public function compose(\Intervention\Image\Interfaces\ImageInterface $image, string $layout, ?string $headline, ?string $brand): void
+    public function compose(\Intervention\Image\Interfaces\ImageInterface $image, string $layout, ?string $headline, ?string $brand, ?string $supportingCopy = null, string $cta = 'Learn more', string $brandColour = '#16324f'): void
     {
+        if (in_array($layout, ['statement', 'editorial'], true)) {
+            $this->composeAd($image, $layout, $headline, $brand, $supportingCopy, $cta, $brandColour);
+
+            return;
+        }
         if ($layout === 'headline' && $headline) {
             $this->drawHeadline($image, $headline, $this->resolveFont());
         }
@@ -37,6 +52,61 @@ class ImageComposer
                 $text->valign('bottom');
             });
         }
+    }
+
+    private function composeAd(\Intervention\Image\Interfaces\ImageInterface $image, string $layout, ?string $headline, ?string $brand, ?string $supportingCopy, string $cta, string $brandColour): void
+    {
+        $font = $this->resolveFont();
+        if (! $font || ! $headline) {
+            throw new \RuntimeException('A composed ad requires approved copy and a usable font.');
+        }
+        $w = $image->width();
+        $h = $image->height();
+        $margin = (int) ($w * .055);
+        $panelY = (int) ($h * ($layout === 'statement' ? .52 : .6));
+        $colour = preg_match('/^#[0-9a-f]{6}$/i', $brandColour) ? $brandColour : '#16324f';
+        $lightPanel = $layout === 'editorial';
+        $image->drawRectangle(0, $panelY, function ($rectangle) use ($w, $h, $panelY, $colour, $lightPanel) {
+            $rectangle->size($w, $h - $panelY);
+            $rectangle->background($lightPanel ? '#ffffff' : $colour);
+        });
+        $ink = $lightPanel ? '#101828' : ($this->regionIsLight($image, 0, $panelY, $w, $h - $panelY) ? '#101828' : '#ffffff');
+        $padding = (int) ($h * .032);
+        $y = $panelY + $padding;
+        $write = function (array $fit) use ($image, $font, $margin, $ink, &$y) {
+            foreach ($fit['lines'] as $line) {
+                $image->text($line, $margin, $y, function ($text) use ($font, $fit, $ink) {
+                    $text->filename($font);
+                    $text->size($fit['size']);
+                    $text->color($ink);
+                    $text->valign('top');
+                });
+                $y += (int) ($fit['size'] * 1.25);
+            }
+            $y += (int) ($image->height() * .014);
+        };
+        // Scale to the displayed width: a 1200px landscape asset is commonly
+        // shown only 300px wide. Height-only sizing made its copy unreadable.
+        $heading = $this->fitHeadline($headline, $font, $w - 2 * $margin, max(16, (int) min($w * .065, $h * .1)), 2);
+        $footer = trim(($brand ?? '').'  ·  '.$cta, ' ·');
+        $signature = $this->fitHeadline($footer, $font, $w - 2 * $margin, max(10, (int) ($w * .032)), 1);
+        if (! $heading || ! $signature || $heading['size'] < $w * .04 || $signature['size'] < $w * .026) {
+            throw new \RuntimeException('Approved ad copy is too long to compose legibly in this format.');
+        }
+        $footerY = $h - $padding - (int) ($signature['size'] * 1.25);
+        $write($heading);
+        if ($y > $footerY) {
+            throw new \RuntimeException('Approved headline overlaps the ad footer.');
+        }
+        // Small and wide ads prioritise a readable headline and action.
+        if ($h >= 500 && $w / $h < 1.5 && $supportingCopy) {
+            $body = $this->fitHeadline($supportingCopy, $font, $w - 2 * $margin, (int) ($w * .035), 2);
+            if ($body && $body['size'] >= $w * .028 && $y + count($body['lines']) * $body['size'] * 1.25 + $padding <= $footerY) {
+                $write($body);
+            }
+        }
+        $y = $footerY;
+        $write($signature);
     }
 
     public function fitHeadline(string $text, string $fontPath, int $maxWidth, int $startSize, int $maxLines = 2): ?array
