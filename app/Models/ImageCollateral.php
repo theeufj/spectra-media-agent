@@ -214,6 +214,12 @@ class ImageCollateral extends Model
             $key = (string) Str::uuid();
 
             foreach ($rows as $row) {
+                $previous = $old->firstWhere('format', $row['format'] ?? null);
+                if ($previous) {
+                    // A visual correction must retain the user's selection.
+                    $row['should_deploy'] = $previous->should_deploy;
+                    $row['is_seed'] = $previous->is_seed;
+                }
                 static::create($row + ['concept_key' => $key]);
             }
 

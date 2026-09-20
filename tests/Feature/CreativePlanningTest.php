@@ -164,4 +164,19 @@ class CreativePlanningTest extends TestCase
         $this->assertNull(ImageCollateral::createConcept(Campaign::factory()->create(), [$row], $original->concept_key, $strategy->id, 'test-run'));
         $this->assertNotNull($original->fresh());
     }
+
+    public function test_a_correction_preserves_exclusion_and_does_not_consume_another_concept_slot(): void
+    {
+        $strategy = $this->reviewStrategy();
+        $original = $strategy->imageCollaterals()->first();
+        $original->update(['should_deploy' => false, 'is_seed' => true]);
+        $row = $original->only(['campaign_id', 'strategy_id', 'platform', 'format', 'cloudfront_url', 'generation_metadata']);
+        $row['s3_path'] = 'test/revised.jpg';
+        $key = ImageCollateral::createConcept($strategy->campaign, [$row], $original->concept_key, $strategy->id, 'test-run');
+        $replacement = ImageCollateral::where('concept_key', $key)->firstOrFail();
+        $this->assertFalse($replacement->should_deploy);
+        $this->assertTrue($replacement->is_seed);
+        $this->assertSame(3, ImageCollateral::conceptsForCampaign($strategy->campaign));
+        $this->assertNull($original->fresh());
+    }
 }
