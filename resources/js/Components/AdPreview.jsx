@@ -9,7 +9,7 @@ export function GoogleSearchPreview({ headlines = [], descriptions = [], url = '
     const displayUrl = url.replace(/^https?:\/\//, '').split('/')[0];
     
     return (
-        <div className="flow-root bg-white border border-gray-200 rounded-lg p-3 sm:p-4 max-w-full sm:max-w-[400px] font-sans">
+        <div className="flow-root w-full min-w-0 max-w-[400px] bg-white border border-gray-200 rounded-lg p-3 sm:p-4 font-sans">
             <div className="text-xs text-gray-500 mb-1">Ad · {displayUrl}</div>
             <h3 className="text-lg text-blue-800 hover:underline cursor-pointer leading-tight">
                 {headlines.slice(0, 3).join(' | ') || 'Your Ad Headline Here'}
@@ -224,7 +224,7 @@ export default function AdPreviewPanel({
             
             <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-4">
                 {/* Google Search */}
-                {isGoogle && isSearch && <div className="flex-shrink-0">
+                {isGoogle && isSearch && <div className="w-full min-w-0 max-w-[400px] shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Google Search</p>
                     <GoogleSearchPreview 
                         headlines={headlines}
