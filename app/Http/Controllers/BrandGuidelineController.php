@@ -147,6 +147,11 @@ class BrandGuidelineController extends Controller
             // policy above has already established that it is the caller's.
             /** @var \App\Models\Customer $owner */
             $owner = $brandGuideline->customer;
+            if ($owner->service_type === 'setup_only' && ! $owner->isPaidSetupOnly()) {
+                return redirect()->route('subscription.pricing')
+                    ->with('success', 'Brand profile confirmed — your one-time setup payment starts the campaign build.');
+            }
+
             $autoCampaign = $owner->campaigns()
                 ->whereNotNull('auto_generated_at')
                 ->orderBy('id')
@@ -173,6 +178,11 @@ class BrandGuidelineController extends Controller
                 // here produced a URL that resolved but leaked the count.
                 return redirect()->route('campaigns.show', $autoCampaign)
                     ->with('success', 'Brand profile confirmed — here\'s the first campaign we built from it.');
+            }
+
+            if ($owner->isPaidSetupOnly()) {
+                return redirect()->route('dashboard')
+                    ->with('success', 'Brand profile confirmed — your campaign build is in progress.');
             }
 
             return redirect()->route('campaigns.create')

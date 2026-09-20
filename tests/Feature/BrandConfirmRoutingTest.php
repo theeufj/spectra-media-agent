@@ -101,4 +101,29 @@ class BrandConfirmRoutingTest extends TestCase
 
         $this->assertTrue($guideline->fresh()->user_verified);
     }
+
+    public function test_one_time_setup_continues_to_payment_after_brand_confirmation(): void
+    {
+        [$user, $customer] = $this->verifiedCustomer();
+        $customer->update(['service_type' => 'setup_only']);
+        $guideline = $this->guideline($customer);
+
+        $this->actingAs($user)->withSession(['active_customer_id' => $customer->id])
+            ->post(route('brand-guidelines.verify', $guideline->id), ['continue' => true])
+            ->assertRedirect(route('subscription.pricing'));
+
+        $this->assertTrue($guideline->fresh()->user_verified);
+        $this->assertSame(0, $customer->campaigns()->count());
+    }
+
+    public function test_paid_setup_waits_for_its_build_instead_of_opening_a_duplicate_wizard(): void
+    {
+        [$user, $customer] = $this->verifiedCustomer();
+        $customer->update(['service_type' => 'setup_only', 'setup_fee_paid_at' => now()]);
+        $guideline = $this->guideline($customer);
+
+        $this->actingAs($user)->withSession(['active_customer_id' => $customer->id])
+            ->post(route('brand-guidelines.verify', $guideline->id), ['continue' => true])
+            ->assertRedirect(route('dashboard'));
+    }
 }
