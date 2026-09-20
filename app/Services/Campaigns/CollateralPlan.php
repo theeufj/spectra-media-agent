@@ -13,6 +13,8 @@ use App\Models\VideoCollateral;
 /** The shared generation plan for both campaign and individual sign-off. */
 class CollateralPlan
 {
+    public const IMAGE_CONCEPTS_PER_STRATEGY = 3;
+
     public function wantsVideo(Campaign $campaign, Strategy $strategy): bool
     {
         if (! $campaign->allowsAutomaticVideo()) {
@@ -40,7 +42,7 @@ class CollateralPlan
         }
         $jobs = [(new GenerateAdCopy($campaign, $strategy, $strategy->platform))->delay(now()->addSeconds(5))];
         if (ImageCollateral::canGenerateForCampaign($campaign)) {
-            for ($slot = 0; $slot < 3; $slot++) {
+            for ($slot = 0; $slot < self::IMAGE_CONCEPTS_PER_STRATEGY; $slot++) {
                 $jobs[] = (new GenerateImage($campaign, $strategy, $slot))->delay(now()->addSeconds(10 + $slot * 10));
             }
         }

@@ -350,6 +350,23 @@ class OneTimeSetupTest extends TestCase
         );
     }
 
+    public function test_setup_only_campaigns_start_paused_even_when_enabled_is_requested(): void
+    {
+        [, $customer] = $this->setupOnlyCustomer(paid: true);
+        \App\Models\Setting::where('key', 'campaign_testing_mode')->delete();
+        config(['campaigns.testing_mode_default' => false, 'campaigns.default_status' => 'ENABLED']);
+
+        $paused = \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::PAUSED;
+        $this->assertSame($paused, \App\Services\CampaignStatusHelper::getGoogleAdsStatus(customer: $customer));
+        $this->assertSame($paused, \App\Services\CampaignStatusHelper::getGoogleAdsStatus('ENABLED', $customer));
+
+        $customer->service_type = 'managed';
+        $this->assertSame(
+            \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::ENABLED,
+            \App\Services\CampaignStatusHelper::getGoogleAdsStatus('ENABLED', $customer),
+        );
+    }
+
     public function test_setup_only_deploys_arrive_paused(): void
     {
         [, $customer] = $this->setupOnlyCustomer(paid: true);

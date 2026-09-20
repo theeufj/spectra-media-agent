@@ -79,7 +79,7 @@ class CreateShoppingCampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::SHOPPING,
             'shopping_setting' => $shoppingSetting,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(),
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer),
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,

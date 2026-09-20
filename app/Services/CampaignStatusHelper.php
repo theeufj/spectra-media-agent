@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\Setting;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 
@@ -30,8 +31,13 @@ class CampaignStatusHelper
      * @param  string|null  $intendedStatus  The intended status ('ENABLED', 'PAUSED'). Defaults to config.
      * @return int The Google Ads CampaignStatus enum value
      */
-    public static function getGoogleAdsStatus(?string $intendedStatus = null): int
+    public static function getGoogleAdsStatus(?string $intendedStatus = null, ?Customer $customer = null): int
     {
+        // Setup packages must start paused even if the build never reaches settlement.
+        if ($customer?->service_type === 'setup_only') {
+            return CampaignStatus::PAUSED;
+        }
+
         // If testing mode is enabled, always return PAUSED
         if (self::isTestingMode()) {
             return CampaignStatus::PAUSED;

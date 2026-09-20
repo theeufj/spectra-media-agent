@@ -61,7 +61,7 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             // Without this there was no way to ask for a campaign that does not
             // start serving the moment it is created, which any verification or
             // staged rollout needs.
-            'status' => CampaignStatusHelper::getGoogleAdsStatus($campaignData['status'] ?? null),
+            'status' => CampaignStatusHelper::getGoogleAdsStatus($campaignData['status'] ?? null, $this->customer),
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'manual_cpc' => new ManualCpc, // Default for search campaigns

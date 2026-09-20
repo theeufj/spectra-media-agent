@@ -62,7 +62,7 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
             'name' => $campaignData['businessName'].' Local Services Campaign - '.uniqid(),
             'advertising_channel_type' => AdvertisingChannelType::LOCAL_SERVICES,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(),
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer),
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,

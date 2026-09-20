@@ -48,7 +48,7 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 
         $campaign = new Campaign([
             'name' => $campaignData['businessName'],
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer), // Status based on testing mode config
             'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
             // 'advertising_channel_sub_type' => AdvertisingChannelSubType::UNKNOWN, // Removed as it causes INVALID_ENUM_VALUE
             'campaign_budget' => $budgetResourceName,

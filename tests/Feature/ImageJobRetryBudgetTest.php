@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Jobs\GenerateImage;
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Services\AdminMonitorService;
+use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
@@ -22,6 +25,28 @@ use Tests\TestCase;
  */
 class ImageJobRetryBudgetTest extends TestCase
 {
+    use DatabaseTransactions;
+
+    public function test_waiting_for_copy_does_not_call_ai_services(): void
+    {
+        $campaign = Campaign::factory()->create();
+        $strategy = Strategy::factory()->create([
+            'campaign_id' => $campaign->id,
+            'imagery_strategy' => 'Sunlit architectural photographs arranged on a deep navy surface.',
+        ]);
+        $gemini = $this->mock(GeminiService::class, function ($mock) {
+            $mock->shouldNotReceive('generateContent');
+        });
+        $monitor = $this->mock(AdminMonitorService::class, function ($mock) {
+            $mock->shouldNotReceive('reviewImagePrompt');
+        });
+
+        $job = (new GenerateImage($campaign, $strategy))->withFakeQueueInteractions();
+        $job->handle($gemini, $monitor);
+
+        $job->assertReleased(20);
+    }
+
     public function test_a_release_cannot_retire_the_job(): void
     {
         $job = new GenerateImage(Campaign::factory()->make(), new Strategy);

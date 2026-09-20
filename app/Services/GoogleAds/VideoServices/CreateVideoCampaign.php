@@ -47,7 +47,7 @@ class CreateVideoCampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::VIDEO,
             'advertising_channel_sub_type' => AdvertisingChannelSubType::VIDEO_RESPONSIVE,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer), // Status based on testing mode config
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'maximize_conversions' => new MaximizeConversions, // Default for video campaigns

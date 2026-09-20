@@ -94,6 +94,28 @@ class CollateralGenerationPendingTest extends TestCase
         $this->assertFalse($this->pending($strategy));
     }
 
+    public function test_the_dispatched_set_finishes_before_the_campaign_allowance_is_full(): void
+    {
+        $strategy = $this->strategy();
+        foreach (range(1, 3) as $i) {
+            $this->addConcept($strategy);
+        }
+
+        $this->assertTrue(ImageCollateral::canGenerateForCampaign($strategy->campaign));
+        $this->assertFalse($this->pending($strategy));
+    }
+
+    public function test_another_strategys_images_do_not_complete_this_set(): void
+    {
+        $strategy = $this->strategy();
+        $other = Strategy::factory()->create(['campaign_id' => $strategy->campaign_id]);
+        foreach (range(1, 3) as $i) {
+            $this->addConcept($other);
+        }
+
+        $this->assertTrue($this->pending($strategy));
+    }
+
     public function test_a_set_that_stopped_early_does_not_spin_for_ever(): void
     {
         /*

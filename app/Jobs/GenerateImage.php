@@ -134,6 +134,27 @@ class GenerateImage implements ShouldQueue
                 return;
             }
 
+            // Defer before AI review or splitting: waiting must not spend provider calls.
+            $adCopy = $this->strategy->adCopies()->first();
+
+            // Image prompts use approved copy as their source for any permitted text.
+            // Copy generation starts first but may take longer than the initial delay.
+            if (! $adCopy && $this->attempts() < self::COPY_WAIT_ATTEMPTS) {
+                Log::info("Ad copy not written yet for strategy {$this->strategy->id}; releasing image slot {$this->slot}", [
+                    'attempt' => $this->attempts(),
+                ]);
+
+                $this->release(self::COPY_WAIT_SECONDS);
+
+                return;
+            }
+
+            if (! $adCopy) {
+                // Out of patience: a picture with no headline is still better
+                // than no creative, and the copy has clearly failed elsewhere.
+                Log::warning("Generating images without ad copy for strategy {$this->strategy->id} after {$this->attempts()} attempts");
+            }
+
             $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
 
             if (! $review['is_valid']) {
@@ -183,39 +204,6 @@ class GenerateImage implements ShouldQueue
                model asked for one good line does better given every line it is
                allowed to use.
             */
-            $adCopy = $this->strategy->adCopies()->first();
-
-            /*
-             * Wait for the copy rather than draw a picture with no words on it.
-             *
-             * GenerateStrategyCollateral dispatches GenerateAdCopy five seconds
-             * after sign-off and the image jobs ten seconds after, and that is
-             * a race the image jobs can lose: on campaign 44 the copy landed at
-             * 08:51:13 and the first image job had already read this line at
-             * about 08:51:10. The headline is composited from that copy, so
-             * losing the race does not mean a slightly worse ad — it means a
-             * stock photograph with nothing written on it, which is not an
-             * advertisement and is not what the customer approved.
-             *
-             * Releasing costs twenty seconds. Generating a creative nobody can
-             * run costs the whole slot.
-             */
-            if (! $adCopy && $this->attempts() < self::COPY_WAIT_ATTEMPTS) {
-                Log::info("Ad copy not written yet for strategy {$this->strategy->id}; releasing image slot {$this->slot}", [
-                    'attempt' => $this->attempts(),
-                ]);
-
-                $this->release(self::COPY_WAIT_SECONDS);
-
-                return;
-            }
-
-            if (! $adCopy) {
-                // Out of patience: a picture with no headline is still better
-                // than no creative, and the copy has clearly failed elsewhere.
-                Log::warning("Generating images without ad copy for strategy {$this->strategy->id} after {$this->attempts()} attempts");
-            }
-
             $adText = $this->renderableCopy($adCopy);
 
             $successfulUploads = 0;

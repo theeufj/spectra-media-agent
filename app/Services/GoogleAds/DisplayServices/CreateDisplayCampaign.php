@@ -54,7 +54,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             'name' => $campaignName,
             'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer), // Status based on testing mode config
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'manual_cpc' => new ManualCpc, // Default for display campaigns

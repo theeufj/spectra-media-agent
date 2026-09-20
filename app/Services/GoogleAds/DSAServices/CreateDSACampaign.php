@@ -2,12 +2,12 @@
 
 namespace App\Services\GoogleAds\DSAServices;
 
+use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\DynamicSearchAdsSetting;
 use Google\Ads\GoogleAds\V22\Common\ManualCpc;
 use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
@@ -75,7 +75,7 @@ class CreateDSACampaign extends BaseGoogleAdsService
         $campaign = new Campaign([
             'name' => $campaignName,
             'advertising_channel_type' => AdvertisingChannelType::SEARCH,
-            'status' => CampaignStatus::ENABLED,
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer),
             'campaign_budget' => $budgetResource,
             'manual_cpc' => new ManualCpc(['enhanced_cpc_enabled' => true]),
             'dynamic_search_ads_setting' => $dsaSettings,

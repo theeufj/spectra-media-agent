@@ -151,26 +151,20 @@ class CollateralController extends Controller
             return true;
         }
 
-        /*
-         * Counted in pictures against the campaign's cap, not in rows.
-         *
-         * This compared imageCollaterals()->count() to three, which was the
-         * number of images a strategy got when one image meant one row. One
-         * picture is now three rows — square, landscape and MREC — so the very
-         * first concept satisfied the old test and generation was declared
-         * finished with three more concepts still to come. The page stopped
-         * watching, showed one creative out of four, and never updated.
-         */
+        // Count concepts, not format rows. The plan dispatches three concepts
+        // per strategy; unused campaign allowance is not work still in flight.
         $campaign = $strategy->campaign;
 
         if (! $campaign) {
             return false;
         }
 
-        $expected = ImageCollateral::capForCampaign($campaign);
-        $have = ImageCollateral::conceptsForCampaign($campaign);
+        $rows = $strategy->imageCollaterals()->get(['id', 'concept_key']);
+        $have = $rows->whereNotNull('concept_key')->unique('concept_key')->count()
+            + $rows->whereNull('concept_key')->count();
 
-        return $have < $expected
+        return $have < \App\Services\Campaigns\CollateralPlan::IMAGE_CONCEPTS_PER_STRATEGY
+            && ImageCollateral::canGenerateForCampaign($campaign)
             && $strategy->signed_off_at->gt(now()->subMinutes(self::IMAGE_GENERATION_WINDOW_MINUTES));
     }
 
