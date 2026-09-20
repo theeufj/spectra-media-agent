@@ -122,4 +122,17 @@ class SetupJourneyReadinessTest extends TestCase
         $this->assertSame('failed', $journey['steps'][2]['status']);
         $this->assertSame(route('campaigns.deployment-status', $campaign), $journey['steps'][2]['action_url']);
     }
+
+    public function test_published_tracking_configuration_does_not_claim_a_live_website_conversion(): void
+    {
+        $customer = $this->customer();
+        $customer->update(['conversion_tracking_verified_at' => now(), 'gtm_installed' => false]);
+        $item = app(SetupJourney::class)->forCustomer($customer)['checklist'][5];
+        $this->assertFalse($item['done']);
+        $this->assertStringContainsString('Install your website tag', $item['detail']);
+        $customer->update(['gtm_installed' => true]);
+        $item = app(SetupJourney::class)->forCustomer($customer)['checklist'][5];
+        $this->assertFalse($item['done']);
+        $this->assertStringContainsString('test conversion', $item['detail']);
+    }
 }

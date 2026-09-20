@@ -97,8 +97,10 @@ class SetupJourney
                     'detail' => $customer->handover_at ? 'Invitation sent. Accept it in your email; acceptance is not confirmed here.' : 'Sent after the campaign is created.'],
                 ['title' => 'Google billing', 'done' => false,
                     'detail' => 'Add or confirm your payment method in Google Ads. Billing readiness is not verified here.'],
-                ['title' => 'Conversion tracking', 'done' => $customer->conversion_tracking_verified_at !== null,
-                    'detail' => $customer->conversion_tracking_verified_at ? 'Tracking verified.' : ($customer->gtm_installed ? 'Website tag detected. Test your conversion before launching.' : 'Install your website tag, then test a conversion before launching.'),
+                // conversion_tracking_verified_at is also set when configuration is merely published.
+                // It cannot prove that a website tag is installed or that a test conversion fired.
+                ['title' => 'Conversion tracking', 'done' => false,
+                    'detail' => $customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.',
                     'url' => $customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null],
             ],
         ];
