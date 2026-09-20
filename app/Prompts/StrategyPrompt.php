@@ -114,7 +114,13 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}{$croContext}{$abTestContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "daily_budget", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+Each platform object must have the following keys: "platform", "campaign_type", "daily_budget", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+
+"campaign_type" must match the placement: search, display, video, shopping, app,
+demand_gen, local_services, or performance_max. Google Ads (SEM) and Search use
+"search", never "display"; YouTube uses "video". For social feed placements use
+"display". Keep the platform label, creative requirements and video applicability
+consistent with this type.
 
 **Budget allocation:**
 Return each platform's share as a positive numeric "daily_budget" in the account currency.
@@ -272,6 +278,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
   "strategies": [
     {
       "platform": "Facebook Ads",
+      "campaign_type": "display",
       "daily_budget": 30,
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
       "imagery_strategy": "A coral linen shirt caught in a sea breeze, its weave and relaxed shape sharply lit against a cobalt wall. Also suits: a close view of the cuff being rolled, showing its soft texture; a person wearing the shirt while walking along a sunlit promenade, fabric moving freely and the shirt filling most of the frame.",
@@ -304,6 +311,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
     },
     {
       "platform": "Google Ads (SEM)",
+      "campaign_type": "search",
       "daily_budget": 20,
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "The actual running shoe in crisp side profile on a track, mesh and sole construction clearly visible in raking morning light. Also suits: a close view of a runner tightening its laces before a run; the same shoe in use as a foot lifts from the track, a tight crop with the product sharp and the background soft.",

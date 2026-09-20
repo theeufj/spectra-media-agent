@@ -313,6 +313,7 @@ class GenerateStrategy implements ShouldQueue
                     try {
                         $newStrategy = $this->campaign->strategies()->create([
                             'platform' => $strategy['platform'],
+                            'campaign_type' => $strategy['campaign_type'],
                             'daily_budget' => $strategy['daily_budget'],
                             'generation_id' => $generationId,
                             'ad_extensions' => $strategy['ad_extensions'] ?? [],

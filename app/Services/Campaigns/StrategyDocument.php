@@ -16,6 +16,7 @@ final readonly class StrategyDocument
             'strategies' => 'required|array|min:1|max:12',
             'strategies.*' => 'required|array',
             'strategies.*.platform' => 'required|string|max:100',
+            'strategies.*.campaign_type' => 'sometimes|in:search,display,video,shopping,app,demand_gen,local_services,performance_max',
             'strategies.*.ad_copy_strategy' => 'required|string',
             'strategies.*.imagery_strategy' => 'required|string',
             'strategies.*.video_strategy' => 'present|nullable|string',
@@ -42,7 +43,21 @@ final readonly class StrategyDocument
             if (($strategy['targeting']['age_min'] ?? 18) > ($strategy['targeting']['age_max'] ?? 65)) {
                 throw ValidationException::withMessages(['strategies' => 'The audience age range is reversed.']);
             }
-            if (preg_match('/search|sem/i', $strategy['platform'])) {
+            $searchLabel = (bool) preg_match('/search|sem/i', $strategy['platform']);
+            $type = $strategy['campaign_type'] ?? match (true) {
+                (bool) preg_match('/performance.?max|pmax/i', $strategy['platform']) => 'performance_max',
+                (bool) preg_match('/demand.?gen/i', $strategy['platform']) => 'demand_gen',
+                (bool) preg_match('/youtube|video/i', $strategy['platform']) => 'video',
+                (bool) preg_match('/shopping/i', $strategy['platform']) => 'shopping',
+                (bool) preg_match('/display/i', $strategy['platform']) => 'display',
+                (bool) preg_match('/google|microsoft|bing|search|sem/i', $strategy['platform']) => 'search',
+                default => 'display',
+            };
+            if ($searchLabel && $type !== 'search') {
+                throw ValidationException::withMessages(['strategies' => 'A Search strategy must use the search campaign type.']);
+            }
+            $strategies[$index]['campaign_type'] = $type;
+            if ($type === 'search') {
                 $strategies[$index]['generate_video'] = false;
             }
         }
