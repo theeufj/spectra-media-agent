@@ -1,5 +1,7 @@
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { useEffect } from 'react';
+import { usePolling } from '@/hooks/usePolling';
 import { EnvelopeIcon } from '@heroicons/react/24/outline';
 import { brandTint } from '@/Components/Marketing/Hero';
 import { SUBMIT } from '@/Components/Forms';
@@ -15,6 +17,16 @@ import { SUBMIT } from '@/Components/Forms';
  */
 export default function VerifyEmail({ status, auth }) {
     const { post, processing } = useForm({});
+    const { data: verification } = usePolling(route('verification.notice'), {
+        interval: 5000,
+        until: (result) => result?.verified === true,
+    });
+
+    useEffect(() => {
+        if (verification?.verified === true) {
+            router.visit(route('dashboard'), { replace: true });
+        }
+    }, [verification?.verified]);
 
     const submit = (e) => {
         e.preventDefault();
@@ -38,6 +50,9 @@ export default function VerifyEmail({ status, auth }) {
                     We've sent a verification link to{' '}
                     <strong className="break-all font-semibold">{auth?.user?.email || 'your email address'}</strong>.
                     {' '}Click it and we'll take you straight to setting up your first campaign.
+                </p>
+                <p className="mt-3 text-xs text-gray-500">
+                    You can open the link in another tab. This page will continue automatically once your email is verified.
                 </p>
 
                 {status === 'verification-link-sent' && (
