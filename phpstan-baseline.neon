@@ -695,12 +695,6 @@ parameters:
 			path: app/Jobs/ProcessHarvestedAsset.php
 
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Jobs/ProcessKnowledgeBaseFile.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
 			count: 1

@@ -64,15 +64,11 @@ class DiscoverNavigationUrls implements ShouldQueue
             $html = app(\App\Services\Crawling\WebsiteRenderer::class)->html($websiteUrl);
         } catch (\Throwable $e) {
             report($e);
-            Log::warning('DiscoverNavigationUrls: Browsershot failed, trying HTTP fallback', [
+            Log::warning('DiscoverNavigationUrls: Renderer failed, trying safe HTTP fallback', [
                 'error' => $e->getMessage(),
             ]);
             try {
-                $response = \Illuminate\Support\Facades\Http::timeout(15)
-                    ->withHeaders([
-                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    ])
-                    ->get($websiteUrl);
+                $response = app(\App\Services\Crawling\PublicWebsiteFetcher::class)->get($websiteUrl);
                 $html = $response->successful() ? $response->body() : '';
             } catch (\Throwable $e2) {
                 report($e2);
@@ -106,6 +102,16 @@ class DiscoverNavigationUrls implements ShouldQueue
                 'Your website appears to be blocking automated visitors — usually a firewall '
                 .'or bot-protection service sitting in front of the site. If your web provider '
                 .'can allow our scanner through, reply to this email and we\'ll rerun the scan.'
+            );
+
+            return;
+        }
+
+        if (empty($discoveredUrls) && mb_strlen(self::readableText($html)) < 200) {
+            $this->concludeWithoutDiscovery(
+                'Your website loaded, but our scanner could not read enough page content. '
+                .'Sites that load their content with JavaScript need browser rendering. '
+                .'You can upload a text document about your business to continue, or contact us to rerun the scan.'
             );
 
             return;
@@ -204,18 +210,31 @@ class DiscoverNavigationUrls implements ShouldQueue
     }
 
     /**
-     * Does this rendered document look like a bot-protection shell rather
-     * than a real page? WAF interstitials render as markup with scripts but
-     * almost no readable text. Threshold is deliberately low: a legitimate
-     * homepage with under 200 characters of visible text has nothing to
-     * crawl anyway, so a false positive costs nothing.
+     * Sparse HTML alone is not evidence of blocking: an unrendered React or
+     * Inertia page has the same shape. Require an actual challenge marker.
      */
     public static function looksBlocked(string $html): bool
     {
-        $text = preg_replace('#<(script|style|noscript|template|svg)\b[^>]*>.*?</\1>#si', ' ', $html);
-        $text = trim(preg_replace('/\s+/', ' ', strip_tags($text)));
+        if (mb_strlen(self::readableText($html)) >= 2000) {
+            return false;
+        }
 
-        return mb_strlen($text) < 200;
+        return (bool) preg_match(
+            '#/cdn-cgi/challenge-platform/|checking your browser before accessing|enable javascript and cookies to continue|request blocked|local_rate_limited#i',
+            $html,
+        );
+    }
+
+    private static function readableText(string $html): string
+    {
+        $crawler = new Crawler($html);
+        $crawler->filter('script, style, noscript, template, svg, head')->each(function (Crawler $node) {
+            foreach ($node as $element) {
+                $element->parentNode?->removeChild($element);
+            }
+        });
+
+        return trim(preg_replace('/\s+/u', ' ', $crawler->text('')) ?? '');
     }
 
     private function extractNavigationLinks(string $html, string $websiteUrl): array
