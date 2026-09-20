@@ -15,8 +15,31 @@ vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: {}, url: '/' }),
     Head: () => null,
 }));
+vi.mock('@/Layouts/AuthenticatedLayout', () => ({ default: ({ children }) => <div>{children}</div> }));
+vi.mock('@/Components/CampaignCopilot', () => ({ default: () => null }));
+vi.mock('@/hooks/useJobWatch', () => ({ useJobWatch: () => ({ phase: 'idle', data: null }) }));
+vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null }) }));
 
-import { StrategyCard } from '@/Pages/Campaigns/Show';
+import Show, { StrategyCard } from '@/Pages/Campaigns/Show';
+
+it('shows the saved strategy after Inertia returns updated props without a remount', () => {
+    const campaign = {
+        uuid: 'campaign-edited', name: 'Edited campaign',
+        strategies: [{
+            id: 99, uuid: 'strategy-edited', platform: 'Google Ads',
+            ad_copy_strategy: 'Original brief', imagery_strategy: 'Property photos', video_strategy: 'N/A',
+        }],
+    };
+    const { rerender, getByText, queryByText } = render(<Show auth={{ user: {} }} campaign={campaign} />);
+    expect(getByText('Original brief')).toBeTruthy();
+
+    rerender(<Show auth={{ user: {} }} campaign={{
+        ...campaign,
+        strategies: [{ ...campaign.strategies[0], ad_copy_strategy: 'Saved listing-specific brief' }],
+    }} />);
+    expect(getByText('Saved listing-specific brief')).toBeTruthy();
+    expect(queryByText('Original brief')).toBeNull();
+});
 
 /**
  * The signed-off branch of the strategy card, which nothing rendered until a

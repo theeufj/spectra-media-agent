@@ -380,6 +380,11 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 
 export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
     const [campaigns, setCampaign] = useState(campaign);
+    // Saves return fresh Inertia props without remounting this page. Keep the
+    // review card in sync so it shows the brief that was actually saved.
+    useEffect(() => {
+        setCampaign(campaign);
+    }, [campaign]);
     // Whether generation is still running, as far as this page knows. Seeded
     // from the server render, then driven by the watch below.
     const [isPolling, setIsPolling] = useState(
