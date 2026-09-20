@@ -311,7 +311,12 @@ class GenerateImage implements ShouldQueue
                     $scene .= "\nVisual medium: {$concept['visual_style']}. Composition: {$concept['composition']}. Dominant subject: {$concept['subject']}.";
                 }
                 if ($this->reviewFeedback) {
-                    $scene .= "\nCorrection after reviewing the first render: retain the supported selling idea, but this correction overrides earlier scene objects and composition where they conflict. ".$this->reviewFeedback;
+                    // Do not repeat the rejected scene: it anchors the image
+                    // model on the very objects the review asked us to remove.
+                    $scene = $concept
+                        ? "Selling idea: {$concept['selling_idea']}\nSupported fact: {$concept['evidence']}\n"
+                        : '';
+                    $scene .= 'Create a corrected replacement image. Follow the concrete replacement direction below while obeying all placement and image rules. Remove the rejected objects rather than redrawing them: '.$this->reviewFeedback;
                 }
 
                 /*

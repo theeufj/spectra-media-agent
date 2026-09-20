@@ -136,8 +136,26 @@ class CreativePlanningTest extends TestCase
             $image = $request->data()['contents'][0]['parts'][1]['inlineData'] ?? [];
 
             return ($image['mimeType'] ?? null) === 'image/jpeg'
-                && strlen(base64_decode($image['data'] ?? '')) > 1000;
+                && strlen(base64_decode($image['data'] ?? '')) > 1000
+                && $request->data()['generationConfig']['responseMimeType'] === 'application/json'
+                && $request->data()['generationConfig']['maxOutputTokens'] >= 8192;
         });
+    }
+
+    public function test_malformed_visual_review_is_a_reportable_provider_failure(): void
+    {
+        $strategy = $this->reviewStrategy();
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $jpeg = (string) ImageManager::gd()->create(120, 120)->fill('#123456')->toJpeg();
+        foreach ($strategy->imageCollaterals as $asset) {
+            \Illuminate\Support\Facades\Storage::disk('public')->put($asset->s3_path, $jpeg);
+        }
+        $gemini = $this->createMock(\App\Services\GeminiService::class);
+        $gemini->expects($this->once())->method('generateContent')->willReturn(['text' => '{"concepts":']);
+        $this->app->instance(\App\Services\GeminiService::class, $gemini);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Invalid creative review response:');
+        app(RenderedSetReviewer::class)->review($strategy, 'test-run');
     }
 
     public function test_a_failed_final_review_stops_after_one_correction(): void

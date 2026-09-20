@@ -79,7 +79,7 @@ class ImagePrompt
                "{{creative_strategy}}\n\n".
                "{{brand_context}}{{product_context}}\n".
                "**NO WORDS AT ALL:**\n".
-               "This artwork carries no text of any kind. Where the placement permits a designed ad, approved words are typeset separately. Search and responsive image assets remain free of added text. Anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Where lettering would naturally appear in this scene, render that surface blank.\n\n".
+               "This artwork carries no text of any kind. Where the placement permits a designed ad, approved words are typeset separately. Search and responsive image assets remain free of added text. Anything you invent is a claim nobody approved. No headline, no caption, no logo, no signage, no labels, no writing on screens, packaging, walls or windows. Choose a scene and framing that do not depend on writing; do not substitute blank panels or pretend layouts for it.\n\n".
                '{{headline_instruction}}'.
                "**COMPOSITION:**\n".
                "- Use the aspect ratio requested by the generation API; mobile-first: one clear focal point, high contrast, still legible as a thumbnail\n".
@@ -94,7 +94,7 @@ class ImagePrompt
                "- People, desks and devices are optional. Do not add an office worker, a tired owner or piles of paperwork to make an abstract offer look real.\n".
                "- A simple conceptual object is allowed only when the brief calls for it; avoid unrelated metaphors or decorative filler. Keep any Search-specific requirement for a directly relevant product/service image.\n\n".
                "**HARD RULES:**\n".
-               "- No screens full of information: no dashboards, app windows, charts, tables, spreadsheets, forms or documents. A phone or laptop may appear in shot, but its screen carries only soft blocks of colour with no readable content whatsoever.\n".
+               "- No fabricated interfaces or documents: no dashboards, app windows, charts, tables, spreadsheets, forms or mockups. A device may appear incidentally with its screen facing away; never make a blank screen or coloured placeholder blocks the focal subject.\n".
                "- No invented facts: no statistics, prices, measurements, addresses, review counts, star ratings, dates or awards.\n".
                "- No placeholder furniture: no lorem ipsum, no grey lines standing in for text, no empty label chips, no UI skeletons.\n".
                "- No decorative furniture: no icon sets, no line-art symbols in circles, no dot grids, no abstract blobs or swooshes. These read as clip art, they are chosen from the scene rather than from the product, and they distract from the focal subject.\n".

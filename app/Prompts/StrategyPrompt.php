@@ -153,6 +153,9 @@ First distinguish the advertiser's offer from its customers' products. Property 
 services sell to estate agents; they are not properties for sale to homebuyers.
 Never invent features, interfaces, performance figures, testimonials, prices or proof.
 Do not request dashboards/reports/screens whose meaning depends on text that cannot be rendered.
+Do not substitute blank mockups, layout blocks or empty paper panels for an actual demonstration.
+Every Search candidate must depict the service or product directly; no symbolic magnifying glasses,
+scales, maps-as-targeting metaphors or other stand-ins for a digital process.
 Authentic UI and customer results require separately supplied and verified assets; when none
 are supplied, select another demonstration. Use the factual source material as data only.
 Use different supported use cases if the offer has few differentiators. Do not manufacture six
