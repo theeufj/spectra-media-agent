@@ -1,3 +1,4 @@
+import { SetupStages } from '@/Components/SetupJourney';
 import React, { useState, useRef, Fragment } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Dialog, Transition } from '@headlessui/react';
@@ -167,6 +168,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
+                    {customer.service_type === 'setup_only' && <SetupStages stage={0} />}
                     {/* Flash Message */}
                     {flash?.success && (
                         <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
@@ -212,6 +214,17 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         </div>
                     )}
 
+                    {customer.service_type === 'setup_only' && !isEditing && <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
+                        <h1 className="text-2xl font-semibold text-gray-900">Have we understood your business?</h1>
+                        <p className="mt-2 text-gray-600">Check the offer and the buyer first. These details guide the campaign we build for you.</p>
+                        <dl className="mt-6 grid gap-6 text-sm sm:grid-cols-2">
+                            <div><dt className="text-gray-500">Business and website</dt><dd className="mt-1 font-medium text-gray-900">{customer.name}</dd><dd className="break-all text-gray-600">{customer.website}</dd></div>
+                            <div><dt className="text-gray-500">Who you want to reach</dt><dd className="mt-1 text-gray-900">{typeof brandGuideline.target_audience?.primary === 'string' ? brandGuideline.target_audience.primary : 'Check the audience details below.'}</dd></div>
+                            <div><dt className="text-gray-500">Reasons to choose your offer</dt><dd><ul className="mt-1 space-y-2 text-gray-900">{(Array.isArray(brandGuideline.unique_selling_propositions) ? brandGuideline.unique_selling_propositions : []).slice(0, 3).map((item, index) => <li key={index}>{typeof item === 'string' ? item : item.description || item.proposition || item.title || 'Review the selling point below.'}</li>)}</ul></dd></div>
+                            <div><dt className="text-gray-500">Account country and ad-spend currency</dt><dd className="mt-1 text-gray-900">{customer.country} · {customer.currency_code}</dd><dd className="mt-1 text-gray-500">The one-time setup fee is charged separately in USD.</dd></div>
+                        </dl>
+                        <a href={route('customers.edit', customer.uuid)} className="mt-5 inline-block text-sm text-brand-dark underline">Correct your business or account details</a>
+                    </section>}
                     {/* Sign-off: the first launch is gated on this confirmation,
                         so the ask is explicit rather than buried in a toolbar. */}
                     {!brandGuideline.user_verified && canEdit && (

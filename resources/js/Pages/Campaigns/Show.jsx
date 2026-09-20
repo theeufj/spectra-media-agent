@@ -1,3 +1,4 @@
+import { SetupStages } from '@/Components/SetupJourney';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link, router, usePage } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -144,6 +145,7 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                 )}
             </div>
 
+            {strategy.creative_concepts?.length > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-3">{strategy.creative_concepts.map((concept, index) => <div key={index} className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Concept {index + 1}</p><h4 className="mt-1 font-semibold text-gray-900">{concept.selling_idea}</h4><p className="mt-2 text-sm text-gray-600">{concept.evidence}</p></div>)}</div>}
             {isEditing ? (
                 <form onSubmit={handleUpdate} className="space-y-4">
                     <div>
@@ -154,16 +156,16 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                         <label className="font-bold text-jet">Imagery Strategy</label>
                         <textarea value={data.imagery_strategy} onChange={e => setData('imagery_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
                     </div>
-                    <div>
+                    {strategy.campaign_type !== 'search' && <div>
                         <label className="font-bold text-jet">Video Strategy</label>
                         <textarea value={data.video_strategy} onChange={e => setData('video_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
-                    </div>
+                    </div>}
                     <div className="flex justify-end space-x-2">
                         <button type="button" onClick={() => setIsEditing(false)} className="text-sm text-gray-600">Cancel</button>
                         <PrimaryButton disabled={processing}>Save Changes</PrimaryButton>
                     </div>
                 </form>
-            ) : isSignedOff ? (
+            ) : (
                 /*
                    Signed off, so the brief steps out of the way.
                    
@@ -188,27 +190,12 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                             <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🖼️</span>Imagery Strategy</h4>
                             <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.imagery_strategy}</p>
                         </div>
-                        <div className="pt-5 border-t border-gray-100">
+                        {strategy.campaign_type !== 'search' && <div className="pt-5 border-t border-gray-100">
                             <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🎬</span>Video Strategy</h4>
                             <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.video_strategy}</p>
-                        </div>
+                        </div>}
                     </div>
                 </details>
-            ) : (
-                <div className="space-y-5">
-                    <div>
-                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>✍️</span>Ad Copy Strategy</h4>
-                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.ad_copy_strategy}</p>
-                    </div>
-                    <div className="pt-5 border-t border-gray-100">
-                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🖼️</span>Imagery Strategy</h4>
-                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.imagery_strategy}</p>
-                    </div>
-                    <div className="pt-5 border-t border-gray-100">
-                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🎬</span>Video Strategy</h4>
-                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.video_strategy}</p>
-                    </div>
-                </div>
             )}
 
             {isSignedOff ? (
@@ -237,7 +224,7 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                         href={route('campaigns.collateral.show', { campaign: campaignUuid, strategy: strategy.uuid })}
                         className="px-4 py-2 text-sm font-medium bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition whitespace-nowrap"
                     >
-                        View collateral
+                        Review ads
                     </Link>
                 </div>
             ) : (
@@ -248,7 +235,7 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                         className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        {processing ? 'Signing off…' : 'Approve & Sign Off Strategy'}
+                        {processing ? 'Signing off…' : 'Approve direction & prepare ads'}
                     </button>
                     <p className="mt-2 text-center text-xs text-gray-500">Locks the strategy and starts generating your ad creative — you can edit it first.</p>
                 </div>
@@ -257,126 +244,15 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
     );
 };
 
-// Strategy Generation Loading Experience
-const GENERATION_STEPS = [
-    { label: 'Analyzing your knowledge base', icon: '📚', duration: 15 },
-    { label: 'Reviewing brand guidelines', icon: '🎨', duration: 25 },
-    { label: 'Researching target audience', icon: '🎯', duration: 40 },
-    { label: 'Evaluating platform opportunities', icon: '📊', duration: 60 },
-    { label: 'Crafting ad copy strategies', icon: '✍️', duration: 80 },
-    { label: 'Designing imagery & video approaches', icon: '🖼️', duration: 100 },
-    { label: 'Optimizing budget allocation', icon: '💰', duration: 115 },
-    { label: 'Finalizing your strategies', icon: '✨', duration: 130 },
-];
-
-const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
-    const currentStepIndex = GENERATION_STEPS.findIndex(s => elapsedSeconds < s.duration);
-    const activeStep = currentStepIndex === -1 ? GENERATION_STEPS.length - 1 : currentStepIndex;
-
-    const prevThreshold = activeStep > 0 ? GENERATION_STEPS[activeStep - 1].duration : 0;
-    const nextThreshold = GENERATION_STEPS[activeStep].duration;
-    const stepProgress = Math.min((elapsedSeconds - prevThreshold) / (nextThreshold - prevThreshold), 1);
-    const overallProgress = Math.min(((activeStep + stepProgress) / GENERATION_STEPS.length) * 100, 95);
-
-    const formatTime = (s) => {
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-    };
-
-    return (
-        <div className="mb-8">
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-brand-dark via-brand-darker to-purple-700 px-8 py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h3 className="text-xl font-bold text-white">Building your strategy</h3>
-                            <p className="text-white/80 text-sm mt-1">for {campaignName}</p>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-2xl font-mono font-bold text-white">{formatTime(elapsedSeconds)}</div>
-                            <p className="text-white/80 text-xs">elapsed</p>
-                        </div>
-                    </div>
-                    {/*
-                      * This bar sits on the dark brand-dark→purple header, so the
-                      * track is white at low alpha rather than a brand tint —
-                      * brandTint() mixes towards white, which is the wrong
-                      * direction on a dark ground, and the `bg-brand-darker/30`
-                      * it replaces compiled to nothing at all. The fill ends on
-                      * white so the filled portion stays obvious against the band.
-                      */}
-                    <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
-                        <div
-                            className="h-full rounded-full transition-all duration-1000 ease-out"
-                            style={{
-                                width: `${overallProgress}%`,
-                                backgroundImage: `linear-gradient(to right, ${brandTint(50)}, #fff)`,
-                            }}
-                        />
-                    </div>
-                </div>
-
-                {/* Steps */}
-                <div className="px-8 py-6">
-                    <div className="space-y-3">
-                        {GENERATION_STEPS.map((step, idx) => {
-                            const isComplete = idx < activeStep;
-                            const isActive = idx === activeStep;
-
-                            return (
-                                <div
-                                    key={idx}
-                                    className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
-                                        isActive ? 'border' :
-                                        isComplete ? 'opacity-60' : 'opacity-40'
-                                    }`}
-                                    style={
-                                        isActive
-                                            ? { backgroundColor: brandTint(10), borderColor: brandTint(30) }
-                                            : undefined
-                                    }
-                                >
-                                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-                                        {isComplete ? (
-                                            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        ) : isActive ? (
-                                            <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
-                                        ) : (
-                                            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                        )}
-                                    </div>
-                                    <span className="text-lg">{step.icon}</span>
-                                    <span className={`text-sm font-medium ${
-                                        isActive ? 'text-brand-darker' :
-                                        isComplete ? 'text-gray-500' : 'text-gray-500'
-                                    }`}>
-                                        {step.label}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-8 py-4 bg-gray-50 border-t flex items-center justify-between">
-                    <p className="text-xs text-gray-500">
-                        Our AI is analyzing your brand, audience, and market data to create tailored strategies.
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                        <span className="text-xs text-gray-500 font-medium">Live</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
+// Elapsed time is not evidence that a research or generation stage completed.
+const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => (
+    <section className="mb-8 rounded-xl border border-gray-200 bg-white p-8" role="status">
+        <h2 className="text-xl font-semibold text-gray-900">Preparing your campaign</h2>
+        <p className="mt-2 text-gray-600">We are waiting for the campaign plan for {campaignName}. It will appear here when saved.</p>
+        <p className="mt-4 text-sm text-gray-500">{Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s elapsed</p>
+        {elapsedSeconds > 300 && <p className="mt-3 text-sm text-amber-800">This is taking longer than expected. Your business details are saved; you can return from your dashboard.</p>}
+    </section>
+);
 
 export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
     const [campaigns, setCampaign] = useState(campaign);
@@ -661,10 +537,11 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
         <AuthenticatedLayout
             user={auth.user}
             header={<h2 className="font-semibold text-xl text-jet leading-tight">
-                {budgetStage ? `Step 1 of 2 — your budget` : `Review Strategy for: ${campaigns.name}`}
+                {budgetStage ? `Your campaign budget` : `Your campaign — ${campaigns.name}`}
             </h2>}
         >
-            <Head title={`Strategy for ${campaigns.name}`} />
+            <Head title={`Your campaign — ${campaigns.name}`} />
+            {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={1} /></div>}
 
             {/* Leads the page for campaigns we generated: it is the one thing
                 standing between the customer and deploying, and without it they
@@ -877,7 +754,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                                 </button>
                             )}
                             <PrimaryButton onClick={handleSignOffAll} disabled={processing || allStrategiesSignedOff}>
-                                {allStrategiesSignedOff ? 'All Strategies Signed Off' : 'Sign Off All Strategies'}
+                                {allStrategiesSignedOff ? 'Creative direction approved' : 'Approve direction & prepare ads'}
                             </PrimaryButton>
                         </div>
                     )}

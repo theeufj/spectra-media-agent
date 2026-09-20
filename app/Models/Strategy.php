@@ -28,6 +28,12 @@ class Strategy extends Model
      */
     public const DEPLOYED_STATUSES = ['deployed', 'verified'];
 
+    public function supportsVideo(): bool
+    {
+        return ! in_array($this->campaign_type, ['search', 'shopping', 'local_services'], true)
+            && ! preg_match('/search|sem/i', $this->platform);
+    }
+
     /** Strategies live on their platform. */
     public function scopeDeployed($query)
     {
@@ -55,6 +61,7 @@ class Strategy extends Model
         'campaign_type',
         'ad_copy_strategy',
         'imagery_strategy',
+        'creative_concepts',
         'video_strategy',
         'signed_off_at',
         'bidding_strategy',
@@ -80,6 +87,7 @@ class Strategy extends Model
         'signed_off_at' => 'datetime',
         'deployed_at' => 'datetime',
         'bidding_strategy' => 'array',
+        'creative_concepts' => 'array',
         'ad_extensions' => 'array',
         'conversion_goals' => 'array',
         'execution_plan' => 'array',

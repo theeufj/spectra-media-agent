@@ -205,9 +205,9 @@ export default function Index({ auth, campaigns = [] }) {
                                                                             <p className="text-xs text-gray-500 mt-1 line-clamp-2">{strategy.ad_copy_strategy}</p>
                                                                         </div>
                                                                         <span className={`ml-4 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${
-                                                                            strategy.status === 'pending_approval' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                                                                            !strategy.signed_off_at ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                                                                         }`}>
-                                                                            {strategy.status === 'pending_approval' ? 'Pending' : 'Approved'}
+                                                                            {strategy.deployment_status === 'verified' ? 'Created & verified' : strategy.deployment_status === 'deployed' ? 'Created · verifying' : strategy.signed_off_at ? 'Approved' : 'Awaiting approval'}
                                                                         </span>
                                                                     </div>
 

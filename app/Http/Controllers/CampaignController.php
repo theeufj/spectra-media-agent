@@ -266,6 +266,7 @@ class CampaignController extends Controller
                 'id' => $strategy->id,
                 'platform' => $strategy->platform,
                 'status' => $strategy->deployment_status ?? 'pending',
+                'progress' => $this->calculateDeploymentProgress($strategy),
                 'deployed_at' => $strategy->deployed_at,
                 'error_message' => $strategy->deployment_error,
                 'ad_copies_count' => $strategy->ad_copies_count,

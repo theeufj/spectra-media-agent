@@ -30,6 +30,11 @@ class SetupFeeController extends Controller
             ]);
         }
 
+        if (! app(\App\Services\Onboarding\SetupJourney::class)->checkoutReady($customer)) {
+            return redirect()->to(app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($customer)['steps'][0]['action_url'])
+                ->with('error', 'Confirm your business details and add readable source content before payment.');
+        }
+
         return \Inertia\Inertia::location($service->checkoutUrl(
             $user,
             $customer,

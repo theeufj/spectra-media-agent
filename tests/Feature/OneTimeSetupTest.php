@@ -114,9 +114,10 @@ class OneTimeSetupTest extends TestCase
                 ->withSession(['active_customer_id' => $customer->id])
                 ->getJson('/api/setup-progress')
                 ->json('steps')
-        )->firstWhere('key', 'payment');
+        )->firstWhere('key', 'campaign');
 
-        $this->assertSame('Pay your one-time setup fee', $step['title']);
+        $this->assertSame('Your campaign', $step['title']);
+        $this->assertStringContainsString('one-time fee', $step['description']);
         $this->assertFalse($step['completed']);
     }
 

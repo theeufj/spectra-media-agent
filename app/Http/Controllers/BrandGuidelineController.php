@@ -32,7 +32,7 @@ class BrandGuidelineController extends Controller
 
         return Inertia::render('BrandGuidelines/Index', [
             'brandGuideline' => $brandGuideline,
-            'customer' => $customer->only(['id', 'uuid', 'name', 'website']),
+            'customer' => $customer->only(['id', 'uuid', 'name', 'website', 'service_type', 'country', 'currency_code']),
             'canEdit' => true, // You can add permission logic here
         ]);
     }
@@ -218,7 +218,11 @@ class BrandGuidelineController extends Controller
             ->latest()
             ->first();
 
+        $briefUpdated = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+            ->where('source_type', 'text')->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')->max('updated_at');
+
         $failed = $failure !== null
+            && (! $briefUpdated || $failure->created_at->gt($briefUpdated))
             && ($guideline === null || $failure->created_at->gt($guideline->updated_at));
 
         return response()->json([

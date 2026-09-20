@@ -45,4 +45,18 @@ class StrategyCampaignTypeTest extends TestCase
         $this->expectException(ValidationException::class);
         StrategyDocument::fromArray(['strategies' => [$this->strategy(['campaign_type' => 'display'])]], ['Google Ads'], 50);
     }
+
+    public function test_repeated_selling_ideas_are_rejected_before_generation(): void
+    {
+        $concept = ['selling_idea' => 'Per-listing control', 'evidence' => 'Campaign settings described on the product page', 'visual' => 'An agent preparing a listing campaign'];
+        $this->expectException(ValidationException::class);
+        StrategyDocument::fromArray(['strategies' => [$this->strategy(['creative_concepts' => [$concept, $concept, $concept]])]], ['Google Ads'], 50);
+    }
+
+    public function test_search_cannot_generate_video_even_if_an_old_flag_says_yes(): void
+    {
+        $strategy = new \App\Models\Strategy(['platform' => 'Google Ads (SEM)', 'campaign_type' => 'search', 'generate_video' => true]);
+        $this->assertFalse($strategy->supportsVideo());
+        $this->assertFalse((new \App\Services\Campaigns\CollateralPlan)->wantsVideo(new \App\Models\Campaign, $strategy));
+    }
 }

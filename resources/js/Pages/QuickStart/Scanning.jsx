@@ -1,8 +1,9 @@
 import React from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useJobWatch } from '@/hooks/useJobWatch';
 import ForecastPanel from '@/Components/ForecastPanel';
+import { SetupStages } from '@/Components/SetupJourney';
 
 /**
  * The post-QuickStart holding screen. The old flow dumped the user on the
@@ -33,7 +34,7 @@ const Step = ({ state, label, detail }) => (
 );
 
 // Exported for tests: pure rendering of the wait, given the watch state.
-export function ScanningProgress({ phase, data, website }) {
+export function ScanningProgress({ phase, data, website, recovery }) {
     const pages = data?.pages ?? 0;
 
     if (phase === 'failed') {
@@ -44,10 +45,7 @@ export function ScanningProgress({ phase, data, website }) {
                 <p className="text-gray-600 mb-6">
                     {data?.failure_reason || 'Something blocked the scan.'} You can add your content manually and we'll build from that instead.
                 </p>
-                <div className="flex justify-center gap-3">
-                    <a href="/knowledge-base" className="px-5 py-2.5 bg-brand-primary text-white rounded-md font-semibold">Add content manually</a>
-                    <a href="/dashboard" className="px-5 py-2.5 bg-white border border-gray-300 rounded-md font-semibold text-gray-700">Go to dashboard</a>
-                </div>
+                {recovery || <a href="/knowledge-base" className="text-brand-dark underline">Add content manually</a>}
             </div>
         );
     }
@@ -73,9 +71,9 @@ export function ScanningProgress({ phase, data, website }) {
                 <p className="text-4xl mb-4">⏱</p>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">This is taking longer than usual</h1>
                 <p className="text-gray-600 mb-6">
-                    The scan is still running in the background — we'll email you the moment your brand profile is ready. No need to wait here.
+                    We have not received a finished business profile. You can give us the details below to continue.
                 </p>
-                <a href="/dashboard" className="px-5 py-2.5 bg-brand-primary text-white rounded-md font-semibold">Go to dashboard</a>
+                {recovery}
             </div>
         );
     }
@@ -115,11 +113,28 @@ export function ScanningProgress({ phase, data, website }) {
     );
 }
 
-export default function Scanning({ customerName, website }) {
+function BusinessBrief({ customerName }) {
+    const { data, setData, post, processing, errors } = useForm({ business_name: customerName || '', business_description: '' });
+    return <form className="mt-6 space-y-4 text-left" onSubmit={event => { event.preventDefault(); post(route('quick-start.business-brief'), { preserveState: false }); }}>
+        <h2 className="text-lg font-semibold text-gray-900">Tell us about your business</h2>
+        <label className="block text-sm font-medium text-gray-700">Business name
+            <input required value={data.business_name} onChange={event => setData('business_name', event.target.value)} className="mt-1 w-full rounded-lg border-gray-300" />
+        </label>
+        {errors.business_name && <p role="alert" className="text-sm text-red-700">{errors.business_name}</p>}
+        <label className="block text-sm font-medium text-gray-700">What do you sell, who is it for, and why should they choose you?
+            <textarea required minLength={300} maxLength={12000} rows={7} value={data.business_description} onChange={event => setData('business_description', event.target.value)} className="mt-2 w-full rounded-lg border-gray-300" aria-describedby="brief-help" />
+        </label>
+        <p id="brief-help" className="text-sm text-gray-500">Include your offer, service area and any confirmed selling points. At least 300 characters. We will ask you to check the resulting profile before payment.</p>
+        {errors.business_description && <p role="alert" className="text-sm text-red-700">{errors.business_description}</p>}
+        <button disabled={processing} className="rounded-lg bg-brand-dark px-5 py-3 font-medium text-white disabled:opacity-50">{processing ? 'Saving…' : 'Build my business profile'}</button>
+    </form>;
+}
+
+export default function Scanning({ customerName, website, setupOnly = false, manualEntry = false, baselineUpdatedAt = null }) {
     const { phase, data } = useJobWatch(route('brand-guidelines.status'), {
-        enabled: true,
+        enabled: !manualEntry,
         interval: 4000,
-        isDone: (d) => d?.exists === true,
+        isDone: (d) => d?.exists === true && (!baselineUpdatedAt || d.updated_at !== baselineUpdatedAt),
         isFailed: (d) => d?.failed === true,
         onDone: () => router.visit(route('brand-guidelines.index', { review: 1 })),
     });
@@ -129,7 +144,9 @@ export default function Scanning({ customerName, website }) {
             <Head title="Scanning your website" />
             <div className="min-h-[70vh] flex items-center justify-center py-12 px-4">
                 <div className="w-full max-w-2xl bg-white shadow-sm rounded-lg p-10">
-                    <ScanningProgress phase={phase} data={data} website={website} customerName={customerName} />
+                    {setupOnly && <SetupStages stage={0} />}
+                    <ScanningProgress phase={manualEntry ? 'failed' : phase} data={manualEntry ? { failure_reason: 'We need a little more information about your offer.' } : data} website={website} recovery={<BusinessBrief customerName={customerName} />} />
+                    {phase === 'watching' && <details className="mt-8"><summary className="cursor-pointer text-sm text-brand-dark">Prefer to describe your business yourself?</summary><BusinessBrief customerName={customerName} /></details>}
                 </div>
             </div>
         </AuthenticatedLayout>

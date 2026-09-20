@@ -114,7 +114,7 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}{$croContext}{$abTestContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "campaign_type", "daily_budget", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+Each platform object must have the following keys: "platform", "campaign_type", "daily_budget", "ad_copy_strategy", "imagery_strategy", "creative_concepts", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
 
 "campaign_type" must match the placement: search, display, video, shopping, app,
 demand_gen, local_services, or performance_max. Google Ads (SEM) and Search use
@@ -126,6 +126,25 @@ consistent with this type.
 Return each platform's share as a positive numeric "daily_budget" in the account currency.
 All shares together must equal the campaign daily budget. Do not assign the full campaign
 budget independently to every platform.
+
+**Three selling ideas, before any scene direction:**
+Return "creative_concepts": exactly three objects, each with "selling_idea", "evidence", and "visual".
+- selling_idea: a different, specific reason THIS buyer would choose THIS offer (max 250 characters).
+- evidence: the supporting fact from the supplied business content, naming its source page or section.
+  If only two differentiators are supported, use a different buyer use case supported by that content;
+  never invent a feature, result, testimonial, interface, price, guarantee or proof point to fill the set.
+- visual: a standalone art-directed image brief, 40–90 words, demonstrating that selling idea.
+First distinguish the advertiser's offer from its customers' products. For a B2B property marketing
+service, sell the service to estate agents; do not accidentally advertise a house to homebuyers.
+Each concept must test a materially different reason to buy. Three property photos, three laptop
+scenes, three moods or three camera angles are not three selling ideas. State a concrete subject,
+action, composition, light and colour. Demonstrate the useful mechanism or desirable outcome
+without pretending a generated image is measured proof. Respect the placement rules below.
+The imagery_strategy summarises this set; do not replace it with three generic stock-photo scenes.
+Video uses one of these same selling ideas, with an immediate visual hook, the offer made clear,
+a short demonstration or sequence, and one appropriate next action. Do not make a slideshow of
+unrelated scenes or a generic misery-to-success story. Make the two video concepts test different
+selling ideas from this set. Keep any numerical or factual claims within the supplied evidence.
 
 **Imagery Strategy:**
 "imagery_strategy" is fed almost verbatim to an image-generation model. Write concrete,
@@ -242,15 +261,14 @@ If "generate_video" is false, still populate "video_strategy" with a brief expla
 Start that explanation with "N/A" and keep it under 90 characters, with no alternative creative instructions.
 For pure Search, write exactly: "N/A — video is not applicable to this Search strategy."
 
-If the platform is "Video" or "YouTube", the "video_strategy" object MUST include:
-- "youtube_video_id": A placeholder string (e.g., "INSERT_VIDEO_ID") or a real ID if known.
-- "video_ad_format": String (e.g., "Skippable In-Stream", "In-Feed").
+For YouTube, keep video_strategy a string describing the film and intended placement
+(e.g. skippable in-stream or in-feed). Never invent a YouTube ID; the upload creates it.
 
 **Landing Page URL:**
 You MUST identify the most appropriate landing page URL for this campaign strategy.
 - Look for specific product pages or "money pages" in the **KNOWLEDGE BASE** content provided below.
 - If a specific product page matches the campaign goal better than the generic home page, use that URL.
-- If no specific URL is found in the knowledge base, use the campaign's main URL (if provided in the brief) or a placeholder that clearly indicates what the page should be (e.g., "https://example.com/product-page").
+- If no specific URL is found in the knowledge base, use the campaign's main URL (if provided in the brief) never invent a URL or return a placeholder domain.
 {$selectedPagesPrompt}
 
 **Revenue CPA Multiple:**
@@ -282,6 +300,11 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "daily_budget": 30,
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
       "imagery_strategy": "A coral linen shirt caught in a sea breeze, its weave and relaxed shape sharply lit against a cobalt wall. Also suits: a close view of the cuff being rolled, showing its soft texture; a person wearing the shirt while walking along a sunlit promenade, fabric moving freely and the shirt filling most of the frame.",
+      "creative_concepts": [
+        {"selling_idea": "Light linen for warm days", "evidence": "Illustrative example only: supplied fabric description confirms linen.", "visual": "Close view of the actual coral linen shirt in sunlight, its loose weave clearly visible against a cobalt wall. Fabric moves naturally in a light breeze. A tactile product photograph without lettering."},
+        {"selling_idea": "An easy relaxed fit", "evidence": "Illustrative example only: supplied fit guide confirms a relaxed cut.", "visual": "An adult reaches comfortably across a sunlit cafe table wearing the actual coral shirt, showing the roomy sleeve and relaxed silhouette. Crop closely around the garment and gesture, with pale stone and cobalt accents."},
+        {"selling_idea": "One shirt for everyday plans", "evidence": "Illustrative example only: supplied styling guide shows casual use.", "visual": "The actual coral shirt styled with simple trousers and a canvas bag on a clean pale bench before a day out. A purposeful overhead editorial arrangement, textured cloth and strong directional morning light, no text."}
+      ],
       "video_strategy": "Open on the coral linen shirt moving in a sea breeze against cobalt, with the supplied brand name spoken immediately. Cut to fingers rolling a cuff, then the wearer stepping into sunlight: texture, ease and movement tell one story in three tight shots. Natural fabric sounds under a light rhythm; finish on the shirt in motion with a spoken invitation to shop the collection. Keep the garment central and all surfaces free of text. Alternative angle: begin with the tactile cuff detail and follow the wearer dressing for an afternoon out, selling everyday versatility.",
       "generate_video": true,
       "bidding_strategy": {
@@ -315,6 +338,11 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "daily_budget": 20,
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "The actual running shoe in crisp side profile on a track, mesh and sole construction clearly visible in raking morning light. Also suits: a close view of a runner tightening its laces before a run; the same shoe in use as a foot lifts from the track, a tight crop with the product sharp and the background soft.",
+      "creative_concepts": [
+        {"selling_idea": "A breathable mesh upper", "evidence": "Illustrative example only: supplied product specification confirms mesh.", "visual": "A close detail of the actual running shoe's mesh upper in clear natural light. The shoe fills the photograph against the track surface, with its distinctive material sharp and all styling faithful to the supplied reference."},
+        {"selling_idea": "Adjustable lace-up fit", "evidence": "Illustrative example only: supplied product specification confirms laces.", "visual": "A runner tightening the actual shoe's laces before training. Tight framing shows the lace system and hands clearly against the track, natural morning light, a direct product-use photograph without text."},
+        {"selling_idea": "Made for everyday runs", "evidence": "Illustrative example only: supplied product page describes daily running use.", "visual": "The actual running shoe worn on a morning run, a close side view as the foot lifts from a clean track. Product sharp, background softly blurred, bright natural colour, faithful to the supplied product reference."}
+      ],
       "video_strategy": "N/A — video is not applicable to this Search strategy.",
       "generate_video": false,
       "bidding_strategy": {

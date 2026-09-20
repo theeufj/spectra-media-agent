@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
+import { SetupStages } from '@/Components/SetupJourney';
 import { brandTint } from '@/Components/Marketing/Hero';
 import {
     ArrowRightIcon,
@@ -102,6 +103,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                 utility Tailwind silently ignored. */}
             <div className="py-8 sm:py-12">
                 <div className="mx-auto max-w-2xl px-4 sm:px-0">
+                    {data.service_type === 'setup_only' && <SetupStages stage={0} />}
                     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                         <div className="p-6 text-center sm:p-8">
                             <span
@@ -111,7 +113,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                 <RocketLaunchIcon className="h-7 w-7" aria-hidden="true" />
                             </span>
                             <h1 className="mb-2 text-2xl font-bold tracking-tight text-gray-900">
-                                Get started in 30 seconds
+                                Let’s start with your business
                             </h1>
                             <p className="mx-auto mb-8 max-w-md text-gray-600">
                                 Give us your website address. We read the site, learn your brand, and prepare

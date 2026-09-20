@@ -49,6 +49,16 @@ class KnowledgeBaseRetriever
      */
     public function search(Customer $customer, string $question, int $limit = 10): array
     {
+        // An explicit onboarding brief is useful even before an embedding exists.
+        // Reading it directly also avoids an unnecessary provider call after a failed crawl.
+        $briefs = DB::table('knowledge_bases')->where('customer_id', $customer->id)
+            ->where('source_type', 'text')->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')->whereRaw('length(content) >= ?', [self::MIN_CONTENT_CHARS])
+            ->latest('updated_at')->limit(max(1, $limit))->get(['content'])
+            ->map(fn ($row) => ['url' => (string) $customer->website, 'excerpt' => $this->excerpt((string) $row->content)])->all();
+        if ($briefs !== []) {
+            return $briefs;
+        }
+
         try {
             $queryEmbedding = $this->gemini->embedContent(
                 config('ai.models.embedding'),

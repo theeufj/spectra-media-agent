@@ -1,3 +1,4 @@
+import { SetupStages } from '@/Components/SetupJourney';
 import React, { useState, useEffect } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -15,7 +16,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     // 'deploy_unverified' is its "couldn't confirm" outcome, and
     // 'skipped_plan' means the platform isn't in the user's plan: terminal.
     const isLive = (d) => d.status === 'deployed' || d.status === 'verified';
-    const isTerminal = (d) => isLive(d) || ['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status);
+    const isTerminal = (d) => d.status === 'verified' || ['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status);
     // Stop once every strategy has reached a terminal state.
     const allComplete = deployments.length > 0 && deployments.every(isTerminal);
 
@@ -71,12 +72,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
 
         const stepsPerStrategy = 4;
         const steps = deployments.reduce((total, d) => {
-            // A terminal deployment is all four steps done, however it ended.
-            if (isTerminal(d) && (d.progress ?? 0) < stepsPerStrategy) {
-                return total + stepsPerStrategy;
-            }
-
-            return total + (d.progress ?? 0);
+            return total + (d.progress ?? (d.status === 'verified' ? 4 : d.status === 'deployed' ? 3 : d.status === 'deploying' ? 2 : 0));
         }, 0);
 
         setOverallProgress(Math.round((steps / (deployments.length * stepsPerStrategy)) * 100));
@@ -188,6 +184,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                 </div>
             }
         >
+            {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={2} /></div>}
             <Head title={`Deployment - ${campaign.name}`} />
             
             <div className="py-12">
@@ -312,7 +309,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                 is telling them money goes out tonight. */}
                             <p className="text-green-700 mb-4">
                                 {setupOnly
-                                    ? 'Everything is in your Google Ads account and paused. Add your billing details there and switch the campaign on whenever you are ready — it starts serving the day after you do.'
+                                    ? 'Your campaign has been created and verified. Open your handover checklist to confirm access, billing and tracking before you switch on ads.'
                                     : 'Your campaign has been successfully deployed. Ads are scheduled to begin serving from tomorrow — campaigns start the day after deployment.'}
                             </p>
                             <div className="flex gap-4">
@@ -320,14 +317,14 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                     href="/dashboard"
                                     className="inline-flex min-h-[44px] items-center px-4 bg-brand-dark text-white rounded-lg hover:bg-brand-darker"
                                 >
-                                    View dashboard →
+                                    {setupOnly ? 'View handover checklist →' : 'View dashboard →'}
                                 </Link>
-                                <Link
+                                {!setupOnly && <Link
                                     href="/campaigns/wizard"
                                     className="inline-flex items-center px-4 py-2 bg-white text-green-700 border border-green-300 rounded-lg hover:bg-green-50"
                                 >
                                     Create Another Campaign
-                                </Link>
+                                </Link>}
                             </div>
                         </div>
                     )}

@@ -26,6 +26,7 @@ class SubscriptionController extends Controller
 
         return Inertia::render('Subscription/Pricing', [
             'plans' => $plans,
+            'journey' => $customer ? app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($customer) : null,
             // The one-and-done alternative: a single USD fee instead of a plan.
             'setupFee' => [
                 'price_usd' => (int) round(config('services.stripe.setup_fee_usd_cents', 99900) / 100),

@@ -8,10 +8,10 @@ export function parseCollateral(value) {
     if (!value || typeof value !== 'object'
         || !Array.isArray(value.imageCollaterals) || !Array.isArray(value.videoCollaterals)
         || (value.adCopy != null && typeof value.adCopy !== 'object')
-        || (value.collateralErrors != null && !Array.isArray(value.collateralErrors))) {
+        || (value.collateralErrors != null && typeof value.collateralErrors !== 'object')) {
         throw new Error('The creative status response was incomplete.');
     }
-    return value;
+    return { ...value, collateralErrors: Object.values(value.collateralErrors || {}).map(error => typeof error === 'string' ? { message: error } : error) };
 }
 
 /** @param {number|string} value @returns {number} Exact cents for form previews. */

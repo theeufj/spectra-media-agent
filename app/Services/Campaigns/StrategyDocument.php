@@ -19,6 +19,10 @@ final readonly class StrategyDocument
             'strategies.*.campaign_type' => 'sometimes|in:search,display,video,shopping,app,demand_gen,local_services,performance_max',
             'strategies.*.ad_copy_strategy' => 'required|string',
             'strategies.*.imagery_strategy' => 'required|string',
+            'strategies.*.creative_concepts' => 'sometimes|array|size:3',
+            'strategies.*.creative_concepts.*.selling_idea' => 'required|string|max:250',
+            'strategies.*.creative_concepts.*.evidence' => 'required|string|max:1200',
+            'strategies.*.creative_concepts.*.visual' => 'required|string|max:2000',
             'strategies.*.video_strategy' => 'present|nullable|string',
             'strategies.*.generate_video' => 'required|boolean',
             'strategies.*.bidding_strategy' => 'required|array',
@@ -38,6 +42,10 @@ final readonly class StrategyDocument
             $enabled = collect($enabledPlatforms)->contains(fn ($name) => str_contains(strtolower($strategy['platform']), strtolower($name)));
             if (! $enabled) {
                 throw ValidationException::withMessages(['strategies' => 'The strategy selected a disabled platform.']);
+            }
+            $ideas = array_map(fn ($concept) => mb_strtolower(trim($concept['selling_idea'])), $strategy['creative_concepts'] ?? []);
+            if (count(array_unique($ideas)) !== count($ideas)) {
+                throw ValidationException::withMessages(['strategies' => 'Creative concepts must test distinct reasons to choose the offer.']);
             }
             $weights[(string) $index] = isset($strategy['daily_budget']) ? (int) round($strategy['daily_budget'] * 100) : 1;
             if (($strategy['targeting']['age_min'] ?? 18) > ($strategy['targeting']['age_max'] ?? 65)) {

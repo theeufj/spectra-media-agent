@@ -62,7 +62,7 @@ class SetupOnlyJourneyTest extends TestCase
         $keys = $this->stepKeys($user, $customer);
 
         $this->assertSame(
-            ['site_scan', 'brand_confirmed', 'payment', 'review_ads', 'handover'],
+            ['business', 'campaign', 'review_ads', 'handover'],
             $keys,
         );
 
@@ -70,7 +70,7 @@ class SetupOnlyJourneyTest extends TestCase
         // asked for first.
         $this->assertLessThan(
             array_search('review_ads', $keys, true),
-            array_search('payment', $keys, true),
+            array_search('campaign', $keys, true),
         );
     }
 
@@ -109,9 +109,9 @@ class SetupOnlyJourneyTest extends TestCase
         */
         $this->assertSame(
             route('campaigns.show', $campaign),
-            $steps['review_ads']['action_url'],
+            $steps['campaign']['action_url'],
         );
-        $this->assertSame('Review', $steps['review_ads']['action_text']);
+        $this->assertSame('Review campaign', $steps['campaign']['action_text']);
 
         // The handover is ours and stays ours: a button here is an instruction
         // to do the thing they paid us to do.
@@ -132,7 +132,7 @@ class SetupOnlyJourneyTest extends TestCase
         // Paid, but the build has not produced a campaign yet. Linking to a
         // campaign that does not exist is a 404 at the end of the funnel.
         $this->assertNull($steps['review_ads']['action_url']);
-        $this->assertSame('in_progress', $steps['review_ads']['status']);
+        $this->assertSame('in_progress', $steps['campaign']['status']);
     }
 
     public function test_they_are_never_shown_the_campaign_wizard(): void
@@ -231,6 +231,9 @@ class SetupOnlyJourneyTest extends TestCase
                 ->json('steps')
         )->keyBy('key');
 
-        $this->assertTrue($steps['brand_confirmed']['completed']);
+        // A generated profile alone cannot fund a build with no readable source.
+        $this->assertFalse($steps['business']['completed']);
+        \App\Models\KnowledgeBase::create(['url' => $customer->website, 'customer_id' => $customer->id, 'user_id' => $user->id, 'content' => str_repeat('Supported product detail. ', 30)]);
+        $this->getJson('/api/setup-progress')->assertJsonPath('steps.0.completed', true);
     }
 }

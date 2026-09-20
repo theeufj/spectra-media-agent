@@ -34,6 +34,10 @@ class VideoCollateralController extends Controller
                 abort(403, 'Unauthorized action.');
             }
 
+            if (! $strategy->supportsVideo()) {
+                return back()->withErrors(['video' => 'This campaign type does not use video ads.']);
+            }
+
             // Standardize the platform input
             $platformInput = strtolower($request->input('platform', ''));
             $standardizedPlatform = null;
@@ -190,6 +194,10 @@ class VideoCollateralController extends Controller
 
         if ($strategy->campaign_id !== $campaign->id) {
             abort(403, 'Strategy does not belong to this campaign.');
+        }
+
+        if (! $strategy->supportsVideo()) {
+            return back()->withErrors(['video' => 'This campaign type does not use video ads.']);
         }
 
         $request->validate([

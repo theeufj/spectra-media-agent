@@ -42,13 +42,13 @@ describe('ScanningProgress', () => {
         expect(getByText('Refresh')).toBeInTheDocument();
     });
 
-    it('offers the dashboard exit on timeout without pretending anything failed', () => {
+    it('offers inline recovery on timeout without claiming a job is still running', () => {
         const { getByText, queryByText } = render(
-            <ScanningProgress phase="timeout" data={{ pages: 20 }} />
+            <ScanningProgress phase="timeout" data={{ pages: 20 }} recovery={<button>Describe my business</button>} />
         );
 
         expect(getByText('This is taking longer than usual')).toBeInTheDocument();
-        expect(getByText('Go to dashboard')).toBeInTheDocument();
-        expect(queryByText(/couldn't finish/)).toBeNull();
+        expect(getByText('Describe my business')).toBeInTheDocument();
+        expect(queryByText(/still running in the background/)).toBeNull();
     });
 });

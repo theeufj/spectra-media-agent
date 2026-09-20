@@ -86,6 +86,13 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
         const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(current.imageCollaterals);
         const hasNewVideos = JSON.stringify(data.videoCollaterals) !== JSON.stringify(current.videoCollaterals);
 
+        const waitingForRequestedAsset = (generatingAdCopyRef.current && !hasNewAdCopy)
+            || (generatingImageRef.current && !hasNewImages)
+            || (generatingVideoRef.current && !hasNewVideos);
+        if (data.generationPending === false && !waitingForRequestedAsset) {
+            setIsPolling(false);
+        }
+
         if (hasNewAdCopy || hasNewImages || hasNewVideos) {
             setCollateral(data);
 

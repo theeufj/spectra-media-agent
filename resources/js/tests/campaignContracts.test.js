@@ -5,7 +5,8 @@ describe('campaign transport contracts', () => {
     it('rejects an incomplete poll instead of replacing available creative', () => {
         expect(() => parseCollateral({message: 'Session expired'})).toThrow();
         const value = {adCopy: null, imageCollaterals: [], videoCollaterals: []};
-        expect(parseCollateral(value)).toBe(value);
+        expect(parseCollateral(value)).toEqual({ ...value, collateralErrors: [] });
+        expect(parseCollateral({ ...value, collateralErrors: { image: 'Provider unavailable' }, generationPending: false })).toMatchObject({ collateralErrors: [{ message: 'Provider unavailable' }], generationPending: false });
     });
     it('converts decimal budgets without truncation or non-finite values', () => {
         expect(budgetCents('12.34')).toBe(1234);

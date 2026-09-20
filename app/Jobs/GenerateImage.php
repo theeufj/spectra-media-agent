@@ -162,32 +162,37 @@ class GenerateImage implements ShouldQueue
                 throw new \Exception("Image prompt failed validation: {$feedback}");
             }
 
-            // --- AI-Powered Prompt Splitting ---
-            $splitterPrompt = (new ImagePromptSplitterPrompt($strategyPrompt))->getPrompt();
-            $splitterResponse = $geminiService->generateContent(config('ai.models.default'), $splitterPrompt);
+            $concept = $this->strategy->creative_concepts[$this->slot % 3] ?? null;
+            if ($concept) {
+                // These are the approved distinct selling ideas. Do not ask three
+                // independent splitter calls to invent a different set for each slot.
+                $prompts = ["Selling idea: {$concept['selling_idea']}\nSupported fact: {$concept['evidence']}\nPicture: {$concept['visual']}"];
+            } else {
+                $splitterPrompt = (new ImagePromptSplitterPrompt($strategyPrompt))->getPrompt();
+                $splitterResponse = $geminiService->generateContent(config('ai.models.default'), $splitterPrompt);
 
-            $prompts = [];
-            try {
-                $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($splitterResponse['text']));
-                $decoded = json_decode($cleanedJson, true);
-                if (json_last_error() !== JSON_ERROR_NONE || ! isset($decoded['prompts']) || ! is_array($decoded['prompts'])) {
-                    throw new \Exception('Failed to decode prompts from the splitter model.');
+                $prompts = [];
+                try {
+                    $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($splitterResponse['text']));
+                    $decoded = json_decode($cleanedJson, true);
+                    if (json_last_error() !== JSON_ERROR_NONE || ! isset($decoded['prompts']) || ! is_array($decoded['prompts'])) {
+                        throw new \Exception('Failed to decode prompts from the splitter model.');
+                    }
+                    $prompts = $decoded['prompts'];
+                } catch (\Throwable $e) {
+                    Log::error('Failed to parse prompts from ImagePromptSplitter: '.$e->getMessage(), ['response' => $splitterResponse['text'] ?? null]);
+                    // Fallback to the original strategy if splitting fails
+                    $prompts = [$strategyPrompt];
                 }
-                $prompts = $decoded['prompts'];
-            } catch (\Throwable $e) {
-                Log::error('Failed to parse prompts from ImagePromptSplitter: '.$e->getMessage(), ['response' => $splitterResponse['text'] ?? null]);
-                // Fallback to the original strategy if splitting fails
-                $prompts = [$strategyPrompt];
-            }
 
-            if (empty($prompts)) {
-                // If splitting results in no prompts, fall back to the original strategy
-                $prompts = [$strategyPrompt];
-                Log::warning('Image prompt splitter returned no prompts. Falling back to the original strategy.');
+                if (empty($prompts)) {
+                    // If splitting results in no prompts, fall back to the original strategy
+                    $prompts = [$strategyPrompt];
+                    Log::warning('Image prompt splitter returned no prompts. Falling back to the original strategy.');
+                }
+                // Each dispatched slot owns one concept; three slots must not render nine concepts.
+                $prompts = [$prompts[$this->slot % count($prompts)]];
             }
-            // Each dispatched slot owns one concept; three slots must not render nine concepts.
-            $prompts = [$prompts[$this->slot % count($prompts)]];
-            // --- End Prompt Splitting ---
 
             /*
                The only words allowed inside a generated creative are the
@@ -274,7 +279,7 @@ class GenerateImage implements ShouldQueue
                  */
                 $lens = $this->slot;
                 $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens);
-                $scene = CreativeVariant::apply($prompt, $lens);
+                $scene = $concept ? $prompt : CreativeVariant::apply($prompt, $lens);
 
                 /*
                  * A different approved headline on each creative.

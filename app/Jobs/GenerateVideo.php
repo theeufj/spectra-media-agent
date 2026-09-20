@@ -217,7 +217,10 @@ class GenerateVideo implements ShouldQueue
                footage is still one advertisement twice. The lens is what makes
                the second concept look like a different ad.
             */
-            $actionableContent = CreativeVariant::apply($actionableContent, $this->variationIndex);
+            $concept = $this->strategy->creative_concepts[$this->variationIndex % 3] ?? null;
+            $actionableContent = $concept
+                ? "Selling idea: {$concept['selling_idea']}\nSupported fact: {$concept['evidence']}\nVisual direction: {$concept['visual']}\nAdapt the following film brief to demonstrate this one idea. Open with the offer, demonstrate it, then one next action. Do not invent proof.\n".$actionableContent
+                : CreativeVariant::apply($actionableContent, $this->variationIndex);
 
             Log::info('Video concept', [
                 'campaign_id' => $this->campaign->id,

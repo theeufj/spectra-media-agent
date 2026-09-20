@@ -408,6 +408,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('quick-start.process');
     // The post-QuickStart holding screen: narrates scan → brand extraction,
     // then hands off to the brand guidelines for sign-off.
+    Route::post('/quick-start/business-brief', [App\Http\Controllers\QuickStartController::class, 'saveBrief'])
+        ->middleware('throttle:5,1')->name('quick-start.business-brief');
     Route::get('/quick-start/scanning', [App\Http\Controllers\QuickStartController::class, 'scanning'])->name('quick-start.scanning');
 
     // One-and-done: a single USD setup fee instead of a subscription.

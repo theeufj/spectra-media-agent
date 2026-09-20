@@ -44,6 +44,12 @@ class DashboardController extends Controller
         // simply unavailable. Never throws — see FeatureRecorder.
         FeatureRecorder::record(ProductFeature::Dashboard, 'viewed', $activeCustomer->id, $user->id);
 
+        if ($activeCustomer->service_type === 'setup_only') {
+            return Inertia::render('Setup/Index', [
+                'journey' => app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($activeCustomer),
+            ]);
+        }
+
         $campaigns = $activeCustomer->campaigns()
             ->with(['strategies'])
             ->orderBy('created_at', 'desc')

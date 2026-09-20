@@ -39,14 +39,47 @@ class QuickStartController extends Controller
             return redirect()->route('quick-start');
         }
 
-        if ($customer->brandGuideline()->exists()) {
+        $baseline = $request->query('after');
+        if ($customer->brandGuideline && ! $request->boolean('manual')
+            && (! $baseline || $customer->brandGuideline->updated_at->toIso8601String() !== $baseline)) {
             return redirect()->route('brand-guidelines.index', ['review' => 1]);
         }
 
         return \Inertia\Inertia::render('QuickStart/Scanning', [
             'customerName' => $customer->name,
             'website' => $customer->website,
+            'setupOnly' => $customer->service_type === 'setup_only',
+            'manualEntry' => $request->boolean('manual'),
+            'baselineUpdatedAt' => $baseline,
         ]);
+    }
+
+    public function saveBrief(Request $request)
+    {
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $this->authorize('update', $customer);
+        $data = $request->validate([
+            'business_name' => 'required|string|max:255',
+            'business_description' => 'required|string|min:300|max:12000',
+        ]);
+        // One editable source, even if a client retries a submission. Never discard crawl evidence.
+        \Illuminate\Support\Facades\DB::transaction(function () use ($customer, $request, $data) {
+            $customer->newQuery()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
+            $customer->update(['name' => $data['business_name']]);
+            $brief = \App\Models\KnowledgeBase::firstOrNew([
+                'customer_id' => $customer->id, 'source_type' => 'text', 'original_filename' => 'onboarding-business-brief.txt', 'file_path' => null,
+            ]);
+            $brief->fill(['url' => $customer->website ?? '', 'user_id' => $request->user()->id, 'content' => $data['business_description']]);
+            if ($brief->isDirty() || ($brief->updated_at?->lt(now()->subMinutes(10)) && ! $customer->brandGuideline?->user_verified)) {
+                $brief->fill(['embedding' => null, 'embedding_model' => null]);
+                $brief->updated_at = now();
+                $brief->save();
+                $customer->brandGuideline?->update(['user_verified' => false]);
+                \App\Jobs\ExtractBrandGuidelines::dispatch($customer, force: true)->afterCommit();
+            }
+        });
+
+        return redirect()->route('quick-start.scanning', array_filter(['after' => $customer->brandGuideline?->refresh()->updated_at?->toIso8601String()]));
     }
 
     public function process(Request $request)
@@ -56,6 +89,8 @@ class QuickStartController extends Controller
             // The fork: ongoing management (default) or the one-time US$999
             // setup. Intent only — payment is collected at the plan step.
             'service_type' => 'nullable|in:managed,setup_only',
+            'timezone' => 'nullable|timezone',
+            'country' => 'nullable|string|size:2|regex:/^[A-Z]{2}$/',
         ]);
 
         return $this->doProcess($validated['website_url'], Auth::user(), $request);

@@ -17,7 +17,7 @@ class CollateralPlan
 
     public function wantsVideo(Campaign $campaign, Strategy $strategy): bool
     {
-        if (! $campaign->allowsAutomaticVideo()) {
+        if (! $strategy->supportsVideo() || ! $campaign->allowsAutomaticVideo()) {
             return false;
         }
         if ($strategy->getRawOriginal('generate_video') !== null) {

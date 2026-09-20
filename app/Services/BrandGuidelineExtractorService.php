@@ -154,7 +154,10 @@ class BrandGuidelineExtractorService
                 return "--- PAGE TYPE: {$typeLabel} | URL: {$page->url} ---\n\n{$page->content}";
             })->all();
 
-            $websiteContent = self::budgetedContent($customerPageChunks);
+            $manualBriefs = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+                ->where('source_type', 'text')->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')->latest('updated_at')->pluck('content')
+                ->map(fn ($content) => "--- BUSINESS DESCRIPTION SUPPLIED BY THE CUSTOMER ---\n".$content)->all();
+            $websiteContent = self::budgetedContent(array_merge($manualBriefs, $customerPageChunks));
 
             // Fallback to KnowledgeBase if no CustomerPage data
             if (empty($websiteContent)) {

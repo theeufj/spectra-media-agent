@@ -1,3 +1,4 @@
+import { SetupStages } from '@/Components/SetupJourney';
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -77,7 +78,7 @@ export function UnlockAction({ setupOnly, label, className }) {
     );
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {} }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
@@ -486,13 +487,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         <AuthenticatedLayout
             user={auth.user}
             header={
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
                     {/* currentStrategy.name is frequently empty, which rendered
                         "Collateral for Spring Lead Gen -" with a trailing dash
                         and nothing after it. Fall back to the platform, which
                         is what the reader actually wants to know. */}
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                        Collateral for {campaign.name}
+                        Review your ads — {campaign.name}
                         {(currentStrategy.name || currentStrategy.platform)
                             ? ` — ${currentStrategy.name || currentStrategy.platform}`
                             : ''}
@@ -507,7 +508,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                     once to build an account they will run themselves,
                                     the button creates the ads — it does not start
                                     them. */}
-                                {setupOnly ? 'Create my ads' : 'Deploy All'}
+                                {setupOnly ? (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update paused ads' : 'Create paused ads') : 'Deploy All'}
                             </button>
                             <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
@@ -540,7 +541,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 </div>
             }
         >
-            <Head title="Collateral" />
+            <Head title="Review your ads" />
 
             <SubscriptionRequiredModal 
                 show={showSubscriptionModal} 
@@ -577,6 +578,26 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
 
+                    {setupOnly && <SetupStages stage={2} />}
+                    <section className="mb-8 grid gap-6 rounded-xl border border-gray-200 bg-white p-6 lg:grid-cols-2">
+                        <div>
+                            <h1 className="text-2xl font-semibold text-gray-900">Your ad, as a customer could see it</h1>
+                            <p className="mt-2 mb-5 text-sm text-gray-600">Review the message and destination, then approve the assets below.{setupOnly && ' Creating the ads leaves the campaign paused.'}</p>
+                            {collateral.adCopy ? <AdPreviewPanel adCopy={collateral.adCopy} images={collateral.imageCollaterals} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''} />
+                                : <p role="status" className="rounded-lg bg-gray-50 p-5 text-gray-600">{isPolling ? 'Your ad copy is being prepared. The preview will appear here.' : 'Ad copy is not available yet. Use Generate ad copy below to retry.'}</p>}
+                        </div>
+                        <div className="lg:border-l lg:border-gray-100 lg:pl-6">
+                            <h2 className="font-semibold text-gray-900">Campaign details</h2>
+                            <dl className="mt-4 space-y-4 text-sm">
+                                <div><dt className="text-gray-500">Daily budget</dt><dd className="mt-1 font-medium text-gray-900">{money(reviewSummary.daily_budget ?? campaign.daily_budget, reviewSummary.currency || currency)} per day</dd></div>
+                                <div><dt className="text-gray-500">Audience</dt><dd className="mt-1 text-gray-900">{reviewSummary.audience || campaign.target_market || 'See campaign targeting'}</dd></div>
+                                <div><dt className="text-gray-500">Destination</dt><dd className="mt-1 break-all text-gray-900">{reviewSummary.destination || campaign.landing_page_url}</dd></div>
+                                <div><dt className="text-gray-500">Placement</dt><dd className="mt-1 text-gray-900">{currentStrategy.platform} · {currentStrategy.campaign_type}</dd></div>
+                            </dl>
+                            <Link href={route('campaigns.show', { campaign: campaign.uuid })} className="mt-5 inline-block text-sm text-brand-dark underline">Review campaign details and creative direction</Link>
+                            {setupOnly && ['deployed', 'verified'].includes(currentStrategy.deployment_status) && <Link href={route('dashboard')} className="mt-4 block text-sm font-semibold text-brand-dark underline">View your handover checklist</Link>}
+                        </div>
+                    </section>
                     {/* Runtime collateral generation failure banner */}
                     {collateralError && (
                         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -648,8 +669,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                         {/* Deployment selection summary */}
                         {(() => {
-                            const selImages = collateral.imageCollaterals?.filter(i => i.should_deploy).length ?? 0;
-                            const totalImages = collateral.imageCollaterals?.length ?? 0;
+                            const concepts = groupConcepts(collateral.imageCollaterals);
+                            const selImages = concepts.filter(concept => concept.deployed).length;
+                            const totalImages = concepts.length;
                             const selVideos = collateral.videoCollaterals?.filter(v => v.should_deploy).length ?? 0;
                             const totalVideos = collateral.videoCollaterals?.length ?? 0;
                             const selAdCopy = collateral.adCopy?.should_deploy ? 1 : 0;
@@ -660,12 +682,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                 <div className={`mt-4 rounded-lg border-2 px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${totalSelected > 0 ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-lg font-bold ${totalSelected > 0 ? 'text-green-700' : 'text-amber-700'}`}>
-                                            {totalSelected > 0 ? `${totalSelected} item${totalSelected !== 1 ? 's' : ''} selected for deployment` : 'No items selected for deployment'}
+                                            {totalSelected > 0 ? `${totalSelected} item${totalSelected !== 1 ? 's' : ''} selected` : 'No items selected'}
                                         </span>
                                         <span className="text-sm text-gray-500">
                                             {[
                                                 selAdCopy ? `${selAdCopy} ad copy` : null,
-                                                totalImages ? `${selImages}/${totalImages} images` : null,
+                                                totalImages ? `${selImages}/${totalImages} image concepts` : null,
                                                 totalVideos ? `${selVideos}/${totalVideos} videos` : null,
                                             ].filter(Boolean).join(' · ')}
                                         </span>
@@ -777,11 +799,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <div onClick={(e) => e.stopPropagation()}>
                                                             <AdPreviewPanel
                                                                 platform={strategyItem.platform.toLowerCase()}
-                                                                headlines={collateral.adCopy.headlines}
-                                                                descriptions={collateral.adCopy.descriptions}
-                                                                businessName={campaign.name}
-                                                                displayUrl={campaign.target_url || 'example.com'}
-                                                                imageUrl={collateral.imageCollaterals?.[0]?.cloudfront_url}
+                                                                campaignType={strategyItem.campaign_type}
+                                                                adCopy={collateral.adCopy}
+                                                                brandName={reviewSummary.business_name}
+                                                                websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''}
+                                                                images={collateral.imageCollaterals}
                                                             />
                                                         </div>
                                                     )}
@@ -791,7 +813,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <hr className="my-8" />
 
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Image Collateral</h3>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Image concepts</h3>
                                         <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
                                         {strategyItem.campaign_type === 'search' && /google/i.test(strategyItem.platform) && (
                                             <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
@@ -1000,7 +1022,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             <>
                                                 <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
                                                     <span>☑️</span>
-                                                    <span>Check the box on each image to include it in deployment. Unchecked images will not go live.</span>
+                                                    <span>{currentStrategy.campaign_type === 'search' ? 'Select images to save to your Google Ads asset library. Attach eligible images to your Search ads in Google Ads.' : 'Select the image concepts you want included in your ads.'}</span>
                                                 </p>
                                                 {/* items-start, or the row stretches every card to the
                                                     tallest in it. A 1200x628 next to a 1024x1024 then grows
@@ -1146,7 +1168,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     <svg className="h-3.5 w-3.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                                                 )}
                                                             </span>
-                                                            {concept.deployed ? 'Will deploy' : 'Not deploying'}
+                                                            {concept.deployed ? (currentStrategy.campaign_type === 'search' ? 'Save to asset library' : 'Selected for ads') : 'Excluded'}
                                                         </span>
 
                                                         {concept.formats.length > 1 && (
@@ -1191,7 +1213,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                                         </svg>
-                                                        <p className="text-sm font-medium text-gray-600">Generating the next image</p>
+                                                        <p className="text-sm font-medium text-gray-600">Preparing remaining creative</p>
                                                         <p className="text-xs text-gray-500">It appears here as soon as it is ready</p>
                                                     </div>
                                                 )}
@@ -1201,7 +1223,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <hr className="my-8" />
 
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Video Collateral</h3>
+                                        {supportsVideo && <>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Video ads</h3>
                                         <p>Generate a unique video based on the video strategy for {strategyItem.platform}, or upload your own.</p>
 
                                         {/* Quota indicator */}
@@ -1349,6 +1372,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 </div>
                                             </>
                                         )}
+                                        </>}
                                     </div>
                                 )
                             ))}
@@ -1376,10 +1400,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     video={extendingVideo}
                     onClose={() => setExtendingVideo(null)}
                     onExtensionStart={() => {
+                        setGeneratingVideo(true);
                         setIsPolling(true);
-                        setTimeout(() => {
-                            setIsPolling(false);
-                        }, 600000); // Poll for 10 minutes — extension takes 5–15 min
                     }}
                 />
             )}

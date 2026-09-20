@@ -200,9 +200,13 @@ export default function AdPreviewPanel({
     adCopy, 
     images = [], 
     platform,
+    campaignType,
     brandName = 'Your Brand',
     websiteUrl = 'yourwebsite.com'
 }) {
+    const isGoogle = /google|microsoft|bing|search|sem/i.test(platform || '');
+    const isSearch = campaignType ? campaignType === 'search' : /search|sem/i.test(platform || '');
+    const isSocial = /facebook|instagram|meta/i.test(platform || '');
     const headlines = adCopy?.headlines || [];
     const descriptions = adCopy?.descriptions || [];
     const primaryImage = images[0]?.cloudfront_url || null;
@@ -214,12 +218,12 @@ export default function AdPreviewPanel({
                 Ad Preview
             </h3>
             <p className="text-sm text-gray-500 mb-6">
-                See how your ads will appear across different placements
+                Example appearance for this campaign. Google may combine headlines and descriptions differently.
             </p>
             
             <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-4">
                 {/* Google Search */}
-                <div className="flex-shrink-0">
+                {isGoogle && isSearch && <div className="flex-shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Google Search</p>
                     <GoogleSearchPreview 
                         headlines={headlines}
@@ -228,8 +232,9 @@ export default function AdPreviewPanel({
                     />
                 </div>
                 
+                }
                 {/* Google Display */}
-                <div className="flex-shrink-0">
+                {isGoogle && !isSearch && <div className="flex-shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Google Display</p>
                     <GoogleDisplayPreview 
                         headline={headlines[0]}
@@ -238,8 +243,9 @@ export default function AdPreviewPanel({
                     />
                 </div>
                 
+                }
                 {/* Facebook Feed */}
-                <div className="flex-shrink-0">
+                {isSocial && <div className="flex-shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Facebook Feed</p>
                     <FacebookFeedPreview 
                         pageName={brandName}
@@ -250,8 +256,9 @@ export default function AdPreviewPanel({
                     />
                 </div>
                 
+                }
                 {/* Instagram */}
-                <div className="flex-shrink-0">
+                {isSocial && <div className="flex-shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Instagram</p>
                     <InstagramFeedPreview 
                         username={brandName.toLowerCase().replace(/\s+/g, '')}
@@ -259,7 +266,8 @@ export default function AdPreviewPanel({
                         imageUrl={primaryImage}
                         caption={descriptions[0]}
                     />
-                </div>
+                </div>}
+                {!isGoogle && !isSocial && <GoogleDisplayPreview headline={headlines[0]} description={descriptions[0]} imageUrl={primaryImage} />}
             </div>
             
             <p className="text-xs text-gray-500 mt-4 text-center">

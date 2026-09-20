@@ -102,6 +102,11 @@ class StrategyController extends Controller
             'video_strategy' => 'required|string',
         ]);
 
+        if ($strategy->imagery_strategy !== $validated['imagery_strategy']) {
+            // A manually rewritten image brief supersedes the generated concept set.
+            $validated['creative_concepts'] = null;
+        }
+
         $strategy->update($validated);
 
         // If this strategy was already signed off, its collateral is now stale.

@@ -78,6 +78,14 @@ class CollateralController extends Controller
 
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
+            'reviewSummary' => [
+                'business_name' => $customer->name,
+                'destination' => $strategy->bidding_strategy['landing_page_url'] ?? $campaign->landing_page_url ?: $customer->website,
+                'audience' => $campaign->target_market,
+                'daily_budget' => $campaign->approved_daily_budget ?? $campaign->daily_budget,
+                'currency' => $customer->currency_code,
+            ],
+            'supportsVideo' => $strategy->supportsVideo(),
             'currentStrategy' => $strategy,
             'allStrategies' => $allStrategies,
             'adCopy' => $adCopy,
@@ -163,9 +171,13 @@ class CollateralController extends Controller
         $have = $rows->whereNotNull('concept_key')->unique('concept_key')->count()
             + $rows->whereNull('concept_key')->count();
 
-        return $have < \App\Services\Campaigns\CollateralPlan::IMAGE_CONCEPTS_PER_STRATEGY
+        $imagesPending = $have < \App\Services\Campaigns\CollateralPlan::IMAGE_CONCEPTS_PER_STRATEGY
             && ImageCollateral::canGenerateForCampaign($campaign)
             && $strategy->signed_off_at->gt(now()->subMinutes(self::IMAGE_GENERATION_WINDOW_MINUTES));
+        $videosPending = $strategy->supportsVideo() && VideoCollateral::forStrategy($strategy)
+            ->where('is_active', true)->whereIn('status', ['pending', 'generating'])->exists();
+
+        return $imagesPending || $videosPending;
     }
 
     /**
@@ -190,6 +202,7 @@ class CollateralController extends Controller
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
             'collateralErrors' => $this->liveCollateralErrors($strategy, $adCopy, $imageCollaterals, $videoCollaterals),
+            'generationPending' => $this->generationPending($strategy),
         ]);
     }
 
