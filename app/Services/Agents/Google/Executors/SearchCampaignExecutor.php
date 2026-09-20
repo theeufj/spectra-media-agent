@@ -14,13 +14,11 @@ use App\Services\Agents\Google\BiddingStrategyApplier;
 use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
-use App\Services\GoogleAds\CommonServices\LinkAdGroupAsset;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\StorageHelper;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -132,12 +130,13 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // 3.5 Add Audience Targeting
         $this->audiences->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
 
-        // 4. Upload Image Assets for Responsive Search Ad (if available)
+        // 4. Save images to the account library. Search image links are read-only
+        // through the API; attaching them requires the Google Ads UI.
+        // https://developers.google.com/google-ads/api/docs/assets/overview
         $imageAssetResourceNames = [];
         $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         if ($imageCollaterals->isNotEmpty()) {
             $uploadImageAssetService = new UploadImageAsset($this->customer);
-            $linkAdGroupAssetService = new LinkAdGroupAsset($this->customer);
 
             foreach ($imageCollaterals as $image) {
                 try {
@@ -155,32 +154,19 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                         $imageAssetResourceNames[] = $assetResourceName;
                         $result->addPlatformId('image_asset', $assetResourceName);
 
-                        // Determine field type from image dimensions.
-                        // AD_IMAGE is Display/Video only — Search image extensions require
-                        // MARKETING_IMAGE (landscape) or SQUARE_MARKETING_IMAGE (square).
-                        $size = @getimagesizefromstring($imageData);
-                        $width = $size[0] ?? 0;
-                        $height = $size[1] ?? 1;
-                        $ratio = $height > 0 ? $width / $height : 1;
-                        $fieldType = ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300)
-                            ? AssetFieldType::SQUARE_MARKETING_IMAGE
-                            : AssetFieldType::MARKETING_IMAGE;
-
-                        $linkResourceName = ($linkAdGroupAssetService)($customerId, $adGroupResourceName, $assetResourceName, $fieldType);
-                        if ($linkResourceName) {
-                            $result->addPlatformId('ad_group_asset', $linkResourceName);
-                            Log::info('GoogleAdsExecutionAgent: Linked image asset to ad group', [
-                                'asset' => $assetResourceName,
-                                'ad_group' => $adGroupResourceName,
-                                'field_type' => $fieldType,
-                            ]);
-                        }
                     }
                 } catch (\Throwable $e) {
                     report($e);
-                    $result->addWarning("Failed to upload/link image asset {$image->s3_path}: ".$e->getMessage());
+                    $result->addWarning("Failed to upload image asset {$image->s3_path}: ".$e->getMessage());
                 }
             }
+        }
+
+        if ($imageAssetResourceNames !== []) {
+            $result->addWarning(
+                'search_images_require_manual_linking',
+                'Images are saved in your Google Ads asset library. Add them to Search ads in Google Ads once your account meets its image-asset eligibility requirements.',
+            );
         }
 
         // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
@@ -202,7 +188,6 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                         'finalUrls' => [$finalUrl],
                         'headlines' => $adCopy->headlines ?? [],
                         'descriptions' => $adCopy->descriptions ?? [],
-                        'imageAssets' => $imageAssetResourceNames,
                     ];
                     $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
                     if ($adResourceName) {
@@ -221,7 +206,6 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                             'finalUrls' => [$finalUrl],
                             'headlines' => $rotated,
                             'descriptions' => array_reverse($firstCopy->descriptions ?? []),
-                            'imageAssets' => $imageAssetResourceNames,
                         ];
                         $adResourceName2 = ($createAdService)($customerId, $adGroupResourceName, $adData2);
                         if ($adResourceName2) {

@@ -793,6 +793,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Image Collateral</h3>
                                         <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
+                                        {strategyItem.campaign_type === 'search' && /google/i.test(strategyItem.platform) && (
+                                            <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
+                                                Search images are saved to your Google Ads asset library. Add them to your ads in Google Ads once your account is eligible for image assets. Your text ads can run without them.
+                                            </p>
+                                        )}
 
                                         {/* Quota indicator */}
                                         {creativeUsage && !creativeUsage.is_unlimited && (
