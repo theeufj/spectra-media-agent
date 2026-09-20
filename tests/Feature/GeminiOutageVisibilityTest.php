@@ -174,6 +174,19 @@ class GeminiOutageVisibilityTest extends TestCase
         Exceptions::assertReported(GeminiUnavailable::class);
     }
 
+    public function test_vision_failure_cannot_fall_back_to_a_text_only_answer(): void
+    {
+        config(['services.openrouter.api_key' => 'test-openrouter-key']);
+        Cache::put('gcp_vertex_access_token', 'test-token', 600);
+        Http::fake(['*' => Http::response(['error' => ['message' => 'Unavailable']], 403)]);
+        Exceptions::fake();
+        $result = app(GeminiService::class)->generateContent(config('ai.models.default'), 'Review the image.',
+            maxRetries: 1, imageBase64: base64_encode('test image'));
+        $this->assertNull($result);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'openrouter.ai'));
+        Exceptions::assertReported(GeminiUnavailable::class);
+    }
+
     public function test_a_successful_call_reports_nothing(): void
     {
         // The token exchange goes through google/auth, not Laravel's HTTP

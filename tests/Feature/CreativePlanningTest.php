@@ -117,6 +117,29 @@ class CreativePlanningTest extends TestCase
         $this->assertSame(3, $strategy->imageCollaterals()->count());
     }
 
+    public function test_visual_review_sends_the_rendered_contact_sheet_in_a_real_provider_request(): void
+    {
+        $strategy = $this->reviewStrategy();
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $jpeg = (string) ImageManager::gd()->create(120, 120)->fill('#123456')->toJpeg();
+        foreach ($strategy->imageCollaterals as $asset) {
+            \Illuminate\Support\Facades\Storage::disk('public')->put($asset->s3_path, $jpeg);
+        }
+        \Illuminate\Support\Facades\Cache::put('gcp_vertex_access_token', 'test-token', 600);
+        $expected = array_map(fn ($slot) => ['slot' => $slot, 'passed' => true, 'feedback' => 'Distinct subject and framing.'], range(0, 2));
+        \Illuminate\Support\Facades\Http::fake(['*aiplatform*' => \Illuminate\Support\Facades\Http::response([[
+            'candidates' => [['content' => ['parts' => [['text' => json_encode(['concepts' => $expected])]]]]],
+        ]])]);
+        $this->assertSame($expected, app(RenderedSetReviewer::class)->review($strategy, 'test-run'));
+        \Illuminate\Support\Facades\Http::assertSentCount(1);
+        \Illuminate\Support\Facades\Http::assertSent(function ($request) {
+            $image = $request->data()['contents'][0]['parts'][1]['inlineData'] ?? [];
+
+            return ($image['mimeType'] ?? null) === 'image/jpeg'
+                && strlen(base64_decode($image['data'] ?? '')) > 1000;
+        });
+    }
+
     public function test_a_failed_final_review_stops_after_one_correction(): void
     {
         $strategy = $this->reviewStrategy();

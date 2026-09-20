@@ -311,7 +311,7 @@ class GenerateImage implements ShouldQueue
                     $scene .= "\nVisual medium: {$concept['visual_style']}. Composition: {$concept['composition']}. Dominant subject: {$concept['subject']}.";
                 }
                 if ($this->reviewFeedback) {
-                    $scene .= "\nCorrection after reviewing the first render (retain this approved selling idea): ".$this->reviewFeedback;
+                    $scene .= "\nCorrection after reviewing the first render: retain the supported selling idea, but this correction overrides earlier scene objects and composition where they conflict. ".$this->reviewFeedback;
                 }
 
                 /*
@@ -560,7 +560,7 @@ class GenerateImage implements ShouldQueue
                             $img->cover($targetW, $targetH);
                         }
 
-                        app(\App\Services\Creative\ImageComposer::class)->compose($img, $layout, $headline, $brandName, $approvedDescriptions[$lens % max(1, count($approvedDescriptions))] ?? null, brandColour: (string) ($brandGuidelines?->color_palette['primary_colors'][0] ?? '#16324f'));
+                        app(\App\Services\Creative\ImageComposer::class)->compose($img, $layout, $headline, $brandName, $approvedDescriptions[$lens] ?? null, brandColour: (string) ($brandGuidelines?->color_palette['primary_colors'][0] ?? '#16324f'));
 
                         $encoded = (string) $img->encode();
                     } catch (\Throwable $e) {

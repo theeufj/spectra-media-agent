@@ -307,7 +307,9 @@ class GeminiService
            it is healthy, and the answer is shaped identically: a caller cannot
            tell which vendor replied.
         */
-        if ($result === null) {
+        // This fallback sends text only. A vision task must fail visibly rather
+        // than receive an answer from a model that never saw its image.
+        if ($result === null && $imageBase64 === null) {
             $result = $this->generateViaOpenRouter($prompt, $config, $systemInstruction, $context, $model);
         }
 
