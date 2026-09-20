@@ -50,7 +50,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
                 <p className="mt-1 text-sm text-gray-600">
                     {setupOnly
                         ? "We built this campaign from your website, including a suggested budget. Your ads arrive paused — this is the number they'll run at once you switch them on."
-                        : "We built this campaign from your website, including a suggested budget. Nothing is live and nothing has been charged — check the number below and it's yours."}
+                        : "We built this campaign from your website, including a suggested budget. Your ads are not live yet. Confirm your daily ad spend below; this is separate from your monthly subscription."}
                 </p>
             </div>
 

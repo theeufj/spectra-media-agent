@@ -7,7 +7,9 @@ import ConfirmationModal from '@/Components/ConfirmationModal';
 import BrandExtractionStatus from '@/Components/BrandExtractionStatus';
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
-    const { flash } = usePage().props;
+    const page = usePage();
+    const { flash } = page.props;
+    const isOnboardingReview = new URLSearchParams((page.url || '').split('?')[1] || '').get('review') === '1';
     const [isEditing, setIsEditing] = useState(false);
     const [activeSection, setActiveSection] = useState('overview');
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
@@ -227,14 +229,16 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                     </section>}
                     {/* Sign-off: the first launch is gated on this confirmation,
                         so the ask is explicit rather than buried in a toolbar. */}
-                    {!brandGuideline.user_verified && canEdit && (
+                    {canEdit && !isEditing && (!brandGuideline.user_verified || isOnboardingReview) && (
                         <div className="mb-6 rounded-lg border-2 border-brand-primary bg-white p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm">
                             <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-gray-900">This is the brand profile your ads will be written from</p>
                                 <p className="text-sm text-gray-600 mt-0.5">
                                     {/* Asking for a confident yes directly under a panel doubting
                                         the source read as though we had not noticed. */}
-                                    {brandGuideline.extraction_warning
+                                    {brandGuideline.user_verified
+                                        ? 'Your changes are saved. Continue to the next step of your campaign setup.'
+                                        : brandGuideline.extraction_warning
                                         ? 'Check the address above first. If it is right, correct anything we got wrong here and confirm.'
                                         : 'Look it over and fix anything we got wrong — then confirm it to move on to your first campaign.'}
                                 </p>
@@ -243,7 +247,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 onClick={handleVerify}
                                 className="flex-shrink-0 px-6 py-3 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold"
                             >
-                                Confirm & continue →
+                                {brandGuideline.user_verified ? 'Continue →' : 'Confirm & continue →'}
                             </button>
                         </div>
                     )}

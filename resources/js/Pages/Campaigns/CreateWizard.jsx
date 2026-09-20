@@ -758,10 +758,10 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 <p className="text-sm text-green-700">
                                     <strong>Daily Budget:</strong> ~
                                     {money(
-                                        data.total_budget / Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24))),
+                                        data.total_budget / Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24)) + 1),
                                         currency
                                     )}
-                                    /day over {Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24))} days
+                                    /day over {Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24)) + 1)} days
                                 </p>
                             </div>
                         )}

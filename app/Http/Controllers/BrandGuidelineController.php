@@ -49,55 +49,68 @@ class BrandGuidelineController extends Controller
 
         $validated = $request->validate([
             'brand_voice' => 'nullable|array',
+            'brand_voice.primary_tone' => 'nullable|string|max:255',
+            'brand_voice.description' => 'nullable|string|max:2000',
+            'brand_voice.examples' => 'nullable|array',
+            'brand_voice.examples.*' => 'nullable|string|max:2000',
             'brand_voice.primary_voice' => 'nullable|string|max:255',
             'brand_voice.voice_descriptors' => 'nullable|array',
             'brand_voice.voice_descriptors.*' => 'string|max:100',
 
             'tone_attributes' => 'nullable|array',
-            'tone_attributes.primary_tones' => 'nullable|array',
-            'tone_attributes.primary_tones.*' => 'string|max:100',
-            'tone_attributes.contextual_tones' => 'nullable|array',
+            'tone_attributes.*' => 'nullable|string|max:255',
 
             'color_palette' => 'nullable|array',
             'color_palette.primary_colors' => 'nullable|array',
             'color_palette.secondary_colors' => 'nullable|array',
             'color_palette.accent_colors' => 'nullable|array',
+            'color_palette.description' => 'nullable|string|max:2000',
+            'color_palette.usage_notes' => 'nullable|string|max:2000',
 
             'typography' => 'nullable|array',
             'typography.primary_font' => 'nullable|string|max:100',
             'typography.secondary_font' => 'nullable|string|max:100',
             'typography.font_context' => 'nullable|string|max:500',
+            'typography.heading_style' => 'nullable|string|max:500',
+            'typography.body_style' => 'nullable|string|max:500',
+            'typography.fonts_detected' => 'nullable|array',
+            'typography.fonts_detected.*' => 'nullable|string|max:100',
+            'typography.font_weights' => 'nullable|string|max:255',
+            'typography.letter_spacing' => 'nullable|string|max:255',
 
             'visual_style' => 'nullable|array',
             'visual_style.overall_aesthetic' => 'nullable|string|max:255',
             'visual_style.imagery_style' => 'nullable|string|max:255',
             'visual_style.description' => 'nullable|string|max:1000',
+            'visual_style.color_treatment' => 'nullable|string|max:500',
+            'visual_style.layout_preference' => 'nullable|string|max:500',
 
             'messaging_themes' => 'nullable|array',
-            'messaging_themes.primary_themes' => 'nullable|array',
-            'messaging_themes.primary_themes.*' => 'string|max:255',
-            'messaging_themes.emotional_appeal' => 'nullable|string|max:255',
-            'messaging_themes.proof_points' => 'nullable|string|max:1000',
+            'messaging_themes.*' => 'nullable|string|max:1000',
 
             'unique_selling_propositions' => 'nullable|array',
             'unique_selling_propositions.*' => 'string|max:500',
 
             'target_audience' => 'nullable|array',
+            'target_audience.primary' => 'nullable|string|max:1000',
             'target_audience.demographics' => 'nullable|string|max:500',
             'target_audience.psychographics' => 'nullable|string|max:500',
             'target_audience.pain_points' => 'nullable|array',
             'target_audience.aspirations' => 'nullable|array',
+            'target_audience.language_level' => 'nullable|string|max:255',
+            'target_audience.familiarity_assumption' => 'nullable|string|max:255',
 
             'brand_personality' => 'nullable|array',
             'brand_personality.traits' => 'nullable|array',
             'brand_personality.traits.*' => 'string|max:100',
             'brand_personality.archetype' => 'nullable|string|max:100',
             'brand_personality.communication_style' => 'nullable|string|max:255',
+            'brand_personality.characteristics' => 'nullable|array',
+            'brand_personality.characteristics.*' => 'nullable|string|max:255',
+            'brand_personality.if_brand_were_person' => 'nullable|string|max:2000',
 
             'competitor_differentiation' => 'nullable|array',
-            'competitor_differentiation.differentiation_points' => 'nullable|array',
-            'competitor_differentiation.differentiation_points.*' => 'string|max:500',
-            'competitor_differentiation.competitive_advantage' => 'nullable|string|max:500',
+            'competitor_differentiation.*' => 'nullable|string|max:1000',
 
             'do_not_use' => 'nullable|array',
             'do_not_use.*' => 'string|max:255',
@@ -113,10 +126,14 @@ class BrandGuidelineController extends Controller
             'service_lines.*.pain_points.*' => 'string|max:255',
         ]);
 
-        $brandGuideline->update($validated);
-
-        // Mark as user-verified since they edited it
-        $brandGuideline->update(['user_verified' => true]);
+        // An edit to one property must preserve the rest of that section.
+        // Lists are replaced as submitted so removing an item still works.
+        foreach (['brand_voice', 'color_palette', 'typography', 'visual_style', 'target_audience', 'brand_personality'] as $section) {
+            if (isset($validated[$section])) {
+                $validated[$section] = array_replace($brandGuideline->{$section} ?? [], $validated[$section]);
+            }
+        }
+        $brandGuideline->update(array_merge($validated, ['user_verified' => true]));
 
         Log::info('Brand guidelines updated by user', [
             'user_id' => $request->user()->id,

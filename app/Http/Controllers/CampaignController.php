@@ -15,6 +15,7 @@ use App\Services\ActivityLogger;
 use App\Services\StorageHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -599,9 +600,25 @@ class CampaignController extends Controller
         return back()->with('success', 'All strategies have been signed off! We are generating your collateral now.');
     }
 
-    /**
-     * regenerateStrategies deletes existing strategies and re-dispatches the generation job.
-     */
+    /** Retry a failed first build without requiring a subscription or replacing assets. */
+    public function retryGeneration(Campaign $campaign): RedirectResponse
+    {
+        $this->authorize('update', $campaign);
+
+        DB::transaction(function () use ($campaign) {
+            $locked = Campaign::query()->lockForUpdate()->findOrFail($campaign->id);
+            abort_unless($locked->strategy_generation_error && ! $locked->strategies()->exists(), 409,
+                'Only a failed first build can be retried here.');
+            $locked->update([
+                'strategy_generation_started_at' => now(),
+                'strategy_generation_error' => null,
+            ]);
+            GenerateStrategy::dispatch($locked)->afterCommit();
+        });
+
+        return back()->with('success', 'Trying campaign generation again.');
+    }
+
     /**
      * Remove every generated asset belonging to a campaign, files included.
      */

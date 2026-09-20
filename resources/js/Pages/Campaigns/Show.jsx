@@ -264,8 +264,8 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
     // Whether generation is still running, as far as this page knows. Seeded
     // from the server render, then driven by the watch below.
     const [isPolling, setIsPolling] = useState(
-        campaign.is_generating_strategies ||
-        (campaign.strategies.length === 0 && campaign.strategy_generation_started_at)
+        !campaign.strategy_generation_error && (campaign.is_generating_strategies ||
+        (campaign.strategies.length === 0 && campaign.strategy_generation_started_at))
     );
     const [showGenerationModal, setShowGenerationModal] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
@@ -428,7 +428,18 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
         }
     }, [watchPhase]);
 
-    const pollingError = ['failed', 'timeout', 'disconnected'].includes(watchPhase);
+    const pollingError = Boolean(campaigns.strategy_generation_error) || ['failed', 'timeout', 'disconnected'].includes(watchPhase);
+
+    const retryFailedGeneration = () => {
+        post(route('campaigns.retry-generation', { campaign: campaigns.uuid }), {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                setCampaign(page.props.campaign);
+                setIsPolling(true);
+                setElapsedSeconds(0);
+            },
+        });
+    };
 
     // Elapsed time counter for generation loading state
     useEffect(() => {
@@ -710,6 +721,16 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                                                 ? campaigns.strategy_generation_error
                                                 : 'Please refresh the page in a moment or contact support if this persists.'}
                                     </p>
+                                    {campaigns.strategy_generation_error && campaigns.strategies.length === 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={retryFailedGeneration}
+                                            disabled={processing || isPolling}
+                                            className="mt-3 mr-3 px-4 py-2 bg-red-700 text-white text-sm rounded-md font-semibold hover:bg-red-800 disabled:opacity-50"
+                                        >
+                                            {processing ? 'Retrying…' : 'Try generation again'}
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => router.reload()}

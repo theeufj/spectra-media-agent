@@ -121,12 +121,15 @@ class FirstCampaignFunnelTest extends TestCase
         $customer = Customer::factory()->create(['website' => 'https://example.com']);
         $this->attach($user, $customer);
 
-        KnowledgeBase::create([
-            'user_id' => $user->id,
-            'customer_id' => $customer->id,
-            'url' => 'https://example.com/about',
-            'content' => str_repeat('Real page content. ', 30),
-        ]);
+        config(['first_campaign.enabled' => true]);
+        for ($page = 0; $page < \App\Jobs\GenerateFirstCampaign::MIN_SUBSTANTIVE_PAGES; $page++) {
+            KnowledgeBase::create([
+                'user_id' => $user->id,
+                'customer_id' => $customer->id,
+                'url' => 'https://example.com/page-'.$page,
+                'content' => str_repeat('Real page content. ', 30),
+            ]);
+        }
 
         $response = $this->actingAs($user)->getJson('/api/setup-progress')->assertOk();
 
@@ -145,6 +148,25 @@ class FirstCampaignFunnelTest extends TestCase
         */
         $this->assertSame('in_progress', $steps->firstWhere('key', 'first_campaign')['status']);
         $this->assertTrue($response->json('is_working'));
+    }
+
+    public function test_a_manual_brief_offers_the_wizard_instead_of_waiting_for_a_campaign_that_will_not_run(): void
+    {
+        $user = $this->newUser();
+        $customer = Customer::factory()->create(['website' => 'https://example.com']);
+        $this->attach($user, $customer);
+        KnowledgeBase::create([
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'url' => 'https://example.com/manual-brief',
+            'content' => str_repeat('A useful manual business description. ', 30),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/setup-progress')->assertOk();
+        $step = collect($response->json('steps'))->firstWhere('key', 'first_campaign');
+        $this->assertSame('pending', $step['status']);
+        $this->assertSame(route('campaigns.wizard'), $step['action_url']);
+        $this->assertFalse($response->json('is_working'));
     }
 
     public function test_the_checklist_stops_working_once_the_campaign_is_written(): void

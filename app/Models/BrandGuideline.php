@@ -64,10 +64,10 @@ class BrandGuideline extends Model
      */
     public function getFormattedBrandVoice(): string
     {
-        $voice = $this->brand_voice;
+        $voice = array_replace(['primary_tone' => '', 'description' => ''], $this->brand_voice ?? []);
         $output = "**Primary Tone:** {$voice['primary_tone']}\n";
         $output .= "**Description:** {$voice['description']}\n";
-        $output .= '**Key Attributes:** '.implode(', ', $this->tone_attributes)."\n";
+        $output .= '**Key Attributes:** '.implode(', ', $this->tone_attributes ?? [])."\n";
 
         if (! empty($voice['examples'])) {
             $output .= "**Examples from their content:**\n";
@@ -196,8 +196,8 @@ class BrandGuideline extends Model
 
     public function getFormattedColorPalette(): string
     {
-        $palette = $this->color_palette;
-        $output = '**Primary Colors:** '.implode(', ', $palette['primary_colors'])."\n";
+        $palette = array_replace(['primary_colors' => [], 'description' => ''], $this->color_palette ?? []);
+        $output = '**Primary Colors:** '.implode(', ', $palette['primary_colors'] ?? [])."\n";
         $output .= '**Secondary Colors:** '.implode(', ', $palette['secondary_colors'] ?? [])."\n";
         $output .= "**Usage:** {$palette['description']}\n";
 
@@ -211,8 +211,8 @@ class BrandGuideline extends Model
     {
         return implode("\n", array_map(
             fn ($usp, $index) => ($index + 1).". {$usp}",
-            $this->unique_selling_propositions,
-            array_keys($this->unique_selling_propositions)
+            $this->unique_selling_propositions ?? [],
+            array_keys($this->unique_selling_propositions ?? [])
         ));
     }
 
@@ -221,7 +221,7 @@ class BrandGuideline extends Model
      */
     public function getFormattedTargetAudience(): string
     {
-        $audience = $this->target_audience;
+        $audience = array_replace(['primary' => '', 'demographics' => '', 'psychographics' => '', 'language_level' => ''], $this->target_audience ?? []);
         $output = "**Primary Audience:** {$audience['primary']}\n";
         $output .= "**Demographics:** {$audience['demographics']}\n";
         $output .= "**Psychographics:** {$audience['psychographics']}\n";
@@ -239,6 +239,8 @@ class BrandGuideline extends Model
      */
     public function getFormattedGuidelines(): string
     {
+        $archetype = $this->brand_personality['archetype'] ?? '';
+
         return <<<GUIDELINES
 === BRAND GUIDELINES ===
 
@@ -258,7 +260,7 @@ class BrandGuideline extends Model
 {$this->getFormattedColorPalette()}
 
 **BRAND PERSONALITY:**
-Archetype: {$this->brand_personality['archetype']}
+Archetype: {$archetype}
 Characteristics: {$this->getFormattedCharacteristics()}
 
 {$this->getFormattedConstraints()}
@@ -274,7 +276,7 @@ GUIDELINES;
     {
         return implode("\n", array_map(
             fn ($theme) => "- {$theme}",
-            $this->messaging_themes
+            $this->messaging_themes ?? []
         ));
     }
 
@@ -283,7 +285,7 @@ GUIDELINES;
      */
     private function getFormattedVisualStyle(): string
     {
-        $style = $this->visual_style;
+        $style = array_replace(['overall_aesthetic' => '', 'imagery_style' => '', 'description' => ''], $this->visual_style ?? []);
 
         return "Aesthetic: {$style['overall_aesthetic']}\n".
                "Imagery: {$style['imagery_style']}\n".
@@ -295,7 +297,7 @@ GUIDELINES;
      */
     private function getFormattedCharacteristics(): string
     {
-        return implode(', ', $this->brand_personality['characteristics']);
+        return implode(', ', $this->brand_personality['characteristics'] ?? []);
     }
 
     /**

@@ -264,6 +264,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // POST /campaigns/{campaign}/confirm-budget
     Route::post('/campaigns/{campaign}/confirm-budget', [App\Http\Controllers\CampaignController::class, 'confirmBudget'])->name('campaigns.confirm-budget');
 
+    // Recover a failed first build; this cannot replace an existing strategy.
+    Route::post('/campaigns/{campaign}/retry-generation', [App\Http\Controllers\CampaignController::class, 'retryGeneration'])
+        ->middleware('throttle:3,10')->name('campaigns.retry-generation');
+
     // Route to delete a campaign.
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');

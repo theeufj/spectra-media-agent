@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CampaignStatus;
+use App\Jobs\GenerateFirstCampaign;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
@@ -68,6 +69,8 @@ class SetupProgressController extends Controller
             $campaigns = $customer->campaigns()->get(['id', 'uuid', 'status', 'auto_generated_at', 'budget_confirmed_at']);
             $firstCampaign = $campaigns->sortBy('id')->first();
             $hasCampaign = $campaigns->isNotEmpty();
+            $needsCampaignDetails = ! $hasCampaign && $scanStatus === 'completed'
+                && ! GenerateFirstCampaign::qualifies($customer);
 
             // --- 3. Budget confirmed -----------------------------------------
             // A hand-built campaign had its budget typed in by the user; only
@@ -133,11 +136,13 @@ class SetupProgressController extends Controller
                     'key' => 'first_campaign',
                     'title' => match (true) {
                         $hasCampaign => 'Review your campaign',
+                        $needsCampaignDetails => 'Add your campaign details',
                         $scanStatus === 'completed' => 'We are writing your first campaign',
                         default => 'Your first campaign',
                     },
                     'description' => match (true) {
                         $hasCampaign => 'Your campaign and its strategies are ready to review.',
+                        $needsCampaignDetails => 'Your business profile is ready. Add your campaign goals and audience so we can write your ads.',
                         $scanStatus === 'failed' => 'We could not read enough of your site to write one. Add a page or two, or build the campaign yourself.',
                         $scanStatus === 'completed' => 'Written from your own site — your brand voice, your audience, the pages you sell from. Nothing for you to fill in.',
                         default => 'We write this for you as soon as the scan finishes.',
@@ -145,6 +150,7 @@ class SetupProgressController extends Controller
                     'completed' => $hasCampaign,
                     'status' => match (true) {
                         $hasCampaign => 'completed',
+                        $needsCampaignDetails => 'pending',
                         $scanStatus === 'failed' => 'failed',
                         $scanStatus === 'completed' => 'in_progress',
                         default => 'pending',
@@ -154,11 +160,13 @@ class SetupProgressController extends Controller
                     // it yourself".
                     'action_url' => match (true) {
                         $firstCampaign !== null => route('campaigns.show', $firstCampaign),
+                        $needsCampaignDetails => route('campaigns.wizard'),
                         $scanStatus === 'failed' => route('campaigns.wizard'),
                         default => null,
                     },
                     'action_text' => match (true) {
                         $hasCampaign => 'Review Campaign',
+                        $needsCampaignDetails => 'Continue Campaign Setup',
                         $scanStatus === 'failed' => 'Build it yourself',
                         default => null,
                     },
@@ -166,7 +174,7 @@ class SetupProgressController extends Controller
                 [
                     'key' => 'budget_confirmed',
                     'title' => 'Confirm your budget',
-                    'description' => 'Approve the daily spend before anything goes live — nothing is charged until you do.',
+                    'description' => 'Set your daily advertising budget before launch. Ad spend is separate from your monthly subscription.',
                     'completed' => $budgetConfirmed,
                     'status' => $budgetConfirmed ? 'completed' : 'pending',
                     'action_url' => $firstCampaign
@@ -189,8 +197,8 @@ class SetupProgressController extends Controller
                     // One-time setup has its own journey entirely — see
                     // setupOnlySteps(). This branch is the managed plan.
                     'key' => 'payment',
-                    'title' => 'Add a payment method',
-                    'description' => 'Building is free — a payment method is only needed to deploy.',
+                    'title' => 'Choose your monthly plan',
+                    'description' => 'You can build your draft first. Your monthly subscription starts when you complete checkout; ad spend is billed separately.',
                     'completed' => $hasPayment,
                     'status' => $hasPayment ? 'completed' : 'pending',
                     'action_url' => route('subscription.pricing'),

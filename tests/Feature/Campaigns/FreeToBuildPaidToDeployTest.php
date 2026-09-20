@@ -136,6 +136,34 @@ class FreeToBuildPaidToDeployTest extends TestCase
             ->assertRedirect(route('subscription.pricing'));
     }
 
+    public function test_a_failed_first_build_can_be_retried_once_without_paying(): void
+    {
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $this->customer->id,
+            'strategy_generation_error' => 'An unexpected error occurred.',
+        ]);
+        $this->asGuest()->post(route('campaigns.retry-generation', $campaign))->assertRedirect();
+        $this->assertNull($campaign->fresh()->strategy_generation_error);
+        Queue::assertPushed(GenerateStrategy::class, 1);
+
+        $this->post(route('campaigns.retry-generation', $campaign))->assertStatus(409);
+        Queue::assertPushed(GenerateStrategy::class, 1);
+    }
+
+    public function test_retry_cannot_replace_existing_strategies_or_reach_another_tenant(): void
+    {
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $this->customer->id,
+            'strategy_generation_error' => 'A later generation failed.',
+        ]);
+        \App\Models\Strategy::factory()->create(['campaign_id' => $campaign->id]);
+        $this->asGuest()->post(route('campaigns.retry-generation', $campaign))->assertStatus(409);
+
+        $other = Campaign::factory()->create();
+        $this->post(route('campaigns.retry-generation', $other))->assertNotFound();
+        Queue::assertNotPushed(GenerateStrategy::class);
+    }
+
     public function test_the_copilot_stays_behind_the_paywall(): void
     {
         $campaign = Campaign::factory()->create(['customer_id' => $this->customer->id]);

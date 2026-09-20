@@ -1,13 +1,15 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
+
+const retryPost = vi.hoisted(() => vi.fn());
 
 vi.mock('@inertiajs/react', () => ({
     Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
     useForm: (initial) => ({
         data: initial,
         setData: vi.fn(),
-        post: vi.fn(),
+        post: retryPost,
         processing: false,
         errors: {},
     }),
@@ -21,6 +23,22 @@ vi.mock('@/hooks/useJobWatch', () => ({ useJobWatch: () => ({ phase: 'idle', dat
 vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null }) }));
 
 import Show, { StrategyCard } from '@/Pages/Campaigns/Show';
+
+it('offers a working retry for a failed first generation, before polling', () => {
+    retryPost.mockClear();
+    const campaign = {
+        uuid: 'failed-campaign', name: 'New campaign', strategies: [],
+        strategy_generation_started_at: '2026-09-20T08:18:18Z',
+        strategy_generation_error: 'Generation failed. Please try again.',
+    };
+    const { getByRole, getByText } = render(<Show auth={{ user: {} }} campaign={campaign} />);
+    expect(getByText('Strategy generation failed')).toBeInTheDocument();
+    fireEvent.click(getByRole('button', { name: 'Try generation again' }));
+    expect(retryPost).toHaveBeenCalledWith(
+        route('campaigns.retry-generation', { campaign: campaign.uuid }),
+        expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+});
 
 it('shows the saved strategy after Inertia returns updated props without a remount', () => {
     const campaign = {

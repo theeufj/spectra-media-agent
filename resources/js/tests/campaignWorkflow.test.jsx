@@ -133,6 +133,14 @@ describe('campaign creation workflow', () => {
         expect(postMock.mock.calls[0][0]).toBe('/__route__/campaigns.store');
     });
 
+    it('includes both scheduled dates in the daily budget, matching the saved campaign', () => {
+        reachBudget();
+        fireEvent.change(screen.getByLabelText('Start Date'), { target: { value: '2026-09-21' } });
+        fireEvent.change(screen.getByLabelText('End Date'), { target: { value: '2026-10-21' } });
+        fireEvent.change(screen.getByLabelText('Total Budget (AUD)'), { target: { value: '1550' } });
+        expect(screen.getByText('Daily Budget:').parentElement).toHaveTextContent(/\$50\.00\s*\/day over 31 days/);
+    });
+
     it('does not submit an intermediate step on Enter and restores the saved target', () => {
         reachBudget();
         const input = screen.getByLabelText('What would make this campaign worth it?');
