@@ -518,7 +518,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                     once to build an account they will run themselves,
                                     the button creates the ads — it does not start
                                     them. */}
-                                {setupOnly ? (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update paused ads' : 'Create paused ads') : 'Deploy All'}
+                                {setupOnly ? (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update paused ads' : 'Create paused ads') : (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update deployed ads' : 'Deploy All')}
                             </button>
                             <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
@@ -589,6 +589,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 <div className="max-w-7xl mx-auto">
 
                     {setupOnly && <SetupStages stage={2} />}
+                    {['deploying', 'deployed', 'verified'].includes(currentStrategy.deployment_status) && (
+                        <div role="status" className={`mb-6 rounded-lg border p-5 ${currentStrategy.deployment_status === 'deploying' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
+                            <h2 className="font-semibold">{currentStrategy.deployment_status === 'deploying'
+                                ? 'Your ads are being created'
+                                : (setupOnly ? 'Your paused ads have been created' : 'Your campaign has been deployed')}</h2>
+                            <p className="mt-1 text-sm">{currentStrategy.deployment_status === 'verified'
+                                ? 'Campaign creation has been verified on the platform.'
+                                : 'Open deployment status for the latest progress and verification result.'}</p>
+                            <Link href={route('campaigns.deployment-status', { campaign: campaign.uuid || campaign.id })} className="mt-3 inline-block font-semibold underline">View deployment status →</Link>
+                        </div>
+                    )}
                     <section className="mb-8 grid gap-6 rounded-xl border border-gray-200 bg-white p-6 lg:grid-cols-2">
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">Your ad, as a customer could see it</h1>

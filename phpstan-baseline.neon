@@ -247,12 +247,6 @@ parameters:
 			path: app/Http/Controllers/CampaignController.php
 
 		-
-			message: '#^Strict comparison using \=\=\= between 0\|float and 100 will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>messages" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2452,4 +2446,3 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 5
 			path: tests/Unit/GeminiServiceTest.php
-

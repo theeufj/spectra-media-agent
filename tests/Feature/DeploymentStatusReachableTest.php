@@ -86,4 +86,18 @@ class DeploymentStatusReachableTest extends TestCase
         $this->get(route('campaigns.deployment-status', ['campaign' => $stranger->id]))
             ->assertNotFound();
     }
+
+    public function test_status_polling_distinguishes_deployed_from_verified_and_other_terminal_outcomes(): void
+    {
+        [, $campaign] = $this->ownedCampaign(['deployment_status' => 'deployed']);
+        $this->getJson(route('api.campaigns.deployment-status', $campaign))
+            ->assertOk()->assertJsonPath('is_complete', false);
+
+        foreach (['verified', 'failed', 'deploy_unverified', 'skipped_plan'] as $status) {
+            $campaign->strategies()->update(['deployment_status' => $status]);
+            $this->getJson(route('api.campaigns.deployment-status', $campaign))
+                ->assertOk()->assertJsonPath('is_complete', true)
+                ->assertJsonPath('deployments.0.status', $status);
+        }
+    }
 }

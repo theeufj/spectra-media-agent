@@ -946,7 +946,9 @@ class CampaignController extends Controller
             ],
             'deployments' => $deployments,
             'overall_progress' => $overallProgress,
-            'is_complete' => $overallProgress === 100,
+            'is_complete' => $deployments->isNotEmpty() && $deployments->every(
+                fn ($deployment) => in_array($deployment['status'], ['verified', 'failed', 'deploy_unverified', 'skipped_plan'], true)
+            ),
         ]);
     }
 

@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { usePolling } from '@/hooks/usePolling';
+import { useToast } from '@/Components/Toast';
 
 /**
  * DeploymentStatus - Shows real-time deployment progress and status
  */
 export default function DeploymentStatus({ campaign, deployments: initialDeployments, setupOnly = false }) {
     const { auth } = usePage().props;
+    const toast = useToast();
     const [deployments, setDeployments] = useState(initialDeployments || []);
-    const [overallProgress, setOverallProgress] = useState(0);
     // 'verified' is the state VerifyDeployment promotes 'deployed' to once it
     // confirms the objects exist on the platform — success, terminally so.
     // 'deploy_unverified' is its "couldn't confirm" outcome, and
@@ -19,36 +20,60 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     const isTerminal = (d) => d.status === 'verified' || ['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status);
     // Stop once every strategy has reached a terminal state.
     const allComplete = deployments.length > 0 && deployments.every(isTerminal);
+    const allDeployed = deployments.length > 0 && deployments.every(isLive);
 
     // Cap the watch at 15 minutes: a deploy that long has stalled, and an
     // uncapped 3-second poll ran forever on any strategy that never reached a
     // terminal state.
-    const pollStartRef = React.useRef(Date.now());
     const [pollTimedOut, setPollTimedOut] = useState(false);
+    const [watchAttempt, setWatchAttempt] = useState(0);
+    const notifiedRef = React.useRef((initialDeployments || []).length > 0 && initialDeployments.every(isLive));
 
-    const { data: polled } = usePolling(
-        `/api/campaigns/${campaign.id}/deployment-status`,
+    useEffect(() => {
+        setDeployments(initialDeployments || []);
+    }, [initialDeployments]);
+
+    // The deadline must also run when requests fail or never return.
+    useEffect(() => {
+        if (allComplete) return;
+        const timer = setTimeout(() => setPollTimedOut(true), 15 * 60 * 1000);
+        return () => clearTimeout(timer);
+    }, [campaign.id, allComplete, watchAttempt]);
+
+    const { data: polled, error: pollingError, failureStreak } = usePolling(
+        route('api.campaigns.deployment-status', { campaign: campaign.uuid || campaign.id }),
         {
             interval: 3000,
             enabled: !allComplete && !pollTimedOut,
-            until: (data) => {
-                if (Date.now() - pollStartRef.current > 15 * 60 * 1000) {
-                    setPollTimedOut(true);
-
-                    return true;
-                }
-
-                return data?.is_complete === true;
+            parse: (data) => {
+                if (!Array.isArray(data?.deployments)) throw new Error('Invalid deployment status response');
+                return data;
             },
-            immediate: false,
+            until: (data) => data.deployments.length > 0 && data.deployments.every(isTerminal),
         }
     );
 
     useEffect(() => {
         if (!polled) return;
-        setDeployments(polled.deployments || []);
-        setOverallProgress(polled.overall_progress || 0);
+        setDeployments(polled.deployments);
     }, [polled]);
+
+    useEffect(() => {
+        if (allDeployed && !notifiedRef.current) {
+            toast.success(setupOnly ? 'Your paused ads have been created.' : 'Your campaign has been deployed.', 10000);
+            notifiedRef.current = true;
+        }
+    }, [allDeployed, setupOnly, toast]);
+
+    const checkAgain = () => {
+        router.reload({
+            only: ['campaign', 'deployments'],
+            onSuccess: () => {
+                setPollTimedOut(false);
+                setWatchAttempt(attempt => attempt + 1);
+            },
+        });
+    };
 
     /*
        Derive progress locally too, so Echo-pushed updates move the bar without
@@ -67,16 +92,11 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
        that has failed is not going to move again — which is what the old
        version was written to fix and is kept.
     */
-    useEffect(() => {
-        if (deployments.length === 0) return;
-
-        const stepsPerStrategy = 4;
-        const steps = deployments.reduce((total, d) => {
+    const overallProgress = deployments.length === 0 ? 0 : Math.round(
+        deployments.reduce((total, d) => {
             return total + (d.progress ?? (d.status === 'verified' ? 4 : d.status === 'deployed' ? 3 : d.status === 'deploying' ? 2 : 0));
-        }, 0);
-
-        setOverallProgress(Math.round((steps / (deployments.length * stepsPerStrategy)) * 100));
-    }, [deployments]);
+        }, 0) / (deployments.length * 4) * 100
+    );
 
 
     // Listen for real-time updates if Echo is available
@@ -92,7 +112,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             
             channel.listen('.deployment.completed', (e) => {
                 setDeployments(prev => prev.map(d => 
-                    d.id === e.strategy_id ? { ...d, status: 'deployed', deployed_at: new Date() } : d
+                    d.id === e.strategy_id && d.status !== 'verified' ? { ...d, status: 'deployed', progress: 3, deployed_at: new Date() } : d
                 ));
             });
             
@@ -116,13 +136,15 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         if (deployments.length === 0) return 'pending';
 
         const hasFailure = deployments.some(d => d.status === 'failed');
-        const stillRunning = deployments.some(d => !isTerminal(d));
+        const stillRunning = deployments.some(d => !isTerminal(d) && !isLive(d));
 
         // While anything is still running, report progress — one early platform
         // failure shouldn't label the whole deploy "failed" mid-flight.
         if (stillRunning) return 'processing';
         if (hasFailure) return 'failed';
-        if (deployments.some(isLive)) return 'completed';
+        if (deployments.some(d => ['deploy_unverified', 'skipped_plan'].includes(d.status))) return 'attention';
+        if (deployments.every(d => d.status === 'verified')) return 'completed';
+        if (allDeployed) return 'verifying';
         // Everything terminal, nothing live, nothing failed: unverified or
         // plan-skipped rows only. "Pending" here read as stuck-forever.
         return 'attention';
@@ -133,6 +155,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             pending: 'bg-yellow-100 text-yellow-800',
             deploying: 'bg-blue-100 text-blue-800',
             processing: 'bg-blue-100 text-blue-800',
+            verifying: 'bg-green-100 text-green-800',
             deployed: 'bg-green-100 text-green-800',
             verified: 'bg-green-100 text-green-800',
             deploy_unverified: 'bg-yellow-100 text-yellow-800',
@@ -149,6 +172,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             pending: '⏳',
             deploying: '🔄',
             processing: '🔄',
+            verifying: '✅',
             deployed: '✅',
             verified: '✅',
             deploy_unverified: '⚠️',
@@ -161,6 +185,13 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     };
     
     const overallStatus = getOverallStatus();
+    const updatesUnavailable = !allComplete && (pollTimedOut || failureStreak >= 4);
+    const statusLabels = {
+        pending: 'Waiting to start', deploying: 'Creating ads', deployed: 'Deployed · verifying',
+        verified: 'Verified', deploy_unverified: 'Needs verification', skipped_plan: 'Not in your plan',
+        processing: 'Creating ads', verifying: 'Deployed · verifying', completed: 'Deployment complete',
+        failed: 'Deployment needs attention', attention: 'Needs attention',
+    };
     
     return (
         <AuthenticatedLayout
@@ -179,7 +210,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                         </h2>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start flex-shrink-0 ${getStatusColor(overallStatus)}`}>
-                        {getStatusIcon(overallStatus)} {overallStatus?.charAt(0).toUpperCase() + overallStatus?.slice(1)}
+                        {getStatusIcon(overallStatus)} {updatesUnavailable ? 'Status updates unavailable' : statusLabels[overallStatus]}
                     </span>
                 </div>
             }
@@ -189,10 +220,28 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             
             <div className="py-12">
                 <div className="max-w-4xl mx-auto">
-                    {pollTimedOut && !allComplete && (
-                        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
-                            This is taking longer than expected — we've stopped auto-refreshing.
-                            Reload the page to check again, or contact support if it stays stuck.
+                    {updatesUnavailable && (
+                        <div role="alert" className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                            <p>{pollingError?.status === 401
+                                ? 'Your session expired, so we cannot receive deployment updates. Sign in again, then check the status. Your deployment may still have completed.'
+                                : 'We cannot confirm the latest deployment status. The information below is the last update received; your ads may already have been created.'}</p>
+                            <button type="button" onClick={checkAgain} className="mt-3 font-semibold underline">Check status again</button>
+                        </div>
+                    )}
+
+                    {allDeployed && (
+                        <div role="status" aria-live="polite" className="mb-6 bg-green-50 border border-green-200 rounded-lg p-6">
+                            <h3 className="text-lg font-semibold text-green-800">
+                                {setupOnly ? 'Your paused ads have been created' : 'Your campaign has been deployed'}
+                            </h3>
+                            <p className="mt-2 text-green-700">{overallStatus === 'completed'
+                                ? 'The campaign and ads have also been verified on the platform.'
+                                : (updatesUnavailable
+                                    ? 'Your ads were created, but we cannot confirm the latest verification result. Check the status again for an update.'
+                                    : 'We are confirming the campaign and ads on the platform. This screen will update when verification finishes.')}</p>
+                            <p className="mt-2 text-sm text-green-700">{setupOnly
+                                ? 'Your ads remain paused. Complete your handover checks before switching them on.'
+                                : 'Ad delivery depends on platform approval, billing and your campaign start date.'}</p>
                         </div>
                     )}
 
@@ -216,7 +265,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             <div 
                                 key={deployment.id}
                                 className={`bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 ${
-                                    deployment.status === 'deployed' ? 'border-green-500' :
+                                    isLive(deployment) ? 'border-green-500' :
                                     deployment.status === 'failed' ? 'border-red-500' :
                                     deployment.status === 'deploying' ? 'border-blue-500' :
                                     'border-gray-300'
@@ -240,7 +289,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                         </div>
                                     </div>
                                     <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap self-start flex-shrink-0 ${getStatusColor(deployment.status)}`}>
-                                        {getStatusIcon(deployment.status)} {deployment.status}
+                                        {getStatusIcon(deployment.status)} {statusLabels[deployment.status] || deployment.status}
                                     </span>
                                 </div>
                                 
@@ -310,7 +359,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             <p className="text-green-700 mb-4">
                                 {setupOnly
                                     ? 'Your campaign has been created and verified. Open your handover checklist to confirm access, billing and tracking before you switch on ads.'
-                                    : 'Your campaign has been successfully deployed. Ads are scheduled to begin serving from tomorrow — campaigns start the day after deployment.'}
+                                    : 'Deployment is complete and verified. You can follow campaign performance from your dashboard.'}
                             </p>
                             <div className="flex gap-4">
                                 <Link
