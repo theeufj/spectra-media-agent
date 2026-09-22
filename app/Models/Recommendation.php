@@ -17,13 +17,23 @@ class Recommendation extends Model
         'rationale',
         'status',
         'requires_approval',
+        'platform', 'source', 'fingerprint', 'evidence', 'payload', 'execution', 'outcome',
+        'applied_at', 'verified_at', 'measured_at',
     ];
 
     protected $casts = [
         'target_entity' => 'array',
         'parameters' => 'array',
         'requires_approval' => 'boolean',
+        'evidence' => 'array', 'payload' => 'array', 'execution' => 'array', 'outcome' => 'array',
+        'applied_at' => 'datetime', 'verified_at' => 'datetime', 'measured_at' => 'datetime',
     ];
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Campaign, $this> */
+    public function campaign(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Campaign::class);
+    }
 
     /**
      * Is this exact suggestion already sitting in the queue unanswered?

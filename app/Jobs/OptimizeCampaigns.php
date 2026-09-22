@@ -76,6 +76,7 @@ class OptimizeCampaigns implements ShouldQueue
                     // Clear old pending recommendations for this campaign
                     Recommendation::where('campaign_id', $campaign->id)
                         ->where('status', 'pending')
+                        ->whereNull('source')
                         ->delete();
 
                     $categorized = $recommendations['categorized'] ?? [];
@@ -90,6 +91,11 @@ class OptimizeCampaigns implements ShouldQueue
 
                     // Auto-apply high-confidence recommendations immediately
                     foreach ($autoApply as $rec) {
+                        if (($rec['source'] ?? null) === 'competitor') {
+                            app(\App\Services\Competition\CompetitiveRecommendationService::class)->record($campaign, $rec, true);
+
+                            continue;
+                        }
                         $result = $optimizationAgent->applyRecommendation($campaign, $rec);
 
                         Recommendation::create([
@@ -110,6 +116,12 @@ class OptimizeCampaigns implements ShouldQueue
 
                     // Store lower-confidence recommendations for human review
                     foreach ($needsReview as $rec) {
+                        if (($rec['source'] ?? null) === 'competitor') {
+                            $record = app(\App\Services\Competition\CompetitiveRecommendationService::class)->record($campaign, $rec);
+                            $pendingCount += (int) $record->wasRecentlyCreated;
+
+                            continue;
+                        }
                         /*
                          * Not the same suggestion twice.
                          *

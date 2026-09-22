@@ -33,7 +33,7 @@ class CreateResponsiveSearchAd extends BaseGoogleAdsService
         // Prepare headline text assets (up to 15, minimum 3)
         $headlines = [];
         foreach ($adData['headlines'] as $headlineText) {
-            $headlines[] = new AdTextAsset(['text' => substr($headlineText, 0, 30)]); // Max 30 chars
+            $headlines[] = new AdTextAsset(['text' => mb_substr($headlineText, 0, 30)]); // Max 30 chars
         }
 
         // Ensure minimum 3 headlines
@@ -44,7 +44,7 @@ class CreateResponsiveSearchAd extends BaseGoogleAdsService
         // Prepare description text assets (up to 4, minimum 2)
         $descriptions = [];
         foreach ($adData['descriptions'] as $descriptionText) {
-            $descriptions[] = new AdTextAsset(['text' => substr($descriptionText, 0, 90)]); // Max 90 chars
+            $descriptions[] = new AdTextAsset(['text' => mb_substr($descriptionText, 0, 90)]); // Max 90 chars
         }
 
         // Ensure minimum 2 descriptions

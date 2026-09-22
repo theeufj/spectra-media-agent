@@ -82,6 +82,9 @@ class RunCompetitorIntelligence implements ShouldQueue
 
             // Run full analysis
             $results = $intelligenceAgent->runFullAnalysis($this->customer);
+            if (($results['counter_strategy']['status'] ?? null) === 'success') {
+                ReviewCompetitiveCampaigns::dispatch($this->customer->id, true);
+            }
 
             // Update customer with last analysis timestamp
             $this->customer->update([

@@ -173,6 +173,17 @@ class WarRoomController extends Controller
         // RecommendationPolicy walks campaign->customer_id.
         $this->authorize('update', $recommendation);
 
+        if ($recommendation->source === 'competitor') {
+            if (! ($recommendation->execution['can_apply'] ?? false)) {
+                return back()->with('flash', ['type' => 'warning', 'message' => $recommendation->execution['blocked_reason'] ?? 'This action needs a specialist review.']);
+            }
+            $queued = Recommendation::whereKey($recommendation->id)->where('status', 'pending')->update(['status' => 'approved']);
+            if ($queued) {
+                \App\Jobs\ApplyCompetitiveRecommendation::dispatch($recommendation->id)->afterCommit();
+            }
+
+            return back()->with('flash', ['type' => 'success', 'message' => $queued ? 'Change queued. Its platform verification and results will appear in the competitor report.' : 'This action has already been reviewed.']);
+        }
         $recommendation->update(['status' => 'approved']);
 
         return redirect()->back()->with('flash', [
@@ -185,7 +196,7 @@ class WarRoomController extends Controller
     {
         $this->authorize('update', $recommendation);
 
-        $recommendation->update(['status' => 'rejected']);
+        Recommendation::whereKey($recommendation->id)->where('status', 'pending')->update(['status' => 'rejected']);
 
         return redirect()->back()->with('flash', [
             'type' => 'success',

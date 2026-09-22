@@ -44,11 +44,11 @@ class RecommendationApplier
 
     private const MAX_BUDGET_FACTOR = 2.0;
 
-    public function apply(Campaign $campaign, array $recommendation): array
+    public function apply(Campaign $campaign, array $recommendation, bool $approvedByUser = false): array
     {
         $customer = $campaign->customer;
 
-        if ($customer && ! Feature::for($customer)->active(AutoOptimization::class)) {
+        if (! $approvedByUser && $customer && ! Feature::for($customer)->active(AutoOptimization::class)) {
             return [
                 'applied' => false,
                 'message' => 'Auto-optimization is disabled for this customer',
@@ -84,7 +84,7 @@ class RecommendationApplier
                 'BUDGET' => $this->applyBudget($campaign, $recommendation),
                 'KEYWORDS' => $this->applyKeyword($campaign, $recommendation),
                 'NEGATIVE_KEYWORDS' => $this->applyNegativeKeywords($campaign, $recommendation),
-                'BIDDING' => $this->applyBidding($campaign, $recommendation),
+                'BIDDING' => $this->applyBidding($campaign, $recommendation, $approvedByUser),
                 'TARGETING' => $this->applyTargeting($campaign, $recommendation),
                 'AD_EXTENSIONS' => $this->applyExtension($campaign, $recommendation),
                 'SCHEDULE' => $this->applySchedule($campaign, $recommendation),
@@ -100,7 +100,7 @@ class RecommendationApplier
                 'error' => $e->getMessage(),
             ]);
 
-            return ['applied' => false, 'message' => 'Failed to apply: '.$e->getMessage(), 'recommendation' => $recommendation];
+            return ['applied' => false, 'pending_verification' => true, 'message' => 'Failed to confirm change: '.$e->getMessage(), 'recommendation' => $recommendation];
         }
     }
 
@@ -344,7 +344,7 @@ class RecommendationApplier
         return ['applied' => $ok, 'message' => $ok ? 'Keyword removed' : 'Failed to remove keyword'];
     }
 
-    private function applyBidding(Campaign $campaign, array $rec): array
+    private function applyBidding(Campaign $campaign, array $rec, bool $approvedByUser = false): array
     {
         $customer = $campaign->customer;
         $subType = $rec['sub_type'] ?? null;
@@ -352,7 +352,7 @@ class RecommendationApplier
         // gate could never pass and every bidding auto-apply was recorded failed.
         $confidence = $rec['confidence_score'] ?? $rec['confidence'] ?? 0;
 
-        if ($subType === 'keyword_cpc' && $confidence >= 0.95 && $campaign->google_ads_campaign_id && $customer) {
+        if ($subType === 'keyword_cpc' && ($approvedByUser || $confidence >= 0.95) && $campaign->google_ads_campaign_id && $customer) {
             $kwResource = $rec['keyword_resource'] ?? null;
             $newBidMicros = $rec['suggested_value'] ?? null;
 
@@ -366,7 +366,7 @@ class RecommendationApplier
                 if ($ok) {
                     AgentActivity::record(
                         'optimization', 'bid_adjusted',
-                        'Auto-adjusted keyword bid to $'.round($newBidMicros / 1_000_000, 2),
+                        'Adjusted keyword bid to $'.round($newBidMicros / 1_000_000, 2),
                         $customer->id, $campaign->id,
                         ['keyword' => $kwResource, 'new_bid_micros' => $newBidMicros, 'confidence' => $confidence]
                     );

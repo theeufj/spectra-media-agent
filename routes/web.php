@@ -902,6 +902,8 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
     Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
     Route::post('/seo/competitors/refresh', [SeoController::class, 'refreshCompetitors'])->name('seo.competitors.refresh');
+    Route::get('/seo/competitors/actions', [SeoController::class, 'competitorActions'])->name('seo.competitors.actions');
+    Route::post('/seo/competitors/review-campaigns', [SeoController::class, 'reviewCompetitorCampaigns'])->middleware('throttle:6,60')->name('seo.competitors.review-campaigns');
 
     // CRO Audits
     Route::get('/seo/cro', [App\Http\Controllers\CroController::class, 'index'])->name('seo.cro');

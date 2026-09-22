@@ -56,6 +56,7 @@ class GetAuctionInsights extends BaseGoogleAdsService
 
             $insights = [
                 'campaign_name' => null,
+                'campaign_resource' => $campaignResourceName,
                 'date_range' => $dateRange,
                 'our_metrics' => null,
                 'competitors' => [],
@@ -118,6 +119,7 @@ class GetAuctionInsights extends BaseGoogleAdsService
 
             return [
                 'campaign_name' => null,
+                'campaign_resource' => $campaignResourceName,
                 'date_range' => $dateRange,
                 'our_metrics' => null,
                 'competitors' => [],

@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { brandTint } from '@/Components/Marketing/Hero';
+import CompetitiveCampaignActions from '@/Components/CompetitiveCampaignActions';
 
 function UpgradePrompt() {
     return (
@@ -303,7 +304,7 @@ function StrategySection({ strategy, updatedAt }) {
     );
 }
 
-export default function Competitors({ domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null }) {
+export default function Competitors({ domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null, campaignActions = null }) {
     const [refreshing, setRefreshing] = useState(false);
 
     const handleRefresh = () => {
@@ -346,6 +347,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
                         <UpgradePrompt />
                     ) : (
                         <div className="space-y-6">
+                            <CompetitiveCampaignActions initial={campaignActions} />
                             {/* Competitive Strategy */}
                             <StrategySection strategy={competitiveStrategy} updatedAt={strategyUpdatedAt} />
 

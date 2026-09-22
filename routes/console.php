@@ -117,6 +117,7 @@ Schedule::job(new Scheduled\FetchPlatformPerformanceData)->name('fetch-platform-
 
 // AI-powered optimization analysis - reviews performance and suggests improvements
 Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(notifyAdminOnFailure('OptimizeCampaigns'));
+Schedule::job(new \App\Jobs\VerifyCompetitiveChanges)->hourly()->withoutOverlapping();
 
 // Pause ad groups that spend without converting (deterministic; reported in the daily email).
 Schedule::job(new \App\Jobs\PauseWastefulAdGroups)->dailyAt('02:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('PauseWastefulAdGroups'));

@@ -214,7 +214,9 @@ class AdCopyPrompt
                 $entry .= "\n  Their messaging: ".implode('; ', array_slice((array) $keyMessages, 0, 3));
             }
             if ($counterStrategy) {
-                $strategy = is_array($counterStrategy) ? ($counterStrategy['strategy'] ?? '') : $counterStrategy;
+                $strategy = is_array($counterStrategy)
+                    ? ($counterStrategy['strategy'] ?? implode('; ', array_merge($counterStrategy['differentiation_angles'] ?? [], $counterStrategy['ad_copy_recommendations'] ?? [])))
+                    : $counterStrategy;
                 if ($strategy) {
                     $entry .= "\n  Counter-angle: {$strategy}";
                 }

@@ -142,12 +142,13 @@ class CompetitorIntelligenceAgent
                         $trends = $competitor->auction_trends ?? [];
                         $trends[] = [
                             'date' => now()->toDateString(),
+                            'campaign_resource' => $campaignInsights['campaign_resource'] ?? null,
                             'impression_share' => $newIs,
                             'delta' => round($newIs - $prevIs, 2),
                         ];
-                        // Keep only last 8 snapshots
-                        if (count($trends) > 8) {
-                            $trends = array_slice($trends, -8);
+                        // Bound history across campaigns; compare only matching campaign snapshots below.
+                        if (count($trends) > 80) {
+                            $trends = array_slice($trends, -80);
                         }
 
                         $competitor->update([
@@ -198,7 +199,7 @@ class CompetitorIntelligenceAgent
     /**
      * Analyze WoW auction insight trends and surface bid/budget recommendations.
      *
-     * - Competitor IS +15% WoW → push BIDDING recommendation into CampaignOptimizationAgent cache
+     * - Competitor IS +15% WoW → persist campaign evidence for the next optimisation
      * - Own IS dropped >10% (non-budget-limited) → push BIDDING escalation recommendation
      */
     protected function analyzeAuctionTrends(Customer $customer, array $insightsResult): array
@@ -215,18 +216,20 @@ class CompetitorIntelligenceAgent
                 continue;
             }
 
-            $latest = end($trends);
-            $prior = $trends[count($trends) - 2];
-
-            $delta = ($latest['impression_share'] ?? 0) - ($prior['impression_share'] ?? 0);
-
-            if ($delta >= 15.0) {
-                $this->pushBidRecommendation($customer, $competitor, $delta);
-                $actions[] = [
-                    'type' => 'competitor_is_surge',
-                    'competitor' => $competitor->domain,
-                    'delta' => $delta,
-                ];
+            // Compare the same campaign on different weekly snapshots. Previously,
+            // two campaigns fetched in one run could be mistaken for a weekly surge.
+            foreach (collect($trends)->filter(fn ($row) => ! empty($row['campaign_resource']))->groupBy('campaign_resource') as $resource => $snapshots) {
+                $latest = $snapshots->last();
+                $prior = $snapshots->reverse()->first(fn ($row) => $row['date'] <= \Carbon\Carbon::parse($latest['date'])->subDays(5)->toDateString());
+                if (! $prior || $latest['date'] < now()->subDays(8)->toDateString()) {
+                    continue;
+                }
+                $delta = ($latest['impression_share'] ?? 0) - ($prior['impression_share'] ?? 0);
+                if ($delta >= 15.0) {
+                    $this->pushBidRecommendation($customer, $competitor, $delta, $resource);
+                    $actions[] = ['type' => 'competitor_is_surge', 'competitor' => $competitor->domain,
+                        'campaign_resource' => $resource, 'delta' => $delta];
+                }
             }
         }
 
@@ -236,32 +239,33 @@ class CompetitorIntelligenceAgent
         return $actions;
     }
 
-    private function pushBidRecommendation(Customer $customer, Competitor $competitor, float $delta): void
+    private function pushBidRecommendation(Customer $customer, Competitor $competitor, float $delta, string $resource): void
     {
-        $cacheKey = "competitor_is_surge:{$customer->id}:{$competitor->id}";
+        $cacheKey = "competitor_is_surge:{$customer->id}:{$competitor->id}:".hash('sha256', $resource);
         if (Cache::has($cacheKey)) {
             return;
         }
         Cache::put($cacheKey, true, now()->addDays(7));
 
-        // Inject into each active campaign's optimization cache as an additional BIDDING recommendation
+        // Keep evidence durably; the optimiser consumes it alongside campaign performance.
         $campaigns = $customer->campaigns()
             ->where('status', 'active')
             ->whereNotNull('google_ads_campaign_id')
             ->get();
 
         foreach ($campaigns as $campaign) {
-            $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
-            $existing['competitor_bid_alerts'][] = [
+            if ($campaign->googleAdsResourceName() !== $resource) {
+                continue;
+            }
+            app(\App\Services\Competition\CompetitorCampaignContext::class)->recordSignal($campaign, [
                 'priority' => 'HIGH',
                 'category' => 'BIDDING',
-                'recommendation' => "Competitor {$competitor->domain} grew impression share by {$delta}% WoW. Review bids on overlapping keywords and consider raising target IS or tCPA to defend position.",
+                'recommendation' => "Competitor {$competitor->domain} grew impression share by {$delta} percentage points between weekly snapshots. Review bids on overlapping keywords and consider raising target IS or tCPA to defend position.",
                 'source' => 'CompetitorIntelligenceAgent',
                 'competitor' => $competitor->domain,
-                'is_delta' => $delta,
+                'is_delta' => $delta, 'campaign_resource' => $resource,
                 'recorded_at' => now()->toIso8601String(),
-            ];
-            Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
+            ]);
         }
 
         Log::info("CompetitorIntelligenceAgent: Competitor IS surge — {$competitor->domain} +{$delta}%", [
@@ -280,7 +284,10 @@ class CompetitorIntelligenceAgent
         }
 
         $latest = end($ownIsHistory);
-        $prior = $ownIsHistory[count($ownIsHistory) - 2];
+        $prior = collect($ownIsHistory)->reverse()->first(fn ($row) => $row['date'] <= \Carbon\Carbon::parse($latest['date'])->subDays(5)->toDateString());
+        if (! $prior || $latest['date'] < now()->subDays(8)->toDateString()) {
+            return;
+        }
 
         $latestIs = $latest['impression_share'] ?? 0;
         $priorIs = $prior['impression_share'] ?? 0;
@@ -299,10 +306,12 @@ class CompetitorIntelligenceAgent
         $budgetLimited = $customer->campaigns()
             ->where('status', 'active')
             ->whereNotNull('google_ads_campaign_id')
-            ->where(function ($q) {
-                $q->whereRaw('daily_budget_utilization > 0.95'); // proxy: campaigns nearly exhausting budget
-            })
-            ->exists();
+            ->get()->contains(function ($campaign) {
+                $recent = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())->get();
+
+                return $recent->isEmpty() || $recent->avg('cost') >= (float) $campaign->daily_budget * 0.95;
+            });
 
         if ($budgetLimited) {
             return;
@@ -321,16 +330,14 @@ class CompetitorIntelligenceAgent
             ->get();
 
         foreach ($campaigns as $campaign) {
-            $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
-            $existing['competitor_bid_alerts'][] = [
+            app(\App\Services\Competition\CompetitorCampaignContext::class)->recordSignal($campaign, [
                 'priority' => 'HIGH',
                 'category' => 'BIDDING',
-                'recommendation' => "Own impression share dropped {$dropPct}% WoW (from {$priorIs}% to {$latestIs}%) with budget not limiting. Review bid strategy and consider increasing target IS or tCPA.",
+                'recommendation' => "Customer-wide average impression share dropped {$dropPct}% between weekly snapshots (from {$priorIs}% to {$latestIs}%). Available spend data does not indicate a budget limit; verify campaign-specific performance before acting. Review bid strategy and consider increasing target IS or tCPA.",
                 'source' => 'CompetitorIntelligenceAgent',
                 'own_is_drop' => $dropPct,
                 'recorded_at' => now()->toIso8601String(),
-            ];
-            Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
+            ]);
         }
 
         Log::warning("CompetitorIntelligenceAgent: Own IS dropped {$dropPct}% WoW (budget not limiting)", [

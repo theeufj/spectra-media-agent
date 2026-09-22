@@ -54,7 +54,22 @@ class CampaignOptimizationAgent
             'data_quality_notes' => $dataQuality['notes'],
         ];
 
-        $prompt = OptimizationPrompt::generate($campaignData, $metrics, $historical);
+        $competitiveContext = app(\App\Services\Competition\CompetitorCampaignContext::class);
+        $sources = $competitiveContext->forCampaign($campaign);
+        $campaignData['approved_daily_budget'] = $campaign->approved_daily_budget ?? $campaign->daily_budget;
+        $campaignData['landing_page_url'] = $campaign->landing_page_url;
+        if ($sources !== [] && $campaign->google_ads_campaign_id) {
+            try {
+                $state = app(\App\Services\Competition\CompetitivePlatformGateway::class)->state($campaign);
+                $state['ads'] = array_slice($state['ads'], 0, 20);
+                $state['keywords'] = array_slice($state['keywords'], 0, 100);
+                $campaignData['current_google_configuration'] = $state;
+            } catch (\Throwable $e) {
+                report($e);
+                $campaignData['current_google_configuration'] = 'Unavailable. Do not invent existing ad groups, keywords or resource identifiers.';
+            }
+        }
+        $prompt = OptimizationPrompt::generate($campaignData, $metrics, $historical, $sources);
 
         try {
             $response = $this->gemini->generateContent(
@@ -74,6 +89,7 @@ class CampaignOptimizationAgent
                 $recommendations = json_decode($matches[0], true);
 
                 if ($recommendations) {
+                    $recommendations = $competitiveContext->attribute($recommendations, $sources, $metrics);
                     $recommendations = $this->scorer->enhance($recommendations, $metrics, $historical, $dataQuality);
                     $recommendations['categorized'] = $this->scorer->categorize($recommendations);
 
@@ -153,11 +169,11 @@ class CampaignOptimizationAgent
         return 12;
     }
 
-    public function applyRecommendation(Campaign $campaign, array $recommendation): array
+    public function applyRecommendation(Campaign $campaign, array $recommendation, bool $approvedByUser = false): array
     {
         $type = RecommendationScorer::canonicalType($recommendation['type'] ?? '');
         $field = $type === 'BUDGET' ? 'last_budget_changed_at' : 'last_bidding_changed_at';
-        if (in_array($type, ['BUDGET', 'BIDDING'], true) && $campaign->$field?->greaterThan(now()->subDays(7))) {
+        if (! $approvedByUser && in_array($type, ['BUDGET', 'BIDDING'], true) && $campaign->$field?->greaterThan(now()->subDays(7))) {
             return [
                 'applied' => false,
                 'requires_review' => true,
@@ -165,7 +181,7 @@ class CampaignOptimizationAgent
                 'recommendation' => $recommendation,
             ];
         }
-        $result = $this->applier->apply($campaign, $recommendation);
+        $result = $this->applier->apply($campaign, $recommendation, $approvedByUser);
         if (($result['applied'] ?? false) && in_array($type, ['BUDGET', 'BIDDING'], true)) {
             $campaign->forceFill([$field => now()])->save();
         }

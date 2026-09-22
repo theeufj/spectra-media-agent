@@ -74,7 +74,10 @@ class AnalyzeWarRoomCompetitor implements ShouldQueue
                 ->get();
 
             if ($competitors->isNotEmpty()) {
-                $gapService->generate($this->customer, $competitors);
+                $gap = $gapService->generate($this->customer, $competitors);
+                if (($gap['status'] ?? null) === 'success') {
+                    ReviewCompetitiveCampaigns::dispatch($this->customer->id, true);
+                }
             }
         }
 

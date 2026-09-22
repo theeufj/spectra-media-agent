@@ -88,7 +88,7 @@ class AuditMoneyRegressionTest extends Tests\TestCase
         $recommendation = ['type' => 'BUDGET_ADJUSTMENT', 'suggested_value' => 150];
         $applier = new class extends RecommendationApplier
         {
-            public function apply(Campaign $campaign, array $recommendation): array
+            public function apply(Campaign $campaign, array $recommendation, bool $approvedByUser = false): array
             {
                 throw new RuntimeException('Cooling-off must prevent the call.');
             }

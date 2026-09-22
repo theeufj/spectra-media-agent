@@ -191,6 +191,7 @@ class SeoController extends Controller
             'competitiveStrategy' => $canAccess ? $customer->competitive_strategy : null,
             'strategyUpdatedAt' => $canAccess ? $customer->competitive_strategy_updated_at?->toIso8601String() : null,
             'lastAnalyzedAt' => $canAccess ? $customer->competitor_analysis_at?->toIso8601String() : null,
+            'campaignActions' => $canAccess ? app(\App\Services\Competition\CompetitiveActionReport::class)->forCustomer($customer) : null,
         ]);
     }
 
@@ -221,5 +222,30 @@ class SeoController extends Controller
             'type' => 'success',
             'message' => 'Competitor analysis started. Results will appear within a few minutes.',
         ]);
+    }
+
+    public function competitorActions(Request $request)
+    {
+        abort_unless($request->user()->hasFeature('competitor_analysis'), 403);
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer, 404);
+
+        return response()->json(app(\App\Services\Competition\CompetitiveActionReport::class)->forCustomer($customer));
+    }
+
+    public function reviewCompetitorCampaigns(Request $request)
+    {
+        abort_unless($request->user()->hasFeature('competitor_analysis'), 403);
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer, 404);
+        $key = 'competitive_review:'.$customer->id;
+        $existing = \Illuminate\Support\Facades\Cache::get($key);
+        if (in_array($existing['status'] ?? '', ['queued', 'running'], true)) {
+            return back()->with('flash', ['type' => 'info', 'message' => 'Campaign review is already running.']);
+        }
+        \Illuminate\Support\Facades\Cache::put($key, ['status' => 'queued'], now()->addMinutes(20));
+        \App\Jobs\ReviewCompetitiveCampaigns::dispatch($customer->id);
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Reviewing competitor opportunities for your serving campaigns.']);
     }
 }
