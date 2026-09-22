@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { count } from '@/utils/format';
+import { fetchJson, HttpError } from '@/utils/http';
 
 const matchTypeColors = {
     BROAD: 'bg-blue-100 text-blue-700',
@@ -29,33 +30,27 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
         setSuggestions([]);
 
         try {
-            const response = await fetch('/keywords/inline-research', {
+            const requestResearch = () => fetchJson('/keywords/inline-research', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({
+                json: {
                     seed_keywords: seedInput || undefined,
                     landing_page: urlInput || undefined,
                     max_keywords: maxKeywords,
-                }),
+                },
             });
 
-            if (!response.ok) {
-                let msg = 'Keyword research failed. Please try again.';
-                try {
-                    const data = await response.json();
-                    msg = data.error
-                        || data.message
-                        || (data.errors ? Object.values(data.errors).flat().join(' ') : null)
-                        || msg;
-                } catch {}
-                throw new Error(msg);
+            let data;
+            try {
+                data = await requestResearch();
+            } catch (err) {
+                if (!(err instanceof HttpError) || err.status !== 419) throw err;
+                // A CSRF rejection never reaches the research controller.
+                // Refresh once without reloading or losing the wizard inputs;
+                // do not retry timeouts or server errors that may have run it.
+                await fetchJson('/sanctum/csrf-cookie', { cache: 'no-store' });
+                data = await requestResearch();
             }
 
-            const data = await response.json();
             const keywords = data.keywords || [];
             setSuggestions(keywords);
             setNegatives(data.negative_keywords || []);
@@ -79,7 +74,14 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                 setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
             }
         } catch (err) {
-            setError(err.message);
+            if (err instanceof HttpError && [401, 419].includes(err.status)) {
+                setError('Your session expired. Sign in again in another tab, then retry. Your keyword inputs have been kept here.');
+            } else {
+                setError(err.body?.error
+                    || (err.body?.errors ? Object.values(err.body.errors).flat().join(' ') : null)
+                    || err.body?.message
+                    || 'Keyword research failed. Please try again.');
+            }
         } finally {
             setLoading(false);
         }

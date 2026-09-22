@@ -13,6 +13,22 @@ export function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 }
 
+function csrfHeaders() {
+    // Inertia keeps the original document head across navigation, but Laravel
+    // rotates the session token. Read the fresh encrypted cookie on each call,
+    // using its own header: X-CSRF-TOKEN expects the unencrypted meta value.
+    const cookie = document.cookie.split(';').map(part => part.trim())
+        .find(part => part.startsWith('XSRF-TOKEN='));
+    if (cookie) {
+        try {
+            const token = decodeURIComponent(cookie.slice('XSRF-TOKEN='.length));
+            if (token) return { 'X-XSRF-TOKEN': token };
+        } catch { /* Fall back if a malformed cookie cannot be decoded. */ }
+    }
+
+    return { 'X-CSRF-TOKEN': csrfToken() };
+}
+
 export class HttpError extends Error {
     constructor(response, body) {
         super(`Request failed with ${response.status}`);
@@ -39,8 +55,8 @@ export async function fetchJson(url, options = {}) {
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
-            ...(rest.method && rest.method.toUpperCase() !== 'GET'
-                ? { 'X-CSRF-TOKEN': csrfToken() }
+            ...(rest.method && !['GET', 'HEAD', 'OPTIONS'].includes(rest.method.toUpperCase())
+                ? csrfHeaders()
                 : {}),
             ...headers,
         },
