@@ -148,7 +148,7 @@ class SeoController extends Controller
         if (! $customer) {
             return redirect()->route('customers.create');
         }
-        $domain = $customer->website ? parse_url($customer->website, PHP_URL_HOST) : null;
+        $domain = BacklinkAnalysisService::domain($customer);
 
         if (! $domain) {
             return Inertia::render('SEO/Backlinks', [
@@ -159,12 +159,39 @@ class SeoController extends Controller
         }
 
         $service = new BacklinkAnalysisService($customer);
-        $profile = $service->analyze($domain);
 
-        return Inertia::render('SEO/Backlinks', [
-            'profile' => $profile,
-            'domain' => $domain,
-        ]);
+        return Inertia::render('SEO/Backlinks', $service->report($domain));
+    }
+
+    public function backlinkStatus(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer, 404);
+        $domain = BacklinkAnalysisService::domain($customer);
+        abort_unless($domain !== null, 422, 'Set your website URL before running an analysis.');
+
+        return response()->json((new BacklinkAnalysisService($customer))->report($domain));
+    }
+
+    public function refreshBacklinks(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer, 404);
+        $domain = BacklinkAnalysisService::domain($customer);
+        if (! $domain) {
+            return back()->with('flash', ['type' => 'warning', 'message' => 'Set your website URL before running an analysis.']);
+        }
+        $key = (new BacklinkAnalysisService($customer))->key($domain);
+        \Illuminate\Support\Facades\Cache::lock($key.':dispatch', 10)->get(function () use ($key, $customer, $domain) {
+            $run = \Illuminate\Support\Facades\Cache::get($key.':run');
+            if (in_array($run['status'] ?? '', ['queued', 'running'], true)) {
+                return;
+            }
+            \Illuminate\Support\Facades\Cache::put($key.':run', ['status' => 'queued'], now()->addMinutes(10));
+            \App\Jobs\RunBacklinkAnalysis::dispatch($customer->id, $domain);
+        });
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Backlink analysis queued. Results will update here.']);
     }
 
     public function competitorComparison(Request $request)

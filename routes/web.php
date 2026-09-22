@@ -900,6 +900,8 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/seo/rankings', [SeoController::class, 'rankings'])->name('seo.rankings');
     Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');
     Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
+    Route::get('/seo/backlinks/status', [SeoController::class, 'backlinkStatus'])->name('seo.backlinks.status');
+    Route::post('/seo/backlinks/refresh', [SeoController::class, 'refreshBacklinks'])->middleware('throttle:4,60')->name('seo.backlinks.refresh');
     Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
     Route::post('/seo/competitors/refresh', [SeoController::class, 'refreshCompetitors'])->name('seo.competitors.refresh');
     Route::get('/seo/competitors/actions', [SeoController::class, 'competitorActions'])->name('seo.competitors.actions');
