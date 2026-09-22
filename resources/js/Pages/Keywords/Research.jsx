@@ -29,7 +29,7 @@ function ClusterCard({ cluster }) {
 export default function Research({ customer }) {
     const { props } = usePage();
     const results = props.research_results || null;
-    const [form, setForm] = useState({ seed_keywords: '', competitor_url: '', landing_page: customer?.website_url || '', max_keywords: 20 });
+    const [form, setForm] = useState({ seed_keywords: '', competitor_url: '', landing_page: customer?.website || '', max_keywords: 20 });
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = (e) => {

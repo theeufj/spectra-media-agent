@@ -32,6 +32,8 @@ use Illuminate\Support\Facades\Log;
  * campaign discovers what converts; waiting for clicks before adding is circular
  * (the keyword can't get clicks if it doesn't exist yet).
  *
+ * Requires verified conversion tracking and 30 conversions in the previous 30 days.
+ * This is our conservative expansion policy, not a Google API requirement.
  * Rate limit: once per 30 days per campaign (Cache key).
  */
 class ExpandBroadMatchKeywords implements ShouldQueue
@@ -55,6 +57,15 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         $customer = $this->campaign->customer;
 
         if (! $customer?->google_ads_customer_id || ! $this->campaign->google_ads_campaign_id) {
+            return;
+        }
+
+        // Do not immediately undo conservative setup match types on a new account.
+        if (! $customer->conversion_tracking_verified_at || $this->campaign->googleAdsPerformanceData()
+            ->whereDate('date', '>=', now()->subDays(30)->toDateString())
+            ->whereDate('date', '<=', now()->toDateString())->sum('conversions') < 30) {
+            Log::info('ExpandBroadMatchKeywords: Waiting for verified tracking and conversion evidence', ['campaign_id' => $this->campaign->id]);
+
             return;
         }
 
@@ -222,7 +233,8 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         $researchService = new KeywordResearchService($customer);
         $negatives = $researchService->generateNegativeKeywords(
             $customer->name ?? 'this business',
-            $this->campaign->strategy?->industry ?? null
+            $customer->business_type,
+            ['offer' => $this->campaign->product_focus, 'audience' => $this->campaign->target_market]
         );
 
         if (empty($negatives)) {

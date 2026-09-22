@@ -110,19 +110,21 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $strategy->save();
         }
 
-        // 3. Add Keywords — always validate through Keyword Planner for volume data
+        // 3. Preserve the selected keywords; Planner supplies metrics, not replacements.
         $keywords = $this->keywords->getKeywords($campaign, $strategy, $plan);
         if (empty($keywords)) {
             // Fallback: use AI keyword research to generate initial keywords
             $keywords = $this->keywords->researchKeywords($customerId, $campaign, $strategy);
         }
-        // Validate all keywords through Keyword Planner to filter low-volume terms
+        // Missing Planner metrics must not erase a reviewed keyword or widen its match type.
         if (! empty($keywords)) {
             $keywords = $this->keywords->validateAndEnrichKeywords($customerId, $keywords, $campaign, $strategy);
         }
-        if (! empty($keywords)) {
-            $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
+        if ($keywords === []) {
+            throw new \RuntimeException('No relevant Search keywords could be selected. Review the campaign keywords before retrying.');
         }
+        $result->addMetadata('selected_keywords', $keywords);
+        $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
 
         // 3.2 Add negative keywords at campaign creation time
         $this->keywords->addInitialNegativeKeywords($customerId, $campaignResourceName, $campaign, $strategy, $result);

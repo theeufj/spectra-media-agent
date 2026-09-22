@@ -392,12 +392,6 @@ parameters:
 
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$website_url\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/KeywordController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$domain\.$#'
 			identifier: property.notFound
 			count: 1
@@ -600,12 +594,6 @@ parameters:
 		-
 			message: '#^If condition is always false\.$#'
 			identifier: if.alwaysFalse
-			count: 1
-			path: app/Jobs/ExpandBroadMatchKeywords.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>industry" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Jobs/ExpandBroadMatchKeywords.php
 
@@ -1150,18 +1138,6 @@ parameters:
 			identifier: smaller.alwaysTrue
 			count: 1
 			path: app/Services/Agents/Google/Executors/PerformanceMaxCampaignExecutor.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>business_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 3
-			path: app/Services/Agents/Google/SearchKeywordBuilder.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>industry" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 3
-			path: app/Services/Agents/Google/SearchKeywordBuilder.php
 
 		-
 			message: '#^Property App\\Services\\Agents\\GoogleAdsExecutionAgent\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'

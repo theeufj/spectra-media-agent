@@ -54,7 +54,7 @@ class KeywordController extends Controller
         }
 
         return Inertia::render('Keywords/Research', [
-            'customer' => $customer->only('id', 'uuid', 'name', 'industry', 'website_url'),
+            'customer' => $customer->only('id', 'uuid', 'name', 'business_type', 'website'),
         ]);
     }
 
@@ -82,11 +82,12 @@ class KeywordController extends Controller
             $results = $service->research(
                 $customerId,
                 $customer->name,
-                $customer->industry,
-                $validated['landing_page'] ?? $customer->website_url,
+                $customer->business_type,
+                $validated['landing_page'] ?? $customer->website,
                 'languageConstants/1000',
                 [],
-                $validated['max_keywords'] ?? 20
+                $validated['max_keywords'] ?? 20,
+                array_values(array_filter(array_map('trim', preg_split('/[\r\n,]+/', $validated['seed_keywords'] ?? ''))))
             );
 
             // AI clustering
@@ -365,8 +366,8 @@ class KeywordController extends Controller
             $results = $service->research(
                 $customerId,
                 $customer->name,
-                $customer->industry,
-                $validated['landing_page'] ?? $customer->website_url,
+                $customer->business_type,
+                $validated['landing_page'] ?? $customer->website,
                 'languageConstants/1000',
                 [],
                 $validated['max_keywords'] ?? 20,

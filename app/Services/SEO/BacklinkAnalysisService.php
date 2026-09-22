@@ -144,6 +144,9 @@ class BacklinkAnalysisService
         $response = Http::withHeaders(['x-moz-token' => config('services.moz.api_key')])
             ->acceptJson()->connectTimeout(10)->timeout(30)->post('https://lsapi.seomoz.com/v2/'.$endpoint, $parameters);
         if (! $response->successful()) {
+            if ($response->status() === 403 && str_contains(strtolower((string) $response->json('error', '')), 'quota')) {
+                throw new \RuntimeException('Moz quota is exhausted for this period. Available link records are shown; missing metrics need a quota reset or plan upgrade.');
+            }
             // Never expose raw provider responses or credentials in the report.
             throw new \RuntimeException('Moz '.$endpoint.' request failed (HTTP '.$response->status().'). Please retry or check the provider connection.');
         }

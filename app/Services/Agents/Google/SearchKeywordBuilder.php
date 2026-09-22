@@ -10,6 +10,8 @@ use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
+use App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas;
+use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
 
@@ -30,7 +32,7 @@ class SearchKeywordBuilder
             $keywords = $campaign->keywords;
             Log::info('GoogleAdsExecutionAgent: Using campaign keywords', ['count' => count($keywords)]);
 
-            return $keywords;
+            return $this->normalizeKeywords($keywords);
         }
 
         // 2. Check targeting config keywords
@@ -39,16 +41,22 @@ class SearchKeywordBuilder
             $keywords = $targetingConfig->google_options['keywords'];
             Log::info('GoogleAdsExecutionAgent: Using targeting config keywords', ['count' => count($keywords)]);
 
-            return $keywords;
+            return $this->normalizeKeywords($keywords);
         }
 
-        // 3. Check execution plan keywords (AI-generated)
-        $creativeStrategy = $plan->getCreativeStrategy();
-        if (isset($creativeStrategy['keywords']) && ! empty($creativeStrategy['keywords'])) {
-            $keywords = $creativeStrategy['keywords'];
-            Log::info('GoogleAdsExecutionAgent: Using execution plan keywords', ['count' => count($keywords)]);
+        // Use the reviewed strategy before an execution agent's optional suggestions.
+        if (! empty($strategy->bidding_strategy['keywords'])) {
+            return $this->normalizeKeywords($strategy->bidding_strategy['keywords'], false);
+        }
 
-            return $keywords;
+        $creativeStrategy = $plan->getCreativeStrategy();
+        if (! empty($creativeStrategy['keywords'])) {
+            return $this->normalizeKeywords($creativeStrategy['keywords'], false);
+        }
+        foreach ($plan->steps as $step) {
+            if (($step['action'] ?? '') === 'add_keywords' && ! empty($step['parameters']['keywords'])) {
+                return $this->normalizeKeywords($step['parameters']['keywords'], false);
+            }
         }
 
         Log::warning('GoogleAdsExecutionAgent: No keywords found for campaign');
@@ -68,7 +76,7 @@ class SearchKeywordBuilder
                 $keywordText = is_array($keyword) ? ($keyword['text'] ?? $keyword['keyword'] ?? '') : $keyword;
                 $matchType = is_array($keyword) && isset($keyword['match_type'])
                     ? $keyword['match_type']
-                    : 'BROAD';
+                    : 'PHRASE';
 
                 if (empty($keywordText)) {
                     continue;
@@ -89,95 +97,63 @@ class SearchKeywordBuilder
         }
     }
 
-    /**
-     * Validate keywords through Google Keyword Planner and filter out low-volume terms.
-     * Uses AI keywords as seeds, expands via Keyword Planner, and returns only viable keywords.
-     */
+    /** Enrich the selected set with metrics; never replace it with Planner suggestions. */
     public function validateAndEnrichKeywords(string $customerId, array $keywords, Campaign $campaign, Strategy $strategy): array
     {
+        $keywords = $this->normalizeKeywords($keywords);
+        if ($keywords === []) {
+            return [];
+        }
+        $ideaMap = [];
         try {
-            // Extract keyword texts to use as seeds for Keyword Planner
-            $seedTexts = array_map(function ($kw) {
-                return is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
-            }, $keywords);
-            $seedTexts = array_values(array_filter($seedTexts));
-
-            if (empty($seedTexts)) {
-                return $keywords;
-            }
-
-            $landingPageUrl = $campaign->landing_page_url ?? null;
-            $generateIdeas = new \App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas($this->customer);
-            $ideas = ($generateIdeas)($customerId, array_slice($seedTexts, 0, 20), $landingPageUrl);
-
-            if (empty($ideas)) {
-                Log::warning('GoogleAdsExecutionAgent: Keyword Planner returned no ideas, using original keywords');
-
-                return $keywords;
-            }
-
-            // Build a lookup of keyword volumes from Planner results
-            $ideaMap = [];
+            $generateIdeas = app(GenerateKeywordIdeas::class, ['customer' => $this->customer]);
+            $ideas = ($generateIdeas)($customerId, array_slice(array_column($keywords, 'text'), 0, 20), $this->landingPage($campaign, $strategy));
             foreach ($ideas as $idea) {
-                $ideaMap[strtolower($idea['keyword'])] = $idea;
+                $ideaMap[mb_strtolower($idea['keyword'])] = $idea;
             }
-
-            // Check which original keywords have sufficient volume
-            $validated = [];
-            $minVolume = 10;
-            foreach ($keywords as $kw) {
-                $text = is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
-                $lower = strtolower($text);
-                if (isset($ideaMap[$lower]) && ($ideaMap[$lower]['avg_monthly_searches'] ?? 0) >= $minVolume) {
-                    $idea = $ideaMap[$lower];
-                    $validated[] = [
-                        'text' => $text,
-                        'match_type' => $this->recommendMatchTypeFromMetrics($idea),
-                        'avg_monthly_searches' => $idea['avg_monthly_searches'],
-                    ];
-                }
+            foreach ($keywords as &$keyword) {
+                $idea = $ideaMap[mb_strtolower($keyword['text'])] ?? [];
+                // Missing from a suggestions response does not mean zero search volume.
+                $keyword['avg_monthly_searches'] = $idea['avg_monthly_searches'] ?? null;
+                $keyword['competition_index'] = $idea['competition_index'] ?? null;
             }
-
-            // If too few original keywords survived, supplement with top Keyword Planner suggestions
-            if (count($validated) < 6) {
-                $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-                $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
-                $industry = $strategy->businessProfile?->industry ?? null;
-                $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl, 'languageConstants/1000', [], 20);
-                $researchKeywords = $research['keywords'] ?? [];
-
-                // Add research keywords that aren't already in validated set
-                $existingTexts = array_map(fn ($v) => strtolower($v['text']), $validated);
-                foreach ($researchKeywords as $rk) {
-                    if (count($validated) >= 20) {
-                        break;
-                    }
-                    $rkText = strtolower($rk['text'] ?? '');
-                    if (! in_array($rkText, $existingTexts) && ($rk['avg_monthly_searches'] ?? 0) >= $minVolume) {
-                        $validated[] = $rk;
-                        $existingTexts[] = $rkText;
-                    }
-                }
-            }
-
-            Log::info('GoogleAdsExecutionAgent: Keyword validation complete', [
-                'original_count' => count($keywords),
-                'validated_count' => count($validated),
-            ]);
-
-            $final = ! empty($validated) ? $validated : $keywords;
-
-            $this->forecastViability($customerId, $final, $campaign, $ideaMap);
-
-            return $final;
+            unset($keyword);
         } catch (\Throwable $e) {
             report($e);
-            Log::warning('GoogleAdsExecutionAgent: Keyword validation failed, using original keywords', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return $keywords;
+            Log::warning('GoogleAdsExecutionAgent: Keyword metrics unavailable; preserving selected keywords', ['campaign_id' => $campaign->id]);
         }
+        $this->forecastViability($customerId, $keywords, $campaign, $ideaMap);
+
+        return $keywords;
+    }
+
+    protected function normalizeKeywords(array $keywords, bool $allowBroad = true): array
+    {
+        $normalized = [];
+        foreach ($keywords as $keyword) {
+            $text = is_array($keyword) ? ($keyword['text'] ?? $keyword['keyword'] ?? '') : $keyword;
+            if (! is_string($text) || trim($text) === '') {
+                continue;
+            }
+            $text = trim($text);
+            $match = is_array($keyword) ? strtoupper($keyword['match_type'] ?? 'PHRASE') : 'PHRASE';
+            if (! in_array($match, $allowBroad ? ['EXACT', 'PHRASE', 'BROAD'] : ['EXACT', 'PHRASE'], true)) {
+                $match = 'PHRASE';
+            }
+            $normalized[mb_strtolower($text).'|'.$match] = array_merge(is_array($keyword) ? $keyword : [], ['text' => $text, 'match_type' => $match]);
+        }
+
+        return array_values($normalized);
+    }
+
+    protected function landingPage(Campaign $campaign, Strategy $strategy): ?string
+    {
+        return $campaign->landing_page_url ?: ($strategy->bidding_strategy['landing_page_url'] ?? $this->customer->website);
+    }
+
+    protected function businessContext(Campaign $campaign): array
+    {
+        return ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market, 'goals' => $campaign->goals];
     }
 
     /**
@@ -310,25 +286,6 @@ class SearchKeywordBuilder
     }
 
     /**
-     * Recommend match type from Keyword Planner metrics.
-     */
-    protected function recommendMatchTypeFromMetrics(array $idea): string
-    {
-        $volume = $idea['avg_monthly_searches'] ?? 0;
-        $competitionIndex = $idea['competition_index'] ?? 50;
-        $cpc = ($idea['average_cpc_micros'] ?? 0) / 1_000_000;
-
-        if ($volume > 1000 && $competitionIndex < 30) {
-            return 'BROAD';
-        }
-        if ($competitionIndex > 70 || $cpc > 5.0) {
-            return 'EXACT';
-        }
-
-        return 'PHRASE';
-    }
-
-    /**
      * Use AI-powered keyword research when no keywords are configured.
      */
     public function researchKeywords(string $customerId, Campaign $campaign, Strategy $strategy): array
@@ -338,19 +295,11 @@ class SearchKeywordBuilder
                 return [];
             }
 
-            $businessName = $campaign->business_name
-                ?? $strategy->businessProfile?->business_name
-                ?? $this->customer->name
-                ?? 'Business';
-            $industry = $strategy->businessProfile?->industry ?? null;
-            // Fall back to strategy landing page when campaign doesn't have one set
-            $landingPageUrl = $campaign->landing_page_url
-                ?? $strategy->bidding_strategy['landing_page_url']
-                ?? $this->customer->website
-                ?? null;
-
-            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-            $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl);
+            $researchService = app(KeywordResearchService::class, ['customer' => $this->customer]);
+            $research = $researchService->research(
+                $customerId, $this->customer->name, $this->customer->business_type,
+                $this->landingPage($campaign, $strategy), businessContext: $this->businessContext($campaign)
+            );
 
             $keywords = $research['keywords'] ?? [];
             if (! empty($keywords)) {
@@ -381,19 +330,15 @@ class SearchKeywordBuilder
                 return;
             }
 
-            $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
-            $industry = $strategy->businessProfile?->industry ?? null;
+            $researchService = app(KeywordResearchService::class, ['customer' => $this->customer]);
+            $negatives = $researchService->generateNegativeKeywords(
+                $this->customer->name, $this->customer->business_type,
+                array_merge($this->businessContext($campaign), ['positive_keywords' => $result->metadata['selected_keywords'] ?? []])
+            );
+            if ($negatives === []) {
+                $result->addWarning('negative_keywords_unavailable', 'No relevant negative keywords were confirmed; review search terms after launch.');
 
-            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-            $research = $researchService->research($customerId, $businessName, $industry);
-            $negatives = $research['negative_keywords'] ?? [];
-
-            if (empty($negatives)) {
-                // Fallback: brand-protection negatives for any broad-match campaign
-                $negatives = ['free', 'cheap', 'diy', 'tutorial', 'how to', 'torrent', 'crack', 'pirate', 'course'];
-                Log::info('GoogleAdsExecutionAgent: No LLM negatives — using default broad-match protection negatives', [
-                    'campaign_id' => $campaign->id,
-                ]);
+                return;
             }
 
             $addNegativeService = new AddNegativeKeyword($this->customer);
@@ -429,7 +374,7 @@ class SearchKeywordBuilder
      * Match type for an initial brand-protection negative.
      *
      * These are intent terms, never observed search terms, and the campaign's
-     * positives default to BROAD (see addKeywords()). At EXACT — which is what
+     * positives can include broad match. At EXACT — which is what
      * every one of them used to go in as — 'free' blocks only the literal query
      * "free", so "free crm tutorial" kept being paid for while the log and the
      * Google UI both showed the negative sitting there. A negative broad blocks

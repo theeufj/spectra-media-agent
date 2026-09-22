@@ -105,6 +105,17 @@ class BacklinkAnalysisTest extends TestCase
         $this->assertNull($profile['domain_authority']);
     }
 
+    public function test_provider_quota_error_explains_why_metrics_are_unavailable(): void
+    {
+        Http::fake(['lsapi.seomoz.com/v2/links' => Http::response(['results' => [$this->link()]]),
+            'lsapi.seomoz.com/v2/url_metrics' => Http::response(['error' => 'The account does not have enough quota remaining for current period.'], 403)]);
+        $profile = (new BacklinkAnalysisService($this->customer()))->analyze('example.com');
+        $this->assertSame('partial', $profile['status']);
+        $this->assertStringContainsString('quota is exhausted', $profile['warnings'][0]);
+        $this->assertCount(1, $profile['backlinks']);
+        $this->assertNull($profile['indexed_linking_pages']);
+    }
+
     public function test_search_mentions_are_separate_from_backlinks_and_unsafe_urls_are_dropped(): void
     {
         config(['services.moz.api_key' => null]);
