@@ -72,7 +72,9 @@ class ReconcileStuckDeployments implements ShouldQueue
                     continue;
                 }
 
-                $exists = $verifier->verify($strategy, $customer);
+                // A configuration mismatch must never be mistaken for an absent campaign
+                // and invite a duplicate deployment. The follow-up verifies the settings.
+                $exists = $verifier->verify($strategy, $customer, verifyConfiguration: false);
 
                 if ($exists) {
                     // Objects are live. Hand to VerifyDeployment's normal path by
@@ -101,6 +103,7 @@ class ReconcileStuckDeployments implements ShouldQueue
                      */
                     if ($liveCampaign = $strategy->campaign) {
                         app(SettleDeployedCampaign::class)->settle($liveCampaign);
+                        VerifyDeployment::dispatch($liveCampaign)->delay(now()->addMinute());
                     }
 
                     Log::info("ReconcileStuckDeployments: strategy {$strategy->id} ({$strategy->platform}) verified live — marked deployed");

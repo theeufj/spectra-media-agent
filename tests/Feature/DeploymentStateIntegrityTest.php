@@ -58,7 +58,7 @@ class DeploymentStateIntegrityTest extends TestCase
         /** @var DeploymentVerifier&\Mockery\MockInterface $verifier */
         $verifier = Mockery::mock(DeploymentVerifier::class);
         $verifier->shouldReceive('supports')->andReturn($supported);
-        $verifier->shouldReceive('verify')->andReturn($exists);
+        $verifier->shouldReceive('verify')->withArgs(fn ($strategy, $customer, $verifyConfiguration) => $verifyConfiguration === false)->andReturn($exists);
 
         (new ReconcileStuckDeployments)->handle($verifier);
     }
@@ -73,6 +73,7 @@ class DeploymentStateIntegrityTest extends TestCase
         // deployment succeeded regardless of what our row claimed.
         $this->assertSame('deployed', $strategy->fresh()->deployment_status);
         $this->assertNotNull($strategy->fresh()->deployed_at);
+        \Queue::assertPushed(\App\Jobs\VerifyDeployment::class);
     }
 
     public function test_a_reconciled_deployment_also_brings_the_campaign_out_of_draft(): void

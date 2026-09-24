@@ -39,7 +39,7 @@ class DeploymentVerifier
         return $key !== null && EnabledPlatform::isEnabled($key);
     }
 
-    public function verify(Strategy $strategy, ?Customer $customer): bool
+    public function verify(Strategy $strategy, ?Customer $customer, bool $verifyConfiguration = true): bool
     {
         if (! $customer) {
             return false;
@@ -48,7 +48,7 @@ class DeploymentVerifier
         $platformIds = $strategy->execution_result['platform_ids'] ?? [];
 
         return match ($this->platformKey($strategy->platform)) {
-            'google' => $this->verifyGoogleAds($strategy, $customer, $platformIds),
+            'google' => $this->verifyGoogleAds($strategy, $customer, $platformIds, $verifyConfiguration),
             'facebook' => $this->verifyFacebookAds($strategy, $customer, $platformIds),
             'microsoft' => $this->verifyMicrosoftAds($strategy, $customer, $platformIds),
             'linkedin' => $this->verifyLinkedInAds($strategy, $customer, $platformIds),
@@ -91,7 +91,7 @@ class DeploymentVerifier
         return $id === null || $id === '' ? null : (string) $id;
     }
 
-    private function verifyGoogleAds(Strategy $strategy, Customer $customer, array $platformIds): bool
+    private function verifyGoogleAds(Strategy $strategy, Customer $customer, array $platformIds, bool $verifyConfiguration): bool
     {
         $googleCampaignId = $this->platformCampaignId($platformIds)
             ?? $strategy->campaign->google_ads_campaign_id
@@ -110,7 +110,7 @@ class DeploymentVerifier
         }
 
         $exists = (new GetCampaignStatus($customer))($customerId, $resourceName) !== null;
-        if (! $exists || ! in_array(strtolower($strategy->campaign_type ?? 'search'), ['search', 'sem'], true)) {
+        if (! $exists || ! $verifyConfiguration || ! in_array(strtolower($strategy->campaign_type ?? 'search'), ['search', 'sem'], true)) {
             return $exists;
         }
         $baseline = $strategy->execution_result['metadata']['google_search_baseline'] ?? [];
