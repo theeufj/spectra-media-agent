@@ -36,9 +36,11 @@ class RecordSiteGoogleConversion implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
+    public $tries = 8;
 
-    public $backoff = [60, 300];
+    // New Google actions can take 4–6 hours to accept uploads. Keep the fixed
+    // event timestamp/transaction ID while retrying through that window.
+    public $backoff = [60, 300, 1800, 3600, 7200, 10800, 21600];
 
     /**
      * Own-site event key → the UPLOAD_CLICKS conversion action it uploads to.
