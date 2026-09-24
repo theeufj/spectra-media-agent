@@ -337,7 +337,7 @@ PROMPT;
             // Ad strength enum: 0=UNSPECIFIED, 1=UNKNOWN, 2=PENDING, 3=NO_ADS, 4=POOR, 5=AVERAGE, 6=GOOD, 7=EXCELLENT
             $weakAds = array_filter($ads, fn ($ad) => in_array($ad['ad_strength'], [4, 5], true));
 
-            $updater = new UpdateResponsiveSearchAd($customer);
+            $updater = app(UpdateResponsiveSearchAd::class, ['customer' => $customer]);
 
             foreach ($weakAds as $ad) {
                 $strengthLabel = $ad['ad_strength'] === 4 ? 'POOR' : 'AVERAGE';
@@ -355,6 +355,8 @@ PROMPT;
                 }
                 $newCopy = $this->generateAdStrengthCopy($campaign, $customer, $ad, $strategy);
                 if (empty($newCopy)) {
+                    $errors[] = "No valid replacement copy was returned for RSA {$ad['ad_id']}.";
+
                     continue;
                 }
 
@@ -430,7 +432,7 @@ Requirements:
 - Do NOT write generic copy — reflect what this business actually does
 
 Return ONLY valid JSON:
-[{"headlines": ["...", "...", "..."], "descriptions": ["...", "..."]}]
+{"headlines": ["...", "...", "..."], "descriptions": ["...", "..."]}
 PROMPT;
 
         try {
@@ -442,7 +444,13 @@ PROMPT;
             $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $data = json_decode(trim($text), true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                return $data;
+                // xAI JSON mode returns an object. Accept the legacy one-item array too.
+                $candidate = isset($data['headlines']) ? $data : ($data[0] ?? null);
+                if (is_array($candidate) && is_array($candidate['headlines'] ?? null) && is_array($candidate['descriptions'] ?? null)
+                    && $candidate['headlines'] !== [] && $candidate['descriptions'] !== []
+                    && collect(array_merge($candidate['headlines'], $candidate['descriptions']))->every(fn ($text) => is_string($text) && trim($text) !== '')) {
+                    return [$candidate];
+                }
             }
         } catch (\Throwable $e) {
             report($e);
