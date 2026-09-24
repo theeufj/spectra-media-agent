@@ -40,6 +40,8 @@ class AdCopy extends Model
 
     /**
      * An AdCopy belongs to a Strategy.
+     *
+     * @return BelongsTo<Strategy, $this>
      */
     public function strategy(): BelongsTo
     {

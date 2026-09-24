@@ -78,6 +78,20 @@ class BudgetIntelligenceAgent
         $this->learnedHourlyMultipliers = CampaignHourlyPerformance::getLearnedHourlyMultipliers($customerId);
         $this->learnedDayMultipliers = CampaignHourlyPerformance::getLearnedDayMultipliers($customerId);
 
+        // Preserve the approved budget while learning or before sufficient conversion evidence exists.
+        $learningHold = $campaign->primary_status === 'LEARNING'
+            || $campaign->created_at?->gt(now()->subDays(14))
+            || \App\Models\AgentActivity::where('campaign_id', $campaign->id)
+                ->where('created_at', '>=', now()->subDays(7))
+                ->whereIn('action', ['paid_subscription_goal_activated', 'conversion_goals_updated', 'bidding_strategy_changed', 'bidding_upgraded'])
+                ->exists();
+        $conversions = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(30)->toDateString())->sum('conversions');
+        if ($learningHold || $conversions < config('optimization.budget_intelligence.min_daypart_conversions', 30)) {
+            $this->learnedHourlyMultipliers = null;
+            $this->learnedDayMultipliers = null;
+        }
+
         $timeMultiplier = $this->getTimeOfDayMultiplier();
         $dayMultiplier = $this->getDayOfWeekMultiplier();
         $seasonalMultiplier = $this->getSeasonalMultiplier();
@@ -94,7 +108,8 @@ class BudgetIntelligenceAgent
             'day_multiplier' => $dayMultiplier,
             'seasonal_multiplier' => $seasonalMultiplier,
             'combined' => $combinedMultiplier,
-            'source' => $this->learnedHourlyMultipliers ? 'learned' : 'static',
+            'source' => $this->learnedHourlyMultipliers || $this->learnedDayMultipliers ? 'learned' : ($learningHold ? 'learning_hold' : 'insufficient_evidence'),
+            'time_basis' => 'UTC (matches stored hourly performance)',
         ];
 
         // A neutral hour must restore the base after an earlier reduction. Every
@@ -125,25 +140,14 @@ class BudgetIntelligenceAgent
      */
     protected function getTimeOfDayMultiplier(): float
     {
-        $currentHour = (int) now()->format('H');
+        $currentHour = (int) now()->utc()->format('H');
 
         // Use learned multipliers if available
         if ($this->learnedHourlyMultipliers && isset($this->learnedHourlyMultipliers[$currentHour])) {
             return $this->learnedHourlyMultipliers[$currentHour];
         }
 
-        // Fall back to config-based multipliers
-        $multipliers = $this->config['time_of_day_multipliers'] ?? [];
-        $currentTime = sprintf('%02d:00', $currentHour);
-
-        foreach ($multipliers as $range => $multiplier) {
-            [$start, $end] = explode('-', $range);
-
-            if ($this->isTimeInRange($currentTime, $start, $end)) {
-                return $multiplier;
-            }
-        }
-
+        // No measured pattern means no adjustment. Generic commute/evening rules are not evidence.
         return 1.0;
     }
 
@@ -166,17 +170,14 @@ class BudgetIntelligenceAgent
      */
     protected function getDayOfWeekMultiplier(): float
     {
-        $currentDay = strtolower(now()->format('l'));
+        $currentDay = strtolower(now()->utc()->format('l'));
 
         // Use learned multipliers if available
         if ($this->learnedDayMultipliers && isset($this->learnedDayMultipliers[$currentDay])) {
             return $this->learnedDayMultipliers[$currentDay];
         }
 
-        // Fall back to config-based multipliers
-        $multipliers = $this->config['day_of_week_multipliers'] ?? [];
-
-        return $multipliers[$currentDay] ?? 1.0;
+        return 1.0;
     }
 
     /**
@@ -184,33 +185,7 @@ class BudgetIntelligenceAgent
      */
     protected function getSeasonalMultiplier(): float
     {
-        $multipliers = $this->config['seasonal_multipliers'] ?? [];
-        $today = now();
-
-        // Check for specific dates (MM-DD format)
-        $dateKey = $today->format('m-d');
-        if (isset($multipliers[$dateKey])) {
-            return $multipliers[$dateKey];
-        }
-
-        // Check for Black Friday (last Friday of November)
-        if ($today->format('m') === '11') {
-            $lastFriday = $today->copy()->lastOfMonth(\Carbon\Carbon::FRIDAY);
-            if ($today->isSameDay($lastFriday) && isset($multipliers['black_friday'])) {
-                return $multipliers['black_friday'];
-            }
-        }
-
-        // Check for Cyber Monday (Monday after Black Friday)
-        if ($today->format('m') === '11' || $today->format('m') === '12') {
-            // Cyber Monday is the Monday after the last Thursday of November
-            $thanksgiving = now()->setMonth(11)->lastOfMonth(\Carbon\Carbon::THURSDAY);
-            $cyberMonday = $thanksgiving->copy()->addDays(4);
-            if ($today->isSameDay($cyberMonday) && isset($multipliers['cyber_monday'])) {
-                return $multipliers['cyber_monday'];
-            }
-        }
-
+        // Seasonal offers are business-specific. Never alter a campaign using global retail dates.
         return 1.0;
     }
 
@@ -228,7 +203,7 @@ class BudgetIntelligenceAgent
         if ($seasonal !== 1.0) {
             $reasons[] = "Seasonal event ({$seasonal}x)";
         } elseif ($day !== 1.0) {
-            $dayName = ucfirst(now()->format('l'));
+            $dayName = ucfirst(now()->utc()->format('l'));
             $reasons[] = "{$dayName} adjustment ({$day}x)";
         }
 

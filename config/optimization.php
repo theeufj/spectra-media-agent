@@ -71,6 +71,7 @@ return [
     ],
 
     'budget_intelligence' => [
+        'min_daypart_conversions' => 30,
         'reallocation_min_conversions' => 15,
         'reallocation_roas_ratio' => 2.0,
         'reallocation_max_shift_pct' => 0.10,

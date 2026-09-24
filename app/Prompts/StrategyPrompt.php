@@ -239,8 +239,8 @@ The "targeting" object should have the following keys:
 
 **Ad Extensions:**
 You MUST include an "ad_extensions" object to improve ad visibility and CTR.
-- "sitelinks": Array of objects, each with "text" (max 25 chars), "description1" (max 35 chars), and "description2" (max 35 chars). Provide at least 4 sitelinks.
-- "callouts": Array of strings (max 25 chars each). Provide at least 4 callouts highlighting key selling points (e.g., "Free Shipping", "24/7 Support").
+- "sitelinks": Up to 4 objects with "text" (max 25 chars), "description1" and "description2" (max 35 chars), and "url". Use only actual page URLs found in the knowledge base. Match each label and claim to that page. Fewer links or [] is valid; never invent URLs, trials, case studies or results to fill a quota.
+- "callouts": Array of strings (max 25 chars each). Provide up to 4 callouts supported by the website. Omit unverified claims. Do not generate pricing or promotion assets: these require verified catalogue offers, not inferred industry prices or discounts.
 
 **Conversion Goals:**
 You MUST include a "conversion_goals" object to guide optimization.
@@ -303,7 +303,7 @@ Each item in the "keywords" array must be an object with:
 - "text": The keyword string.
 - "match_type": One of "BROAD", "PHRASE", or "EXACT".
 
-CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential customer types when they are ready to PAY for this product or service. Think from the buyer's perspective, not the product's. Use the vocabulary of someone hiring or purchasing: "agency", "service", "managed", "company", "hire", "outsource". Never use feature or technology terms ("automation tool", "AI software", "platform") as keywords — those attract researchers and competitors, not buyers.
+Match keywords to what this business actually sells and the buyer's intent. Agency/hire terms fit an agency service; software/tool/platform terms fit software and can have strong purchase intent. Do not force one business model onto another. Prefer a small set of specific EXACT and PHRASE terms. Do not broaden match types to meet a keyword quota. Explain the connection between each keyword and the offer in selection_reason. Never substitute volume for relevance.
 
 **Example platform fields (creative_candidates omitted for brevity; always include six fully structured candidates in your response):**
 ```json

@@ -23,6 +23,17 @@ class CreateSitelinkAsset extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $linkText, string $description1, string $description2, string $finalUrl): ?string
     {
+        if (! $this->customer) {
+            return null;
+        }
+        $links = app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($this->customer,
+            [['text' => $linkText, 'url' => $finalUrl, 'desc1' => $description1, 'desc2' => $description2]], 1);
+        $link = $links[0] ?? null;
+        // This low-level writer must not silently substitute a different destination.
+        if (! $link || $link['url'] !== app(\App\Services\Campaigns\AdvertisingEvidence::class)->url($finalUrl)) {
+            return null;
+        }
+        [$linkText, $description1, $description2] = [$link['text'], $link['desc1'], $link['desc2']];
         $this->ensureClient();
 
         $sitelinkAsset = new SitelinkAsset([

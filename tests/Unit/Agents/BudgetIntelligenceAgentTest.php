@@ -103,6 +103,30 @@ class BudgetIntelligenceAgentTest extends TestCase
         $this->assertEquals(1.0, $result['multiplier_applied']);
     }
 
+    public function test_a_new_learning_campaign_ignores_global_hour_weekday_and_seasonal_rules(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-12-24 02:00:00', 'UTC'));
+        config(['budget_rules.time_of_day_multipliers' => ['00:00-06:00' => 0.5],
+            'budget_rules.day_of_week_multipliers.thursday' => 1.2, 'budget_rules.seasonal_multipliers.12-24' => 1.5]);
+        $campaign = $this->campaign();
+        $campaign->update(['primary_status' => 'LEARNING']);
+        $budgets = new RecordingBudgetMutator;
+        $factory = new class($budgets) extends CustomerRoutedAdsServiceFactory
+        {
+            public function __construct(private BudgetMutator $writer) {}
+
+            public function budgets(Customer $customer): BudgetMutator
+            {
+                return $this->writer;
+            }
+        };
+        $result = (new BudgetIntelligenceAgent($factory))->optimize($campaign);
+        $this->assertSame(1.0, $result['multiplier_applied']);
+        $this->assertSame(100000000.0, $budgets->writes[0][2]);
+        $this->assertSame('learning_hold', $result['adjustments'][0]['source']);
+        $this->travelBack();
+    }
+
     public function test_a_rejected_budget_is_reported_and_logged(): void
     {
         $campaign = $this->campaign();

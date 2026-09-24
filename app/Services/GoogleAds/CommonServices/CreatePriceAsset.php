@@ -31,6 +31,19 @@ class CreatePriceAsset extends BaseGoogleAdsService
         array $offerings,
         string $languageCode = 'en'
     ): ?string {
+        if (! $this->customer) {
+            return null;
+        }
+        $evidence = app(\App\Services\Campaigns\AdvertisingEvidence::class);
+        $offerings = array_values(array_filter(array_map(fn ($offer) => is_array($offer)
+            ? $evidence->priceOffering($this->customer, $offer) : null, $offerings)));
+        $offerings = array_values(array_column($offerings, null, 'source_product_id'));
+        if (count($offerings) < 3) {
+            $this->logInfo('Price asset omitted: fewer than three verified catalogue offers.');
+
+            return null;
+        }
+        $type = \Google\Ads\GoogleAds\V22\Enums\PriceExtensionTypeEnum\PriceExtensionType::PRODUCT_CATEGORIES;
         $this->ensureClient();
 
         $priceOfferings = [];
@@ -40,7 +53,7 @@ class CreatePriceAsset extends BaseGoogleAdsService
                 'description' => $offering['description'],
                 'price' => new Money([
                     'amount_micros' => $offering['price_micros'],
-                    'currency_code' => $offering['currency_code'] ?? 'AUD',
+                    'currency_code' => $offering['currency_code'],
                 ]),
                 'unit' => $offering['unit'] ?? 0, // UNSPECIFIED
                 'final_url' => $offering['final_url'],

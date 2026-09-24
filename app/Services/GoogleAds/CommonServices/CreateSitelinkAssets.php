@@ -37,7 +37,7 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
         try {
             // campaign.id must be in the SELECT clause when filtering campaign_asset by it.
             $q = 'SELECT campaign.id, campaign_asset.resource_name FROM campaign_asset '
-                ."WHERE campaign.id = {$campaignId} AND campaign_asset.field_type = 'SITELINK'";
+                ."WHERE campaign.id = {$campaignId} AND campaign_asset.field_type = 'SITELINK' AND campaign_asset.status = 'ENABLED'";
             foreach ($this->searchQuery($customerId, $q)->getIterator() as $_) {
                 $existing++;
             }
@@ -109,32 +109,6 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
      */
     private function buildSitelinks(Campaign $campaign): array
     {
-        $customer = $campaign->customer;
-        $sitelinks = [];
-        $seen = [];
-
-        foreach ($customer->pages()->whereNotNull('url')->limit(12)->get() as $page) {
-            $text = trim((string) ($page->title ?? ''));
-            $url = trim((string) $page->url);
-            if ($text === '' || $url === '') {
-                continue;
-            }
-            $key = strtolower($url);
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-            $sitelinks[] = ['text' => $text, 'url' => $url, 'desc1' => null, 'desc2' => null];
-        }
-
-        // Fallback to conventional pages off the website root.
-        if (empty($sitelinks) && $customer->website) {
-            $base = rtrim($customer->website, '/');
-            foreach ([['Get Started', '/'], ['Pricing', '/pricing'], ['About Us', '/about'], ['Contact', '/contact']] as [$t, $path]) {
-                $sitelinks[] = ['text' => $t, 'url' => $base.$path, 'desc1' => null, 'desc2' => null];
-            }
-        }
-
-        return $sitelinks;
+        return app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($campaign->customer, [], 12);
     }
 }

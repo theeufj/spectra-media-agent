@@ -94,7 +94,7 @@ class VerifyDeployment implements ShouldQueue
             foreach ($customer->users as $user) {
                 $user->notify(new \App\Notifications\DeploymentFailed(
                     $this->campaign,
-                    'We deployed your ads to '.implode(', ', $unverified).' but could not confirm they exist on the platform. Our team has been alerted and is checking — no action needed from you yet.'
+                    'We could not verify that your campaign on '.implode(', ', $unverified).' matches its reviewed settings. Our team has been alerted and is checking.'
                 ));
             }
         }

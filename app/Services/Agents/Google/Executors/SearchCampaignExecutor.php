@@ -176,6 +176,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         if ($adCopies->isEmpty()) {
             $adCopies = $strategy->adCopies()->limit(3)->get();
         }
+        $expectedAds = [];
 
         if ($adCopies->isNotEmpty()) {
             $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
@@ -186,6 +187,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                 $createAdService = new CreateResponsiveSearchAd($this->customer);
 
                 foreach ($adCopies as $adCopy) {
+                    $expectedAds[] = ['ad_copy_id' => $adCopy->id, 'headlines' => $adCopy->headlines ?? [], 'descriptions' => $adCopy->descriptions ?? [], 'final_urls' => [$finalUrl]];
                     $adData = [
                         'finalUrls' => [$finalUrl],
                         'headlines' => $adCopy->headlines ?? [],
@@ -194,6 +196,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                     $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
                     if ($adResourceName) {
                         $result->addPlatformId('ad', $adResourceName);
+                        $expectedAds[array_key_last($expectedAds)]['resource'] = $adResourceName;
                     }
                 }
 
@@ -225,6 +228,29 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // Target CPA requires 30+/month, Target ROAS requires 50+/month — fall back to
         // MaximizeConversions on accounts below those thresholds.
         $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
+
+        $resources = $result->metadata['platform_resources'] ?? [];
+        $extensionTypes = ['sitelink_asset', 'callout_asset', 'structured_snippet_asset', 'call_asset', 'price_asset', 'promotion_asset'];
+        $goal = strtoupper(str_replace(['-', ' '], '_', $strategy->conversion_goals['primary_goal'] ?? ''));
+        $result->addMetadata('google_search_baseline', [
+            'version' => 1, 'keywords' => $keywords, 'ads' => $expectedAds,
+            'locations' => $result->metadata['expected_locations'] ?? [],
+            'location_mode' => 'PRESENCE',
+            'networks' => ['targetGoogleSearch' => true, 'targetSearchNetwork' => false, 'targetContentNetwork' => false],
+            'budget_micros' => (int) round(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100) * 10000,
+            'bidding' => $result->metadata['expected_bidding'] ?? 'MANUAL_CPC',
+            'asset_resources' => array_merge(...array_map(fn ($type) => $resources[$type] ?? [], $extensionTypes)),
+            'verified_offer_assets' => array_merge($resources['price_asset'] ?? [], $resources['promotion_asset'] ?? []),
+            'verified_offer_details' => $result->metadata['verified_offer_details'] ?? [],
+            'sitelink_urls' => array_column(app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($this->customer,
+                $strategy->ad_extensions['sitelinks'] ?? $strategy->bidding_strategy['sitelinks'] ?? []), 'url'),
+            'conversion_category' => match ($goal) {
+                'PURCHASE', 'PURCHASES', 'SALE', 'SALES', 'PAID_SUBSCRIPTION' => 'PURCHASE',
+                'SIGNUP', 'SIGN_UP', 'SIGN_UPS', 'SIGN_UPS/REGISTRATIONS' => 'SIGNUP',
+                'LEAD', 'LEADS', 'SUBMIT_LEAD_FORM' => 'SUBMIT_LEAD_FORM',
+                default => null,
+            },
+        ]);
 
         // 8. Apply conversion value rules (device + audience modifiers)
         try {

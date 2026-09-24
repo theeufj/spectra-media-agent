@@ -62,6 +62,12 @@ class BiddingStrategyApplier
         if (! $mappedStrategy) {
             return;
         }
+        $result->addMetadata('expected_bidding', match ($mappedStrategy) {
+            'TARGET_CPA' => 'TARGET_CPA',
+            'TARGET_ROAS' => 'TARGET_ROAS',
+            'MAXIMIZE_CLICKS' => 'TARGET_SPEND',
+            default => $mappedStrategy,
+        });
 
         $targetCpa = isset($biddingData['parameters']['targetCpaMicros'])
             ? $biddingData['parameters']['targetCpaMicros'] / 1_000_000

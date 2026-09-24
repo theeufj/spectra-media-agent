@@ -33,6 +33,15 @@ class CreatePromotionAsset extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $promotionTarget, array $promotionData): ?string
     {
+        $verified = $this->customer
+            ? app(\App\Services\Campaigns\AdvertisingEvidence::class)->promotion($this->customer, $promotionData) : null;
+        if (! $verified) {
+            $this->logInfo('Promotion omitted: no verified catalogue sale supports the discount.');
+
+            return null;
+        }
+        $promotionTarget = $verified['promotion_target'];
+        $promotionData = $verified;
         $this->ensureClient();
 
         $assetData = [

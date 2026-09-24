@@ -126,7 +126,7 @@ class HourlyBudgetOptimization implements ShouldQueue
             return;
         }
 
-        $now = now();
+        $now = now()->utc();
         $hour = (int) $now->format('H');
         $date = $now->toDateString();
         $dayOfWeek = (int) $now->format('w'); // 0=Sunday

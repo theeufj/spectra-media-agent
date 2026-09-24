@@ -194,49 +194,10 @@ class AdExtensionAgent
 
     private function generateSitelinks(object $customer, Campaign $campaign, string $context, int $count): array
     {
-        $landingPage = $customer->website ?? null;
-        if (! $landingPage) {
-            Log::warning('[AdExtensionAgent] No website set for customer, skipping sitelink generation', [
-                'customer_id' => $customer->id,
-            ]);
+        $links = app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($customer, [], $count);
 
-            return [];
-        }
-
-        $prompt = <<<PROMPT
-You are an expert Google Ads copywriter. Generate {$count} sitelink extension(s) for the following business.
-
-{$context}
-
-Requirements:
-- link_text: max 25 characters, action-oriented
-- description1: max 35 characters
-- description2: max 35 characters
-- url: use the business website or a relevant page if inferable
-
-Return ONLY valid JSON array:
-[{"link_text":"...","description1":"...","description2":"...","url":"..."}]
-PROMPT;
-
-        try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
-            $text = $response['text'] ?? '';
-            $text = preg_replace('/```json\s*|\s*```/', '', $text);
-            $data = json_decode(trim($text), true);
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                foreach ($data as &$item) {
-                    $item['url'] = $item['url'] ?? $landingPage;
-                }
-
-                return array_slice($data, 0, $count);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('AdExtensionAgent: Sitelink generation failed: '.$e->getMessage());
-        }
-
-        return [];
+        return array_map(fn ($link) => ['link_text' => $link['text'], 'description1' => $link['desc1'],
+            'description2' => $link['desc2'], 'url' => $link['url']], $links);
     }
 
     private function generateCallouts(object $customer, Campaign $campaign, string $context, int $count): array

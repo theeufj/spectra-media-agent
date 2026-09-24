@@ -18,6 +18,7 @@ class GetExtensionPerformance extends BaseGoogleAdsService
         $this->ensureClient();
 
         $query = "SELECT
+                    campaign_asset.campaign,
                     campaign_asset.asset,
                     campaign_asset.field_type,
                     asset.type,
@@ -72,10 +73,11 @@ class GetExtensionPerformance extends BaseGoogleAdsService
             return 0;
         }
 
-        $query = "SELECT campaign_asset.asset
+        $query = "SELECT campaign_asset.campaign, campaign_asset.asset
                   FROM campaign_asset
                   WHERE campaign_asset.campaign = '{$campaignResourceName}'
-                    AND campaign_asset.field_type = {$fieldTypeName}";
+                    AND campaign_asset.field_type = {$fieldTypeName}
+                    AND campaign_asset.status = 'ENABLED'";
 
         $count = 0;
 

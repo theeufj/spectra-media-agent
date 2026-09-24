@@ -133,7 +133,8 @@ class GenerateAdCopy implements ShouldQueue
                     $brandGuidelines,
                     $productContext,
                     $persona,
-                    $competitors
+                    $competitors,
+                    app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($this->campaign, $this->strategy),
                 ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);

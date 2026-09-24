@@ -88,6 +88,7 @@ class DeploymentService
                 'execution_time' => $result->executionTime,
                 'errors' => $result->errors,
                 'warnings' => $result->warnings,
+                'metadata' => $result->metadata,
                 'executed_at' => now()->toIso8601String(),
             ];
             $strategy->execution_time = $result->executionTime;

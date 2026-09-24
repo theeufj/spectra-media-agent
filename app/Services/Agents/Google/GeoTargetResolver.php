@@ -76,6 +76,7 @@ class GeoTargetResolver
             ]);
         }
 
+        $result->addMetadata('expected_locations', array_values(array_unique($locationIds)));
         $this->applyLocationCriteria($customerId, $campaignResourceName, $locationIds, $result);
     }
 

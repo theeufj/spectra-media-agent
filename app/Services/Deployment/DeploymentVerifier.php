@@ -109,7 +109,23 @@ class DeploymentVerifier
             $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
         }
 
-        return (new GetCampaignStatus($customer))($customerId, $resourceName) !== null;
+        $exists = (new GetCampaignStatus($customer))($customerId, $resourceName) !== null;
+        if (! $exists || ! in_array(strtolower($strategy->campaign_type ?? 'search'), ['search', 'sem'], true)) {
+            return $exists;
+        }
+        $baseline = $strategy->execution_result['metadata']['google_search_baseline'] ?? [];
+        $snapshot = app(\App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration::class, ['customer' => $customer])
+            ->read($customerId, $resourceName);
+        $issues = app(GoogleSearchConfigurationCheck::class)->compare($baseline, $snapshot);
+        $execution = $strategy->execution_result ?? [];
+        $execution['metadata']['configuration_verification'] = ['checked_at' => now()->toIso8601String(),
+            'passed' => $issues === [], 'issues' => $issues];
+        $strategy->forceFill(['execution_result' => $execution, 'deployment_error' => $issues ? implode(' ', $issues) : null])->save();
+        \App\Models\AgentActivity::record('deployment', $issues ? 'configuration_mismatch' : 'configuration_verified',
+            $issues ? 'Google campaign settings need review: '.implode(' ', $issues) : 'Google campaign settings match the reviewed deployment.',
+            $customer->id, $strategy->campaign_id, ['strategy_id' => $strategy->id, 'issues' => $issues], $issues ? 'needs_review' : 'completed');
+
+        return $issues === [];
     }
 
     private function verifyFacebookAds(Strategy $strategy, Customer $customer, array $platformIds): bool

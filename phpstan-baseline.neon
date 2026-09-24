@@ -301,12 +301,6 @@ parameters:
 			path: app/Http/Controllers/DashboardController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$campaign\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/DeploymentController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\DeploymentController\:\:toggleCollateral\(\) should return Illuminate\\Http\\JsonResponse but returns Illuminate\\Http\\RedirectResponse\.$#'
 			identifier: return.type
 			count: 1
@@ -1127,11 +1121,6 @@ parameters:
 			count: 1
 			path: app/Services/Agents/FacebookLearningPhaseAgent.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>descriptions" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Agents/Google/AdExtensionBuilder.php
 
 		-
 			message: '#^Comparison operation "\<" between int\<min, 49\> and 50 is always true\.$#'

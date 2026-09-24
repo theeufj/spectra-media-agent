@@ -60,7 +60,7 @@ class AdminMonitorService
      * @param  AdCopy  $adCopy  The AdCopy model instance to review.
      * @return array An array containing programmatic validation and Gemini's qualitative feedback.
      */
-    public function reviewAdCopy(AdCopy $adCopy): array
+    public function reviewAdCopy(AdCopy $adCopy, bool $existingSearchAd = false): array
     {
         $platform = $adCopy->platform;
         $headlines = is_string($adCopy->headlines) ? json_decode($adCopy->headlines, true) : $adCopy->headlines;
@@ -71,7 +71,10 @@ class AdminMonitorService
             'descriptions' => $descriptions,
         ]);
 
-        $validationResults = $this->validateAdCopy($platform, $headlines, $descriptions);
+        $validationResults = $this->validateAdCopy($platform, $headlines, $descriptions, $existingSearchAd);
+        $strategy = $adCopy->strategy;
+        $evidence = $strategy?->campaign
+            ? app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($strategy->campaign, $strategy) : [];
 
         // If programmatic validation fails critically, we might not even call Gemini.
         // For now, we'll always call Gemini but include programmatic results.
@@ -80,7 +83,7 @@ class AdminMonitorService
             $headlinesString = implode("\n", $headlines);
             $descriptionsString = implode("\n", $descriptions);
 
-            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString))->getPrompt();
+            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString, $evidence))->getPrompt();
 
             $generatedResponse = $this->geminiService->generateContent(config('ai.models.default'), $reviewPrompt);
 
@@ -118,6 +121,18 @@ class AdminMonitorService
                 'exception' => $e,
             ]);
             $geminiFeedback = ['overall_score' => 0, 'feedback' => ['general' => ['An unexpected error occurred during Gemini review.']]];
+        }
+
+        // The generation loop may accept a lower style score, but must never bypass factual/intent failures.
+        if ($evidence !== [] && (($geminiFeedback['factual_accuracy'] ?? false) !== true
+            || ($geminiFeedback['intent_relevance'] ?? false) !== true || ! empty($geminiFeedback['blocking_issues']))) {
+            $validationResults['is_valid'] = false;
+            $validationResults['feedback']['general'][] = 'Campaign evidence/intent review did not pass.';
+            foreach ((array) ($geminiFeedback['blocking_issues'] ?? []) as $issue) {
+                if (is_string($issue)) {
+                    $validationResults['feedback']['general'][] = $issue;
+                }
+            }
         }
 
         $finalReview = [
@@ -247,7 +262,7 @@ class AdminMonitorService
      * @param  array  $descriptions  An array of descriptions.
      * @return array An array containing validation results.
      */
-    private function validateAdCopy(string $platform, ?array $headlines, ?array $descriptions): array
+    private function validateAdCopy(string $platform, ?array $headlines, ?array $descriptions, bool $existingSearchAd = false): array
     {
         // Ensure headlines and descriptions are arrays to prevent errors.
         $headlines = $headlines ?? [];
@@ -271,7 +286,7 @@ class AdminMonitorService
         }
 
         // Validate Headlines
-        if (count($headlines) !== $platformRules['headline_count']) {
+        if ($existingSearchAd ? count($headlines) < 3 || count($headlines) > 15 : count($headlines) !== $platformRules['headline_count']) {
             $isValid = false;
             $feedback['headlines'][] = "Expected {$platformRules['headline_count']} headlines, but got ".count($headlines).'.';
         }
@@ -299,7 +314,7 @@ class AdminMonitorService
         }
 
         // Validate Descriptions
-        if (count($descriptions) !== $platformRules['description_count']) {
+        if ($existingSearchAd ? count($descriptions) < 2 || count($descriptions) > 4 : count($descriptions) !== $platformRules['description_count']) {
             $isValid = false;
             $feedback['descriptions'][] = "Expected {$platformRules['description_count']} descriptions, but got ".count($descriptions).'.';
         }

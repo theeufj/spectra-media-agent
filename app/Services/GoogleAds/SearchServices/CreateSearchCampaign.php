@@ -65,6 +65,9 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'manual_cpc' => new ManualCpc, // Default for search campaigns
+            'geo_target_type_setting' => new Campaign\GeoTargetTypeSetting([
+                'positive_geo_target_type' => \Google\Ads\GoogleAds\V22\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType::PRESENCE,
+            ]),
             'network_settings' => new Campaign\NetworkSettings([
                 'target_google_search' => true,
                 'target_search_network' => false,

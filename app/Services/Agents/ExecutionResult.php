@@ -133,6 +133,10 @@ class ExecutionResult
     public function addPlatformId(string $type, string $id): self
     {
         $this->platformIds[$type] = $id;
+        // Preserve every created resource; the legacy scalar key contains only the last one.
+        $this->metadata['platform_resources'][$type] = array_values(array_unique([
+            ...($this->metadata['platform_resources'][$type] ?? []), $id,
+        ]));
 
         return $this;
     }
