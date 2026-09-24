@@ -377,7 +377,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 // admin dashboard. Event names are validated against a fixed allowlist.
 Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     $event = $r->input('event');
-    $allowed = array_keys(config('conversions.events', []));
+    $allowed = array_keys(array_filter(config('conversions.events', []), fn ($definition) => ($definition['mode'] ?? null) === 'client'));
     if (! in_array($event, $allowed, true)) {
         return response()->json(['ok' => false], 422);
     }

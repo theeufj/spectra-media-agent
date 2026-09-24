@@ -183,7 +183,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <div className="bg-white rounded-lg shadow overflow-hidden">
                             <div className="px-6 py-4 border-b border-gray-200">
                                 <h3 className="text-lg font-medium text-gray-900">Attribution Conversions (DB)</h3>
-                                <p className="text-sm text-gray-500 mt-0.5">Server-side events recorded locally.</p>
+                                <p className="text-sm text-gray-500 mt-0.5">Events recorded locally. Accepted uploads are awaiting Google's processing and attribution; they are not confirmed ad conversions.</p>
                             </div>
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -227,6 +227,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Google delivery</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
                                     </tr>
                                 </thead>
@@ -243,7 +244,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                 <Badge color={ev.mode === 'client' ? 'blue' : 'gray'}>{ev.mode}</Badge>
                                             </td>
                                             <td className="px-6 py-3 text-sm text-gray-700">
-                                                {ev.value ? `$${parseFloat(ev.value).toFixed(2)}` : '—'}
+                                                {ev.value ? `${ev.currency || 'USD'} ${parseFloat(ev.value).toFixed(2)}` : '—'}
                                             </td>
                                             <td className="px-6 py-3 text-sm">
                                                 {ev.gclid
@@ -253,8 +254,20 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                         : <span className="text-gray-500 text-xs">organic</span>
                                                 }
                                             </td>
+                                            <td className="px-6 py-3 text-xs" title={ev.upload_error || ev.google_request_id || undefined}>
+                                                {ev.mode === 'server_google'
+                                                    ? ev.uploaded_to_google
+                                                        ? <Badge color="green">Accepted by Google</Badge>
+                                                        : ev.upload_error
+                                                            ? <Badge color="yellow">Upload failed</Badge>
+                                                            : ev.gclid
+                                                                ? <Badge color="gray">Pending upload</Badge>
+                                                                : <span className="text-gray-500">No Google click ID</span>
+                                                    : <span className="text-gray-500">{ev.mode === 'client' ? 'Browser tag' : '—'}</span>
+                                                }
+                                            </td>
                                             <td className="px-6 py-3 text-xs text-gray-500">
-                                                {new Date(ev.created_at).toLocaleString()}
+                                                {new Date(ev.occurred_at || ev.created_at).toLocaleString()}
                                             </td>
                                         </tr>
                                     ))}

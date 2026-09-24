@@ -64,12 +64,12 @@ class ConversionTrackingController extends Controller
             ->with('user:id,name,email')
             ->orderByDesc('created_at')
             ->limit(50)
-            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'uploaded_to_google', 'created_at']);
+            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at']);
 
         // Platform-level signal counts — how many of our own signups came via each ad platform
         $signupsByPlatform = \App\Models\User::query()
             ->selectRaw('
-                COUNT(*) FILTER (WHERE gclid IS NOT NULL) AS via_google,
+                COUNT(*) FILTER (WHERE gclid IS NOT NULL OR gbraid IS NOT NULL OR wbraid IS NOT NULL) AS via_google,
                 COUNT(*) FILTER (WHERE fbclid IS NOT NULL) AS via_facebook,
                 COUNT(*) FILTER (WHERE msclid IS NOT NULL) AS via_microsoft
             ')

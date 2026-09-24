@@ -7,6 +7,7 @@ use App\Models\Setting;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V22\Enums\ConversionActionCountingTypeEnum\ConversionActionCountingType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionTypeEnum\ConversionActionType;
 use Google\Ads\GoogleAds\V22\Enums\TrackingCodeTypeEnum\TrackingCodeType;
@@ -39,6 +40,13 @@ class ProvisionConversionActions extends Command
     protected $description = 'Provision Google Ads conversion actions for sitetospend.com and store labels in settings.';
 
     private array $actions = [
+        'paid_subscription' => [
+            'name' => 'Spectra — Paid Subscription',
+            'type' => ConversionActionType::UPLOAD_CLICKS,
+            'category' => ConversionActionCategory::PURCHASE,
+            'value' => 0.0,
+            'always_use_default_value' => false,
+        ],
         // WEBPAGE twin of signup_import. Kept provisioned so the tag exists, but
         // nothing fires it: registration completes on the server, where the
         // gclid is known for certain and no ad blocker can intervene. Signups
@@ -178,10 +186,14 @@ class ProvisionConversionActions extends Command
                 'status' => ConversionActionStatus::ENABLED,
                 'view_through_lookback_window_days' => 1,
                 'click_through_lookback_window_days' => 30,
+                // New actions start as observations. Promote deliberately only
+                // after checking their delivery path and campaign goals.
+                'primary_for_goal' => false,
+                'counting_type' => ConversionActionCountingType::ONE_PER_CLICK,
                 'value_settings' => new ValueSettings([
                     'default_value' => $def['value'],
                     'default_currency_code' => 'USD',
-                    'always_use_default_value' => true,
+                    'always_use_default_value' => $def['always_use_default_value'] ?? true,
                 ]),
             ]);
 

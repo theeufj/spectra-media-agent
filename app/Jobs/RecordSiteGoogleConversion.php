@@ -47,6 +47,7 @@ class RecordSiteGoogleConversion implements ShouldQueue
      */
     private const UPLOAD_ACTIONS = [
         'signup' => 'signup_import',
+        'paid_subscription' => 'paid_subscription',
         'campaign_live' => 'campaign_live',
         'seven_day_return' => 'seven_day_return',
     ];
@@ -64,74 +65,86 @@ class RecordSiteGoogleConversion implements ShouldQueue
         protected User $user,
         protected string $event,
         protected ?\DateTimeInterface $occurredAt = null,
+        protected ?int $conversionEventId = null,
     ) {}
 
     public function handle(DataManagerService $dataManager): void
     {
-        // gclid, or gbraid/wbraid where iOS ATT replaced it. Checking gclid alone
-        // silently dropped every iOS conversion — and 99% of clicks here are
-        // mobile or tablet.
-        $adIdentifiers = $this->user->googleAdIdentifiers();
-        if (! $adIdentifiers) {
+        $eventId = $this->conversionEventId ?? null; // Also handles jobs queued before this field existed.
+        $record = $eventId
+            ? SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->findOrFail($eventId)
+            : null;
+        if ($this->event === 'paid_subscription' && ! $record) {
+            throw new \LogicException('Paid conversions require a verified invoice event.');
+        }
+
+        $adIdentifiers = $record ? $record->ad_identifiers : $this->user->googleAdIdentifiers();
+        if (! $adIdentifiers || $record?->uploaded_to_google) {
             return;
         }
 
         $actionKey = self::UPLOAD_ACTIONS[$this->event] ?? null;
         if (! $actionKey) {
-            Log::debug("RecordSiteGoogleConversion: no upload action mapped for '{$this->event}'");
-
             return;
         }
 
-        $resourceName = Setting::get("conversion_resource_name.{$actionKey}");
-        if (! $resourceName) {
-            Log::warning("RecordSiteGoogleConversion: '{$actionKey}' not provisioned — run conversions:provision");
-
-            return;
-        }
-
-        // customers/{operatingAccountId}/conversionActions/{conversionActionId}
-        $parts = explode('/', $resourceName);
-        $operatingAccountId = $parts[1] ?? null;
-        $conversionActionId = $parts[3] ?? null;
-        if (! $operatingAccountId || ! $conversionActionId) {
-            Log::error("RecordSiteGoogleConversion: unparseable resource_name '{$resourceName}'");
-
-            return;
-        }
-
+        $occurredAt = $this->occurredAt ?? $this->user->created_at ?? now();
         $config = config("conversions.events.{$this->event}", []);
-
-        $result = $dataManager->ingestConversion(
-            operatingAccountId: (string) $operatingAccountId,
-            conversionActionId: (string) $conversionActionId,
-            adIdentifiers: $adIdentifiers,
-            value: (float) ($config['value'] ?? 0),
-            currency: $config['currency'] ?? 'USD',
-            // Google attributes on the conversion timestamp and rejects
-            // anything outside the click lookback window, so this is the moment
-            // the event happened, never the moment the worker picked the job up.
-            occurredAt: $this->occurredAt ?? $this->user->created_at ?? now(),
-            email: $this->user->email,
-        );
-
-        $idType = array_key_first($adIdentifiers);
-
-        SpectraConversionEvent::record($this->event, $this->user->id, [
-            // Column is named gclid for history; it holds whichever Google click
-            // identifier was actually used, and $idType records which.
-            'gclid' => $adIdentifiers[$idType],
+        $record ??= SpectraConversionEvent::firstOrCreate([
+            'deduplication_key' => "{$this->event}:{$this->user->id}:".$occurredAt->getTimestamp(),
+        ], [
+            'event' => $this->event,
+            'user_id' => $this->user->id,
             'mode' => 'server_google',
-            'uploaded' => $result['success'],
+            'value' => $config['value'] ?? 0,
+            'currency' => $config['currency'] ?? 'USD',
+            'ad_identifiers' => $adIdentifiers,
+            'gclid' => reset($adIdentifiers),
+            'occurred_at' => $occurredAt,
+            'uploaded_to_google' => false,
         ]);
 
-        if ($result['success']) {
-            Log::info("RecordSiteGoogleConversion: uploaded '{$this->event}' for user {$this->user->id} via {$idType} (request ".($result['requestId'] ?? 'n/a').')');
-        } else {
-            Log::warning("RecordSiteGoogleConversion: upload failed for '{$this->event}': ".($result['error'] ?? 'unknown'), [
-                'user_id' => $this->user->id,
-                'identifier' => $idType,
+        if ($record->uploaded_to_google) {
+            return;
+        }
+
+        try {
+            $resourceName = Setting::get("conversion_resource_name.{$actionKey}");
+            if (! is_string($resourceName) || ! preg_match('~^customers/(\d+)/conversionActions/(\d+)$~', $resourceName, $parts)) {
+                throw new \RuntimeException("Conversion action '{$actionKey}' is not provisioned.");
+            }
+
+            $result = $dataManager->ingestConversion(
+                operatingAccountId: $parts[1],
+                conversionActionId: $parts[2],
+                adIdentifiers: $record->ad_identifiers,
+                value: (float) $record->value,
+                currency: $record->currency,
+                occurredAt: $record->occurred_at,
+                email: $this->user->email,
+                transactionId: $record->deduplication_key,
+            );
+            if (! $result['success']) {
+                throw new \RuntimeException('Google conversion upload failed: '.($result['error'] ?? 'unknown error'));
+            }
+
+            // Accepted for processing is not proof of ad attribution. Keep the
+            // provider request ID so delivery can be investigated separately.
+            $record->update([
+                'uploaded_to_google' => true,
+                'google_request_id' => $result['requestId'] ?? null,
+                'upload_error' => null,
             ]);
+            Log::info('Google conversion accepted for processing', [
+                'event_id' => $record->id,
+                'event' => $this->event,
+                'request_id' => $result['requestId'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            $record->update(['upload_error' => mb_substr($e->getMessage(), 0, 2000)]);
+            // Let the queue retry and report final failure, rather than marking
+            // a rejected upload as a successful job.
+            throw $e;
         }
     }
 }

@@ -65,6 +65,11 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'manual_cpc' => new ManualCpc, // Default for search campaigns
+            'network_settings' => new Campaign\NetworkSettings([
+                'target_google_search' => true,
+                'target_search_network' => false,
+                'target_content_network' => false,
+            ]),
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
 

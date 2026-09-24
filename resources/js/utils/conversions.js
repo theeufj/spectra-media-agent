@@ -8,6 +8,8 @@
 // silently — gtag returns no error and Google drops the conversion. This file
 // previously hardcoded AW-16797144138 while every label belonged to
 // AW-18115663500, so no client-side conversion ever reached Google.
+import { fetchJson } from '@/utils/http';
+
 let _targets = {};
 
 /**
@@ -39,12 +41,8 @@ export function trackConversion(event) {
 
     // Logged even when gtag is blocked, so the admin dashboard reflects real
     // user behaviour rather than only ad-blocker-free sessions.
-    fetch('/spectra/conversion', {
+    fetchJson('/spectra/conversion', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-        },
-        body: JSON.stringify({ event }),
+        json: { event },
     }).catch(() => {});
 }

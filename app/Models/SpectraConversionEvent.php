@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SpectraConversionEvent extends Model
 {
+    // Preserve Stripe's UTC instant when writing the timestamptz event time.
+    // Laravel's default date format drops the offset before Postgres sees it.
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected $fillable = [
         'event',
         'user_id',
@@ -16,11 +20,18 @@ class SpectraConversionEvent extends Model
         'value',
         'currency',
         'uploaded_to_google',
+        'deduplication_key',
+        'ad_identifiers',
+        'occurred_at',
+        'google_request_id',
+        'upload_error',
     ];
 
     protected $casts = [
         'value' => 'decimal:2',
         'uploaded_to_google' => 'boolean',
+        'ad_identifiers' => 'array',
+        'occurred_at' => 'immutable_datetime',
     ];
 
     public function user(): BelongsTo

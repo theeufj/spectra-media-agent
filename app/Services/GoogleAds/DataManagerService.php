@@ -98,6 +98,7 @@ class DataManagerService
         ?string $email = null,
         bool $validateOnly = false,
         string $eventSource = 'WEB',
+        ?string $transactionId = null,
     ): array {
         if (! $this->mcc) {
             return ['success' => false, 'error' => 'No active MCC account'];
@@ -132,6 +133,10 @@ class DataManagerService
                 'adPersonalization' => 'CONSENT_GRANTED',
             ],
         ];
+
+        if ($transactionId !== null) {
+            $event['transactionId'] = $transactionId;
+        }
 
         // Enhanced matching: attach the SHA-256 hash of the normalized email.
         if ($email) {

@@ -49,6 +49,15 @@ return [
      *   5. For server mode: dispatch RecordSiteConversion::dispatch($customer, 'event_name').
      */
     'events' => [
+        // Actual initial invoice amount/currency, supplied by the Stripe webhook.
+        // Renewals and one-time setup/ad-spend payments are not acquisitions.
+        'paid_subscription' => [
+            'label' => null,
+            'value' => 0,
+            'currency' => 'USD',
+            'mode' => 'server',
+            'resource_name' => null,
+        ],
         // Uploaded server-side by RecordSiteGoogleConversion on registration, so
         // it carries no gtag label. The WEBPAGE twin ("Spectra — Signup") stays
         // provisioned but unfired — counting both would double every signup.

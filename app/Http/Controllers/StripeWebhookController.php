@@ -180,6 +180,8 @@ class StripeWebhookController extends CashierController
      */
     protected function handleInvoicePaid(array $payload)
     {
+        app(\App\Services\PaidSubscriptionConversionService::class)->record($payload);
+
         $invoice = $payload['data']['object'];
         $stripeCustomerId = $invoice['customer'];
         $subscriptionId = $invoice['subscription'] ?? null;
@@ -211,6 +213,8 @@ class StripeWebhookController extends CashierController
      */
     protected function handleInvoicePaymentSucceeded(array $payload)
     {
+        app(\App\Services\PaidSubscriptionConversionService::class)->record($payload);
+
         $invoice = $payload['data']['object'];
         $stripeCustomerId = $invoice['customer'];
         $subscriptionId = $invoice['subscription'] ?? null;
