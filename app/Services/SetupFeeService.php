@@ -120,6 +120,9 @@ class SetupFeeService
 
         // Paying the setup fee IS deploy-intent — start their account build.
         \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($customer);
+        // A paid customer who already has a child account need not wait for
+        // campaign deployment to receive administrator access.
+        \App\Jobs\InvitePaidSetupCustomer::dispatchIfReady($customer);
 
         /*
            And the campaign, which is the thing they actually bought.

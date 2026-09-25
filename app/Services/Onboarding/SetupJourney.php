@@ -3,6 +3,7 @@
 namespace App\Services\Onboarding;
 
 use App\Jobs\GenerateFirstCampaign;
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Strategy;
@@ -27,6 +28,10 @@ class SetupJourney
         $strategies = $campaign->strategies ?? collect();
         $strategy = $strategies->first();
         $paid = $customer->setup_fee_paid_at !== null;
+        $invitationSent = $paid && $customer->google_ads_customer_id && AgentActivity::where('customer_id', $customer->id)
+            ->where('action', 'google_ads_admin_invitation_sent')
+            ->where('details->google_ads_customer_id', $customer->cleanGoogleCustomerId())
+            ->exists();
         $ready = $this->checkoutReady($customer);
         $signed = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->signed_off_at !== null);
         $verified = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->deployment_status === 'verified');
@@ -68,7 +73,8 @@ class SetupJourney
                 'action_url' => $campaign && ($creating || $deploymentProblem) ? route('campaigns.deployment-status', $campaign) : ($signed ? $reviewUrl : null),
                 'action_text' => $creating || $deploymentProblem ? 'View creation status' : ($signed ? 'Review ads' : null)],
             ['key' => 'handover', 'title' => 'Your account is ready', 'completed' => $handedOver,
-                'description' => $handedOver ? 'Your account is built. Complete the checks below before switching on ads.' : 'We will confirm account creation and send your administrator invitation.',
+                'description' => $handedOver ? 'Your account is built. Complete the checks below before switching on ads.'
+                    : ($invitationSent ? 'Your administrator invitation has been sent. We are finishing your paused campaign.' : 'We will create your account and send your administrator invitation.'),
                 'status' => $handedOver ? 'completed' : ($awaitingInvitation ? 'in_progress' : ($verified ? 'failed' : 'pending')),
                 'action_url' => $created ? route('dashboard') : null, 'action_text' => $created ? 'View handover' : null],
         ];
@@ -93,8 +99,10 @@ class SetupJourney
                     'detail' => $verified ? 'Creation verified. Current status: '.$campaign->status->value.'.' : ($created ? 'Created; verification is still pending.' : 'Awaiting creation and verification.')],
                 ['title' => 'Daily budget', 'done' => $campaign?->budget_confirmed_at !== null,
                     'detail' => $campaign?->budget_confirmed_at ? $customer->currency_code.' '.number_format((float) ($campaign->approved_daily_budget ?? $campaign->daily_budget), 2).' per day approved. Ad spend is paid separately to Google.' : 'Choose and approve this when reviewing your campaign.'],
-                ['title' => 'Administrator invitation', 'done' => $customer->handover_at !== null,
-                    'detail' => $customer->handover_at ? 'Invitation sent. Accept it in your email; acceptance is not confirmed here.' : 'Sent after the campaign is created.'],
+                ['title' => 'Administrator invitation', 'done' => (bool) ($invitationSent || $customer->handover_at),
+                    'detail' => $invitationSent || $customer->handover_at
+                        ? 'Invitation sent. Accept it in your email; acceptance is not confirmed here.'
+                        : 'Sent as soon as your paid Google Ads account is created.'],
                 ['title' => 'Google billing', 'done' => false,
                     'detail' => 'Add or confirm your payment method in Google Ads. Billing readiness is not verified here.'],
                 // conversion_tracking_verified_at is also set when configuration is merely published.

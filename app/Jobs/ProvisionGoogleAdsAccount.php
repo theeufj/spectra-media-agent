@@ -62,7 +62,12 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
 
         Log::info('Dispatching Google Ads account provisioning', ['customer_id' => $customer->id]);
 
-        self::dispatch($customer)->delay(now()->addMinute());
+        // A paid setup buyer needs access to the new account right away.
+        // Keep the existing short delay for managed-plan provisioning.
+        $dispatch = self::dispatch($customer);
+        if (! $customer->isPaidSetupOnly()) {
+            $dispatch->delay(now()->addMinute());
+        }
     }
 
     /**
@@ -94,6 +99,8 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
         }
 
         if ($customer->google_ads_customer_id) {
+            InvitePaidSetupCustomer::dispatchIfReady($customer);
+
             return;
         }
 
@@ -186,6 +193,9 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
             'customer_id' => $customer->id,
             'google_ads_customer_id' => $result['customer_id'],
         ]);
+
+        // The $999 buyer can accept access while we build their paused campaign.
+        InvitePaidSetupCustomer::dispatchIfReady($customer->fresh());
 
         // Until this account existed the campaign wizard's platform step was
         // blocked with no ETA — tell the user it just cleared.
