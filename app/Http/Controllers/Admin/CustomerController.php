@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdSpendTransaction;
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
@@ -117,6 +118,11 @@ class CustomerController extends Controller
                 'type' => 'error',
                 'message' => "{$customer->name} has no Google Ads account yet, so there is nothing to hand over.",
             ],
+            'approval_pending' => [
+                'type' => 'info',
+                'message' => 'Google requires a second account administrator to approve access for '
+                    .implode(', ', $result['awaiting_approval']).'. No invitation email has been sent yet.',
+            ],
             default => [
                 'type' => 'error',
                 'message' => 'Could not invite '.implode(', ', array_keys($result['failed']))
@@ -187,10 +193,15 @@ class CustomerController extends Controller
             && $customer->campaigns
                 ->flatMap->strategies
                 ->contains(fn ($strategy) => $strategy->deployed_at !== null);
+        $latestAccessActivity = $customer->google_ads_customer_id ? AgentActivity::where('customer_id', $customer->id)
+            ->whereIn('action', ['google_ads_admin_invitation_sent', 'google_ads_admin_approval_pending'])
+            ->where('details->google_ads_customer_id', $customer->cleanGoogleCustomerId())
+            ->latest('id')->first() : null;
 
         return Inertia::render('Admin/CustomerDetail', [
             'customer' => $customer,
             'handoverPending' => $handoverPending,
+            'googleApprovalPending' => ! $customer->handover_at && $latestAccessActivity?->action === 'google_ads_admin_approval_pending',
             'emailLogs' => $emailLogs,
             'bm_configured' => app(\App\Services\FacebookAds\BusinessManagerService::class)->isConfigured(),
             'adSpendCredit' => $credit ? [

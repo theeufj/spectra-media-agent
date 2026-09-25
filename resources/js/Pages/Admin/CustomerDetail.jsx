@@ -6,7 +6,7 @@ import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 export default function CustomerDetail({ auth, bm_configured }) {
-    const { customer, adSpendCredit, emailLogs = [], handoverPending = false } = usePage().props;
+    const { customer, adSpendCredit, emailLogs = [], handoverPending = false, googleApprovalPending = false } = usePage().props;
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
     const [editingMsAccount, setEditingMsAccount] = useState(false);
@@ -98,6 +98,16 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                 Back to Customers
                             </Link>
                         </div>
+
+                        {googleApprovalPending && (
+                            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950" role="status">
+                                <p className="font-semibold">Google Ads access needs a second administrator’s approval</p>
+                                <p className="mt-1 text-sm">
+                                    In Google Ads account {customer.google_ads_customer_id}, open Admin → Access and security → Pending invitations.
+                                    Another administrator must approve the request before Google emails the customer and handover can finish.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Customer Info Card */}
                         <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">

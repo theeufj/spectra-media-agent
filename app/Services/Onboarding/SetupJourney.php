@@ -28,10 +28,12 @@ class SetupJourney
         $strategies = $campaign->strategies ?? collect();
         $strategy = $strategies->first();
         $paid = $customer->setup_fee_paid_at !== null;
-        $invitationSent = $paid && $customer->google_ads_customer_id && AgentActivity::where('customer_id', $customer->id)
-            ->where('action', 'google_ads_admin_invitation_sent')
+        $accessActivity = $paid && $customer->google_ads_customer_id ? AgentActivity::where('customer_id', $customer->id)
+            ->whereIn('action', ['google_ads_admin_invitation_sent', 'google_ads_admin_approval_pending'])
             ->where('details->google_ads_customer_id', $customer->cleanGoogleCustomerId())
-            ->exists();
+            ->latest('id')->first() : null;
+        $invitationSent = $accessActivity?->action === 'google_ads_admin_invitation_sent';
+        $approvalPending = $accessActivity?->action === 'google_ads_admin_approval_pending';
         $ready = $this->checkoutReady($customer);
         $signed = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->signed_off_at !== null);
         $verified = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->deployment_status === 'verified');
@@ -74,8 +76,9 @@ class SetupJourney
                 'action_text' => $creating || $deploymentProblem ? 'View creation status' : ($signed ? 'Review ads' : null)],
             ['key' => 'handover', 'title' => 'Your account is ready', 'completed' => $handedOver,
                 'description' => $handedOver ? 'Your account is built. Complete the checks below before switching on ads.'
-                    : ($invitationSent ? 'Your administrator invitation has been sent. We are finishing your paused campaign.' : 'We will create your account and send your administrator invitation.'),
-                'status' => $handedOver ? 'completed' : ($awaitingInvitation ? 'in_progress' : ($verified ? 'failed' : 'pending')),
+                    : ($approvalPending ? 'A second Google Ads administrator must approve access before your invitation is sent.'
+                        : ($invitationSent ? 'Your administrator invitation has been sent. We are finishing your paused campaign.' : 'We will create your account and send your administrator invitation.')),
+                'status' => $handedOver ? 'completed' : ($approvalPending || $awaitingInvitation ? 'in_progress' : ($verified ? 'failed' : 'pending')),
                 'action_url' => $created ? route('dashboard') : null, 'action_text' => $created ? 'View handover' : null],
         ];
         $current = collect($steps)->firstWhere('completed', false) ?? $steps[3];
@@ -84,7 +87,7 @@ class SetupJourney
         return [
             'steps' => $steps, 'current_step' => $current, 'completed_steps' => $completed,
             'total_steps' => 4, 'progress' => $completed * 25, 'is_new_user' => ! $handedOver,
-            'is_working' => $building || $creating || $awaitingInvitation, 'setup_only' => true,
+            'is_working' => $building || $creating || $awaitingInvitation || $approvalPending, 'setup_only' => true,
             'checkout_ready' => $ready, 'paid' => $paid,
             'business' => $customer->only(['name', 'website', 'country', 'currency_code']),
             'campaign' => $campaign ? [
@@ -100,9 +103,10 @@ class SetupJourney
                 ['title' => 'Daily budget', 'done' => $campaign?->budget_confirmed_at !== null,
                     'detail' => $campaign?->budget_confirmed_at ? $customer->currency_code.' '.number_format((float) ($campaign->approved_daily_budget ?? $campaign->daily_budget), 2).' per day approved. Ad spend is paid separately to Google.' : 'Choose and approve this when reviewing your campaign.'],
                 ['title' => 'Administrator invitation', 'done' => (bool) ($invitationSent || $customer->handover_at),
-                    'detail' => $invitationSent || $customer->handover_at
+                    'detail' => $customer->handover_at || $invitationSent
                         ? 'Invitation sent. Accept it in your email; acceptance is not confirmed here.'
-                        : 'Sent as soon as your paid Google Ads account is created.'],
+                        : ($approvalPending ? 'Awaiting approval from a second Google Ads administrator. No invitation email has been sent yet.'
+                            : 'Sent as soon as your paid Google Ads account is created.')],
                 ['title' => 'Google billing', 'done' => false,
                     'detail' => 'Add or confirm your payment method in Google Ads. Billing readiness is not verified here.'],
                 // conversion_tracking_verified_at is also set when configuration is merely published.

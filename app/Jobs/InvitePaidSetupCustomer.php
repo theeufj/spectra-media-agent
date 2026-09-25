@@ -47,21 +47,38 @@ class InvitePaidSetupCustomer implements ShouldQueue
         $accountId = $customer->cleanGoogleCustomerId();
         $inviter = app()->makeWith(InviteCustomerUser::class, ['customer' => $customer]);
         $invited = [];
+        $awaitingApproval = [];
         foreach ($users as $user) {
             $result = $inviter->execute($accountId, $user->email, AccessRole::ADMIN);
             if (! $result['success']) {
                 throw new \RuntimeException("Google Ads administrator invitation failed for customer {$customer->id}: ".($result['error'] ?? 'unknown error'));
             }
-            $invited[] = $user->email;
+            if ($result['approval_pending'] ?? false) {
+                $awaitingApproval[] = $user->email;
+            } else {
+                $invited[] = $user->email;
+            }
         }
 
-        AgentActivity::record(
-            'onboarding',
-            'google_ads_admin_invitation_sent',
-            'Administrator access invited to the customer Google Ads account.',
-            $customer->id,
-            null,
-            ['google_ads_customer_id' => $accountId, 'emails' => $invited]
-        );
+        if ($invited) {
+            AgentActivity::record(
+                'onboarding',
+                'google_ads_admin_invitation_sent',
+                'Administrator access invited to the customer Google Ads account.',
+                $customer->id,
+                null,
+                ['google_ads_customer_id' => $accountId, 'emails' => $invited]
+            );
+        }
+        if ($awaitingApproval) {
+            AgentActivity::record(
+                'onboarding',
+                'google_ads_admin_approval_pending',
+                'A second Google Ads administrator must approve the access request before an invitation is sent.',
+                $customer->id,
+                null,
+                ['google_ads_customer_id' => $accountId, 'emails' => $awaitingApproval]
+            );
+        }
     }
 }

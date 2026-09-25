@@ -77,6 +77,11 @@ class SetupOnlyHandoverTest extends TestCase
 
                     return $this->result;
                 }
+
+                public function hasInvitationOrAccess(string $customerId, string $email): bool
+                {
+                    return (bool) ($this->result['existing_access'] ?? false);
+                }
             };
         });
     }
@@ -141,6 +146,38 @@ class SetupOnlyHandoverTest extends TestCase
          */
         $this->assertNull($customer->fresh()->handover_at);
         Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    public function test_multi_party_approval_does_not_claim_the_customer_has_the_keys(): void
+    {
+        $this->fakeInviter(['success' => true, 'resource_name' => null, 'approval_pending' => true]);
+        [, $customer] = $this->setupOnlyCustomer();
+
+        $result = app(\App\Services\Customers\HandOverAccount::class)->handOver($customer);
+
+        $this->assertFalse($result['handed_over']);
+        $this->assertSame('approval_pending', $result['reason']);
+        $this->assertNull($customer->fresh()->handover_at);
+        $this->assertDatabaseHas('agent_activities', ['customer_id' => $customer->id, 'action' => 'google_ads_admin_approval_pending']);
+        Mail::assertNotSent(HandoverComplete::class);
+    }
+
+    public function test_pending_review_waits_without_resending_and_finishes_after_approval(): void
+    {
+        $this->fakeInviter(['success' => true, 'approval_pending' => true]);
+        [, $customer] = $this->setupOnlyCustomer();
+        app(\App\Services\Customers\HandOverAccount::class)->handOver($customer);
+
+        $this->fakeInviter(['success' => true, 'existing_access' => false]);
+        $waiting = app(\App\Services\Customers\HandOverAccount::class)->handOver($customer);
+        $this->assertSame('approval_pending', $waiting['reason']);
+        $this->assertSame([], $this->invitations);
+
+        $this->fakeInviter(['success' => true, 'existing_access' => true]);
+        $done = app(\App\Services\Customers\HandOverAccount::class)->handOver($customer);
+        $this->assertTrue($done['handed_over']);
+        $this->assertSame([], $this->invitations);
+        Mail::assertSent(HandoverComplete::class, 1);
     }
 
     public function test_an_already_handed_over_customer_is_not_invited_twice(): void

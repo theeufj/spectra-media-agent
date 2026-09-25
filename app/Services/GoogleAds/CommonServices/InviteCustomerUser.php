@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Enums\AccessInvitationStatusEnum\AccessInvitationStatus;
 use Google\Ads\GoogleAds\V22\Enums\AccessRoleEnum\AccessRole;
 use Google\Ads\GoogleAds\V22\Resources\CustomerUserAccessInvitation;
 use Google\Ads\GoogleAds\V22\Services\CustomerUserAccessInvitationOperation;
@@ -29,6 +30,35 @@ use Google\ApiCore\ApiException;
  */
 class InviteCustomerUser extends BaseGoogleAdsService
 {
+    /** Check whether Google now shows an approved ADMIN invitation or access. */
+    public function hasInvitationOrAccess(string $customerId, string $email): bool
+    {
+        $this->ensureClient();
+
+        foreach ($this->searchQuery($customerId,
+            'SELECT customer_user_access_invitation.email_address, customer_user_access_invitation.access_role, customer_user_access_invitation.invitation_status FROM customer_user_access_invitation'
+        )->iterateAllElements() as $row) {
+            $invitation = $row->getCustomerUserAccessInvitation();
+            if (strcasecmp($invitation->getEmailAddress(), $email) === 0
+                && $invitation->getAccessRole() === AccessRole::ADMIN
+                && $invitation->getInvitationStatus() === AccessInvitationStatus::PENDING) {
+                return true;
+            }
+        }
+
+        foreach ($this->searchQuery($customerId,
+            'SELECT customer_user_access.email_address, customer_user_access.access_role FROM customer_user_access'
+        )->iterateAllElements() as $row) {
+            $access = $row->getCustomerUserAccess();
+            if (strcasecmp($access->getEmailAddress(), $email) === 0
+                && $access->getAccessRole() === AccessRole::ADMIN) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Refusals that mean the customer already has what we were sending.
      *
@@ -66,7 +96,7 @@ class InviteCustomerUser extends BaseGoogleAdsService
     /**
      * @param  string  $customerId  Google Ads customer ID (no dashes)
      * @param  string  $email  the address Google emails the invitation to
-     * @return array{success: bool, resource_name?: string|null, error?: string}
+     * @return array{success: bool, resource_name?: string|null, approval_pending?: bool, error?: string}
      */
     public function execute(string $customerId, string $email, int $accessRole = AccessRole::ADMIN): array
     {
@@ -104,6 +134,17 @@ class InviteCustomerUser extends BaseGoogleAdsService
                 );
 
             $resourceName = $response->getResult()?->getResourceName();
+
+            // Google's multi-party approval can make this mutate succeed
+            // without creating an invitation. Our V22 client predates the
+            // backported review field, so an empty resource name is the only
+            // signal it exposes. The buyer gets no email until another admin
+            // approves the request; never report it as an invitation sent.
+            if (! $resourceName) {
+                $this->logInfo("Google Ads administrator invitation for {$email} to {$customerId} awaits multi-party approval");
+
+                return ['success' => true, 'resource_name' => null, 'approval_pending' => true];
+            }
 
             $this->logInfo("Invited {$email} to Google Ads account {$customerId} as admin");
 

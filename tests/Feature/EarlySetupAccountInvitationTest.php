@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\InvitePaidSetupCustomer;
 use App\Jobs\ProvisionGoogleAdsAccount;
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Models\User;
@@ -11,7 +12,12 @@ use App\Services\GoogleAds\CommonServices\InviteCustomerUser;
 use App\Services\GoogleAds\CreateAndLinkManagedAccount;
 use App\Services\Onboarding\SetupJourney;
 use App\Services\SetupFeeService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient;
 use Google\Ads\GoogleAds\V22\Enums\AccessRoleEnum\AccessRole;
+use Google\Ads\GoogleAds\V22\Services\Client\CustomerUserAccessInvitationServiceClient;
+use Google\Ads\GoogleAds\V22\Services\MutateCustomerUserAccessInvitationRequest;
+use Google\Ads\GoogleAds\V22\Services\MutateCustomerUserAccessInvitationResponse;
+use Google\Ads\GoogleAds\V22\Services\MutateCustomerUserAccessInvitationResult;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -95,6 +101,60 @@ class EarlySetupAccountInvitationTest extends TestCase
             $this->assertStringContainsString('USER_NOT_FOUND', $e->getMessage());
         }
         $this->assertDatabaseMissing('agent_activities', ['customer_id' => $customer->id, 'action' => 'google_ads_admin_invitation_sent']);
+    }
+
+    public function test_google_mutation_without_an_invitation_resource_requires_another_administrator(): void
+    {
+        [$user, $customer] = $this->customer();
+        $service = new class extends CustomerUserAccessInvitationServiceClient
+        {
+            public function __construct() {}
+
+            public function mutateCustomerUserAccessInvitation(MutateCustomerUserAccessInvitationRequest $request, array $callOptions = []): MutateCustomerUserAccessInvitationResponse
+            {
+                return new MutateCustomerUserAccessInvitationResponse([
+                    'result' => new MutateCustomerUserAccessInvitationResult(['resource_name' => '']),
+                ]);
+            }
+        };
+        $client = new class($service) extends GoogleAdsClient
+        {
+            public function __construct(private CustomerUserAccessInvitationServiceClient $service) {}
+
+            public function getCustomerUserAccessInvitationServiceClient(): CustomerUserAccessInvitationServiceClient
+            {
+                return $this->service;
+            }
+        };
+        $inviter = new class($customer, $client) extends InviteCustomerUser
+        {
+            public function __construct(Customer $customer, GoogleAdsClient $client)
+            {
+                $this->customer = $customer;
+                $this->client = $client;
+            }
+        };
+
+        $result = $inviter->execute('1234567890', $user->email);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['approval_pending']);
+        $this->assertNull($result['resource_name']);
+    }
+
+    public function test_pending_google_approval_does_not_claim_the_invitation_was_sent(): void
+    {
+        [$user, $customer] = $this->customer();
+        AgentActivity::record('onboarding', 'google_ads_admin_invitation_sent', 'Old incorrect state', $customer->id, null,
+            ['google_ads_customer_id' => '1234567890', 'emails' => [$user->email]]);
+        $this->fakeInviter(['success' => true, 'resource_name' => null, 'approval_pending' => true], $user->email);
+
+        (new InvitePaidSetupCustomer($customer))->handle();
+
+        $this->assertDatabaseHas('agent_activities', ['customer_id' => $customer->id, 'action' => 'google_ads_admin_approval_pending']);
+        $journey = app(SetupJourney::class)->forCustomer($customer);
+        $this->assertFalse(collect($journey['checklist'])->firstWhere('title', 'Administrator invitation')['done']);
+        $this->assertStringContainsString('No invitation email', collect($journey['checklist'])->firstWhere('title', 'Administrator invitation')['detail']);
     }
 
     public function test_payment_immediately_queues_invitation_if_a_child_account_already_exists(): void

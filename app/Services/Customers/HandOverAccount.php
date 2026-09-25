@@ -3,6 +3,7 @@
 namespace App\Services\Customers;
 
 use App\Mail\HandoverComplete;
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
 use App\Services\GoogleAds\CommonServices\InviteCustomerUser;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Mail;
 class HandOverAccount
 {
     /**
-     * @return array{handed_over: bool, invited: list<string>, failed: array<string, string>, reason?: string}
+     * @return array{handed_over: bool, invited: list<string>, failed: array<string, string>, reason?: string, awaiting_approval?: list<string>}
      */
     public function handOver(Customer $customer): array
     {
@@ -48,14 +49,41 @@ class HandOverAccount
            role can.
         */
         $inviter = app()->makeWith(InviteCustomerUser::class, ['customer' => $customer]);
+        $latestAccessActivity = AgentActivity::where('customer_id', $customer->id)
+            ->whereIn('action', ['google_ads_admin_invitation_sent', 'google_ads_admin_approval_pending'])
+            ->where('details->google_ads_customer_id', $customer->cleanGoogleCustomerId())
+            ->latest('id')->first();
+        $pendingEmails = $latestAccessActivity?->action === 'google_ads_admin_approval_pending'
+            && $latestAccessActivity->created_at->gt(now()->subDays(20))
+                ? ($latestAccessActivity->details['emails'] ?? []) : [];
 
         $invited = [];
         $failed = [];
+        $awaitingApproval = [];
 
         foreach ($customer->users as $user) {
+            if (in_array($user->email, $pendingEmails, true)) {
+                // Repeating the mutation while Google's review is open
+                // cannot send the buyer an invitation. After another admin
+                // approves, the invitation or ADMIN access becomes readable.
+                if ($inviter->hasInvitationOrAccess($customer->cleanGoogleCustomerId(), $user->email)) {
+                    $invited[] = $user->email;
+                } else {
+                    $awaitingApproval[] = $user->email;
+                }
+
+                continue;
+            }
+
             $result = $inviter->execute($customer->cleanGoogleCustomerId(), $user->email);
 
-            $result['success'] ? $invited[] = $user->email : $failed[$user->email] = $result['error'] ?? 'unknown';
+            if ($result['approval_pending'] ?? false) {
+                $awaitingApproval[] = $user->email;
+            } elseif ($result['success']) {
+                $invited[] = $user->email;
+            } else {
+                $failed[$user->email] = $result['error'] ?? 'unknown';
+            }
         }
 
         if ($failed) {
@@ -72,6 +100,20 @@ class HandOverAccount
             ));
 
             return ['handed_over' => false, 'invited' => $invited, 'failed' => $failed, 'reason' => 'invite_failed'];
+        }
+
+        if ($awaitingApproval) {
+            // Google's successful mutate created a review request, not an
+            // invitation. The buyer cannot enter the account yet.
+            if ($latestAccessActivity?->action !== 'google_ads_admin_approval_pending' || $pendingEmails === []) {
+                AgentActivity::record('onboarding', 'google_ads_admin_approval_pending',
+                    'A second Google Ads administrator must approve the access request before an invitation is sent.',
+                    $customer->id, null,
+                    ['google_ads_customer_id' => $customer->cleanGoogleCustomerId(), 'emails' => $awaitingApproval]);
+            }
+
+            return ['handed_over' => false, 'invited' => $invited, 'failed' => [],
+                'reason' => 'approval_pending', 'awaiting_approval' => $awaitingApproval];
         }
 
         $customer->forceFill(['handover_at' => now()])->save();
