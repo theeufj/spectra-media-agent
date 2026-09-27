@@ -3,6 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Enums\CampaignStatus;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Setting;
 use App\Models\Strategy;
@@ -318,6 +319,16 @@ class CampaignDiagnosticsAgent
 
             $snapshot = (new InspectSearchDelivery($campaign->customer))->inspect($campaign);
             if (! InspectSearchDelivery::isStalled($snapshot, Carbon::parse($deployedAt))) {
+                return null;
+            }
+
+            // The delayed verifier owns the outcome of an active experiment.
+            // Re-alerting the customer on every four-hour scan would misstate
+            // "still measuring" as "the repair failed".
+            if ($snapshot['bidding_strategy'] === BiddingStrategyType::TARGET_SPEND
+                && AgentActivity::where('campaign_id', $campaign->id)
+                    ->where('action', 'search_recovery_started')
+                    ->where('created_at', '>=', now()->subDays(7))->exists()) {
                 return null;
             }
 
