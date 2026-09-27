@@ -58,6 +58,7 @@ class RunSelfHealingChecks implements ShouldQueue
 
         $healed = 0;
         $errors = 0;
+        $warnings = 0;
         $conversionCheckedCustomers = []; // conversion-goal hygiene runs once per customer per pass
 
         foreach ($campaigns as $campaign) {
@@ -71,6 +72,7 @@ class RunSelfHealingChecks implements ShouldQueue
                 $results = $selfHealingAgent->heal($campaign);
                 $healed += count($results['actions_taken'] ?? []);
                 $errors += count($results['errors'] ?? []);
+                $warnings += count($results['warnings'] ?? []);
 
                 // Pass 2: strategic diagnosis → autonomous remediation
                 $findings = $diagnosticsAgent->diagnose($campaign);
@@ -82,6 +84,7 @@ class RunSelfHealingChecks implements ShouldQueue
                     $remediationResult = $remediationAgent->remediate($campaign, $findings);
                     $healed += count($remediationResult['actions_taken'] ?? []);
                     $errors += count($remediationResult['errors'] ?? []);
+                    $warnings += count($remediationResult['unresolved'] ?? []) + count($remediationResult['alerts_sent'] ?? []);
                 }
 
                 if ($campaign->facebook_ads_campaign_id) {
@@ -192,9 +195,10 @@ class RunSelfHealingChecks implements ShouldQueue
             'campaigns' => $campaigns->count(),
             'healed' => $healed,
             'errors' => $errors,
+            'warnings' => $warnings,
         ]);
 
-        $this->finishRun($runStart, actions: $healed, errors: $errors, scope: $campaigns->count().' campaigns');
+        $this->finishRun($runStart, actions: $healed, errors: $errors, warnings: $warnings, scope: $campaigns->count().' campaigns');
     }
 
     /**

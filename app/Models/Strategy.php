@@ -21,17 +21,15 @@ class Strategy extends Model
     /**
      * deployment_status values that mean "this strategy is live on the platform".
      *
-     * 'verified' is the terminal success state — it follows 'deployed' once
-     * VerifyDeployment confirms the objects exist on the platform. Both count as
-     * live, and six call sites already agreed on that pair. AutoStartABTests did
-     * not: it looked for ['deployed', 'live', 'active'], two of which are not
-     * values this column ever holds, while omitting 'verified'. So the strategies
-     * that had deployed *most* successfully were the ones excluded from A/B
-     * testing, and no test was ever started.
-     *
-     * The only recorded values are: deployed, deploying, verified, null.
+     * VerifyDeployment moves 'deployed' to 'verified'; ActivateCampaigns then
+     * moves 'verified' to 'active' after enabling the platform campaign. All
+     * three are live states. Excluding 'active' made health and diagnostic jobs
+     * skip precisely the campaigns that had completed activation.
      */
-    public const DEPLOYED_STATUSES = ['deployed', 'verified'];
+    public const DEPLOYED_STATUSES = ['deployed', 'verified', 'active'];
+
+    /** Live states that still need an ENABLED transition on the platform. */
+    public const ACTIVATABLE_STATUSES = ['deployed', 'verified'];
 
     public function supportsVideo(): bool
     {

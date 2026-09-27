@@ -241,8 +241,34 @@ class CampaignRemediationAgent
             'fix_landing_page' => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
             'refresh_meta_creative' => $this->refreshMetaCreative($campaign, $finding, $results),
+            'bootstrap_search_delivery' => $this->bootstrapSearchDelivery($campaign, $finding, $results),
             default => $this->alertCustomer($campaign, $finding, $results),
         };
+    }
+
+    private function bootstrapSearchDelivery(Campaign $campaign, array $finding, array &$results): void
+    {
+        $snapshot = $finding['details']['snapshot'] ?? null;
+        if (! is_array($snapshot)) {
+            $this->alertCustomer($campaign, $finding, $results);
+
+            return;
+        }
+
+        $outcome = app(GoogleSearchDeliveryRecovery::class)->bootstrap($campaign, $snapshot);
+        if ($outcome['started'] ?? false) {
+            $results['actions_taken'][] = [
+                'type' => 'search_delivery_recovery_started',
+                'message' => 'Started a capped Maximize Clicks experiment and scheduled delivery verification',
+                'cpc_ceiling_micros' => $outcome['cpc_ceiling_micros'],
+                'daily_budget_micros' => $outcome['daily_budget_micros'],
+            ];
+
+            return;
+        }
+
+        $finding['message'] .= '. Automatic recovery unavailable: '.($outcome['reason'] ?? 'unknown reason');
+        $this->alertCustomer($campaign, $finding, $results);
     }
 
     // ─── Placement exclusions ────────────────────────────────────────────────
@@ -1339,6 +1365,10 @@ PROMPT;
         $body = $finding['message'];
         if (! empty($finding['recommended_action'])) {
             $body .= "\n\nWhat to do: ".$finding['recommended_action'];
+        }
+        $documentationUrl = $finding['details']['documentation']['url'] ?? null;
+        if (is_string($documentationUrl)) {
+            $body .= "\n\nGoogle Ads guidance: {$documentationUrl}";
         }
 
         CriticalAgentAlert::deliver(

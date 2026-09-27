@@ -4,11 +4,11 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\MaximizeClicks;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V22\Common\TargetCpa;
 use Google\Ads\GoogleAds\V22\Common\TargetRoas;
+use Google\Ads\GoogleAds\V22\Common\TargetSpend;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
@@ -20,16 +20,18 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
     /**
      * Upgrade a campaign's bidding strategy.
      *
-     * @param  string  $strategy  One of: ENHANCED_CPC | TARGET_CPA | TARGET_ROAS | MAXIMIZE_CONVERSIONS | MAXIMIZE_CONVERSION_VALUE
+     * @param  string  $strategy  One of: ENHANCED_CPC | TARGET_CPA | TARGET_ROAS | MAXIMIZE_CLICKS | MAXIMIZE_CONVERSIONS | MAXIMIZE_CONVERSION_VALUE
      * @param  float|null  $targetCpa  Target CPA in account currency (required for TARGET_CPA)
      * @param  float|null  $targetRoas  Target ROAS as a ratio, e.g. 3.5 = 350% (required for TARGET_ROAS)
+     * @param  int|null  $cpcBidCeilingMicros  Optional per-click ceiling for MAXIMIZE_CLICKS
      */
     public function __invoke(
         string $customerId,
         string $campaignResourceName,
         string $strategy,
         ?float $targetCpa = null,
-        ?float $targetRoas = null
+        ?float $targetRoas = null,
+        ?int $cpcBidCeilingMicros = null
     ): bool {
         $this->ensureClient();
 
@@ -55,8 +57,10 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
                 break;
 
             case 'MAXIMIZE_CLICKS':
-                $campaign->setMaximizeClicks(new MaximizeClicks);
-                $updateMask->setPaths(['maximize_clicks.target_spend_micros']);
+                $campaign->setTargetSpend(new TargetSpend(
+                    $cpcBidCeilingMicros !== null ? ['cpc_bid_ceiling_micros' => $cpcBidCeilingMicros] : []
+                ));
+                $updateMask->setPaths(['target_spend.cpc_bid_ceiling_micros']);
                 break;
 
             case 'MAXIMIZE_CONVERSIONS':

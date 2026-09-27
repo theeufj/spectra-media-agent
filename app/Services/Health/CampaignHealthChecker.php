@@ -11,6 +11,8 @@ use App\Models\Strategy;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use Carbon\Carbon;
+use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
+use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Support\Facades\Log;
 
 class CampaignHealthChecker
@@ -117,21 +119,29 @@ class CampaignHealthChecker
                     $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
                 }
 
-                $statusData = (new \App\Services\GoogleAds\CommonServices\GetCampaignStatus($customer))($customerId, $resourceName);
+                $statusData = app(\App\Services\GoogleAds\CommonServices\GetCampaignStatus::class, ['customer' => $customer])($customerId, $resourceName);
 
                 if ($statusData) {
                     $campaignStatus = match ($statusData['status']) {
                         2 => 'ENABLED', 3 => 'PAUSED', 4 => 'REMOVED', default => 'UNKNOWN',
                     };
                     $primaryStatus = match ($statusData['primary_status']) {
-                        2 => 'ELIGIBLE', 3 => 'PAUSED', 4 => 'REMOVED', 5 => 'ENDED',
-                        6 => 'PENDING', 7 => 'MISCONFIGURED', 8 => 'LIMITED', default => 'UNKNOWN',
+                        CampaignPrimaryStatus::ELIGIBLE => 'ELIGIBLE',
+                        CampaignPrimaryStatus::PAUSED => 'PAUSED',
+                        CampaignPrimaryStatus::REMOVED => 'REMOVED',
+                        CampaignPrimaryStatus::ENDED => 'ENDED',
+                        CampaignPrimaryStatus::PENDING => 'PENDING',
+                        CampaignPrimaryStatus::MISCONFIGURED => 'MISCONFIGURED',
+                        CampaignPrimaryStatus::LIMITED => 'LIMITED',
+                        CampaignPrimaryStatus::LEARNING => 'LEARNING',
+                        CampaignPrimaryStatus::NOT_ELIGIBLE => 'NOT_ELIGIBLE',
+                        default => 'UNKNOWN',
                     };
 
                     // Don't alert on campaigns that are intentionally paused in our DB.
                     $isIntentionallyPaused = in_array($campaign->status, CampaignStatus::nonDelivering(), true);
 
-                    if (! $isIntentionallyPaused && ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['REMOVED', 'ENDED', 'MISCONFIGURED'], true))) {
+                    if (! $isIntentionallyPaused && ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['REMOVED', 'ENDED', 'MISCONFIGURED', 'NOT_ELIGIBLE'], true))) {
                         $health['issues'][] = [
                             'type' => 'google_campaign_not_serving',
                             'severity' => 'critical',
@@ -213,13 +223,21 @@ class CampaignHealthChecker
         }
 
         if ($campaign->google_ads_campaign_id) {
-            $metrics = $this->getGoogleMetricsSummary($campaign);
-            if ($metrics && ($metrics['impressions'] ?? 0) === 0) {
+            $liveRecent = $this->getGoogleMetricsSummary($campaign);
+            $lastImpressionDate = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('impressions', '>', 0)->max('date');
+            $twoCompleteDaysAgo = now($campaign->customer?->timezone ?: config('app.timezone'))
+                ->subDays(2)->toDateString();
+            if ($liveRecent !== null && ($liveRecent['impressions'] ?? 0) === 0
+                && (! $lastImpressionDate
+                    || Carbon::parse($lastImpressionDate)->toDateString() < $twoCompleteDaysAgo)) {
                 $health['warnings'][] = [
                     'type' => 'google_zero_delivery',
                     'severity' => 'high',
-                    'message' => 'Google campaign has not recorded impressions since deployment',
-                    'details' => 'Check ad approval, bidding, targeting, and billing before spend is lost to delay.',
+                    'message' => $lastImpressionDate
+                        ? 'Google campaign has stopped recording impressions'
+                        : 'Google campaign has not recorded impressions since deployment',
+                    'details' => 'Last day with impressions: '.($lastImpressionDate ?: 'none').'. Check Google Search delivery, bidding, targeting and billing.',
                 ];
             }
         }
@@ -243,13 +261,23 @@ class CampaignHealthChecker
     {
         $health = ['issues' => [], 'warnings' => []];
 
-        if (! $campaign->daily_budget || ! $campaign->started_at) {
+        if (! $campaign->daily_budget) {
             return $health;
         }
 
-        $daysRunning = now()->diffInDays($campaign->started_at);
+        $startedAt = $campaign->started_at ?: $campaign->strategies()
+            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
+            ->whereNotNull('deployed_at')->min('deployed_at');
+        if (! $startedAt) {
+            return $health;
+        }
+
+        $daysRunning = now()->diffInDays(Carbon::parse($startedAt));
         $expectedSpend = $campaign->daily_budget * $daysRunning;
-        $actualSpend = $campaign->total_spend ?? 0;
+        $actualSpend = max(
+            (float) ($campaign->total_spend ?? 0),
+            (float) GoogleAdsPerformanceData::where('campaign_id', $campaign->id)->sum('cost')
+        );
 
         if ($daysRunning <= 0) {
             return $health;
@@ -439,11 +467,15 @@ class CampaignHealthChecker
                     $resource = "customers/{$customerId}/campaigns/{$resource}";
                 }
 
-                $ads = (new GetAdStatus($customer))($customerId, $resource);
+                $ads = app(GetAdStatus::class, ['customer' => $customer])($customerId, $resource);
                 $limited = 0;
 
                 foreach ($ads as $ad) {
-                    if (($ad['approval_status'] ?? 0) === 4) {
+                    if (($ad['status'] ?? null) !== 2) {
+                        continue;
+                    }
+
+                    if (($ad['approval_status'] ?? 0) === PolicyApprovalStatus::DISAPPROVED) {
                         $topics = array_map(fn ($t) => $t['topic'] ?? 'unknown', $ad['policy_topics'] ?? []);
                         $health['issues'][] = [
                             'type' => 'google_ad_disapproved',
@@ -451,7 +483,7 @@ class CampaignHealthChecker
                             'message' => 'A Google ad was disapproved'.(! empty($topics) ? ' for: '.implode(', ', $topics) : '').'. Our team is working to resolve this.',
                             'details' => 'Policy topics: '.implode(', ', $topics),
                         ];
-                    } elseif (($ad['approval_status'] ?? 0) === 3) {
+                    } elseif (($ad['approval_status'] ?? 0) === PolicyApprovalStatus::APPROVED_LIMITED) {
                         $limited++;
                     }
                 }
@@ -500,7 +532,7 @@ class CampaignHealthChecker
         return $health;
     }
 
-    private function getGoogleMetricsSummary(Campaign $campaign): ?array
+    protected function getGoogleMetricsSummary(Campaign $campaign): ?array
     {
         try {
             $customer = $campaign->customer;
@@ -513,11 +545,12 @@ class CampaignHealthChecker
 
             $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService
             {
-                public function getMetrics(string $customerId, string $campaignId): ?array
+                public function getMetrics(string $customerId, string $campaignId): array
                 {
                     $this->ensureClient();
+                    $today = now($this->customer?->timezone ?: config('app.timezone'));
                     $query = "SELECT metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE campaign.id = {$campaignId} AND segments.date BETWEEN '"
-                        .now()->subDays(1)->toDateString()."' AND '".now()->toDateString()."'";
+                        .$today->copy()->subDays(2)->toDateString()."' AND '".$today->copy()->subDay()->toDateString()."'";
                     $response = $this->searchQuery($customerId, $query);
                     $metrics = ['impressions' => 0, 'clicks' => 0, 'cost' => 0.0];
 

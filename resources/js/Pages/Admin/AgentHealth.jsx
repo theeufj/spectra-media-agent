@@ -6,6 +6,7 @@ import SideNav from './SideNav';
 const STATUS = {
     completed:  { label: 'Ran · made changes', cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
     no_op:      { label: 'Ran · no changes',   cls: 'bg-amber-100 text-amber-700', dot: 'bg-amber-400' },
+    attention:  { label: 'Needs attention',    cls: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
     partial:    { label: 'Ran · some errors',  cls: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
     failed:     { label: 'Failed',             cls: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
     never_run:  { label: 'Never ran',          cls: 'bg-red-100 text-red-700', dot: 'bg-red-500' },

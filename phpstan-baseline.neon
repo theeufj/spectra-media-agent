@@ -1441,18 +1441,6 @@ parameters:
 			path: app/Services/GoogleAds/CommonServices/PromoteCampaignExperiment.php
 
 		-
-			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\V22\\Resources\\Campaign\:\:setMaximizeClicks\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/UpdateCampaignBiddingStrategy.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\MaximizeClicks not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/UpdateCampaignBiddingStrategy.php
-
-		-
 			message: '#^PHPDoc tag @var for variable \$campaignBudgetServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CampaignBudgetServiceClient\.$#'
 			identifier: class.notFound
 			count: 1
@@ -1551,12 +1539,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$started_at\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Services/Health/CampaignHealthChecker.php
-
-		-
-			message: '#^Method App\\Services\\GoogleAds\\BaseGoogleAdsService@anonymous/app/Services/Health/CampaignHealthChecker\.php\:514\:\:getMetrics\(\) never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
 			count: 1
 			path: app/Services/Health/CampaignHealthChecker.php
 

@@ -17,7 +17,7 @@ use Tests\TestCase;
  * excluded from A/B testing. Across 20 scheduled runs it started zero tests, and
  * EvaluateABTests then had nothing to evaluate: 40 runs, 0 actions.
  *
- * Production only ever holds: deployed, deploying, verified, null.
+ * ActivateCampaigns also writes 'active' after enabling the platform campaign.
  */
 class DeployedStatusTest extends TestCase
 {
@@ -38,17 +38,16 @@ class DeployedStatusTest extends TestCase
         $this->assertFalse((new Strategy(['deployment_status' => null]))->isDeployed());
     }
 
-    public function test_values_the_column_never_holds_do_not_count(): void
+    public function test_active_campaigns_still_count_as_deployed(): void
     {
-        // 'live' and 'active' were in the old allow-list but are not real values.
-        // If either ever becomes one, this test should fail and force a decision.
+        $this->assertTrue((new Strategy(['deployment_status' => 'active']))->isDeployed());
         $this->assertFalse((new Strategy(['deployment_status' => 'live']))->isDeployed());
-        $this->assertFalse((new Strategy(['deployment_status' => 'active']))->isDeployed());
     }
 
-    public function test_the_canonical_set_is_exactly_deployed_and_verified(): void
+    public function test_the_canonical_set_includes_all_live_states(): void
     {
-        $this->assertSame(['deployed', 'verified'], Strategy::DEPLOYED_STATUSES);
+        $this->assertSame(['deployed', 'verified', 'active'], Strategy::DEPLOYED_STATUSES);
+        $this->assertSame(['deployed', 'verified'], Strategy::ACTIVATABLE_STATUSES);
     }
 
     public function test_the_scope_uses_the_same_definition(): void

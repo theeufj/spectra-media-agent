@@ -2,12 +2,17 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
+use App\Services\GoogleAds\Diagnostics\OfficialTroubleshootingDocs;
+use Carbon\Carbon;
+use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -277,6 +282,7 @@ class CampaignDiagnosticsAgent
             if ($finding = $this->checkDisplayOnlyTraffic($campaign, $perf)) {
                 $findings[] = $finding;
             }
+
         } catch (\Throwable $e) {
             report($e);
             Log::error('CampaignDiagnosticsAgent: diagnoseGoogleAds failed', [
@@ -285,7 +291,70 @@ class CampaignDiagnosticsAgent
             ]);
         }
 
+        // The network-specific delivery check must still run if a broader
+        // performance report fails; otherwise an API hiccup hides a real stall.
+        if ($finding = $this->checkSearchDeliveryStall($campaign)) {
+            $findings[] = $finding;
+        }
+
         return $findings;
+    }
+
+    /** Detect a Search campaign that has stopped delivering on Google Search itself. */
+    private function checkSearchDeliveryStall(Campaign $campaign): ?array
+    {
+        if ($campaign->status !== CampaignStatus::Active) {
+            return null;
+        }
+
+        try {
+            $deployedAt = $campaign->strategies()
+                ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
+                ->whereNotNull('deployed_at')
+                ->min('deployed_at');
+            if (! $deployedAt) {
+                return null;
+            }
+
+            $snapshot = (new InspectSearchDelivery($campaign->customer))->inspect($campaign);
+            if (! InspectSearchDelivery::isStalled($snapshot, Carbon::parse($deployedAt))) {
+                return null;
+            }
+
+            $auction = $snapshot['auction'];
+            $mayBootstrap = $snapshot['eligible_keywords'] > 0
+                && $snapshot['approved_ads'] > 0
+                && $snapshot['bidding_strategy'] === BiddingStrategyType::MAXIMIZE_CONVERSIONS
+                && ($snapshot['target_cpa_micros'] ?? null) === 0
+                && $auction['conversions'] == 0
+                && $auction['lost_to_rank'] >= 0.9001
+                && $auction['lost_to_budget'] == 0
+                && ($snapshot['daily_budget_micros'] ?? 0) > 0;
+
+            return [
+                'type' => 'google_search_delivery_stalled',
+                'severity' => 'critical',
+                'platform' => 'google_ads',
+                'message' => 'Enabled Search campaign recorded zero Google Search impressions on the last two complete account days',
+                'details' => [
+                    'snapshot' => $snapshot,
+                    'documentation' => app(OfficialTroubleshootingDocs::class)->lookup('search_delivery'),
+                ],
+                'can_auto_fix' => $mayBootstrap,
+                'auto_fix_action' => $mayBootstrap ? 'bootstrap_search_delivery' : null,
+                'recommended_action' => $mayBootstrap
+                    ? 'Test a capped Maximize Clicks strategy within the existing daily budget, then verify Google Search delivery'
+                    : 'Inspect eligibility, keyword reach, targeting and bidding; do not raise the budget without evidence',
+            ];
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('CampaignDiagnosticsAgent: Search delivery inspection failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     private function fetchGooglePerformance(Campaign $campaign): array

@@ -16,6 +16,7 @@ use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -454,16 +455,6 @@ class SelfHealingAgent
                 ];
             }
 
-            // If campaign has no impressions today but should be active, flag it
-            if (($metrics['impressions'] ?? 0) === 0 && $campaign->platform_status === 'ENABLED') {
-                $results['warnings'][] = [
-                    'type' => 'no_impressions',
-                    'platform' => 'google_ads',
-                    'message' => 'Campaign has 0 impressions today despite being enabled',
-                    'severity' => 'high',
-                ];
-            }
-
         } catch (\Throwable $e) {
             report($e);
             $results['errors'][] = 'Failed to check Google budget health: '.$e->getMessage();
@@ -551,14 +542,14 @@ class SelfHealingAgent
             // Check primary status reasons for common issues
             $reasons = $status['primary_status_reasons'] ?? [];
             foreach ($reasons as $reason) {
-                if ($reason === 7) { // BUDGET_LIMITED
+                if ($reason === CampaignPrimaryStatusReason::BUDGET_CONSTRAINED) {
                     $results['warnings'][] = [
                         'type' => 'limited_by_budget',
                         'platform' => 'google_ads',
                         'message' => 'Campaign is limited by budget — consider increasing the daily budget',
                         'severity' => 'medium',
                     ];
-                } elseif ($reason === 8) { // BID_STRATEGY_LEARNING
+                } elseif ($reason === CampaignPrimaryStatusReason::BIDDING_STRATEGY_LEARNING) {
                     $results['warnings'][] = [
                         'type' => 'bid_strategy_learning',
                         'platform' => 'google_ads',

@@ -13,6 +13,8 @@ class AgentRun extends Model
 
     public const STATUS_NO_OP = 'no_op';
 
+    public const STATUS_ATTENTION = 'attention';
+
     public const STATUS_PARTIAL = 'partial';
 
     public const STATUS_FAILED = 'failed';

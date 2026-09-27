@@ -36,6 +36,7 @@ trait RecordsAgentRun
         $status = match (true) {
             $errors > 0 && $actions === 0 => AgentRun::STATUS_FAILED,
             $errors > 0 => AgentRun::STATUS_PARTIAL,
+            $warnings > 0 => AgentRun::STATUS_ATTENTION,
             $actions === 0 => AgentRun::STATUS_NO_OP,
             default => AgentRun::STATUS_COMPLETED,
         };
