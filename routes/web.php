@@ -233,6 +233,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // GET /campaigns/wizard
     Route::get('/campaigns/wizard', [App\Http\Controllers\CampaignController::class, 'wizard'])->name('campaigns.wizard');
 
+    // A campaign's short URL should open the same detail page as the canonical
+    // strategies URL. Without this GET route it collided with DELETE below and
+    // direct links such as /campaigns/59 returned 405.
+    Route::get('/campaigns/{campaign}', [App\Http\Controllers\CampaignController::class, 'show'])->name('campaigns.direct');
+
     // Creating a campaign dispatches GenerateStrategy, which spends real money
     // on Gemini. The free-plan cap in store() is the cost ceiling — see the
     // note there before loosening it.

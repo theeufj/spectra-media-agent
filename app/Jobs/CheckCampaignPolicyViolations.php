@@ -2,11 +2,14 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -62,25 +65,50 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     {
         $campaignResourceName = $campaign->google_ads_campaign_id;
         if (! str_starts_with($campaignResourceName, 'customers/')) {
-            $campaignResourceName = "customers/{$campaign->customer->google_ads_customer_id}/campaigns/{$campaignResourceName}";
+            $campaignResourceName = "customers/{$campaign->customer->cleanGoogleCustomerId()}/campaigns/{$campaignResourceName}";
         }
 
-        $getAdStatus = new GetAdStatus($campaign->customer);
-        $ads = $getAdStatus($campaign->customer->google_ads_customer_id, $campaignResourceName);
+        $ads = $this->googleAds($campaign, $campaignResourceName);
 
+        $disapprovedAds = [];
+        $approvedAdCanServe = false;
         foreach ($ads as $ad) {
-            if (($ad['approval_status'] ?? null) === PolicyApprovalStatus::DISAPPROVED) {
-                Log::warning("Google Ads policy violation found for campaign {$this->campaignId}. Pausing campaign.", [
-                    'ad' => $ad['resource_name'] ?? null,
-                    'policy_topics' => $ad['policy_topics'] ?? [],
-                ]);
-                $this->pauseCampaign($campaign, 'google_disapproved_ad');
+            if (($ad['status'] ?? null) !== AdGroupAdStatus::ENABLED
+                || ($ad['ad_group_status'] ?? null) !== AdGroupStatus::ENABLED) {
+                continue;
+            }
 
-                return true;
+            if (($ad['approval_status'] ?? null) === PolicyApprovalStatus::DISAPPROVED) {
+                $disapprovedAds[] = $ad;
+            } elseif (in_array($ad['approval_status'] ?? null,
+                [PolicyApprovalStatus::APPROVED, PolicyApprovalStatus::APPROVED_LIMITED], true)) {
+                $approvedAdCanServe = true;
             }
         }
 
-        return false;
+        if ($disapprovedAds === []) {
+            return false;
+        }
+
+        // Google's policy verdict is per ad. An unrelated approved ad remains
+        // eligible to serve, so pausing its entire campaign loses good traffic.
+        if (! $approvedAdCanServe) {
+            Log::warning("Google Ads campaign {$this->campaignId} has no approved enabled ads. Pausing campaign.", [
+                'disapproved_ads' => array_column($disapprovedAds, 'resource_name'),
+            ]);
+            $this->pauseCampaign($campaign, 'google_disapproved_ad');
+        }
+
+        // Heal the rejected ads whether or not the campaign needed pausing.
+        return true;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    protected function googleAds(Campaign $campaign, string $campaignResourceName): array
+    {
+        $getAdStatus = new GetAdStatus($campaign->customer);
+
+        return $getAdStatus($campaign->customer->cleanGoogleCustomerId(), $campaignResourceName);
     }
 
     private function checkFacebookAdsPolicyViolations(Campaign $campaign): bool
@@ -154,6 +182,12 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         }
 
         $result = app(DeactivateCustomerService::class)->pauseCampaign($customer, $campaign);
+
+        if ($result === true) {
+            AgentActivity::record('self_healing', 'policy_paused_campaign',
+                'Paused "'.$campaign->name.'" because no approved enabled ads can serve.',
+                $customer->id, $campaign->id, ['reason' => $reason]);
+        }
 
         if (is_string($result)) {
             // A platform refused, so the campaign is still serving an ad that

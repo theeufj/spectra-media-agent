@@ -6,6 +6,9 @@ use App\Jobs\CheckCampaignPolicyViolations;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Customers\DeactivateCustomerService;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -71,6 +74,70 @@ class PolicyViolationPauseTest extends TestCase
             'status' => 'active',
             'platform_status' => 'ENABLED',
             'google_ads_campaign_id' => 'customers/1234567890/campaigns/999',
+        ]);
+    }
+
+    private function checkGooglePolicy(Campaign $campaign, array $ads): bool
+    {
+        $job = new class($campaign->id, $ads) extends CheckCampaignPolicyViolations
+        {
+            public function __construct(int $campaignId, private array $ads)
+            {
+                parent::__construct($campaignId);
+            }
+
+            protected function googleAds(Campaign $campaign, string $campaignResourceName): array
+            {
+                return $this->ads;
+            }
+        };
+
+        return (new \ReflectionMethod(CheckCampaignPolicyViolations::class, 'checkGoogleAdsPolicyViolations'))
+            ->invoke($job, $campaign);
+    }
+
+    private function googleAd(int $approval, int $status = AdGroupAdStatus::ENABLED, int $groupStatus = AdGroupStatus::ENABLED): array
+    {
+        return [
+            'resource_name' => 'customers/1234567890/adGroupAds/1~2',
+            'status' => $status,
+            'ad_group_status' => $groupStatus,
+            'approval_status' => $approval,
+        ];
+    }
+
+    public function test_one_disapproved_ad_does_not_pause_a_campaign_with_an_approved_enabled_ad(): void
+    {
+        $campaign = $this->liveCampaign();
+        $deactivator = $this->fakeDeactivator(true);
+        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+
+        $found = $this->checkGooglePolicy($campaign, [
+            $this->googleAd(PolicyApprovalStatus::DISAPPROVED),
+            $this->googleAd(PolicyApprovalStatus::APPROVED),
+        ]);
+
+        $this->assertTrue($found, 'The rejected ad still needs healing.');
+        $this->assertSame([], $deactivator->pausedCampaignIds);
+        $this->assertSame('active', $campaign->fresh()->status->value);
+    }
+
+    public function test_all_disapproved_enabled_ads_pause_the_campaign_and_record_why(): void
+    {
+        $campaign = $this->liveCampaign();
+        $deactivator = $this->fakeDeactivator(true);
+        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+
+        $this->assertTrue($this->checkGooglePolicy($campaign, [
+            $this->googleAd(PolicyApprovalStatus::DISAPPROVED),
+            $this->googleAd(PolicyApprovalStatus::APPROVED, AdGroupAdStatus::PAUSED),
+        ]));
+
+        $this->assertSame([$campaign->id], $deactivator->pausedCampaignIds);
+        $this->assertSame('paused', $campaign->fresh()->status->value);
+        $this->assertDatabaseHas('agent_activities', [
+            'campaign_id' => $campaign->id,
+            'action' => 'policy_paused_campaign',
         ]);
     }
 

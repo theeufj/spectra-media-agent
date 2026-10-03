@@ -34,7 +34,8 @@ class GetAdStatus extends BaseGoogleAdsService implements AdStatusSource
                  'ad_group_ad.policy_summary.review_status, '.
                  'ad_group_ad.ad.responsive_search_ad.headlines, '.
                  'ad_group_ad.ad.responsive_search_ad.descriptions, '.
-                 'ad_group.resource_name '.
+                 'ad_group.resource_name, '.
+                 'ad_group.status '.
                  'FROM ad_group_ad '.
                  $whereClause;
 
@@ -71,6 +72,7 @@ class GetAdStatus extends BaseGoogleAdsService implements AdStatusSource
                 $ads[] = [
                     'resource_name' => $adGroupAd->getResourceName(),
                     'ad_group_resource_name' => $googleAdsRow->getAdGroup()->getResourceName(),
+                    'ad_group_status' => $googleAdsRow->getAdGroup()->getStatus(),
                     'status' => $adGroupAd->getStatus(),
                     'approval_status' => $policySummary->getApprovalStatus(),
                     'review_status' => $policySummary->getReviewStatus(),
