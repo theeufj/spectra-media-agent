@@ -50,6 +50,10 @@ export default function Register({ enabledPlatforms = [] }) {
     const submit = (e) => {
         e.preventDefault();
         post(route('register'), {
+            // A successful server registration is a real website lead. The
+            // attribution pixel reports it separately from the Google Ads
+            // signup upload, so this does not create a second Ads conversion.
+            onSuccess: () => window.SpectraPixel?.trackConversion('signup', 0),
             onFinish: () => reset('password', 'password_confirmation'),
         });
     };

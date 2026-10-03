@@ -27,6 +27,9 @@ class AttributionDisclosureTest extends TestCase
                 ->component('Campaigns/Attribution')
                 ->where('trackingSetup.website_host', 'example.com')
                 ->where('trackingSetup.snippet', '<script src="'.rtrim(config('app.url'), '/').'/js/spectra-pixel.js?v='.filemtime(public_path('js/spectra-pixel.js')).'" data-site-id="'.$customer->uuid.'" defer></script>')
+                ->where('trackingSetup.gtm_snippet', fn (string $snippet) => str_contains($snippet, "pixel.setAttribute('data-site-id', siteId)")
+                    && str_contains($snippet, $customer->uuid)
+                    && str_contains($snippet, "var pixel = document.createElement('script')"))
                 ->missing('pixelConfig'));
     }
 }

@@ -89,11 +89,13 @@ describe('attribution pages', () => {
         const { container } = render(
             <AnalyticsAttribution
                 {...empty}
-                trackingSetup={{ website_host: 'example.com', snippet, last_visit_at: null, last_conversion_at: null }}
+                trackingSetup={{ website_host: 'example.com', snippet, gtm_snippet: '<script>pixel.setAttribute("data-site-id", siteId)</script>', last_visit_at: null, last_conversion_at: null }}
             />
         );
 
         expect(container.textContent).toContain(snippet);
+        expect(container.textContent).toContain('pixel.setAttribute');
+        expect(container.textContent).toContain('Do not install another GTM container');
         expect(container.textContent).toContain('No events received yet');
         expect(container.textContent).toContain('trackConversion');
         expect(container.textContent).not.toContain('data-secret');
