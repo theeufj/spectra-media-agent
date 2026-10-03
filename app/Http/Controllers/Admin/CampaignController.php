@@ -241,6 +241,13 @@ class CampaignController extends Controller
     public function startCampaign(Campaign $campaign)
     {
         try {
+            if ($campaign->hasPassedEndDate()) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'This campaign has passed its approved end date. Review its dates before restarting ads.',
+                ]);
+            }
+
             if (! $campaign->google_ads_campaign_id) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',

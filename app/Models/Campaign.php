@@ -55,6 +55,13 @@ class Campaign extends Model
         return in_array($this->primary_status, self::SERVING_PRIMARY_STATUSES, true);
     }
 
+    /** The customer's approved end date is a hard stop for platform spend. */
+    public function hasPassedEndDate(): bool
+    {
+        return $this->getRawOriginal('end_date') !== null
+            && $this->end_date->toDateString() < now($this->customer?->timezone ?: config('app.timezone'))->toDateString();
+    }
+
     /**
      * The attributes that are mass assignable.
      *

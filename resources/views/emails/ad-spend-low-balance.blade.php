@@ -19,7 +19,7 @@
     <p>We'll automatically attempt to replenish your credit balance using your payment method on file. If the automatic charge fails, you may experience campaign interruptions.</p>
 
     <p style="text-align:center;margin:24px 0;">
-        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Add Credit Now</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('billing.ad-spend', absolute: false) }}" class="btn-primary">Add Credit Now</a>
     </p>
 
     <h2>Why Am I Seeing This?</h2>

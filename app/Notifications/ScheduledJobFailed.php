@@ -29,7 +29,7 @@ class ScheduledJobFailed extends Notification
             ->line("The scheduled job **{$this->jobName}** has failed.")
             ->line("Error: {$this->errorMessage}")
             ->line('Time: '.now()->toDateTimeString())
-            ->action('View Horizon Dashboard', url('/horizon'))
+            ->action('View Horizon Dashboard', route('horizon.index'))
             ->line('Please investigate and resolve this issue promptly.');
     }
 }

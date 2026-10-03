@@ -43,7 +43,7 @@ class SiteScanCompleted extends Notification implements ShouldQueue
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We read {$this->totalPages} pages of {$this->customer->website} and built your brand profile from them — your voice, your services, your audience.")
             ->line('Take a look and correct anything we got wrong; everything we write for you starts from it.')
-            ->action('Review your brand profile', $this->tenantUrl('/brand-guidelines'))
+            ->action('Review your brand profile', $this->tenantUrl(route('brand-guidelines.index', absolute: false)))
             ->line('Next step: create your first campaign whenever you\'re ready.')
             ->salutation($this->teamSalutation());
     }
@@ -54,7 +54,7 @@ class SiteScanCompleted extends Notification implements ShouldQueue
             return [
                 'title' => 'Your first campaign is ready to review',
                 'message' => 'We scanned your website, built your brand profile, and drafted a first campaign from it. Nothing runs until you confirm the budget.',
-                'action_url' => $this->tenantUrl("/campaigns/{$this->campaign->id}/strategies"),
+                'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign, false)),
                 'action_text' => 'Review Campaign',
                 'customer_id' => $this->customer->id,
                 'type' => 'site_scan_completed',
@@ -64,7 +64,7 @@ class SiteScanCompleted extends Notification implements ShouldQueue
         return [
             'title' => 'Your website scan is complete',
             'message' => "We read {$this->totalPages} pages and built your brand profile. Review it, then create your first campaign.",
-            'action_url' => $this->tenantUrl('/brand-guidelines'),
+            'action_url' => $this->tenantUrl(route('brand-guidelines.index', absolute: false)),
             'action_text' => 'Review Brand Profile',
             'customer_id' => $this->customer->id,
             'type' => 'site_scan_completed',

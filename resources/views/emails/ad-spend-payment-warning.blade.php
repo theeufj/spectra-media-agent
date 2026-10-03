@@ -24,7 +24,7 @@
     </ol>
 
     <p style="text-align:center;margin:24px 0;">
-        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Update Payment Method</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('billing.ad-spend', absolute: false) }}" class="btn-primary">Update Payment Method</a>
     </p>
 
     <h2>Tips to fix this:</h2>

@@ -26,7 +26,7 @@
     <p>Simply update your payment method and your campaigns will be automatically resumed within 1 hour.</p>
 
     <p style="text-align:center;margin:24px 0;">
-        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Add Payment &amp; Resume Campaigns</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('billing.ad-spend', absolute: false) }}" class="btn-primary">Add Payment &amp; Resume Campaigns</a>
     </p>
 
     <h2>Need Help?</h2>

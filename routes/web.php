@@ -326,6 +326,10 @@ Route::middleware(['auth', 'verified', 'subscribed'])->group(function () {
 |
 */
 Route::middleware(['auth', 'subscribed'])->group(function () {
+    // Old billing emails used /billing. Keep their links useful after the
+    // templates move to the named ad-spend billing route.
+    Route::get('/billing', fn () => redirect()->route('billing.ad-spend'))->name('billing.legacy');
+
     // Dashboard view for ad spend billing
     Route::get('/billing/ad-spend', [App\Http\Controllers\AdSpendBillingController::class, 'index'])->name('billing.ad-spend');
 
@@ -607,6 +611,9 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
+    // Previously sent reconciliation alerts linked to /admin.
+    Route::get('/', fn () => redirect()->route('admin.revenue.index'))->name('admin.legacy');
+
     // The admin landing page. Also the post-2FA redirect target (see
     // Admin\TwoFactorController) and both nav links in AuthenticatedLayout, so
     // it must render rather than redirect.

@@ -35,7 +35,7 @@ class CompetitorIntelligenceComplete extends Notification implements ShouldQueue
         }
 
         return $mail
-            ->action('View Competitor Analysis', $this->tenantUrl('/seo/competitors'))
+            ->action('View Competitor Analysis', $this->tenantUrl(route('seo.competitors', absolute: false)))
             ->salutation($this->teamSalutation());
     }
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\CheckCampaignPolicyViolations;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
@@ -138,6 +139,23 @@ class PolicyViolationPauseTest extends TestCase
         $this->assertDatabaseHas('agent_activities', [
             'campaign_id' => $campaign->id,
             'action' => 'policy_paused_campaign',
+        ]);
+    }
+
+    public function test_approved_ads_cannot_keep_spending_after_the_customer_end_date(): void
+    {
+        $campaign = $this->liveCampaign();
+        $campaign->update(['end_date' => now()->subDay()]);
+        $deactivator = $this->fakeDeactivator(true);
+        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+
+        (new CheckCampaignPolicyViolations($campaign->id))->handle($this->createMock(SelfHealingAgent::class));
+
+        $this->assertSame([$campaign->id], $deactivator->pausedCampaignIds);
+        $this->assertSame('paused', $campaign->fresh()->status->value);
+        $this->assertDatabaseHas('agent_activities', [
+            'campaign_id' => $campaign->id,
+            'action' => 'campaign_end_date_paused',
         ]);
     }
 

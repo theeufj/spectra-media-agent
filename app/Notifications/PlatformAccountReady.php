@@ -34,7 +34,7 @@ class PlatformAccountReady extends Notification implements ShouldQueue
         return [
             'title' => "{$this->platform} is ready",
             'message' => "Your {$this->platform} account is set up — you can now include it in campaigns.",
-            'action_url' => $this->tenantUrl('/campaigns/wizard'),
+            'action_url' => $this->tenantUrl(route('campaigns.wizard', absolute: false)),
             'action_text' => 'Create a Campaign',
             'customer_id' => $this->customer->id,
             'platform' => $this->platform,

@@ -19,7 +19,7 @@
     <p>If we cannot successfully charge your payment method within the next <strong>24 hours</strong>, all your campaigns will be <strong>paused</strong>.</p>
 
     <p style="text-align:center;margin:24px 0;">
-        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Fix Payment Now</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('billing.ad-spend', absolute: false) }}" class="btn-primary">Fix Payment Now</a>
     </p>
 
     <h2>Current Status:</h2>

@@ -40,6 +40,16 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
 
+            // Older deployments used a one-year platform end date regardless
+            // of the date the customer approved. Stop those at the local date.
+            if ($campaign->hasPassedEndDate()) {
+                if ($campaign->platform_status !== 'PAUSED' || $campaign->status->value !== 'paused') {
+                    $this->pauseCampaign($campaign, 'campaign_end_date_passed');
+                }
+
+                return;
+            }
+
             $hasViolation = false;
 
             if ($campaign->google_ads_campaign_id) {
@@ -184,8 +194,11 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         $result = app(DeactivateCustomerService::class)->pauseCampaign($customer, $campaign);
 
         if ($result === true) {
-            AgentActivity::record('self_healing', 'policy_paused_campaign',
-                'Paused "'.$campaign->name.'" because no approved enabled ads can serve.',
+            $ended = $reason === 'campaign_end_date_passed';
+            AgentActivity::record('self_healing', $ended ? 'campaign_end_date_paused' : 'policy_paused_campaign',
+                $ended
+                    ? 'Paused "'.$campaign->name.'" because its approved end date has passed.'
+                    : 'Paused "'.$campaign->name.'" because no approved enabled ads can serve.',
                 $customer->id, $campaign->id, ['reason' => $reason]);
         }
 

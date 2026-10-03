@@ -12,6 +12,7 @@ use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\Google\AdExtensionBuilder;
 use App\Services\Agents\Google\BiddingStrategyApplier;
 use App\Services\Agents\Google\GeoTargetResolver;
+use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\GoogleAds\CommonServices\CreateTextAsset;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
@@ -86,8 +87,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             $campaignData = [
                 'businessName' => $campaignName,
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate' => now()->addDay()->format('Y-m-d'),
-                'endDate' => now()->addYear()->format('Y-m-d'),
+                ...GoogleCampaignSchedule::for($campaign),
                 'targetCpaMicros' => $targetCpaMicros,
             ];
 

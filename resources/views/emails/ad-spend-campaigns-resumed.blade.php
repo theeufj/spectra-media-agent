@@ -26,7 +26,7 @@
     <p>Your ads should begin serving within the next 30-60 minutes as the ad networks re-enable them.</p>
 
     <p style="text-align:center;margin:24px 0;">
-        <a href="{{ config('app.url') . '/campaigns' }}" class="btn-primary">View Your Campaigns</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('campaigns.index', absolute: false) }}" class="btn-primary">View Your Campaigns</a>
     </p>
 
     <p>Thank you for resolving this promptly. If you have any questions, please don't hesitate to reach out.</p>

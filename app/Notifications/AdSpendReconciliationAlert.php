@@ -64,6 +64,6 @@ class AdSpendReconciliationAlert extends Notification
         return $mail
             ->line('**Nothing has been corrected automatically.** Until someone deducts or writes off these amounts, the ledger does not reflect what was actually spent.')
             ->line('If a customer appears here repeatedly, the daily billing run is not selecting them — check that their campaigns are recorded as active locally, not only on the platform.')
-            ->action('Review in Admin Billing', url('/admin'));
+            ->action('Review in Admin Billing', route('admin.revenue.index'));
     }
 }
