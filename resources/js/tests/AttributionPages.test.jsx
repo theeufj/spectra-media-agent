@@ -98,4 +98,16 @@ describe('attribution pages', () => {
         expect(container.textContent).toContain('trackConversion');
         expect(container.textContent).not.toContain('data-secret');
     });
+
+    it('warns when Google Ads totals only contain older stored performance rows', () => {
+        const { container } = render(
+            <AnalyticsAttribution
+                {...empty}
+                googleSummary={{ conversions: 0, conversion_value: 0, latest_date: '2026-09-24' }}
+            />
+        );
+
+        expect(container.textContent).toContain('Latest stored performance day');
+        expect(container.textContent).toContain('incomplete as a current status check');
+    });
 });
