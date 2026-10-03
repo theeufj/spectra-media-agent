@@ -6,6 +6,8 @@ use App\Models\AttributionConversion;
 use App\Models\AttributionTouchpoint;
 use App\Models\Campaign;
 use App\Services\Attribution\AttributionService;
+use App\Services\Attribution\AttributionSetup;
+use App\Services\Attribution\GoogleConversionSummary;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -16,7 +18,7 @@ class AttributionController extends Controller
     /**
      * Show attribution dashboard for a campaign.
      */
-    public function show(Request $request, Campaign $campaign)
+    public function show(Request $request, Campaign $campaign, AttributionSetup $setup, GoogleConversionSummary $googleSummary)
     {
         $this->authorize('view', $campaign);
 
@@ -61,6 +63,8 @@ class AttributionController extends Controller
             : 0;
 
         return Inertia::render('Campaigns/Attribution', [
+            'trackingSetup' => $setup->forCustomer($campaign->customer),
+            'googleSummary' => $googleSummary->forCampaign($campaign->id),
             'campaign' => $campaign->only('id', 'uuid', 'name'),
             'summary' => [
                 'total_conversions' => $totalConversions,

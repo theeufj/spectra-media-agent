@@ -35,22 +35,18 @@ class NeverExercisedFeaturesTest extends TestCase
         return Customer::factory()->create($attrs);
     }
 
-    /** Sign a tracking payload the way the JS pixel is meant to. */
-    private function signed(Customer $customer, array $payload): array
+    /** Browser payload sent by the public pixel from the registered website. */
+    private function browserEvent(Customer $customer, array $payload): array
     {
-        $timestamp = now()->toIso8601String();
-        $signature = hash_hmac(
-            'sha256',
-            $customer->id.'|'.$timestamp,
-            $customer->tracking_signing_secret
-        );
+        $origin = 'https://example.com';
 
         return [
-            'payload' => array_merge($payload, [
-                'customer_id' => $customer->id,
-                'timestamp' => $timestamp,
-            ]),
-            'headers' => ['X-Tracking-Signature' => $signature],
+            'payload' => array_merge([
+                'site_id' => $customer->uuid,
+                'visitor_id' => '123e4567-e89b-42d3-a456-426614174000',
+                'page_url' => $origin.'/landing',
+            ], $payload),
+            'headers' => ['Origin' => $origin],
         ];
     }
 
@@ -58,11 +54,9 @@ class NeverExercisedFeaturesTest extends TestCase
 
     public function test_attribution_records_a_touchpoint(): void
     {
-        $customer = $this->customer();
-        $this->assertNotNull($customer->tracking_signing_secret, 'observer should mint a signing secret');
+        $customer = $this->customer(['website' => 'https://example.com']);
 
-        $req = $this->signed($customer, [
-            'visitor_id' => 'visitor-abc123',
+        $req = $this->browserEvent($customer, [
             'utm_source' => 'google',
             'utm_medium' => 'cpc',
             'utm_campaign' => 'brand',
@@ -75,43 +69,39 @@ class NeverExercisedFeaturesTest extends TestCase
 
         $this->assertDatabaseHas('attribution_touchpoints', [
             'customer_id' => $customer->id,
-            'visitor_id' => 'visitor-abc123',
+            'visitor_id' => '123e4567-e89b-42d3-a456-426614174000',
             'utm_source' => 'google',
         ]);
     }
 
-    public function test_attribution_rejects_an_unsigned_touchpoint(): void
+    public function test_attribution_rejects_an_unregistered_origin(): void
     {
-        $customer = $this->customer();
+        $customer = $this->customer(['website' => 'https://example.com']);
 
-        $this->postJson('/api/tracking/touchpoint', [
-            'customer_id' => $customer->id,
-            'visitor_id' => 'visitor-abc123',
-        ])->assertStatus(403);
+        $req = $this->browserEvent($customer, []);
+        $this->withHeaders(['Origin' => 'https://attacker.example'])
+            ->postJson('/api/tracking/touchpoint', $req['payload'])
+            ->assertStatus(403);
 
         $this->assertSame(0, AttributionTouchpoint::where('customer_id', $customer->id)->count());
     }
 
-    public function test_attribution_rejects_a_replayed_timestamp(): void
+    public function test_attribution_rejects_a_mismatched_page_url(): void
     {
-        $customer = $this->customer();
-        $stale = now()->subMinutes(10)->toIso8601String();
+        $customer = $this->customer(['website' => 'https://example.com']);
+        $req = $this->browserEvent($customer, ['page_url' => 'https://attacker.example/landing']);
 
-        $this->withHeaders([
-            'X-Tracking-Signature' => hash_hmac('sha256', $customer->id.'|'.$stale, $customer->tracking_signing_secret),
-        ])->postJson('/api/tracking/touchpoint', [
-            'customer_id' => $customer->id,
-            'visitor_id' => 'visitor-abc123',
-            'timestamp' => $stale,
-        ])->assertStatus(403);
+        $this->withHeaders($req['headers'])
+            ->postJson('/api/tracking/touchpoint', $req['payload'])
+            ->assertStatus(403);
     }
 
     public function test_attribution_records_a_conversion(): void
     {
-        $customer = $this->customer();
+        $customer = $this->customer(['website' => 'https://example.com']);
 
-        $req = $this->signed($customer, [
-            'visitor_id' => 'visitor-abc123',
+        $req = $this->browserEvent($customer, [
+            'event_id' => '123e4567-e89b-42d3-a456-426614174001',
             'conversion_type' => 'purchase',
             'conversion_value' => 149.99,
         ]);
@@ -122,7 +112,7 @@ class NeverExercisedFeaturesTest extends TestCase
 
         $this->assertDatabaseHas('attribution_conversions', [
             'customer_id' => $customer->id,
-            'visitor_id' => 'visitor-abc123',
+            'visitor_id' => '123e4567-e89b-42d3-a456-426614174000',
         ]);
     }
 

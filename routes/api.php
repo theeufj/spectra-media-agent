@@ -13,8 +13,9 @@ Route::post('/stripe/webhook', [\App\Http\Controllers\StripeWebhookController::c
 Route::post('/resend/inbound', [\App\Http\Controllers\ResendInboundWebhookController::class, 'handle'])
     ->name('resend.inbound');
 
-// Attribution tracking endpoints (public, rate-limited)
-Route::middleware('throttle:60,1')->group(function () {
+// Browser-only website telemetry. The public site ID is restricted by the
+// registered website's Origin; no secret is ever sent to browser JavaScript.
+Route::middleware('throttle:600,1')->group(function () {
     Route::post('/tracking/touchpoint', [\App\Http\Controllers\TrackingController::class, 'touchpoint'])
         ->name('tracking.touchpoint');
     Route::post('/tracking/conversion', [\App\Http\Controllers\TrackingController::class, 'conversion'])

@@ -14,6 +14,7 @@ class AttributionConversion extends Model
 
     protected $fillable = [
         'customer_id',
+        'event_id',
         'visitor_id',
         'conversion_type',
         'conversion_value',

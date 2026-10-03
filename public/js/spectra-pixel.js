@@ -1,202 +1,104 @@
 /**
- * Spectra Attribution Pixel
- *
- * Captures UTM parameters from ad clicks, stores in first-party cookie,
- * and reports touchpoints to the Spectra attribution API.
- *
- * Usage: Include via GTM or directly:
- *   <script src="/js/spectra-pixel.js" data-customer="CUSTOMER_ID" data-secret="SIGNING_SECRET"></script>
+ * Optional website attribution pixel. Install from the SiteToSpend attribution
+ * page on the registered website, after any consent required by that website.
+ * The site ID is public; there is no secret in browser code.
  */
 (function () {
     'use strict';
 
-    var COOKIE_NAME = '_spectra_attr';
-    var COOKIE_DAYS = 90;
-    var VISITOR_COOKIE = '_spectra_vid';
-    var API_ENDPOINT = '/api/tracking/touchpoint';
+    var script = document.currentScript || document.querySelector('script[src*="/js/spectra-pixel.js"][data-site-id]');
+    if (!script) return;
 
-    // Get customer ID and signing secret from script tag
-    var scripts = document.getElementsByTagName('script');
-    var customerId = null;
-    var signingSecret = null;
-    for (var i = 0; i < scripts.length; i++) {
-        if (scripts[i].src && scripts[i].src.indexOf('spectra-pixel') !== -1) {
-            customerId = scripts[i].getAttribute('data-customer');
-            signingSecret = scripts[i].getAttribute('data-secret');
-            break;
-        }
+    var siteId = script.getAttribute('data-site-id');
+    if (!siteId || !/^[a-f0-9-]{36}$/i.test(siteId)) return;
+
+    var endpoint = new URL('/api/tracking/', script.src).href;
+    var cookieName = '_sts_vid_' + siteId;
+
+    function uuid() {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+        if (!window.crypto || !window.crypto.getRandomValues) return null;
+        var bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 15) | 64;
+        bytes[8] = (bytes[8] & 63) | 128;
+        var hex = Array.from(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+        return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
     }
 
-    if (!customerId || !signingSecret) return;
-
-    /**
-     * Parse URL query parameters
-     */
-    function getQueryParams() {
-        var params = {};
-        var search = window.location.search.substring(1);
-        if (!search) return params;
-        var pairs = search.split('&');
-        for (var i = 0; i < pairs.length; i++) {
-            var pair = pairs[i].split('=');
-            if (pair.length === 2) {
-                params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
-            }
-        }
-        return params;
-    }
-
-    /**
-     * Set a first-party cookie
-     */
-    function setCookie(name, value, days) {
-        var expires = '';
-        if (days) {
-            var date = new Date();
-            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-            expires = '; expires=' + date.toUTCString();
-        }
-        document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax; Secure';
-    }
-
-    /**
-     * Read a cookie value
-     */
-    function getCookie(name) {
-        var nameEQ = name + '=';
-        var ca = document.cookie.split(';');
-        for (var i = 0; i < ca.length; i++) {
-            var c = ca[i].trim();
-            if (c.indexOf(nameEQ) === 0) {
-                return decodeURIComponent(c.substring(nameEQ.length));
-            }
+    function cookie(name) {
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i].trim();
+            if (part.indexOf(name + '=') === 0) return part.slice(name.length + 1);
         }
         return null;
     }
 
-    /**
-     * Generate a random visitor ID
-     */
-    function generateVisitorId() {
-        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        var id = '';
-        for (var i = 0; i < 32; i++) {
-            id += chars.charAt(Math.floor(Math.random() * chars.length));
+    var visitorId = cookie(cookieName);
+    if (!visitorId || !/^[a-f0-9-]{36}$/i.test(visitorId)) {
+        visitorId = uuid();
+        if (!visitorId) return;
+        var expires = new Date(Date.now() + 90 * 86400000).toUTCString();
+        document.cookie = cookieName + '=' + visitorId + '; expires=' + expires + '; path=/; SameSite=Lax; Secure';
+    }
+
+    function safeUrl(value) {
+        if (!value) return '';
+        try {
+            var url = new URL(value);
+            return url.origin + url.pathname;
+        } catch (e) {
+            return '';
         }
-        return id;
     }
 
-    /**
-     * Get or create persistent visitor ID
-     */
-    function getVisitorId() {
-        var vid = getCookie(VISITOR_COOKIE);
-        if (!vid) {
-            vid = generateVisitorId();
-            setCookie(VISITOR_COOKIE, vid, 365);
-        }
-        return vid;
-    }
-
-    /**
-     * Generate HMAC-SHA256 signature using Web Crypto API.
-     * Message format: customerId + '|' + timestamp (matches server-side verification).
-     * Returns a hex-encoded signature string via Promise.
-     */
-    function generateSignature(message, secret) {
-        var encoder = new TextEncoder();
-        return crypto.subtle.importKey(
-            'raw',
-            encoder.encode(secret),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        ).then(function (key) {
-            return crypto.subtle.sign('HMAC', key, encoder.encode(message));
-        }).then(function (sig) {
-            return Array.from(new Uint8Array(sig)).map(function (b) {
-                return ('0' + b.toString(16)).slice(-2);
-            }).join('');
-        });
-    }
-
-    /**
-     * Send a signed XHR request with HMAC signature header.
-     */
-    function sendSigned(url, payload) {
-        var timestamp = payload.timestamp;
-        var message = customerId + '|' + timestamp;
-
-        generateSignature(message, signingSecret).then(function (signature) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', url, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Accept', 'application/json');
-            xhr.setRequestHeader('X-Tracking-Signature', signature);
-            xhr.send(JSON.stringify(payload));
-        }).catch(function () {
-            // Silently fail — don't break the host page
-        });
-    }
-
-    /**
-     * Record touchpoint
-     */
-    function recordTouchpoint(utmParams) {
-        var visitorId = getVisitorId();
-
-        var touchpoint = {
-            customer_id: customerId,
+    function send(kind, values) {
+        var body = new URLSearchParams({
+            site_id: siteId,
             visitor_id: visitorId,
-            utm_source: utmParams.utm_source || null,
-            utm_medium: utmParams.utm_medium || null,
-            utm_campaign: utmParams.utm_campaign || null,
-            utm_content: utmParams.utm_content || null,
-            utm_term: utmParams.utm_term || null,
-            page_url: window.location.href,
-            referrer: document.referrer || null,
-            timestamp: new Date().toISOString()
-        };
+            page_url: safeUrl(window.location.href)
+        });
+        Object.keys(values).forEach(function (key) {
+            if (values[key] !== null && values[key] !== undefined) body.set(key, String(values[key]));
+        });
 
-        // Store in cookie for multi-page journeys
-        var existing = getCookie(COOKIE_NAME);
-        var touchpoints = existing ? JSON.parse(existing) : [];
-        touchpoints.push(touchpoint);
-        // Keep last 20 touchpoints
-        if (touchpoints.length > 20) {
-            touchpoints = touchpoints.slice(-20);
-        }
-        setCookie(COOKIE_NAME, JSON.stringify(touchpoints), COOKIE_DAYS);
-
-        // Send to server with HMAC signature
-        sendSigned(API_ENDPOINT, touchpoint);
+        // URLSearchParams is a simple form request: no CORS preflight or public
+        // HMAC key is needed. The host site's Origin is checked by the server.
+        if (navigator.sendBeacon && navigator.sendBeacon(endpoint + kind, body)) return;
+        fetch(endpoint + kind, { method: 'POST', mode: 'no-cors', credentials: 'omit', keepalive: true, body: body }).catch(function () {});
     }
 
-    // Main: check for UTM parameters
-    var params = getQueryParams();
-    var hasUtm = params.utm_source || params.utm_medium || params.utm_campaign;
+    var params = new URLSearchParams(window.location.search);
+    var source = params.get('utm_source');
+    var medium = params.get('utm_medium');
+    var clickId = params.get('gclid') || params.get('gbraid') || params.get('wbraid');
+    if (!source && clickId) source = 'google';
+    if (!medium && clickId) medium = 'cpc';
 
-    if (hasUtm) {
-        recordTouchpoint(params);
+    var sessionKey = '_sts_seen_' + siteId;
+    var alreadySeen = false;
+    try { alreadySeen = window.sessionStorage.getItem(sessionKey) === '1'; } catch (e) {}
+
+    if (source || medium || params.get('utm_campaign') || !alreadySeen) {
+        send('touchpoint', {
+            utm_source: source,
+            utm_medium: medium,
+            utm_campaign: params.get('utm_campaign'),
+            utm_content: params.get('utm_content'),
+            utm_term: params.get('utm_term'),
+            referrer: safeUrl(document.referrer)
+        });
+        try { window.sessionStorage.setItem(sessionKey, '1'); } catch (e) {}
     }
 
-    // Expose conversion tracking for the host page
     window.SpectraPixel = {
-        trackConversion: function (conversionType, conversionValue) {
-            var visitorId = getVisitorId();
-            var existing = getCookie(COOKIE_NAME);
-            var touchpoints = existing ? JSON.parse(existing) : [];
-
-            var payload = {
-                customer_id: customerId,
-                visitor_id: visitorId,
-                conversion_type: conversionType || 'purchase',
-                conversion_value: conversionValue || 0,
-                touchpoints: touchpoints,
-                timestamp: new Date().toISOString()
-            };
-
-            sendSigned(API_ENDPOINT.replace('touchpoint', 'conversion'), payload);
+        trackConversion: function (type, value) {
+            send('conversion', {
+                event_id: uuid(),
+                conversion_type: type || 'lead',
+                conversion_value: value === undefined ? 0 : value
+            });
         }
     };
 })();

@@ -834,12 +834,6 @@ parameters:
 			path: app/Models/AdCopy.php
 
 		-
-			message: '#^Relation ''campaign'' is not found in App\\Models\\GoogleAdsPerformanceData model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Models/AdSpendCredit.php
-
-		-
 			message: '#^Method App\\Models\\Campaign\:\:customer\(\) should return Illuminate\\Database\\Eloquent\\Relations\\BelongsTo\<App\\Models\\Customer, App\\Models\\Campaign\> but returns Illuminate\\Database\\Eloquent\\Relations\\BelongsTo\<App\\Models\\Customer, \$this\(App\\Models\\Campaign\)\>\.$#'
 			identifier: return.type
 			count: 1

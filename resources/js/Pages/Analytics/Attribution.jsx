@@ -1,8 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AttributionReport from '@/Components/AttributionReport';
+import AttributionSetup from '@/Components/AttributionSetup';
+import GoogleConversionSummary from '@/Components/GoogleConversionSummary';
 import { Head } from '@inertiajs/react';
 
-export default function Attribution({ summary, channelBreakdown, recentTouchpoints, conversions }) {
+export default function Attribution({ summary, channelBreakdown, recentTouchpoints, conversions, trackingSetup, googleSummary }) {
     return (
         <AuthenticatedLayout>
             <Head title="Attribution Models" />
@@ -17,7 +19,10 @@ export default function Attribution({ summary, channelBreakdown, recentTouchpoin
                     */}
                     <a href={route('dashboard')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">&larr; Back to dashboard</a>
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">Website attribution</h1>
-                    <p className="text-sm text-gray-500 mb-6">This report compares website visits and conversions recorded by the SiteToSpend pixel. It does not read Google Ads conversion actions or change campaign bidding.</p>
+                    <p className="text-sm text-gray-500 mb-6">Compare Google Ads reported conversions with separately collected website events. These sources are not merged or used to change bidding here.</p>
+
+                    <GoogleConversionSummary summary={googleSummary} />
+                    <AttributionSetup setup={trackingSetup} />
 
                     <AttributionReport
                         summary={summary}
@@ -26,7 +31,7 @@ export default function Attribution({ summary, channelBreakdown, recentTouchpoin
                         conversions={conversions}
                         emptyState={
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                                No website events have been recorded for this account. This report needs a separately configured website event feed; Google Ads conversions do not appear here automatically.
+                                No website events have been recorded for this account. Install the website tag above to build this journey. Google Ads conversions are reported separately and do not appear in this website journey automatically.
                             </p>
                         }
                     />

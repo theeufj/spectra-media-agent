@@ -1,8 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AttributionReport from '@/Components/AttributionReport';
+import AttributionSetup from '@/Components/AttributionSetup';
+import GoogleConversionSummary from '@/Components/GoogleConversionSummary';
 import { Head, Link } from '@inertiajs/react';
 
-export default function Attribution({ campaign, summary, channelBreakdown, recentTouchpoints, conversions }) {
+export default function Attribution({ campaign, summary, channelBreakdown, recentTouchpoints, conversions, trackingSetup, googleSummary }) {
     return (
         <AuthenticatedLayout>
             <Head title={`Attribution — ${campaign.name}`} />
@@ -21,9 +23,12 @@ export default function Attribution({ campaign, summary, channelBreakdown, recen
                     </Link>
                     <h1 className="text-3xl font-bold text-gray-900">Website attribution</h1>
                     <p className="text-gray-500 mt-1">
-                        Compare website visits and conversions associated with <span className="font-medium text-gray-700">{campaign.name}</span>. This is separate from Google Ads conversion tracking and does not change bidding.
+                        Compare Google Ads reported conversions with separately collected website events for <span className="font-medium text-gray-700">{campaign.name}</span>. This page does not change bidding.
                     </p>
                 </div>
+
+                <GoogleConversionSummary summary={googleSummary} />
+                <AttributionSetup setup={trackingSetup} />
 
                 <AttributionReport
                     summary={summary}
@@ -34,7 +39,7 @@ export default function Attribution({ campaign, summary, channelBreakdown, recen
                         <>
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
                                 No website touchpoints or conversions have been recorded for this campaign.
-                                This report needs a separately configured website event feed; Google Ads conversions do not appear here automatically.
+                                Install the website tag above to build this journey. Google Ads conversions are reported separately and do not appear in this website journey automatically.
                             </p>
                         </>
                     }

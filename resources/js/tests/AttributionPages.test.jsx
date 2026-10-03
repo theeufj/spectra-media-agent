@@ -74,7 +74,7 @@ describe('attribution pages', () => {
 
         expect(getByText('No attribution data yet')).toBeInTheDocument();
         expect(container.textContent).not.toContain('data-secret');
-        expect(container.textContent).toContain('Google Ads conversions do not appear here automatically');
+        expect(container.textContent).toContain('Google Ads conversions are reported separately');
     });
 
     it('leaves it off the account-wide empty state, which has no single customer id', () => {
@@ -82,5 +82,20 @@ describe('attribution pages', () => {
 
         expect(getByText('No attribution data yet')).toBeInTheDocument();
         expect(container.textContent).not.toContain('spectra-pixel.js');
+    });
+
+    it('shows a usable public-site installation and receipt status without a secret', () => {
+        const snippet = '<script src="https://sitetospend.com/js/spectra-pixel.js" data-site-id="123e4567-e89b-42d3-a456-426614174000" defer></script>';
+        const { container } = render(
+            <AnalyticsAttribution
+                {...empty}
+                trackingSetup={{ website_host: 'example.com', snippet, last_visit_at: null, last_conversion_at: null }}
+            />
+        );
+
+        expect(container.textContent).toContain(snippet);
+        expect(container.textContent).toContain('No events received yet');
+        expect(container.textContent).toContain('trackConversion');
+        expect(container.textContent).not.toContain('data-secret');
     });
 });

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AttributionConversion;
 use App\Models\AttributionTouchpoint;
 use App\Services\Attribution\AttributionService;
+use App\Services\Attribution\AttributionSetup;
+use App\Services\Attribution\GoogleConversionSummary;
 use App\Services\Reporting\CrossPlatformAnalyticsService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,7 +18,7 @@ class AnalyticsController extends Controller
         protected AttributionService $attribution,
     ) {}
 
-    public function attribution(Request $request)
+    public function attribution(Request $request, AttributionSetup $setup, GoogleConversionSummary $googleSummary)
     {
         $customer = $this->getActiveCustomer($request);
         if (! $customer) {
@@ -51,6 +53,8 @@ class AnalyticsController extends Controller
             : 0;
 
         return Inertia::render('Analytics/Attribution', [
+            'trackingSetup' => $setup->forCustomer($customer),
+            'googleSummary' => $googleSummary->forCustomer($customer),
             'summary' => [
                 'total_conversions' => $totalConversions,
                 'total_value' => round($totalValue, 2),

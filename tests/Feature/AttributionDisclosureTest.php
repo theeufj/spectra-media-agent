@@ -16,7 +16,7 @@ class AttributionDisclosureTest extends TestCase
     public function test_campaign_report_does_not_send_the_tracking_signing_secret_to_the_browser(): void
     {
         $user = User::factory()->create(['subscription_status' => 'active']);
-        $customer = Customer::factory()->create();
+        $customer = Customer::factory()->create(['website' => 'https://example.com']);
         $user->customers()->attach($customer->id, ['role' => 'owner']);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
 
@@ -25,6 +25,8 @@ class AttributionDisclosureTest extends TestCase
             ->get(route('campaigns.attribution', $campaign->uuid))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Campaigns/Attribution')
+                ->where('trackingSetup.website_host', 'example.com')
+                ->where('trackingSetup.snippet', '<script src="'.rtrim(config('app.url'), '/').'/js/spectra-pixel.js" data-site-id="'.$customer->uuid.'" defer></script>')
                 ->missing('pixelConfig'));
     }
 }

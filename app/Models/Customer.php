@@ -69,7 +69,7 @@ class Customer extends Model
         'average_order_value',
         'agent_thresholds',
         'report_branding',
-        'tracking_signing_secret',
+        'tracking_signing_secret', // Legacy value; browser tracking no longer uses it.
         'is_sandbox',
         'sandbox_results',
         'sandbox_expires_at',
