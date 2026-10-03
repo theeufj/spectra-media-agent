@@ -71,6 +71,7 @@ class OptimizeCampaigns implements ShouldQueue
 
                 $appliedCount = 0;
                 $pendingCount = 0;
+                $advisoryCount = 0;
 
                 if ($recommendations) {
                     // Clear old pending recommendations for this campaign
@@ -114,7 +115,10 @@ class OptimizeCampaigns implements ShouldQueue
                         }
                     }
 
-                    // Store lower-confidence recommendations for human review
+                    // Competitor recommendations have an approval + platform
+                    // verification path. Other lower-confidence ideas are
+                    // advisory only; the War Room must not promise that its
+                    // Approve button can apply them.
                     foreach ($needsReview as $rec) {
                         if (($rec['source'] ?? null) === 'competitor') {
                             $record = app(\App\Services\Competition\CompetitiveRecommendationService::class)->record($campaign, $rec);
@@ -145,10 +149,10 @@ class OptimizeCampaigns implements ShouldQueue
                             'parameters' => $rec['parameters'] ?? $rec['params'] ?? null,
                             'rationale' => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
                             'status' => 'pending',
-                            'requires_approval' => true,
+                            'requires_approval' => false,
                             'platform' => $platform,
                         ]);
-                        $pendingCount++;
+                        $advisoryCount++;
                     }
 
                     $campaign->update(['latest_optimization_analysis' => $recommendations]);
@@ -156,10 +160,10 @@ class OptimizeCampaigns implements ShouldQueue
                     AgentActivity::record(
                         'optimization',
                         'analyzed_campaign',
-                        "Optimised \"{$campaign->name}\": {$appliedCount} changes applied automatically, {$pendingCount} queued for review",
+                        "Optimised \"{$campaign->name}\": {$appliedCount} changes applied automatically, {$pendingCount} queued for approval, {$advisoryCount} advisory ideas",
                         $campaign->customer_id,
                         $campaign->id,
-                        ['auto_applied' => $appliedCount, 'pending_review' => $pendingCount]
+                        ['auto_applied' => $appliedCount, 'pending_review' => $pendingCount, 'advisory' => $advisoryCount]
                     );
                 }
 

@@ -72,7 +72,7 @@ class StrategyNavigationTest extends TestCase
                 ->where('competitiveStrategy.summary', 'Selected account only'));
     }
 
-    public function test_activity_queue_shows_one_pending_decision_per_campaign_action_and_target(): void
+    public function test_activity_page_collapses_duplicate_advisory_ideas(): void
     {
         [$user, $customer] = $this->userOnPlan('growth');
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
@@ -91,8 +91,31 @@ class StrategyNavigationTest extends TestCase
             ->withSession(['active_customer_id' => $customer->id])
             ->get(route('strategy.war-room'))
             ->assertInertia(fn (Assert $page) => $page
+                ->has('recommendations', 0)
+                ->has('advisories', 1)
+                ->where('advisories.0.rationale', 'New suggestion'));
+    }
+
+    public function test_verified_competitor_change_is_the_only_action_in_the_approval_queue(): void
+    {
+        [$user, $customer] = $this->userOnPlan('growth');
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $recommendation = Recommendation::create([
+            'campaign_id' => $campaign->id,
+            'type' => 'COMPETITOR_COPY_TEST',
+            'source' => 'competitor',
+            'rationale' => 'Test a researched messaging gap.',
+            'status' => 'pending',
+            'requires_approval' => true,
+            'execution' => ['can_apply' => true],
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('strategy.war-room'))
+            ->assertInertia(fn (Assert $page) => $page
                 ->has('recommendations', 1)
-                ->where('recommendations.0.rationale', 'New suggestion')
-                ->where('recommendations.0.campaign_uuid', $campaign->uuid));
+                ->where('recommendations.0.id', $recommendation->id)
+                ->has('advisories', 0));
     }
 }

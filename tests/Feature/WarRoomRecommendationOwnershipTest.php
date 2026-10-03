@@ -12,9 +12,9 @@ use Tests\TestCase;
 /**
  * Recommendation has no `customer_id`, so it carries neither BelongsToCustomer
  * nor CustomerScope: a route-model binding hands the controller whatever row
- * the URL names, from any tenant. The War Room approve/reject actions ran a
- * bare update() on it, so anyone could clear a competitor's pending queue.
- * Ownership now comes from RecommendationPolicy, via campaign->customer_id.
+ * the URL names, from any tenant. Ownership comes from RecommendationPolicy,
+ * via campaign->customer_id. Advisory cards must also remain advisory when
+ * their approval URL is called directly.
  */
 class WarRoomRecommendationOwnershipTest extends TestCase
 {
@@ -44,7 +44,7 @@ class WarRoomRecommendationOwnershipTest extends TestCase
         ]);
     }
 
-    public function test_the_owner_can_approve_their_own_recommendation(): void
+    public function test_an_advisory_recommendation_cannot_be_marked_applied_by_approval(): void
     {
         [$user, $customer] = $this->userWithCustomer();
         $recommendation = $this->pendingRecommendationFor($customer);
@@ -53,7 +53,7 @@ class WarRoomRecommendationOwnershipTest extends TestCase
             ->post(route('strategy.war-room.recommendations.approve', $recommendation))
             ->assertRedirect();
 
-        $this->assertSame('approved', $recommendation->fresh()->status);
+        $this->assertSame('pending', $recommendation->fresh()->status);
     }
 
     public function test_another_tenant_cannot_approve_a_recommendation(): void

@@ -182,7 +182,7 @@ function OptimizationQueue({ recommendations }) {
     if (recommendations.length === 0) {
         return (
             <div className="text-center py-8 text-gray-500 text-sm">
-                No pending recommendations. The optimization agent will surface suggestions here.
+                No campaign changes are awaiting approval. General optimizer ideas are listed below as advisory notes.
             </div>
         );
     }
@@ -219,7 +219,6 @@ function OptimizationQueue({ recommendations }) {
                             </button>
                         </div>
                     )}
-                    {!r.requires_approval && <p className="mt-2 text-xs text-gray-500">For review only; this card cannot change the campaign.</p>}
                 </div>
             ))}
         </div>
@@ -719,6 +718,7 @@ export default function WarRoom({
     health,
     activities = [],
     recommendations = [],
+    advisories = [],
     performance,
     alerts = [],
     abTests = [],
@@ -746,7 +746,7 @@ export default function WarRoom({
                             <p className="text-sm text-gray-500 mt-0.5">Recent agent work, pending campaign changes, and competitor findings for the selected account.</p>
                             {canAccessWarRoom && (
                                 <p className="text-sm text-gray-600 mt-2">
-                                    Competitor findings can inform new copy and campaign recommendations. Only cards with an Approve button can queue a change; other suggestions are observations.{' '}
+                                    Competitor findings can inform new copy and campaign recommendations. Approve queues a supported change; general optimizer ideas are advisory only.{' '}
                                     <Link href={route('seo.competitors')} className="text-brand-dark hover:underline">See findings and change history</Link>
                                 </p>
                             )}
@@ -803,6 +803,19 @@ export default function WarRoom({
                                             <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{recommendations.length}</span>
                                         </div>
                                         <OptimizationQueue recommendations={recommendations} />
+                                        {advisories.length > 0 && (
+                                            <details className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+                                                <summary className="cursor-pointer text-xs font-medium text-gray-700">Advisory ideas ({advisories.length}) — no campaign change</summary>
+                                                <div className="mt-3 space-y-3">
+                                                    {advisories.map((idea) => (
+                                                        <div key={idea.id} className="border-t border-gray-100 pt-2 text-xs text-gray-600">
+                                                            <p className="font-medium text-gray-800">{idea.campaign_name} · {idea.type?.replace(/_/g, ' ')}</p>
+                                                            <p className="mt-1">{idea.rationale}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </details>
+                                        )}
                                     </div>
 
                                     <div>

@@ -35,6 +35,7 @@ class WarRoomController extends Controller
                 'health' => null,
                 'activities' => [],
                 'recommendations' => [],
+                'advisories' => [],
                 'performance' => null,
                 'alerts' => [],
                 'abTests' => [],
@@ -67,16 +68,20 @@ class WarRoomController extends Controller
             ]);
 
         // 3. Pending optimization recommendations
-        $recommendations = Recommendation::whereIn('campaign_id', $campaignIds)
+        $pendingRecommendations = Recommendation::whereIn('campaign_id', $campaignIds)
             ->where('status', 'pending')
             ->with('campaign:id,uuid,name')
             ->orderByDesc('created_at')
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        // Only competitor recommendations have a job that applies and verifies
+        // an approved change. Ordinary optimizer cards were being marked
+        // "approved" with no platform operation behind that button.
+        $recommendations = (clone $pendingRecommendations)
+            ->where('source', 'competitor')
+            ->where('requires_approval', true)
             ->take(100)
             ->get()
-            // Older optimizer runs left many near-identical pending records.
-            // Show the latest decision per campaign, action and target instead
-            // of filling the customer's queue with repeats.
             ->unique(fn (Recommendation $r) => $r->campaign_id.'|'.$r->type.'|'.json_encode($r->target_entity))
             ->take(20)
             ->values()
@@ -90,6 +95,20 @@ class WarRoomController extends Controller
                 'parameters' => $r->parameters,
                 'requires_approval' => $r->requires_approval,
                 'created_at' => $r->created_at->toIso8601String(),
+            ]);
+
+        $advisories = (clone $pendingRecommendations)
+            ->where(fn ($query) => $query->whereNull('source')->orWhere('source', '!=', 'competitor')->orWhere('requires_approval', false))
+            ->take(100)
+            ->get()
+            ->unique(fn (Recommendation $r) => $r->campaign_id.'|'.$r->type)
+            ->take(5)
+            ->values()
+            ->map(fn (Recommendation $r) => [
+                'id' => $r->id,
+                'campaign_name' => $r->campaign?->name,
+                'type' => $r->type,
+                'rationale' => $r->rationale,
             ]);
 
         // 4. Cross-platform performance (last 7 days)
@@ -160,6 +179,7 @@ class WarRoomController extends Controller
             'health' => $health,
             'activities' => $activities,
             'recommendations' => $recommendations,
+            'advisories' => $advisories,
             'performance' => $performance,
             'alerts' => $alerts,
             'abTests' => $abTests,
@@ -189,11 +209,10 @@ class WarRoomController extends Controller
 
             return back()->with('flash', ['type' => 'success', 'message' => $queued ? 'Change queued. Its platform verification and results will appear in the competitor report.' : 'This action has already been reviewed.']);
         }
-        $recommendation->update(['status' => 'approved']);
 
-        return redirect()->back()->with('flash', [
-            'type' => 'success',
-            'message' => 'Recommendation approved.',
+        return back()->with('flash', [
+            'type' => 'warning',
+            'message' => 'This suggestion is advisory only. No platform change is available from this page.',
         ]);
     }
 
