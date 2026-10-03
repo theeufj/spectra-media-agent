@@ -19,14 +19,9 @@ use Inertia\Inertia;
 
 class WarRoomController extends Controller
 {
-    private function resolveCustomer(Request $request)
-    {
-        return $request->user()->customer ?? $request->user()->customers()->first();
-    }
-
     public function index(Request $request)
     {
-        $customer = $this->resolveCustomer($request);
+        $customer = $this->getActiveCustomer($request);
 
         if (! $customer) {
             return redirect()->route('customers.create');
@@ -74,12 +69,22 @@ class WarRoomController extends Controller
         // 3. Pending optimization recommendations
         $recommendations = Recommendation::whereIn('campaign_id', $campaignIds)
             ->where('status', 'pending')
-            ->latest()
-            ->take(20)
+            ->with('campaign:id,uuid,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->take(100)
             ->get()
+            // Older optimizer runs left many near-identical pending records.
+            // Show the latest decision per campaign, action and target instead
+            // of filling the customer's queue with repeats.
+            ->unique(fn (Recommendation $r) => $r->campaign_id.'|'.$r->type.'|'.json_encode($r->target_entity))
+            ->take(20)
+            ->values()
             ->map(fn ($r) => [
                 'id' => $r->id,
                 'campaign_id' => $r->campaign_id,
+                'campaign_name' => $r->campaign?->name,
+                'campaign_uuid' => $r->campaign?->uuid,
                 'type' => $r->type,
                 'rationale' => $r->rationale,
                 'parameters' => $r->parameters,
@@ -215,7 +220,7 @@ class WarRoomController extends Controller
             'url' => ['required', 'url', 'max:500', new \App\Rules\SafePublicUrl],
         ]);
 
-        $customer = $this->resolveCustomer($request);
+        $customer = $this->getActiveCustomer($request);
         if (! $customer) {
             return redirect()->route('customers.create');
         }
@@ -273,7 +278,7 @@ class WarRoomController extends Controller
      */
     public function removeCompetitor(Request $request, Competitor $competitor)
     {
-        $customer = $this->resolveCustomer($request);
+        $customer = $this->getActiveCustomer($request);
         if (! $customer) {
             return redirect()->route('customers.create');
         }

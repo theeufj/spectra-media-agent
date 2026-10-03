@@ -19,8 +19,8 @@ import CampaignAttribution from '@/Pages/Campaigns/Attribution';
 /**
  * The two pages were ~340 byte-identical lines and now share
  * Components/AttributionReport. What each page still owns is its own header
- * and its own empty-state copy — the campaign one carries the pixel snippet,
- * the account-wide one has no single customer id to put in it.
+ * and its own empty-state copy. Neither page should ship a browser-visible
+ * signing secret or imply this is the Google Ads conversion report.
  */
 const shared = {
     summary: { total_conversions: 3, total_value: 1200, avg_touchpoints: 2.5 },
@@ -47,7 +47,7 @@ describe('attribution pages', () => {
         expect(back).toBeInTheDocument();
         expect(back.getAttribute('href')).toContain('dashboard');
         expect(getByText('Total Conversions')).toBeInTheDocument();
-        expect(getByText('Channel Attribution by Model')).toBeInTheDocument();
+        expect(getByText('Where conversions came from')).toBeInTheDocument();
         expect(getByText('Side-by-Side Model Comparison')).toBeInTheDocument();
     });
 
@@ -56,26 +56,25 @@ describe('attribution pages', () => {
             <CampaignAttribution
                 {...shared}
                 campaign={{ id: 7, name: 'Spring Sale' }}
-                pixelConfig={{ customer_id: 42, signing_secret: 'sekret' }}
             />
         );
 
         expect(getByText('Back to Campaign')).toBeInTheDocument();
         expect(getByText('Total Conversions')).toBeInTheDocument();
-        expect(getByText('Channel Attribution by Model')).toBeInTheDocument();
+        expect(getByText('Where conversions came from')).toBeInTheDocument();
     });
 
-    it('keeps the pixel snippet on the campaign empty state', () => {
+    it('does not disclose a tracking signing secret on the campaign empty state', () => {
         const { getByText, container } = render(
             <CampaignAttribution
                 {...empty}
                 campaign={{ id: 7, name: 'Spring Sale' }}
-                pixelConfig={{ customer_id: 42, signing_secret: 'sekret' }}
             />
         );
 
         expect(getByText('No attribution data yet')).toBeInTheDocument();
-        expect(container.textContent).toContain('data-customer="42"');
+        expect(container.textContent).not.toContain('data-secret');
+        expect(container.textContent).toContain('Google Ads conversions do not appear here automatically');
     });
 
     it('leaves it off the account-wide empty state, which has no single customer id', () => {

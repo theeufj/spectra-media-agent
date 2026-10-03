@@ -63,7 +63,7 @@ function PersonaCard({ persona, onToggle, onDelete }) {
 
 export default function Index({ personas, campaigns }) {
     const [showCreate, setShowCreate] = useState(false);
-    const generateForm = useForm({ campaign_id: '', count: 4 });
+    const generateForm = useForm({ campaign_id: '', count: 1 });
     const createForm = useForm({
         name: '', description: '', messaging_angle: '', campaign_id: '',
         pain_points: [''], tone_adjustments: { formality: 'balanced', urgency: 'medium', emotion: 'balanced' },
@@ -103,7 +103,7 @@ export default function Index({ personas, campaigns }) {
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>
-                            <p className="mt-1 text-sm text-gray-500">AI-generated audience segments to tailor ad copy and targeting.</p>
+                            <p className="mt-1 text-sm text-gray-500">The latest active campaign persona guides new ad copy; if none exists, the latest active account-wide persona is used. Personas do not change existing ads or platform audience targeting.</p>
                         </div>
                         {personas.length > 0 && (
                             <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
@@ -137,7 +137,7 @@ export default function Index({ personas, campaigns }) {
                                 <div>
                                     <label className="block text-xs text-gray-600 mb-1">Count</label>
                                     <select value={generateForm.data.count} onChange={e => generateForm.setData('count', parseInt(e.target.value))} className="rounded-lg border-gray-300 text-sm">
-                                        {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+                                        {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
                                     </select>
                                 </div>
                                 <button type="submit" disabled={generateForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
@@ -237,9 +237,8 @@ export default function Index({ personas, campaigns }) {
                             <UsersIcon className="mx-auto h-12 w-12 text-gray-300" aria-hidden="true" />
                             <h2 className="mt-4 text-sm font-medium text-gray-900">No personas yet</h2>
                             <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
-                                A persona is who a set of ads is written for — their pain points and the
-                                tone that lands with them. Campaigns use them to vary ad copy instead of
-                                showing everyone the same words.
+                                A persona describes the customer whose needs new ad copy should address.
+                                Create one to guide the next copy generation for this account.
                             </p>
                             <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
                                 <button
@@ -249,7 +248,7 @@ export default function Index({ personas, campaigns }) {
                                     className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                                 >
                                     <SparklesIcon className="h-4 w-4" aria-hidden="true" />
-                                    {generateForm.processing ? 'Generating…' : 'Generate 4 with AI'}
+                                    {generateForm.processing ? 'Generating…' : 'Generate one with AI'}
                                 </button>
                                 <button
                                     type="button"

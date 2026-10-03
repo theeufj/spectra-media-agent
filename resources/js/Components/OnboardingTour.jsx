@@ -42,7 +42,7 @@ const TOUR_STEPS = [
     {
         target: '[data-tour="strategy"]',
         title: 'Strategy',
-        body: 'Activity & competitors shows what the agents have been doing on your account and how you read against the sites you are watching. Proposals is where you plan something new.',
+        body: 'Activity & competitors shows agent actions, pending changes, and recent competitor findings. Agency accounts can also build client proposals here.',
         placement: 'bottom',
     },
     {

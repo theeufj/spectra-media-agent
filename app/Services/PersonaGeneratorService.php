@@ -19,7 +19,7 @@ class PersonaGeneratorService
     /**
      * Generate audience personas for a customer/campaign using Gemini AI.
      */
-    public function generate(Customer $customer, ?Campaign $campaign = null, int $count = 4): array
+    public function generate(Customer $customer, ?Campaign $campaign = null, int $count = 1): array
     {
         $brandGuidelines = $customer->brandGuideline;
 

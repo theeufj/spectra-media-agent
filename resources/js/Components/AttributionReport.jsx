@@ -150,7 +150,7 @@ function ChannelBar({ channels, maxValue }) {
 }
 
 function ModelComparison({ channelBreakdown }) {
-    const [selectedModel, setSelectedModel] = useState('position_based');
+    const [selectedModel, setSelectedModel] = useState('last_click');
 
     const channels = channelBreakdown[selectedModel] || [];
     const maxValue = channels.reduce((max, ch) => Math.max(max, ch.value), 0);
@@ -162,26 +162,30 @@ function ModelComparison({ channelBreakdown }) {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
-                    Channel Attribution by Model
+                    Where conversions came from
                 </h3>
             </div>
 
             <div className="p-6">
-                <div className="flex flex-wrap gap-2 mb-6">
-                    {Object.entries(MODEL_LABELS).map(([key, label]) => (
-                        <button
-                            key={key}
-                            onClick={() => setSelectedModel(key)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                selectedModel === key
-                                    ? 'bg-brand-dark text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
+                <details className="mb-5">
+                    <summary className="cursor-pointer text-sm font-medium text-brand-dark">Compare ways to assign conversion credit</summary>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                        {Object.entries(MODEL_LABELS).map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setSelectedModel(key)}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                    selectedModel === key
+                                        ? 'bg-brand-dark text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </details>
 
                 <p className="text-sm text-gray-500 mb-4 italic">
                     {MODEL_DESCRIPTIONS[selectedModel]}
@@ -263,7 +267,7 @@ function TouchpointJourney({ touchpoints }) {
         return (
             <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Touchpoints</h3>
-                <p className="text-gray-500 text-sm">No touchpoints recorded yet. Install the tracking pixel to start tracking.</p>
+                <p className="text-gray-500 text-sm">No website touchpoints recorded yet.</p>
             </div>
         );
     }
@@ -397,7 +401,10 @@ export default function AttributionReport({ summary, channelBreakdown, recentTou
             ) : (
                 <>
                     <ModelComparison channelBreakdown={channelBreakdown} />
-                    <ModelComparisonTable channelBreakdown={channelBreakdown} />
+                    <details className="mb-8">
+                        <summary className="cursor-pointer text-sm font-medium text-brand-dark">View the full attribution model comparison</summary>
+                        <div className="mt-4"><ModelComparisonTable channelBreakdown={channelBreakdown} /></div>
+                    </details>
                     <RecentConversions conversions={conversions} />
                 </>
             )}

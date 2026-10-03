@@ -16,8 +16,8 @@ export default function Attribution({ summary, channelBreakdown, recentTouchpoin
                         dashboard and the link now says so.
                     */}
                     <a href={route('dashboard')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">&larr; Back to dashboard</a>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Multi-Touch Attribution</h1>
-                    <p className="text-sm text-gray-500 mb-6">Cross-campaign attribution analysis — see how each channel contributes to conversions.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Website attribution</h1>
+                    <p className="text-sm text-gray-500 mb-6">This report compares website visits and conversions recorded by the SiteToSpend pixel. It does not read Google Ads conversion actions or change campaign bidding.</p>
 
                     <AttributionReport
                         summary={summary}
@@ -26,8 +26,7 @@ export default function Attribution({ summary, channelBreakdown, recentTouchpoin
                         conversions={conversions}
                         emptyState={
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                                Install the tracking pixel on your website to start collecting attribution data.
-                                Conversion data will appear here once visitors begin converting.
+                                No website events have been recorded for this account. This report needs a separately configured website event feed; Google Ads conversions do not appear here automatically.
                             </p>
                         }
                     />

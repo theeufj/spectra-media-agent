@@ -194,6 +194,12 @@ function OptimizationQueue({ recommendations }) {
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                             <span className="text-xs font-medium text-gray-900 capitalize">{r.type?.replace(/_/g, ' ')}</span>
+                            {r.campaign_name && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    {r.campaign_uuid ? <Link href={route('campaigns.show', r.campaign_uuid)} className="text-brand-dark hover:underline">{r.campaign_name}</Link> : r.campaign_name}
+                                    {' · '}Suggested, not applied
+                                </p>
+                            )}
                             <p className="text-xs text-gray-500 mt-0.5 line-clamp-3">{r.rationale}</p>
                         </div>
                     </div>
@@ -213,6 +219,7 @@ function OptimizationQueue({ recommendations }) {
                             </button>
                         </div>
                     )}
+                    {!r.requires_approval && <p className="mt-2 text-xs text-gray-500">For review only; this card cannot change the campaign.</p>}
                 </div>
             ))}
         </div>
@@ -736,7 +743,13 @@ export default function WarRoom({
                                 against the competitors being watched.
                             */}
                             <h1 className="text-2xl font-bold text-gray-900">Activity &amp; competitors</h1>
-                            <p className="text-sm text-gray-500 mt-0.5">What the agents have been doing, what they want to change next, and how you compare to the sites you're watching.</p>
+                            <p className="text-sm text-gray-500 mt-0.5">Recent agent work, pending campaign changes, and competitor findings for the selected account.</p>
+                            {canAccessWarRoom && (
+                                <p className="text-sm text-gray-600 mt-2">
+                                    Competitor findings can inform new copy and campaign recommendations. Only cards with an Approve button can queue a change; other suggestions are observations.{' '}
+                                    <Link href={route('seo.competitors')} className="text-brand-dark hover:underline">See findings and change history</Link>
+                                </p>
+                            )}
                         </div>
                         {canAccessWarRoom && abTests.length > 0 && (
                             <div className="flex items-center gap-2">

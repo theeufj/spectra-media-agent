@@ -48,6 +48,8 @@ class HandleInertiaRequests extends Middleware
                     'subscription_plan' => $user->subscription_plan,
                     'subscription_status' => $user->subscription_status,
                     'isAdmin' => $user->hasRole('admin'),
+                    'can_view_proposals' => $user->resolveCurrentPlan()?->slug === 'agency'
+                        || $activeCustomer?->resolvePlan()->slug === 'agency',
                     'has_inbox' => $user->emailInbox()->exists(),
                     'customers' => $user->customers->map(function ($customer) {
                         return [

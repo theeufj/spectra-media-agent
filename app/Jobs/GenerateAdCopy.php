@@ -61,8 +61,11 @@ class GenerateAdCopy implements ShouldQueue
             $geminiService = new GeminiService;
             $adminMonitorService = new AdminMonitorService($geminiService);
 
-            // Load persona if specified
-            $persona = $this->personaId ? \App\Models\Persona::find($this->personaId) : null;
+            // The ordinary collateral flow does not pass a persona ID. Select an
+            // active one here so saved campaign/account personas actually shape
+            // new copy, without ever borrowing another tenant's persona.
+            $persona = app(\App\Services\Campaigns\PersonaSelection::class)
+                ->forCampaign($this->campaign, $this->personaId);
 
             // Get brand guidelines for this customer
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;

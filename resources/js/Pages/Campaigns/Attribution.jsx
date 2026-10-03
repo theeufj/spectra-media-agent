@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AttributionReport from '@/Components/AttributionReport';
 import { Head, Link } from '@inertiajs/react';
 
-export default function Attribution({ campaign, pixelConfig, summary, channelBreakdown, recentTouchpoints, conversions }) {
+export default function Attribution({ campaign, summary, channelBreakdown, recentTouchpoints, conversions }) {
     return (
         <AuthenticatedLayout>
             <Head title={`Attribution — ${campaign.name}`} />
@@ -19,9 +19,9 @@ export default function Attribution({ campaign, pixelConfig, summary, channelBre
                         </svg>
                         Back to Campaign
                     </Link>
-                    <h1 className="text-3xl font-bold text-gray-900">Multi-Touch Attribution</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Website attribution</h1>
                     <p className="text-gray-500 mt-1">
-                        Understand how each channel contributes to conversions for <span className="font-medium text-gray-700">{campaign.name}</span>
+                        Compare website visits and conversions associated with <span className="font-medium text-gray-700">{campaign.name}</span>. This is separate from Google Ads conversion tracking and does not change bidding.
                     </p>
                 </div>
 
@@ -33,18 +33,9 @@ export default function Attribution({ campaign, pixelConfig, summary, channelBre
                     emptyState={
                         <>
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                                Install the tracking pixel on your website to start tracking touchpoints and conversions.
-                                Attribution data will appear here once visitors begin interacting with your campaigns.
+                                No website touchpoints or conversions have been recorded for this campaign.
+                                This report needs a separately configured website event feed; Google Ads conversions do not appear here automatically.
                             </p>
-                            <div className="mt-6 bg-gray-50 rounded-lg p-4 max-w-lg mx-auto text-left">
-                                <p className="text-sm font-medium text-gray-700 mb-2">Add this snippet before &lt;/body&gt;:</p>
-                                <pre className="text-xs bg-gray-900 text-green-400 rounded p-3 overflow-x-auto">
-{`<script src="${window.location.origin}/js/spectra-pixel.js"
-        data-customer="${pixelConfig.customer_id}"
-        data-secret="${pixelConfig.signing_secret}"
-        defer></script>`}
-                                </pre>
-                            </div>
                         </>
                     }
                 />

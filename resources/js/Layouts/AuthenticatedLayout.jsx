@@ -85,6 +85,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
     const user = usePage().props.auth.user;
     const activeCustomer = user.active_customer;
     const setupOnly = activeCustomer?.service_type === 'setup_only';
+    const canViewProposals = user.can_view_proposals;
     const customers = user.customers || [];
     const toast = useToast();
     // One slot per flash channel. A single shared slot would let a response
@@ -277,7 +278,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
                                         <Dropdown.Link href={route('strategy.war-room')}>Activity &amp; competitors</Dropdown.Link>
-                                        <Dropdown.Link href={route('proposals.index')}>Proposals</Dropdown.Link>
+                                        {canViewProposals && <Dropdown.Link href={route('proposals.index')}>Proposals</Dropdown.Link>}
                                     </Dropdown.Content>
                                 </Dropdown>
                             </div>
@@ -677,13 +678,13 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     >
                                         Activity &amp; competitors
                                     </MobileNavLink>
-                                    <MobileNavLink
+                                    {canViewProposals && <MobileNavLink
                                         href={route('proposals.index')}
                                         active={route().current('proposals.*')}
                                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
                                     >
                                         Proposals
-                                    </MobileNavLink>
+                                    </MobileNavLink>}
                                 </MobileNavSection>
 
                                 <MobileNavSection title="Support & Setup">

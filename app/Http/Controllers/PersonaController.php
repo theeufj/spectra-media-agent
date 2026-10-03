@@ -46,7 +46,7 @@ class PersonaController extends Controller
             : null;
 
         $service = app(PersonaGeneratorService::class);
-        $personas = $service->generate($customer, $campaign, $validated['count'] ?? 4);
+        $personas = $service->generate($customer, $campaign, $validated['count'] ?? 1);
 
         if (empty($personas)) {
             return back()->with('error', 'Failed to generate personas. Please try again.');
