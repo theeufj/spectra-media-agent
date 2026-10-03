@@ -12,7 +12,9 @@ class AttributionSetup
     public function forCustomer(Customer $customer): array
     {
         $websiteHost = parse_url((string) $customer->website, PHP_URL_HOST);
-        $scriptUrl = rtrim((string) config('app.url'), '/').'/js/spectra-pixel.js';
+        $scriptPath = public_path('js/spectra-pixel.js');
+        $version = is_file($scriptPath) ? filemtime($scriptPath) : 1;
+        $scriptUrl = rtrim((string) config('app.url'), '/').'/js/spectra-pixel.js?v='.$version;
 
         return [
             'website_host' => is_string($websiteHost) ? $websiteHost : null,

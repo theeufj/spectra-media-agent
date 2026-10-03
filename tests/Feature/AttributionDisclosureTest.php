@@ -26,7 +26,7 @@ class AttributionDisclosureTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Campaigns/Attribution')
                 ->where('trackingSetup.website_host', 'example.com')
-                ->where('trackingSetup.snippet', '<script src="'.rtrim(config('app.url'), '/').'/js/spectra-pixel.js" data-site-id="'.$customer->uuid.'" defer></script>')
+                ->where('trackingSetup.snippet', '<script src="'.rtrim(config('app.url'), '/').'/js/spectra-pixel.js?v='.filemtime(public_path('js/spectra-pixel.js')).'" data-site-id="'.$customer->uuid.'" defer></script>')
                 ->missing('pixelConfig'));
     }
 }

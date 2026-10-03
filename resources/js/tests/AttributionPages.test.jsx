@@ -85,7 +85,7 @@ describe('attribution pages', () => {
     });
 
     it('shows a usable public-site installation and receipt status without a secret', () => {
-        const snippet = '<script src="https://sitetospend.com/js/spectra-pixel.js" data-site-id="123e4567-e89b-42d3-a456-426614174000" defer></script>';
+        const snippet = '<script src="https://sitetospend.com/js/spectra-pixel.js?v=123" data-site-id="123e4567-e89b-42d3-a456-426614174000" defer></script>';
         const { container } = render(
             <AnalyticsAttribution
                 {...empty}
