@@ -38,8 +38,10 @@ export default function Attribution({ campaign, summary, channelBreakdown, recen
                     emptyState={
                         <>
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                                No website touchpoints or conversions have been recorded for this campaign.
-                                Install the website tag above to build this journey. Google Ads conversions are reported separately and do not appear in this website journey automatically.
+                                {recentTouchpoints.length > 0
+                                    ? 'Campaign visits are being recorded, but no website conversion has been attributed to this campaign yet.'
+                                    : 'No website touchpoints or conversions have been recorded for this campaign. Set up the website tag above to build this journey.'}
+                                {' '}Google Ads conversions are reported separately and do not appear in this website journey automatically.
                             </p>
                         </>
                     }

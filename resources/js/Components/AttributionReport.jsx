@@ -386,6 +386,8 @@ function RecentConversions({ conversions }) {
  *   page does not, because it has no single customer id to put in it.
  */
 export default function AttributionReport({ summary, channelBreakdown, recentTouchpoints, conversions, emptyState = null }) {
+    const hasVisits = recentTouchpoints.length > 0;
+
     return (
         <>
             <SummaryCards summary={summary} />
@@ -395,7 +397,7 @@ export default function AttributionReport({ summary, channelBreakdown, recentTou
                     <svg className="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
-                    <h3 className="mt-4 text-lg font-medium text-gray-900">No attribution data yet</h3>
+                    <h3 className="mt-4 text-lg font-medium text-gray-900">{hasVisits ? 'Visits are arriving; no conversions yet' : 'No attribution data yet'}</h3>
                     {emptyState}
                 </div>
             ) : (

@@ -31,7 +31,10 @@ export default function Attribution({ summary, channelBreakdown, recentTouchpoin
                         conversions={conversions}
                         emptyState={
                             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                                No website events have been recorded for this account. Install the website tag above to build this journey. Google Ads conversions are reported separately and do not appear in this website journey automatically.
+                                {recentTouchpoints.length > 0
+                                    ? 'Website visits are being recorded. A conversion will appear after a tracked signup, lead, or purchase succeeds.'
+                                    : 'No website events have been recorded for this account. Set up the website tag above to build this journey.'}
+                                {' '}Google Ads conversions are reported separately and do not appear in this website journey automatically.
                             </p>
                         }
                     />

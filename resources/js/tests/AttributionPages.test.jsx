@@ -101,6 +101,20 @@ describe('attribution pages', () => {
         expect(container.textContent).not.toContain('data-secret');
     });
 
+    it('shows received visits without claiming there are no website events', () => {
+        const { container } = render(
+            <AnalyticsAttribution
+                {...empty}
+                recentTouchpoints={[{ id: 1, page_url: 'https://example.com/', touched_at: '2026-10-03T00:00:00Z' }]}
+                trackingSetup={{ website_host: 'example.com', snippet: '<script></script>', gtm_snippet: '<script></script>', last_visit_at: '2026-10-03T00:00:00Z', last_conversion_at: null }}
+            />
+        );
+
+        expect(container.textContent).toContain('Visits are arriving; no conversions yet');
+        expect(container.textContent).toContain('Website visits are being recorded');
+        expect(container.textContent).not.toContain('No website events have been recorded');
+    });
+
     it('warns when Google Ads totals only contain older stored performance rows', () => {
         const { container } = render(
             <AnalyticsAttribution
