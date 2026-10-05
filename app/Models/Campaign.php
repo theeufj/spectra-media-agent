@@ -113,6 +113,7 @@ class Campaign extends Model
         'budget_adjustments',
         'last_maintenance_at',
         'last_maintenance_results',
+        'policy_checks',
     ];
 
     /**
@@ -143,6 +144,7 @@ class Campaign extends Model
         'budget_adjustments' => 'array',
         'last_maintenance_at' => 'datetime',
         'last_maintenance_results' => 'array',
+        'policy_checks' => 'array',
     ];
 
     /**

@@ -44,9 +44,43 @@ class DashboardController extends Controller
         // simply unavailable. Never throws — see FeatureRecorder.
         FeatureRecorder::record(ProductFeature::Dashboard, 'viewed', $activeCustomer->id, $user->id);
 
+        // Approval problems remain actionable after an automatic or intentional
+        // pause, and one-time setup customers need the same destination evidence.
+        $policyQuery = $activeCustomer->campaigns()
+            ->select(['id', 'uuid', 'name', 'status', 'google_ads_campaign_id', 'facebook_ads_campaign_id', 'policy_checks'])
+            ->where(function ($query) {
+                $query->whereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_ads_campaign_id');
+            })
+            ->where(function ($query) {
+                $query->where('policy_checks->status', 'issues')
+                    ->orWhere(function ($unknown) {
+                        $unknown->whereNotIn('status', ['ended', 'draft'])
+                            ->where(function ($status) {
+                                $status->where('policy_checks->status', 'unknown')->orWhereNull('policy_checks');
+                            });
+                    });
+            });
+        $policyCampaignCount = (clone $policyQuery)->count();
+        $policyCampaigns = $policyQuery
+            ->orderByRaw("CASE WHEN policy_checks->>'status' = 'issues' THEN 0 ELSE 1 END")
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get()
+            ->map(fn ($campaign) => [
+                'id' => $campaign->id,
+                'uuid' => $campaign->uuid,
+                'name' => $campaign->name,
+                'status' => $campaign->status,
+                'google_ads_campaign_id' => $campaign->google_ads_campaign_id,
+                'facebook_ads_campaign_id' => $campaign->facebook_ads_campaign_id,
+                'policy_checks' => \App\Services\Agents\CampaignAlertService::policyStatus($campaign),
+            ]);
+
         if ($activeCustomer->service_type === 'setup_only') {
             return Inertia::render('Setup/Index', [
                 'journey' => app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($activeCustomer),
+                'policyCampaigns' => $policyCampaigns,
+                'policyCampaignCount' => $policyCampaignCount,
             ]);
         }
 
@@ -83,6 +117,8 @@ class DashboardController extends Controller
             'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),
             'pendingTasks' => $this->getPendingTasks($campaigns),
             'healthAlerts' => $this->getHealthAlerts($campaigns),
+            'policyCampaigns' => $policyCampaigns,
+            'policyCampaignCount' => $policyCampaignCount,
             'agentActivities' => AgentActivity::where('customer_id', $activeCustomer->id)
                 ->orderBy('created_at', 'desc')
                 ->limit(20)

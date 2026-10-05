@@ -50,13 +50,9 @@ class BudgetController extends Controller
             'rebalance_frequency' => 'in:daily,weekly,monthly',
         ]);
 
-        // Normalize percentages to 100
         $total = $validated['google_ads_pct'] + $validated['facebook_ads_pct'] + $validated['microsoft_ads_pct'] + $validated['linkedin_ads_pct'];
-        if ($total > 0 && abs($total - 100) > 0.5) {
-            $validated['google_ads_pct'] = round($validated['google_ads_pct'] / $total * 100, 1);
-            $validated['facebook_ads_pct'] = round($validated['facebook_ads_pct'] / $total * 100, 1);
-            $validated['microsoft_ads_pct'] = round($validated['microsoft_ads_pct'] / $total * 100, 1);
-            $validated['linkedin_ads_pct'] = round($validated['linkedin_ads_pct'] / $total * 100, 1);
+        if (abs($total - 100) > 0.5) {
+            return back()->withErrors(['split' => 'The platform percentages must total 100%. Scale the split or edit the percentages before saving.']);
         }
 
         PlatformBudgetAllocation::updateOrCreate(

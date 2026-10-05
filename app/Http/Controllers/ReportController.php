@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\GenerateMonthlyReport;
 use App\Services\Reporting\ReportPdfService;
+use App\Support\WorkStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -26,6 +27,7 @@ class ReportController extends Controller
 
         return Inertia::render('Reports/Index', [
             'reports' => $history,
+            'runs' => ['report-weekly' => WorkStatus::get($customer->id, 'report-weekly'), 'report-monthly' => WorkStatus::get($customer->id, 'report-monthly')],
             'customer' => $customer->only('id', 'uuid', 'name', 'report_branding'),
             'canWhiteLabel' => $this->canWhiteLabel($request),
         ]);
@@ -47,10 +49,14 @@ class ReportController extends Controller
 
         $period = $request->input('period');
 
+        $runId = WorkStatus::start($customer->id, 'report-'.$period);
+        if ($runId === null) {
+            return back()->with('flash', ['type' => 'info', 'message' => 'This report is already queued or running.']);
+        }
         if ($period === 'monthly') {
-            GenerateMonthlyReport::dispatch($customer->id);
+            GenerateMonthlyReport::dispatch($customer->id, $runId);
         } else {
-            GenerateExecutiveReport::dispatch($customer->id, 'weekly');
+            GenerateExecutiveReport::dispatch($customer->id, 'weekly', $runId);
         }
 
         /*
@@ -63,8 +69,16 @@ class ReportController extends Controller
          */
         return back()->with('flash', [
             'type' => 'success',
-            'message' => 'Putting together your '.$period.' report. It will appear in the list here in a few minutes, and land in your inbox.',
+            'message' => 'Putting together your '.$period.' report. It will appear in this list when ready.',
         ]);
+    }
+
+    public function status(Request $request)
+    {
+        $customer = $this->getActiveCustomer($request);
+        abort_unless($customer !== null, 404);
+
+        return response()->json(['runs' => ['report-weekly' => WorkStatus::get($customer->id, 'report-weekly'), 'report-monthly' => WorkStatus::get($customer->id, 'report-monthly')]]);
     }
 
     /**

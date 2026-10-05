@@ -45,6 +45,8 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
         setError(null);
 
         if (!stripe || !elements) {
+            setProcessing(false);
+            setError('The card form is still loading. Please try again shortly.');
             return;
         }
 
@@ -79,7 +81,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
                 setError(result.error || 'Failed to update payment method');
             }
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            setError(err?.body?.error || 'We could not update your payment method. Please try again.');
         }
 
         setProcessing(false);
@@ -92,7 +94,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
             </div>
             
             {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                 </div>
             )}
@@ -121,7 +123,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
 };
 
 // Main Component
-const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
+const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = null, topUp = null }) => {
     const currency = useCurrency();
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [retrying, setRetrying] = useState(false);
@@ -204,7 +206,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                     
                     {/* Payment Failed Alert */}
                     {paymentFailed && (
-                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+                        <div role="alert" className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
                             <div className="flex items-start">
                                 <div className="flex-shrink-0">
                                     <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -212,14 +214,14 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                     </svg>
                                 </div>
                                 <div className="ml-3 flex-1">
-                                    <h3 className="text-lg font-medium text-red-800">Payment Failed</h3>
+                                    <h3 className="text-lg font-medium text-red-800">{credit?.payment_status === 'paused' ? 'Ads paused after a payment issue' : credit?.payment_status === 'grace_period' ? 'Payment needs attention' : 'Payment failed'}</h3>
                                     <p className="mt-1 text-red-700">
                                         Your last payment attempt failed. Please update your payment method to avoid campaign disruption.
                                         {credit?.failed_payments_count >= 2 && (
                                             <span className="font-bold"> Your campaigns have been paused.</span>
                                         )}
                                     </p>
-                                    <div className="mt-4 flex space-x-4">
+                                    <div className="mt-4 flex flex-wrap gap-3">
                                         <button
                                             onClick={handleRetryPayment}
                                             disabled={retrying}
@@ -244,8 +246,8 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-lg font-semibold text-gray-900">Ad Spend Credit Balance</h3>
-                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(credit?.status || 'active')}`}>
-                                    {credit?.status?.charAt(0).toUpperCase() + credit?.status?.slice(1) || 'No Account'}
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(credit?.payment_status === 'paused' || credit?.payment_status === 'failed' ? 'paused' : credit?.status)}`}>
+                                    {credit?.payment_status === 'paused' ? 'Payment paused' : credit?.payment_status === 'failed' ? 'Payment failed' : credit?.status?.replaceAll('_', ' ') || 'No account'}
                                 </span>
                             </div>
 
@@ -255,7 +257,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                         <p className="text-white/80 text-sm">Current Balance</p>
                                         <p className="text-3xl font-bold mt-1">{formatCurrency(credit.current_balance)}</p>
                                         <p className="text-white/80 text-sm mt-2">
-                                            ~{credit.days_remaining || 0} days remaining
+                                            {credit.days_remaining == null ? 'No recent spend to estimate runway' : `~${credit.days_remaining} days remaining`}
                                         </p>
                                     </div>
                                     
@@ -321,8 +323,8 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
                                     <div className="ml-4">
-                                        <p className="text-gray-900 font-medium">Card on file</p>
-                                        <p className="text-gray-500 text-sm">Using your default payment method</p>
+                                        <p className="text-gray-900 font-medium">{paymentMethod ? `${paymentMethod.brand || 'Card'} ending ${paymentMethod.last4 || '••••'}` : 'No payment method on file'}</p>
+                                        <p className="text-gray-500 text-sm">{paymentMethod ? `Business billing payer: ${paymentMethod.payer_name}` : 'Add a card before funding your campaign'}</p>
                                     </div>
                                 </div>
                             )}
@@ -346,14 +348,14 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                         <span className="text-brand-dark font-bold">2</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Daily Billing</h4>
-                                    <p className="text-sm text-gray-500 mt-1">Actual spend deducted each morning at 6 AM</p>
+                                    <p className="text-sm text-gray-500 mt-1">Actual platform spend is deducted daily</p>
                                 </div>
                                 <div className="text-center p-4">
                                     <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>
                                         <span className="text-brand-dark font-bold">3</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Auto Top-Up</h4>
-                                    <p className="text-sm text-gray-500 mt-1">Balance auto-replenished when low</p>
+                                    <p className="text-sm text-gray-500 mt-1">Balance is replenished below {topUp?.threshold_days || 3} days of budget. {topUp?.estimated_amount > 0 && `The next estimated top-up is ${formatCurrency(topUp.estimated_amount)} for 7 days.`}</p>
                                 </div>
                                 <div className="text-center p-4">
                                     <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: brandTint(20) }}>

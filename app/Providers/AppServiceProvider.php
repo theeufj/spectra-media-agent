@@ -66,6 +66,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\HarvestedAsset::class,
         \App\Models\Keyword::class,
         \App\Models\KeywordQualityScore::class,
+        \App\Models\KnowledgeBaseChunk::class,
+        \App\Models\KnowledgeImport::class,
         \App\Models\LandingPageAudit::class,
         \App\Models\NegativeKeywordList::class,
         \App\Models\OfflineConversion::class,
@@ -200,6 +202,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(BrandGuideline::class, BrandGuidelinePolicy::class);
         Gate::policy(KnowledgeBase::class, KnowledgeBasePolicy::class);
         Gate::policy(SupportTicket::class, SupportTicketPolicy::class);
+        Gate::policy(\App\Models\AdCopy::class, \App\Policies\AdCopyPolicy::class);
         Gate::policy(\App\Models\ImageCollateral::class, \App\Policies\ImageCollateralPolicy::class);
         Gate::policy(\App\Models\VideoCollateral::class, \App\Policies\VideoCollateralPolicy::class);
 

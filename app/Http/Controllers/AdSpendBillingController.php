@@ -41,6 +41,12 @@ class AdSpendBillingController extends Controller
         }
 
         $credit = $customer->adSpendCredit;
+        $payer = $customer->adSpendPayer();
+        $dailyBudget = $customer->campaigns()->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('primary_status')->orWhereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED']))
+            ->sum('daily_budget');
+        $dailyEstimate = $credit?->getAverageDailySpend() ?? 0;
+        $topUpDailyBudget = $dailyBudget > 0 ? $dailyBudget : $dailyEstimate;
 
         return Inertia::render('Billing/AdSpend', [
             'credit' => $credit ? [
@@ -49,8 +55,8 @@ class AdSpendBillingController extends Controller
                 'current_balance' => $credit->current_balance,
                 'status' => $credit->status,
                 'payment_status' => $credit->payment_status,
-                'daily_budget' => $credit->daily_budget ?? 0,
-                'estimated_daily_spend' => $credit->estimated_daily_spend ?? 0,
+                'daily_budget' => $dailyBudget,
+                'estimated_daily_spend' => $dailyEstimate,
                 'last_successful_charge_at' => $credit->last_successful_charge_at,
                 'failed_charge_count' => $credit->failed_charge_count,
                 'failed_payments_count' => $credit->failed_charge_count,
@@ -75,7 +81,9 @@ class AdSpendBillingController extends Controller
                     'description' => $t->description,
                     'created_at' => $t->created_at,
                 ]) : [],
-            'paymentFailed' => $credit && $credit->payment_status === 'failed',
+            'paymentFailed' => $credit && in_array($credit->payment_status, ['failed', 'paused', 'grace_period'], true),
+            'paymentMethod' => $payer ? ['brand' => $payer->pm_type, 'last4' => $payer->pm_last_four, 'payer_name' => $payer->name] : null,
+            'topUp' => ['daily_budget' => $topUpDailyBudget, 'estimated_amount' => round($topUpDailyBudget * 7, 2), 'threshold_days' => 3],
         ]);
     }
 
@@ -244,20 +252,28 @@ class AdSpendBillingController extends Controller
         ]);
 
         $user = $request->user();
+        $customer = $this->getActiveCustomer($request);
+        $billingUser = $customer?->adSpendPayer(allowWithoutPaymentMethod: true);
+
+        if (! $customer || ! $billingUser) {
+            return response()->json(['success' => false, 'error' => 'No customer account found'], 404);
+        }
 
         try {
-            // Update the default payment method using Cashier
-            $user->updateDefaultPaymentMethod($request->payment_method_id);
+            if (! $billingUser->hasStripeId()) {
+                $billingUser->createAsStripeCustomer();
+            }
+            $billingUser->updateDefaultPaymentMethod($request->payment_method_id);
 
             Log::info('AdSpendBilling: Payment method updated', [
                 'user_id' => $user->id,
+                'billing_user_id' => $billingUser->id,
+                'customer_id' => $customer->id,
             ]);
 
             // If retry payment flag is set, also retry the failed payment
             if ($request->retry_payment) {
-                $customer = $this->getActiveCustomer($request);
-
-                if ($customer && $customer->adSpendCredit) {
+                if ($customer->adSpendCredit) {
                     $credit = $customer->adSpendCredit;
 
                     // Before the charge — addCredit() restores the account and
@@ -336,6 +352,10 @@ class AdSpendBillingController extends Controller
             ], 422);
         }
 
+        if (! \App\Models\Setting::get('deployment_enabled', true)) {
+            return response()->json(['success' => false, 'error' => 'Ad creation is currently unavailable. Funding will be available when creation resumes.'], 422);
+        }
+
         // Never take money for a deploy the deploy endpoint will refuse. The
         // budget-confirmation gate used to live only there, after the charge.
         if ($request->campaign_id) {
@@ -350,11 +370,33 @@ class AdSpendBillingController extends Controller
                     'requires_budget_confirmation' => true,
                 ], 422);
             }
+            $this->authorize('view', $campaign);
+            $brand = $customer->brandGuideline;
+            if (! $brand?->user_verified || ($brand->approved_version !== null && $brand->approved_version !== $brand->profile_version)) {
+                return response()->json(['success' => false, 'error' => 'Review and confirm your current brand profile before funding this campaign.', 'requires_brand_confirmation' => true], 422);
+            }
+            $strategies = $campaign->strategies()->when($request->strategy_id, fn ($query) => $query->whereKey($request->strategy_id))->get();
+            if ($request->strategy_id && $strategies->isEmpty()) {
+                abort(404);
+            }
+            $approved = $strategies->whereNotNull('signed_off_at');
+            if ($approved->isEmpty() || $approved->contains(fn ($strategy) => in_array($strategy->creative_review['status'] ?? null, ['pending', 'reviewing', 'revising'], true))) {
+                return response()->json(['success' => false, 'error' => 'Finish the creative review and approve a strategy before funding this campaign.'], 422);
+            }
+            if (abs((float) $request->daily_budget - (float) $campaign->daily_budget) > 0.005) {
+                return response()->json(['success' => false, 'error' => 'This campaign budget has changed. Reload the campaign and review the current daily budget before funding.'], 422);
+            }
+            $needsGoogle = $approved->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'));
+            if ($needsGoogle && (empty($customer->google_ads_customer_id) || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true))) {
+                return response()->json(['success' => false, 'error' => 'Your Google Ads account needs setup. Submit the campaign for account setup first; no prepayment is collected yet.', 'requires_account_setup' => true], 422);
+            }
         }
 
         try {
-            // Save payment method to the customer's owner so recurring charges work for all team members
-            $billingUser = $customer->users()->wherePivot('role', 'owner')->first() ?? $user;
+            $billingUser = $customer->adSpendPayer(allowWithoutPaymentMethod: (bool) $request->payment_method_id);
+            if (! $billingUser) {
+                return response()->json(['success' => false, 'error' => 'No payment method on file. Please add a payment method.'], 400);
+            }
 
             if (! $billingUser->stripe_id) {
                 $billingUser->createAsStripeCustomer();

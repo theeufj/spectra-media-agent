@@ -1,11 +1,12 @@
+import { money } from '@/utils/format';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { fetchJson } from '@/utils/http';
 import SideNav from './SideNav';
 
 // Performance Stats Component
-const PerformanceStats = ({ stats, loading }) => {
+const PerformanceStats = ({ stats, loading, currency }) => {
     if (loading) {
         return (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -22,11 +23,11 @@ const PerformanceStats = ({ stats, loading }) => {
     const metrics = [
         { label: 'Impressions', value: stats?.impressions?.toLocaleString() || '0', color: 'text-blue-600' },
         { label: 'Clicks', value: stats?.clicks?.toLocaleString() || '0', color: 'text-green-600' },
-        { label: 'Cost', value: `$${(stats?.cost || 0).toFixed(2)}`, color: 'text-red-600' },
+        { label: 'Cost', value: money(stats?.cost || 0, currency), color: 'text-red-600' },
         { label: 'Conversions', value: (stats?.conversions || 0).toFixed(1), color: 'text-purple-600' },
         { label: 'CTR', value: `${(stats?.ctr || 0).toFixed(2)}%`, color: 'text-brand-dark' },
-        { label: 'CPC', value: `$${(stats?.cpc || 0).toFixed(2)}`, color: 'text-orange-600' },
-        { label: 'CPA', value: stats?.cpa > 0 ? `$${stats.cpa.toFixed(2)}` : '-', color: 'text-pink-600' },
+        { label: 'CPC', value: money(stats?.cpc || 0, currency), color: 'text-orange-600' },
+        { label: 'CPA', value: stats?.cpa > 0 ? money(stats.cpa, currency) : '-', color: 'text-pink-600' },
     ];
 
     return (
@@ -47,20 +48,29 @@ export default function CustomerDashboard({ auth }) {
     const [performanceData, setPerformanceData] = useState(null);
     const [loading, setLoading] = useState(false);
 
+    const [performanceError, setPerformanceError] = useState(null);
+    const [retryPerformance, setRetryPerformance] = useState(0);
     useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+        setPerformanceData(null);
+        setPerformanceError(null);
+        setLoading(Boolean(selectedCampaign));
+        let deadline;
         if (selectedCampaign) {
-            setLoading(true);
-            axios.get(route('admin.campaigns.performance', { campaign: selectedCampaign.uuid }))
-                .then(response => {
-                    setPerformanceData(response.data);
-                    setLoading(false);
-                })
-                .catch(error => {
-                    console.error("Error fetching performance data:", error);
-                    setLoading(false);
-                });
+            deadline = setTimeout(() => {
+                setPerformanceError('Performance data timed out for this campaign.');
+                setLoading(false);
+                active = false;
+                controller.abort();
+            }, 30000);
+            fetchJson(route('admin.campaigns.performance', { campaign: selectedCampaign.uuid }), { signal: controller.signal })
+                .then(data => { if (active) setPerformanceData(data); })
+                .catch(() => { if (active) setPerformanceError('Performance data could not load for this campaign.'); })
+                .finally(() => { clearTimeout(deadline); if (active) setLoading(false); });
         }
-    }, [selectedCampaign]);
+        return () => { active = false; clearTimeout(deadline); controller.abort(); };
+    }, [selectedCampaign?.uuid, retryPerformance]);
 
     const owner = customer.users?.[0];
 
@@ -109,7 +119,7 @@ export default function CustomerDashboard({ auth }) {
                             <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <h4 className="text-lg font-semibold text-gray-900">Campaign Performance</h4>
-                                    <select
+                                    <select aria-label="Campaign performance"
                                         value={selectedCampaign?.id || ''}
                                         onChange={(e) => {
                                             const campaign = campaigns.find(c => c.id === parseInt(e.target.value));
@@ -126,7 +136,7 @@ export default function CustomerDashboard({ auth }) {
                                 </div>
 
                                 {/* Performance Stats */}
-                                <PerformanceStats stats={performanceData?.summary} loading={loading} />
+                                {performanceError ? <div role="alert" className="rounded bg-red-50 p-4 text-sm text-red-800">{performanceError} <button type="button" onClick={() => setRetryPerformance(value => value + 1)} className="ml-2 underline">Retry</button></div> : <PerformanceStats stats={performanceData?.summary} loading={loading} currency={customer.currency_code} />}
 
                                 {/* Message if no data */}
                                 {performanceData?.message && (

@@ -140,27 +140,17 @@ Route::middleware(['auth'])->group(function () {
 |
 */
 Route::middleware(['auth'])->group(function () {
-    // Route to display all knowledge base entries.
-    // GET /knowledge-base
     Route::get('/knowledge-base', [App\Http\Controllers\KnowledgeBaseController::class, 'index'])->name('knowledge-base.index');
-
-    // Route to display the sitemap submission form.
-    // GET /knowledge-base/create
     Route::get('/knowledge-base/create', [App\Http\Controllers\KnowledgeBaseController::class, 'create'])->name('knowledge-base.create');
-
-    // Route to handle the form submission and dispatch the crawling job.
-    // POST /knowledge-base
-    Route::post('/knowledge-base', [App\Http\Controllers\KnowledgeBaseController::class, 'store'])
-        ->middleware(['throttle:3,1', 'verified'])
-        ->name('knowledge-base.store');
-
-    // Route to delete a knowledge base entry.
-    // DELETE /knowledge-base/{knowledgeBase}
+    Route::get('/knowledge-base/status', [App\Http\Controllers\KnowledgeBaseController::class, 'status'])->name('knowledge-base.status');
+    Route::post('/knowledge-base', [App\Http\Controllers\KnowledgeBaseController::class, 'store'])->middleware(['throttle:3,1', 'verified'])->name('knowledge-base.store');
+    Route::post('/knowledge-base/search', [App\Http\Controllers\KnowledgeBaseController::class, 'search'])->middleware('throttle:30,1')->name('knowledge-base.search');
+    Route::post('/knowledge-base/imports/{knowledgeImport}/start', [App\Http\Controllers\KnowledgeBaseController::class, 'startImport'])->middleware(['throttle:3,1', 'verified'])->name('knowledge-base.imports.start');
+    Route::get('/knowledge-base/{knowledgeBase}', [App\Http\Controllers\KnowledgeBaseController::class, 'show'])->name('knowledge-base.show');
+    Route::put('/knowledge-base/{knowledgeBase}', [App\Http\Controllers\KnowledgeBaseController::class, 'update'])->name('knowledge-base.update');
+    Route::post('/knowledge-base/{knowledgeBase}/retry', [App\Http\Controllers\KnowledgeBaseController::class, 'retry'])->middleware(['throttle:6,1', 'verified'])->name('knowledge-base.retry');
+    Route::post('/knowledge-base/{knowledgeBase}/replace', [App\Http\Controllers\KnowledgeBaseController::class, 'replace'])->middleware(['throttle:3,1', 'verified'])->name('knowledge-base.replace');
     Route::delete('/knowledge-base/{knowledgeBase}', [App\Http\Controllers\KnowledgeBaseController::class, 'destroy'])->name('knowledge-base.destroy');
-
-    // Route to search through knowledge base content.
-    // POST /knowledge-base/search
-    Route::post('/knowledge-base/search', [App\Http\Controllers\KnowledgeBaseController::class, 'search'])->name('knowledge-base.search');
 });
 
 /*
@@ -182,6 +172,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Route to verify brand guidelines as accurate.
     // POST /brand-guidelines/{brandGuideline}/verify
+    Route::post('/brand-guidelines/{brandGuideline}/suggestions', [App\Http\Controllers\BrandGuidelineController::class, 'acceptSuggestions'])->name('brand-guidelines.suggestions');
+
     Route::post('/brand-guidelines/{brandGuideline}/verify', [App\Http\Controllers\BrandGuidelineController::class, 'verify'])->name('brand-guidelines.verify');
 
     // Route to re-extract brand guidelines from knowledge base.
@@ -256,6 +248,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // GET /campaigns/{campaign}/{strategy}/collateral
     Route::get('/campaigns/{campaign}/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'show'])->name('campaigns.collateral.show');
 
+    Route::put('/campaigns/{campaign}/collateral-approval', [\App\Http\Controllers\CollateralApprovalController::class, 'update'])->name('campaigns.collateral-approval.update');
+
     // Reviewing and approving what the AI produced is part of deciding whether
     // to pay, so it stays free.
     // POST /campaigns/{campaign}/strategies/{strategy}/sign-off
@@ -313,6 +307,7 @@ Route::middleware(['auth', 'verified', 'subscribed'])->group(function () {
     Route::get('/proposals/create', [\App\Http\Controllers\ProposalController::class, 'create'])->name('proposals.create');
     Route::post('/proposals', [\App\Http\Controllers\ProposalController::class, 'store'])->name('proposals.store');
     Route::get('/proposals/{proposal}', [\App\Http\Controllers\ProposalController::class, 'show'])->name('proposals.show');
+    Route::post('/proposals/{proposal}/retry', [\App\Http\Controllers\ProposalController::class, 'retry'])->name('proposals.retry');
     Route::get('/proposals/{proposal}/status', [\App\Http\Controllers\ProposalController::class, 'status'])->name('proposals.status');
     Route::get('/proposals/{proposal}/pdf', [\App\Http\Controllers\ProposalController::class, 'exportPdf'])->name('proposals.export-pdf');
 });
@@ -356,6 +351,7 @@ Route::middleware(['auth'])->group(function () {
     // In-app support chat. Throttled because each message costs an AI call and
     // fans out an email to every admin — a stuck client retrying would otherwise
     // spam the whole team.
+    Route::get('/api/support/chat', [App\Http\Controllers\SupportChatController::class, 'session'])->name('support.chat.session');
     Route::post('/api/support/chat', [App\Http\Controllers\SupportChatController::class, 'send'])
         ->middleware('throttle:10,1')
         ->name('support.chat.send');
@@ -364,6 +360,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/support-tickets/create', [App\Http\Controllers\SupportTicketController::class, 'create'])->name('support-tickets.create');
     Route::post('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'store'])->name('support-tickets.store');
     Route::get('/support-tickets/{supportTicket}', [App\Http\Controllers\SupportTicketController::class, 'show'])->name('support-tickets.show');
+    Route::post('/support-tickets/{supportTicket}/reply', [App\Http\Controllers\SupportTicketController::class, 'reply'])->name('support-tickets.reply');
 });
 
 // Email inbox (only users with an assigned inbox can access)
@@ -625,6 +622,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'customerShow'])->name('admin.customers.show');
     Route::get('customers/{customer}/dashboard', [App\Http\Controllers\Admin\CustomerController::class, 'customerDashboard'])->name('admin.customers.dashboard');
     Route::get('customers/{customer}/workspace', [App\Http\Controllers\Admin\CustomerController::class, 'customerWorkspace'])->name('admin.customers.workspace');
+    Route::get('customers/{customer}/knowledge-status', [App\Http\Controllers\Admin\CustomerController::class, 'knowledgeStatus'])->name('admin.customers.knowledge-status');
     Route::get('campaigns/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'campaignShow'])->name('admin.campaigns.show');
     Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\Admin\CampaignController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
     Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\Admin\CampaignController::class, 'pauseCampaign'])->name('admin.campaigns.pause');
@@ -777,6 +775,7 @@ Route::middleware(['auth'])->group(function () {
 */
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/status', [ReportController::class, 'status'])->name('reports.status');
     Route::post('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate');
     Route::get('/reports/{period}/{date}/download', [ReportController::class, 'download'])->name('reports.download');
     Route::get('/reports/settings', [ReportController::class, 'settings'])->name('reports.settings');
@@ -834,10 +833,12 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 */
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations.index');
+    Route::get('/integrations/status', [IntegrationController::class, 'status'])->name('integrations.status');
     Route::post('/integrations/connect', [IntegrationController::class, 'connect'])->name('integrations.connect');
     Route::post('/integrations/{integration}/disconnect', [IntegrationController::class, 'disconnect'])->name('integrations.disconnect');
     Route::post('/integrations/{integration}/sync', [IntegrationController::class, 'sync'])->name('integrations.sync');
     Route::get('/integrations/conversions', [IntegrationController::class, 'conversions'])->name('integrations.conversions');
+    Route::get('/integrations/conversions/status', [IntegrationController::class, 'conversionStatus'])->name('integrations.conversions.status');
     Route::post('/integrations/retry-upload', [IntegrationController::class, 'retryUpload'])->name('integrations.retry-upload');
 });
 
@@ -895,6 +896,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::post('/products/feeds', [ProductController::class, 'createFeed'])->name('products.feeds.create');
+    Route::put('/products/feeds/{feed}', [ProductController::class, 'updateFeed'])->name('products.feeds.update');
     Route::post('/products/feeds/{feed}/sync', [ProductController::class, 'syncFeed'])->name('products.feeds.sync');
     Route::delete('/products/feeds/{feed}', [ProductController::class, 'deleteFeed'])->name('products.feeds.delete');
     Route::get('/products/list', [ProductController::class, 'products'])->name('products.list');
@@ -907,6 +909,7 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 */
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/seo', [SeoController::class, 'index'])->name('seo.index');
+    Route::get('/seo/work-status', [SeoController::class, 'workStatus'])->name('seo.work-status');
     Route::post('/seo/audit', [SeoController::class, 'runAudit'])->name('seo.audit');
     Route::get('/seo/audit/{audit}', [SeoController::class, 'auditDetail'])->name('seo.audit.detail');
     Route::get('/seo/rankings', [SeoController::class, 'rankings'])->name('seo.rankings');

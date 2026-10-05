@@ -122,6 +122,22 @@ class Customer extends Model
         return strtoupper($this->currency_code ?: config('cashier.currency', 'aud'));
     }
 
+    /**
+     * Use the same business payer for saved-card display, setup and charging.
+     * Prefer an owner with a card, then a member with one. A new card goes on
+     * that same payer, or the first owner/member when nobody has a card yet.
+     */
+    public function adSpendPayer(bool $allowWithoutPaymentMethod = false): ?User
+    {
+        // Read afresh so replacing a card takes effect before the next charge.
+        $members = $this->users()->orderBy('users.id')->get();
+        $owner = fn (User $member) => ($member->pivot->role ?? null) === 'owner';
+        $payer = $members->first(fn (User $member) => $owner($member) && $member->hasDefaultPaymentMethod())
+            ?? $members->first(fn (User $member) => $member->hasDefaultPaymentMethod());
+
+        return $payer ?? ($allowWithoutPaymentMethod ? ($members->first($owner) ?? $members->first()) : null);
+    }
+
     public function setWebsiteAttribute(?string $value): void
     {
         $this->attributes['website'] = \App\Support\Url::forceHttps($value);

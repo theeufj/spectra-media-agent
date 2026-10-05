@@ -55,15 +55,15 @@ const features = [
     {
         icon: ClockIcon,
         title: 'Launch in Minutes',
-        body: 'Connect your Google Ads account, add your first listing URL, and your first campaign is live — no agency, no setup fees, no learning curve.',
+        body: 'Add your listing URL, review your business profile, then approve the budget and ads. Choose ongoing management or a one-time build before launching.',
     },
 ];
 
 const steps = [
     {
         icon: LinkIcon,
-        title: 'Connect your accounts',
-        body: 'Link Google Ads in one click. Our AI reads your agency website to understand your brand voice, style, and market.',
+        title: 'Start with your listing',
+        body: 'We read your listing or agency website and prepare a business profile for you to confirm. We create a managed ad account or request access to your existing account.',
     },
     {
         icon: CpuChipIcon,
@@ -78,8 +78,8 @@ const steps = [
 ];
 
 const stats = [
-    { value: '3×', label: 'more leads per dollar', detail: 'vs. running ads manually' },
-    { value: '< 5 min', label: 'to launch a campaign', detail: 'from listing URL to live ads' },
+    { value: 'Review first', label: 'approve your ads before launch', detail: 'check the offer, buyer and budget' },
+    { value: 'One URL', label: 'to start your business profile', detail: 'your listing or agency website' },
     { value: '24/7', label: 'AI optimisation', detail: 'while you focus on clients' },
 ];
 
@@ -108,7 +108,7 @@ export default function RealEstateLanding({ auth }) {
                         sub="AI-powered Google Ads that write themselves around your listings — targeting the right buyers and sellers in your market, 24/7."
                         primaryCta={{ href: '/register', label: 'Start your first campaign' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
-                        note="No credit card required. Set up in under 5 minutes."
+                        note="Free to explore your business profile. Ad spend is separate from the service fee."
                     />
 
                     <StatsStrip items={stats} />

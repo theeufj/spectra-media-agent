@@ -37,6 +37,7 @@ function InboxCell({ user }) {
             <form onSubmit={save} className="flex flex-col gap-1 min-w-[220px]">
                 <input
                     type="text"
+                    aria-label={`Inbox display name for ${user.name}`}
                     placeholder="Display name"
                     value={data.display_name}
                     onChange={(e) => setData('display_name', e.target.value)}
@@ -45,12 +46,14 @@ function InboxCell({ user }) {
                 />
                 <input
                     type="email"
+                    aria-label={`Inbox email for ${user.name}`}
                     placeholder="email@sitetospend.com"
                     value={data.email_address}
                     onChange={(e) => setData('email_address', e.target.value)}
                     className="text-xs border border-gray-300 rounded px-2 py-1 w-full"
                     required
                 />
+                {errors.display_name && <p role="alert" className="text-xs text-red-500">{errors.display_name}</p>}
                 {errors.email_address && <p className="text-xs text-red-500">{errors.email_address}</p>}
                 <div className="flex gap-1">
                     <button
@@ -75,19 +78,22 @@ function InboxCell({ user }) {
 const UserTable = ({ users, plans = [] }) => {
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
-    const handlePromote = (userId) => {
-        router.post(route('admin.users.promote', userId), {}, { preserveScroll: true });
+    const handlePromote = (user) => {
+        setConfirmModal({ show: true, title: 'Grant administrator access', message: `${user.name} (${user.email}) will be able to manage customers, billing and system settings.`, isDestructive: true, onConfirm: () => {
+            setConfirmModal(prev => ({ ...prev, show: false }));
+            router.post(route('admin.users.promote', user.id), {}, { preserveScroll: true });
+        } });
     };
 
-    const handleBanUser = (userId) => {
+    const handleBanUser = (user) => {
         setConfirmModal({
             show: true,
             title: 'Ban User',
-            message: 'Are you sure you want to ban this user?',
+            message: `${user.name} (${user.email}) will lose access to the platform until an administrator unbans them.`,
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.post(route('admin.users.ban', userId), {}, { preserveScroll: true });
+                router.post(route('admin.users.ban', user.id), {}, { preserveScroll: true });
             },
         });
     };
@@ -96,27 +102,27 @@ const UserTable = ({ users, plans = [] }) => {
         router.post(route('admin.users.unban', userId), {}, { preserveScroll: true });
     };
 
-    const handleDeleteUser = (userId) => {
+    const handleDeleteUser = (user) => {
         setConfirmModal({
             show: true,
             title: 'Delete User',
-            message: 'Are you sure you want to permanently delete this user? This action cannot be undone.',
+            message: `Permanently delete ${user.name} (${user.email}) and remove their access. This action cannot be undone.`,
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.delete(route('admin.users.delete', userId), { data: { confirmed: true }, preserveScroll: true });
+                router.delete(route('admin.users.delete', user.id), { data: { confirmed: true }, preserveScroll: true });
             },
         });
     };
 
-    const handleImpersonate = (userId) => {
+    const handleImpersonate = (user) => {
         setConfirmModal({
             show: true,
             title: 'Impersonate User',
-            message: 'You will be logged in as this user. Continue?',
+            message: `Open the platform as ${user.name} (${user.email}). Actions will use this user's account until you stop impersonating.`,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.post(route('admin.impersonation.start', userId));
+                router.post(route('admin.impersonation.start', user.id));
             },
         });
     };
@@ -133,6 +139,7 @@ const UserTable = ({ users, plans = [] }) => {
         user.email,
         user.roles.map(role => role.name).join(', '),
         <select
+            aria-label={`Assigned plan for ${user.name}`}
             value={user.assigned_plan_id || ''}
             onChange={(e) => handleAssignPlan(user.id, e.target.value)}
             className="text-sm border border-gray-300 rounded px-2 py-1"
@@ -150,24 +157,24 @@ const UserTable = ({ users, plans = [] }) => {
             {!user.roles.some(role => role.name === 'admin') && (
                 <>
                     <button
-                        onClick={() => handleImpersonate(user.id)}
+                        onClick={() => handleImpersonate(user)}
                         className="text-purple-600 hover:text-purple-900"
-                        title="Impersonate user"
+                        aria-label={`Impersonate ${user.name}`}
                     >
                         <svg className="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </button>
-                    <button onClick={() => handlePromote(user.id)} className="text-brand-dark hover:text-brand-darker">Promote</button>
+                    <button onClick={() => handlePromote(user)} className="text-brand-dark hover:text-brand-darker">Promote</button>
                 </>
             )}
             {user.banned_at ? (
                 <button onClick={() => handleUnbanUser(user.id)} className="text-green-600 hover:text-green-900">Unban</button>
             ) : (
-                <button onClick={() => handleBanUser(user.id)} className="text-red-600 hover:text-red-900">Ban</button>
+                <button onClick={() => handleBanUser(user)} className="text-red-600 hover:text-red-900">Ban</button>
             )}
             {!user.roles.some(role => role.name === 'admin') && (
-                <button onClick={() => handleDeleteUser(user.id)} className="text-red-800 hover:text-red-950">Delete</button>
+                <button onClick={() => handleDeleteUser(user)} className="text-red-800 hover:text-red-950">Delete</button>
             )}
         </div>
     ]);

@@ -20,12 +20,12 @@ import {
 const steps = [
     {
         icon: LinkIcon,
-        title: '1. Connect and paste your listing',
-        body: 'Link your Google Ads account with one click. Then paste the URL of the property you want to advertise — your listing on realestate.com.au, Domain, or your own agency website.',
+        title: '1. Paste your listing and check your profile',
+        body: 'Paste your listing or agency website. We read the business information and ask you to confirm what we understood. We create your managed Google Ads account or request access to an existing one.',
         bullets: [
-            'One-click Google Ads connection',
-            'Works with any listing URL',
-            'No spreadsheets or forms to fill in',
+            'Managed account setup or an access request',
+            'Works with publicly readable listing pages',
+            'Manual business brief if a page cannot be read',
             'Your agency branding applied automatically',
         ],
         panel: {
@@ -36,7 +36,7 @@ const steps = [
     {
         icon: CpuChipIcon,
         title: '2. AI builds the campaign',
-        body: 'Our AI reads every detail of the listing — bedrooms, price, suburb, key features — and writes ad copy, selects keywords, and sets targeting for the buyers most likely to enquire. Ready in seconds.',
+        body: 'Our AI reads every detail of the listing — bedrooms, price, suburb, key features — and writes ad copy, selects keywords, and sets targeting for the buyers most likely to enquire. You review the resulting direction and ads.',
         bullets: [
             'Ad headlines and descriptions written from the listing',
             'Keywords matched to the suburb, price range, and property type',
@@ -50,8 +50,8 @@ const steps = [
     },
     {
         icon: ArrowTrendingUpIcon,
-        title: '3. Campaigns run and improve on their own',
-        body: 'Once live, AI agents monitor the campaign every day — fixing disapproved ads, shifting budget to peak hours, and testing new ad variations. You get a weekly performance report. When the property sells, you pause with one click.',
+        title: '3. Review your budget, ads and launch readiness',
+        body: 'With ongoing management, AI agents monitor the campaign every day — fixing disapproved ads, shifting budget to peak hours, and testing new ad variations. You get a weekly performance report. With a one-time setup, we create the ads paused and hand over the account; you manage launch and ongoing spend.',
         bullets: [
             'Daily bid and budget optimisation',
             'Disapproved ads fixed and resubmitted automatically',
@@ -118,11 +118,11 @@ export default function RealEstateHowItWorks({ auth }) {
                         eyebrow="How it works"
                         headline={
                             <>
-                                {'Listing URL to live campaign '}
-                                <span className="block">in under 5 minutes</span>
+                                {'From listing URL to '}
+                                <span className="block">reviewed, ready-to-launch ads</span>
                             </>
                         }
-                        sub="Paste your property listing. Our AI does everything else — copy, targeting, launch, and daily optimisation."
+                        sub="Start with your listing, confirm the business profile, and review the budget and creative before launch."
                     />
 
                     <FeatureSteps
@@ -139,7 +139,7 @@ export default function RealEstateHowItWorks({ auth }) {
 
                     <CtaBand
                         title="Ready to launch your first listing campaign?"
-                        body="Paste your first listing URL and your campaign is live in minutes."
+                        body="Paste your first listing URL and review what we can build for your property."
                         primaryCta={{ href: '/register', label: 'Start your first campaign' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                     />

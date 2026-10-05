@@ -24,7 +24,7 @@ class CreativeBriefController extends Controller
 
         $briefs = CreativeBrief::where('customer_id', $customer->id)
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
-            ->with('campaign:id,name')
+            ->with('campaign:id,uuid,name')
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();
@@ -63,6 +63,7 @@ class CreativeBriefController extends Controller
         // refusal rather than a redirect — this guards an action, not a page.
         $customer = $this->getActiveCustomer(request());
 
-        abort_if(! $customer || $brief->customer_id !== $customer->id, 403);
+        abort_if(! $customer || $brief->customer_id !== $customer->id, 404);
+        $this->authorize('update', $brief);
     }
 }

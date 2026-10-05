@@ -187,13 +187,13 @@ export default function DemoResultsPanel({ result }) {
                     className="mt-12 text-center rounded-lg border p-8"
                     style={{ backgroundColor: brandTint(10), borderColor: brandTint(20) }}
                 >
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to deploy these campaigns?</h3>
-                    <p className="text-gray-600 mb-6">Our AI agents will build out your entire account structure, write dozens of variations, and manage the budget automatically.</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to review your business profile?</h3>
+                    <p className="text-gray-600 mb-6">Save your website, check your business profile and choose how we build your campaigns. You review budget and ads before anything goes live.</p>
                     <Link
                         href={`/register?demo_url=${encodeURIComponent(url)}`}
                         className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors w-full sm:w-auto"
                     >
-                        Deploy Automatically — Start Free Trial
+                        Create an account — free to explore
                     </Link>
                 </div>
             </div>

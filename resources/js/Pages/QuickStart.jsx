@@ -59,16 +59,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
 
     const [urlFocused, setUrlFocused] = useState(false);
 
-    // A signup that came from the landing-page demo already told us their URL.
-    // Submit it for them — from here, so the post carries the browser timezone
-    // the server-side auto-process never had.
-    const autoSubmitted = useRef(false);
-    useEffect(() => {
-        if (demoUrl && !autoSubmitted.current) {
-            autoSubmitted.current = true;
-            post(route('quick-start.process'));
-        }
-    }, []);
+    // Prefill the demo URL so the user can check it and choose how their ads will be managed.
 
     // The placeholder shows a bare host, so accept one. This must happen in
     // transform(), which runs on the data actually being posted — a setData
@@ -121,6 +112,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                             </p>
 
                             <form onSubmit={handleSubmit} className="mx-auto max-w-lg text-left">
+                                <FormErrorSummary errors={errors} labels={{ website_url: 'Website address', service_type: 'Service choice', timezone: 'Time zone' }} />
                                 <label htmlFor="website_url" className="mb-1.5 block text-sm font-medium text-gray-700">
                                     Your website address
                                 </label>

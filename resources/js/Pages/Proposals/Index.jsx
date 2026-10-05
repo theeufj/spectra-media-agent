@@ -78,7 +78,7 @@ export default function Index({ proposals }) {
                                             </span>
                                             {proposal.budget && (
                                                 <span className="text-sm font-semibold text-gray-700">
-                                                    {money(proposal.budget, currency, { maximumFractionDigits: 0 })}/mo
+                                                    {money(proposal.budget, proposal.currency_code || currency, { maximumFractionDigits: 0 })}/mo
                                                 </span>
                                             )}
                                         </div>

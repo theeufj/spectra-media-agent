@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Services\Agents\AgentIssue;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\Google\AdExtensionBuilder;
@@ -16,6 +17,7 @@ use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
+use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
@@ -45,13 +47,21 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
+        // Every operation uses this customer's sub-account under our MCC.
+        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->cleanGoogleCustomerId()) {
             Log::warning('GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID', [
                 'provided_id' => $customerId,
                 'stored_id' => $this->customer->google_ads_customer_id,
             ]);
-            $customerId = $this->customer->google_ads_customer_id;
+            $customerId = $this->customer->cleanGoogleCustomerId();
+        }
+
+        // A tracking action's existence does not make it an eligible bidding
+        // target. Validate the reviewed objective before creating live objects.
+        $goalService = app(ReconcileCampaignConversionGoals::class, ['customer' => $this->customer]);
+        $goalReadiness = $goalService->prepare($strategy);
+        if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy)) {
+            return;
         }
 
         Log::info('GoogleAdsExecutionAgent: Creating Search Campaign in account', [
@@ -84,6 +94,14 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
             $result->addPlatformId('campaign', $campaignResourceName);
             $strategy->recordGoogleCampaignId($campaignResourceName);
+        }
+
+        // Configure only this campaign, before adding ads or Smart Bidding.
+        // Explicit deployment can configure a staged PAUSED campaign, without
+        // enabling it or changing any other campaign's conversion actions.
+        $goalReadiness = $goalService->reconcile($strategy, $campaignResourceName, allowInactive: true);
+        if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy)) {
+            return;
         }
 
         // 1.5 Add Location Targeting
@@ -231,7 +249,6 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         $resources = $result->metadata['platform_resources'] ?? [];
         $extensionTypes = ['sitelink_asset', 'callout_asset', 'structured_snippet_asset', 'call_asset', 'price_asset', 'promotion_asset'];
-        $goal = strtoupper(str_replace(['-', ' '], '_', $strategy->conversion_goals['primary_goal'] ?? ''));
         $result->addMetadata('google_search_baseline', [
             'version' => 1, 'keywords' => $keywords, 'ads' => $expectedAds,
             'locations' => $result->metadata['expected_locations'] ?? [],
@@ -244,12 +261,8 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             'verified_offer_details' => $result->metadata['verified_offer_details'] ?? [],
             'sitelink_urls' => array_column(app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($this->customer,
                 $strategy->ad_extensions['sitelinks'] ?? $strategy->bidding_strategy['sitelinks'] ?? []), 'url'),
-            'conversion_category' => match ($goal) {
-                'PURCHASE', 'PURCHASES', 'SALE', 'SALES', 'PAID_SUBSCRIPTION' => 'PURCHASE',
-                'SIGNUP', 'SIGN_UP', 'SIGN_UPS', 'SIGN_UPS/REGISTRATIONS' => 'SIGNUP',
-                'LEAD', 'LEADS', 'SUBMIT_LEAD_FORM' => 'SUBMIT_LEAD_FORM',
-                default => null,
-            },
+            'conversion_category' => ReconcileCampaignConversionGoals::categoryFor($strategy),
+            'conversion_goal' => $goalReadiness['intent'] ?? null,
         ]);
 
         // 8. Apply conversion value rules (device + audience modifiers)
@@ -260,6 +273,26 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             report($e);
             Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
         }
+    }
+
+    private function recordGoalReadiness(array $readiness, ExecutionResult $result, Strategy $strategy): bool
+    {
+        // Keep custom-goal ownership and the last verified configuration when
+        // the surrounding deployment serializes its execution result.
+        $persisted = $strategy->fresh()->execution_result['metadata']['conversion_goal_readiness'] ?? [];
+        $result->addMetadata('conversion_goal_readiness', array_replace($persisted, $readiness));
+        if ($readiness['ready'] ?? false) {
+            return true;
+        }
+        $issues = AgentIssue::list($readiness['issues'] ?? []);
+        if ($issues === []) {
+            $issues[] = new AgentIssue('conversion_goal_unready', 'The selected conversion goal could not be verified. Review tracking before launching.');
+        }
+        foreach ($issues as $issue) {
+            $result->addError($issue->code, $issue->message);
+        }
+
+        return false;
     }
 
     /**

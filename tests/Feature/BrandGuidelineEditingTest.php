@@ -47,9 +47,15 @@ class BrandGuidelineEditingTest extends TestCase
         $this->put(route('brand-guidelines.update', $brand), $payload)->assertSessionHasNoErrors()->assertRedirect();
         $saved = $brand->fresh();
         foreach ($payload as $field => $value) {
-            $this->assertSame($value, $saved->{$field}, $field.' was changed or dropped');
+            $this->assertSame($value, $saved->proposed_profile[$field], $field.' was changed or dropped from the draft');
         }
+        $this->assertFalse($saved->user_verified);
+        $this->assertSame('Agency teams', $saved->target_audience['demographics']);
+        $this->post(route('brand-guidelines.verify', $brand), ['profile_version' => $saved->profile_version])->assertSessionHasNoErrors();
+        $saved = $brand->fresh();
         $this->assertTrue($saved->user_verified);
+        $this->assertSame($saved->profile_version, $saved->approved_version);
+        $this->assertNull($saved->proposed_profile);
         $prompt = $saved->getFormattedGuidelines();
         $this->assertStringContainsString('Real estate agents', $prompt);
         $this->assertStringContainsString('Helpful, Practical', $prompt);
@@ -64,12 +70,12 @@ class BrandGuidelineEditingTest extends TestCase
             'tone_attributes' => [], 'messaging_themes' => [], 'competitor_differentiation' => [],
         ])->assertSessionHasNoErrors()->assertRedirect();
         $saved = $brand->fresh();
-        $this->assertSame('Real estate agents', $saved->target_audience['primary']);
-        $this->assertSame('Professional', $saved->target_audience['language_level']);
-        $this->assertSame('Updated audience', $saved->target_audience['demographics']);
-        $this->assertSame([], $saved->tone_attributes);
-        $this->assertSame([], $saved->messaging_themes);
-        $this->assertSame([], $saved->competitor_differentiation);
+        $this->assertSame('Real estate agents', $saved->proposed_profile['target_audience']['primary']);
+        $this->assertSame('Professional', $saved->proposed_profile['target_audience']['language_level']);
+        $this->assertSame('Updated audience', $saved->proposed_profile['target_audience']['demographics']);
+        $this->assertSame([], $saved->proposed_profile['tone_attributes']);
+        $this->assertSame([], $saved->proposed_profile['messaging_themes']);
+        $this->assertSame([], $saved->proposed_profile['competitor_differentiation']);
     }
 
     public function test_previously_incomplete_profiles_can_still_be_used_in_generation(): void

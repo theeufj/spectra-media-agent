@@ -6,8 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
-use App\Services\Agents\CreativeIntelligenceAgent;
-use App\Services\GeminiService;
+use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\GoogleAds\CommonServices\ApplyRecommendation;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
@@ -27,8 +26,8 @@ use Illuminate\Support\Facades\Log;
  *  AUTO-APPLY  — bidding/CPA adjustments Google is confident about.
  *                Applied using Google's own suggested values.
  *
- *  AUTO-FIX    — ad copy issues routed to CreativeIntelligenceAgent,
- *                which knows brand guidelines and performance history.
+ *  AUTO-FIX    — ad copy issues routed to the reviewed RSA repair loop.
+ *                Recommendations remain open until strength is verified.
  *
  *  AUTO-DISMISS — things our agents already handle (broad match expansion,
  *                 budget reallocation). Dismissed so they don't clutter the UI.
@@ -47,6 +46,8 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     public $tries = 2;
 
     public $timeout = 300;
+
+    private int $repairErrors = 0;
 
     private const AUTO_APPLY = [
         RecommendationType::RAISE_TARGET_CPA_BID_TOO_LOW,
@@ -85,7 +86,10 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     {
         $runStart = $this->startRun();
 
+        $this->repairErrors = 0;
         $customers = Customer::whereNotNull('google_ads_customer_id')
+            ->where('service_type', '!=', 'setup_only')
+            ->where(fn ($q) => $q->whereNull('google_ads_link_status')->orWhere('google_ads_link_status', '!=', 'revoked'))
             ->whereHas('campaigns', fn ($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id'))
             ->with(['campaigns' => fn ($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id')])
             ->get();
@@ -99,20 +103,21 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
             try {
                 $actions += $this->reviewCustomer($customer);
             } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("ReviewGoogleAdsRecommendations: Failed for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        $this->finishRun($runStart, actions: $actions, errors: $errors, scope: $customers->count().' customers');
+        $this->finishRun($runStart, actions: $actions, errors: $errors + $this->repairErrors, scope: $customers->count().' customers');
     }
 
     private function reviewCustomer(Customer $customer): int
     {
         $customerId = $customer->cleanGoogleCustomerId();
-        $getRecs = new GetGoogleAdsRecommendations($customer);
-        $apply = new ApplyRecommendation($customer);
-        $dismiss = new DismissRecommendation($customer);
+        $getRecs = app(GetGoogleAdsRecommendations::class, ['customer' => $customer]);
+        $apply = app(ApplyRecommendation::class, ['customer' => $customer]);
+        $dismiss = app(DismissRecommendation::class, ['customer' => $customer]);
 
         $allRecs = ($getRecs)($customerId);
 
@@ -135,8 +140,7 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
             }
 
             if (in_array($type, self::AUTO_FIX_CREATIVE)) {
-                $creativeCampaigns[$rec['campaign_resource']] = true;
-                $toDismiss[] = $rec['resource_name'];
+                $creativeCampaigns[$rec['campaign_resource']][] = $rec;
 
                 continue;
             }
@@ -184,14 +188,17 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
             }
         }
 
-        // Dismiss auto-handled and creative ones (creative agent will fix the actual issue)
-        if (! empty($toDismiss)) {
-            ($dismiss)($customerId, $toDismiss);
-        }
-
-        // Trigger creative agent for campaigns with weak ad copy
+        // Read and repair independently of performance history. A submitted update
+        // is not proof of improvement, so keep its recommendation visible.
+        $repairActions = 0;
         if (! empty($creativeCampaigns)) {
-            $this->triggerCreativeFix($customer, array_keys($creativeCampaigns));
+            $repair = $this->triggerCreativeFix($customer, $creativeCampaigns);
+            $repairActions = $repair['actions'];
+            $toDismiss = array_merge($toDismiss, $repair['dismiss']);
+        }
+        $dismissed = 0;
+        if (! empty($toDismiss) && ($dismiss)($customerId, $toDismiss)) {
+            $dismissed = count($toDismiss);
         }
 
         // Notify admin only for things we truly can't fix
@@ -201,7 +208,7 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
         Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: ".count($toApply).', dismissed: '.count($toDismiss).', creative-fix: '.count($creativeCampaigns).', human-needed: '.count($humanNeeded));
 
-        return count($toApply) + count($toDismiss) + count($creativeCampaigns);
+        return count($toApply) + $dismissed + $repairActions;
     }
 
     private function notifyClientBudget(Customer $customer, array $rec): void
@@ -226,34 +233,42 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         Log::info("ReviewGoogleAdsRecommendations: Notified customer {$customer->id} of budget recommendation");
     }
 
-    private function triggerCreativeFix(Customer $customer, array $campaignResources): void
+    private function triggerCreativeFix(Customer $customer, array $campaignRecommendations): array
     {
-        $campaigns = $customer->campaigns()
-            ->whereIn('google_ads_campaign_id', $campaignResources)
-            ->get();
-
-        if ($campaigns->isEmpty()) {
-            return;
-        }
-
-        $agent = new CreativeIntelligenceAgent(app(GeminiService::class));
-        $fixed = 0;
-
-        foreach ($campaigns as $campaign) {
+        $result = ['dismiss' => [], 'actions' => 0];
+        $agent = app(QualityScoreImprovementAgent::class);
+        foreach ($campaignRecommendations as $resource => $recommendations) {
+            $id = basename($resource);
+            $campaign = $customer->campaigns()->where('status', 'active')
+                ->where(fn ($q) => $q->where('google_ads_campaign_id', $resource)->orWhere('google_ads_campaign_id', $id))->first();
+            if (! $campaign) {
+                continue;
+            }
             try {
-                $agent->analyze($campaign);
-                $fixed++;
+                $repair = $agent->checkAdStrength($campaign);
+                $result['actions'] += count($repair['actions'] ?? []);
+                $this->repairErrors += count($repair['errors'] ?? []);
+                if (($repair['verified'] ?? false) === true && ($repair['checked'] ?? false) === true) {
+                    // Other RSA recommendations may concern missing assets, which
+                    // a healthy strength rating alone cannot prove were repaired.
+                    foreach ($recommendations as $recommendation) {
+                        if ($recommendation['type'] === RecommendationType::RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH) {
+                            $result['dismiss'][] = $recommendation['resource_name'];
+                        }
+                    }
+                }
+                AgentActivity::record('google_ads_recommendations', 'ad_strength_recommendation_checked',
+                    ($repair['verified'] ?? false) ? 'Google confirmed healthy RSA strength.' : 'RSA strength recommendation remains unresolved.',
+                    $customer->id, $campaign->id, $repair, ($repair['verified'] ?? false) ? 'completed' : 'pending');
             } catch (\Throwable $e) {
-                Log::error("ReviewGoogleAdsRecommendations: Creative fix failed for campaign {$campaign->id}: ".$e->getMessage());
+                report($e);
+                $this->repairErrors++;
+                AgentActivity::record('google_ads_recommendations', 'ad_strength_recommendation_failed', 'Could not verify or repair the RSA recommendation.',
+                    $customer->id, $campaign->id, ['error' => $e->getMessage()], 'needs_review');
             }
         }
 
-        AgentActivity::record(
-            'google_ads_recommendations',
-            'creative_fix_triggered',
-            'Ran creative agent on '.$fixed.' campaign(s) with weak ad copy for "'.$customer->name.'"',
-            $customer->id
-        );
+        return $result;
     }
 
     private function notifyAdminHumanRequired(Customer $customer, array $issues): void

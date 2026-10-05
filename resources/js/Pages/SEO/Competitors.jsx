@@ -1,3 +1,4 @@
+import WorkStatusBanner from '@/Components/WorkStatusBanner';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -304,7 +305,8 @@ function StrategySection({ strategy, updatedAt }) {
     );
 }
 
-export default function Competitors({ domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null, campaignActions = null }) {
+export default function Competitors({ domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null, campaignActions = null, competitorRun = null }) {
+    const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(competitorRun?.status));
     const [refreshing, setRefreshing] = useState(false);
 
     const handleRefresh = () => {
@@ -321,7 +323,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
             <div className="py-8">
                 <div className="mx-auto max-w-5xl">
                     <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-1">
                         <h1 className="text-2xl font-bold text-gray-900">Competitor Analysis</h1>
                         {canAccessCompetitors && (
                             <div className="flex items-center gap-3">
@@ -330,7 +332,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
                                 )}
                                 <button
                                     onClick={handleRefresh}
-                                    disabled={refreshing}
+                                    disabled={refreshing || workBusy}
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,6 +345,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
                     </div>
                     <p className="text-sm text-gray-500 mb-6">{domain ? `Your domain: ${domain}` : 'Set your website URL to compare with competitors.'}</p>
 
+                    {canAccessCompetitors && <WorkStatusBanner initialRun={competitorRun} url={route('seo.work-status')} task="competitors" label="Competitor analysis" reloadOnly={['competitors', 'competitiveStrategy', 'strategyUpdatedAt', 'lastAnalyzedAt', 'campaignActions', 'competitorRun']} onBusyChange={setWorkBusy} />}
                     {!canAccessCompetitors ? (
                         <UpgradePrompt />
                     ) : (

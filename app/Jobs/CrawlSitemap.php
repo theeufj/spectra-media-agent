@@ -277,13 +277,20 @@ class CrawlSitemap implements ShouldQueue
 
                 // Dispatch as a batch with completion callback
                 if (! empty($jobs)) {
+                    foreach ($jobs as $pageJob) {
+                        if ($this->customerId) {
+                            \App\Models\KnowledgeBase::firstOrCreate([
+                                'customer_id' => $this->customerId, 'url' => $pageJob->url,
+                            ], ['user_id' => $this->user->id, 'source_type' => 'url', 'content' => '']);
+                        }
+                    }
                     $customer = Customer::find($this->customerId);
                     $user = $this->user;
                     $sitemapUrls = array_map(fn ($job) => $job->url, $jobs);
 
                     $batch = Bus::batch($jobs)
                         ->name("Crawl Sitemap: {$this->sitemapUrl}")
-                        ->then(function (Batch $batch) use ($customer, $user, $sitemapUrls) {
+                        ->finally(function (Batch $batch) use ($customer, $user, $sitemapUrls) {
                             if ($customer) {
                                 Log::info('CrawlSitemap batch completed. Discovering navigation URLs.', [
                                     'customer_id' => $customer->id,

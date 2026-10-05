@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BrandGuideline;
 use App\Models\Customer;
+use App\Services\Brands\BrandProfileReview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -32,8 +33,8 @@ class BrandGuidelineController extends Controller
 
         return Inertia::render('BrandGuidelines/Index', [
             'brandGuideline' => $brandGuideline,
-            'customer' => $customer->only(['id', 'uuid', 'name', 'website', 'service_type', 'country', 'currency_code']),
-            'canEdit' => true, // You can add permission logic here
+            'customer' => $customer->only(['id', 'uuid', 'name', 'website', 'service_type', 'country', 'currency_code', 'timezone']),
+            'canEdit' => $request->user()->can('update', $brandGuideline ?? $customer),
         ]);
     }
 
@@ -48,6 +49,7 @@ class BrandGuidelineController extends Controller
         $this->authorize('update', $brandGuideline);
 
         $validated = $request->validate([
+            'profile_version' => 'nullable|integer|min:1',
             'brand_voice' => 'nullable|array',
             'brand_voice.primary_tone' => 'nullable|string|max:255',
             'brand_voice.description' => 'nullable|string|max:2000',
@@ -56,6 +58,17 @@ class BrandGuidelineController extends Controller
             'brand_voice.primary_voice' => 'nullable|string|max:255',
             'brand_voice.voice_descriptors' => 'nullable|array',
             'brand_voice.voice_descriptors.*' => 'string|max:100',
+
+            'writing_patterns' => 'nullable|array',
+            'writing_patterns.sentence_length' => 'nullable|string|max:255',
+            'writing_patterns.paragraph_style' => 'nullable|string|max:1000',
+            'writing_patterns.uses_questions' => 'nullable|boolean',
+            'writing_patterns.uses_statistics' => 'nullable|boolean',
+            'writing_patterns.uses_testimonials' => 'nullable|boolean',
+            'writing_patterns.uses_storytelling' => 'nullable|boolean',
+            'writing_patterns.call_to_action_style' => 'nullable|string|max:1000',
+            'writing_patterns.punctuation_style' => 'nullable|string|max:255',
+            'writing_patterns.emoji_usage' => 'nullable|string|max:255',
 
             'tone_attributes' => 'nullable|array',
             'tone_attributes.*' => 'nullable|string|max:255',
@@ -128,12 +141,14 @@ class BrandGuidelineController extends Controller
 
         // An edit to one property must preserve the rest of that section.
         // Lists are replaced as submitted so removing an item still works.
-        foreach (['brand_voice', 'color_palette', 'typography', 'visual_style', 'target_audience', 'brand_personality'] as $section) {
+        foreach (['brand_voice', 'writing_patterns', 'color_palette', 'typography', 'visual_style', 'target_audience', 'brand_personality'] as $section) {
             if (isset($validated[$section])) {
-                $validated[$section] = array_replace($brandGuideline->{$section} ?? [], $validated[$section]);
+                $validated[$section] = array_replace($brandGuideline->proposed_profile[$section] ?? $brandGuideline->{$section} ?? [], $validated[$section]);
             }
         }
-        $brandGuideline->update(array_merge($validated, ['user_verified' => true]));
+        $version = $validated['profile_version'] ?? null;
+        unset($validated['profile_version']);
+        app(BrandProfileReview::class)->saveDraft($brandGuideline, $validated, $version);
 
         Log::info('Brand guidelines updated by user', [
             'user_id' => $request->user()->id,
@@ -144,7 +159,18 @@ class BrandGuidelineController extends Controller
             'brand_guideline_id' => $brandGuideline->id,
         ]);
 
-        return back()->with('success', 'Brand guidelines updated successfully!');
+        return back()->with('success', 'Draft saved. Review and approve the profile before it guides new ads.');
+    }
+
+    public function acceptSuggestions(Request $request, BrandGuideline $brandGuideline)
+    {
+        $this->authorize('update', $brandGuideline);
+        $data = $request->validate(['paths' => 'required|array|min:1', 'paths.*' => 'required|string', 'profile_version' => 'required|integer|min:1']);
+        $allowed = array_column($brandGuideline->source_suggestions ?? [], 'path');
+        abort_unless(array_diff($data['paths'], $allowed) === [], 422, 'Choose a current source suggestion.');
+        app(BrandProfileReview::class)->acceptSuggestions($brandGuideline, $data['paths'], $data['profile_version']);
+
+        return back()->with('success', 'Selected suggestions are in your draft. Review and approve before using them.');
     }
 
     /**
@@ -154,7 +180,8 @@ class BrandGuidelineController extends Controller
     {
         $this->authorize('update', $brandGuideline);
 
-        $brandGuideline->update(['user_verified' => true]);
+        $validated = $request->validate(['profile_version' => 'nullable|integer|min:1']);
+        app(BrandProfileReview::class)->approve($brandGuideline, $validated['profile_version'] ?? null);
 
         // The onboarding review flow signs off and moves straight into
         // campaign creation — to the auto-generated first campaign when one

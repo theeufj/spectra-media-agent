@@ -2,34 +2,48 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
-export default function FeatureFlags({ auth, features = [], users = [] }) {
+export default function FeatureFlags({ auth, features = [], users = [], customerFeatures = [], customers = [] }) {
     const [filter, setFilter] = useState('');
+    const [scope, setScope] = useState(customerFeatures.length > 0 ? 'customer' : 'user');
+    const [busy, setBusy] = useState(false);
+    const [confirmation, setConfirmation] = useState(null);
+    const displayedFeatures = scope === 'customer' ? customerFeatures : features;
+    const records = scope === 'customer' ? customers : users;
 
-    const filteredUsers = users.filter(
+    const filteredUsers = records.filter(
         (u) =>
             u.name.toLowerCase().includes(filter.toLowerCase()) ||
-            u.email.toLowerCase().includes(filter.toLowerCase())
+            (u.email || '').toLowerCase().includes(filter.toLowerCase())
     );
 
-    const handleToggle = (featureName, userId, currentValue) => {
-        router.post(
-            route('admin.feature-flags.toggle', featureName),
-            { user_id: userId, active: !currentValue },
-            { preserveScroll: true }
-        );
+    const post = (url, data) => {
+        setBusy(true);
+        router.post(url, data, { preserveScroll: true, onFinish: () => setBusy(false) });
+    };
+
+    const handleToggle = (featureName, id, currentValue) => {
+        post(route('admin.feature-flags.toggle', featureName), {
+            [scope === 'customer' ? 'customer_id' : 'user_id']: id,
+            active: !currentValue,
+        });
     };
 
     const handleGlobalToggle = (featureName, activate) => {
-        router.post(
-            route('admin.feature-flags.toggle', featureName),
-            { user_id: null, active: activate },
-            { preserveScroll: true }
-        );
+        setConfirmation({
+            title: `${activate ? 'Activate' : 'Deactivate'} ${featureName} for everyone?`,
+            message: `This changes ${featureName} for every existing ${scope === 'customer' ? 'customer account' : 'user'}. Review the scope before applying.`,
+            onConfirm: () => post(route('admin.feature-flags.toggle', featureName), { active: activate }),
+        });
     };
 
     const handlePurge = (featureName) => {
-        router.post(route('admin.feature-flags.purge', featureName), { confirmed: true }, { preserveScroll: true });
+        setConfirmation({
+            title: `Reset ${featureName} overrides?`,
+            message: 'Stored overrides will be removed. The next feature check will use its default eligibility rules.',
+            onConfirm: () => post(route('admin.feature-flags.purge', featureName), { confirmed: true }),
+        });
     };
 
     return (
@@ -41,43 +55,48 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                     <div className="mb-6">
                         <h1 className="text-2xl font-bold text-gray-900">Feature Flags</h1>
                         <p className="text-sm text-gray-500 mt-1">
-                            Manage feature access per-user or globally. Features are defined in <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">app/Features/</code>.
+                            Manage automation per customer account and feature access per user. Global actions affect every existing record in the selected scope.
                         </p>
                     </div>
 
-                    {features.length === 0 ? (
+                    <div className="mb-6 flex flex-wrap gap-2" aria-label="Feature scope">
+                        {[['customer', 'Customer automation'], ['user', 'User access']].map(([value, label]) => (
+                            <button key={value} type="button" aria-pressed={scope === value} disabled={busy} onClick={() => { setScope(value); setFilter(''); }} className={`rounded-md border px-4 py-2 text-sm ${scope === value ? 'bg-brand-dark text-white' : 'bg-white text-gray-700'}`}>{label}</button>
+                        ))}
+                    </div>
+                    {displayedFeatures.length === 0 ? (
                         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                            <p className="text-sm text-gray-500">No feature classes found in <code>app/Features/</code>.</p>
+                            <p className="text-sm text-gray-500">No features are configured for this scope.</p>
                         </div>
                     ) : (
                         <>
                             {/* Feature summary cards */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                                {features.map((f) => {
-                                    const activeCount = users.filter((u) => u.flags[f.class]).length;
+                                {displayedFeatures.map((f) => {
+                                    const activeCount = records.filter((u) => u.flags[f.class]).length;
                                     return (
                                         <div key={f.class} className="bg-white rounded-lg border border-gray-200 p-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <h3 className="text-sm font-semibold text-gray-900">{f.name}</h3>
                                                 <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                                                    {activeCount}/{users.length} users
+                                                    {activeCount}/{records.length} {scope === 'customer' ? 'accounts' : 'users'}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-gray-500 mb-3 font-mono">{f.class}</p>
                                             <div className="flex items-center gap-2">
-                                                <button
+                                                <button disabled={busy}
                                                     onClick={() => handleGlobalToggle(f.name, true)}
                                                     className="text-xs px-2.5 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium transition"
                                                 >
                                                     Activate All
                                                 </button>
-                                                <button
+                                                <button disabled={busy}
                                                     onClick={() => handleGlobalToggle(f.name, false)}
                                                     className="text-xs px-2.5 py-1 bg-red-50 text-red-600 rounded-md hover:bg-red-100 font-medium transition"
                                                 >
                                                     Deactivate All
                                                 </button>
-                                                <button
+                                                <button disabled={busy}
                                                     onClick={() => handlePurge(f.name)}
                                                     className="text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 font-medium transition ml-auto"
                                                 >
@@ -92,10 +111,11 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                             {/* Per-user table */}
                             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold text-gray-900">Per-User Feature Access</h2>
+                                    <h2 className="text-sm font-semibold text-gray-900">{scope === 'customer' ? 'Customer Automation' : 'User Feature Access'}</h2>
                                     <input
                                         type="text"
-                                        placeholder="Filter users..."
+                                        aria-label={scope === 'customer' ? 'Filter customer accounts' : 'Filter users'}
+                                        placeholder="Filter names or email..."
                                         value={filter}
                                         onChange={(e) => setFilter(e.target.value)}
                                         className="text-xs border border-gray-200 rounded-md px-3 py-1.5 w-56 focus:ring-1 focus:ring-brand-primary focus:border-brand-primary"
@@ -105,9 +125,9 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                     <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
                                             <tr>
-                                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                                                {features.map((f) => (
+                                                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{scope === 'customer' ? 'Customer' : 'User'}</th>
+                                                {scope === 'user' && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>}
+                                                {displayedFeatures.map((f) => (
                                                     <th key={f.class} className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         {f.name}
                                                     </th>
@@ -123,16 +143,20 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                                             <p className="text-xs text-gray-500">{user.email}</p>
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-2.5">
+                                                    {scope === 'user' && <td className="px-4 py-2.5">
                                                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                                                             {user.plan || 'Free'}
                                                         </span>
-                                                    </td>
-                                                    {features.map((f) => {
-                                                        const isActive = user.flags[f.class];
+                                                    </td>}
+                                                    {displayedFeatures.map((f) => {
+                                                        const isActive = Boolean(user.flags[f.class]);
                                                         return (
                                                             <td key={f.class} className="px-4 py-2.5 text-center">
                                                                 <button
+                                                                    role="switch"
+                                                                    aria-checked={isActive}
+                                                                    aria-label={`${f.name} for ${user.name}`}
+                                                                    disabled={busy}
                                                                     onClick={() => handleToggle(f.name, user.id, isActive)}
                                                                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                                                                         isActive ? 'bg-green-500' : 'bg-gray-200'
@@ -153,13 +177,14 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                     </table>
                                 </div>
                                 {filteredUsers.length === 0 && (
-                                    <div className="px-4 py-6 text-center text-xs text-gray-500">No users match the filter.</div>
+                                    <div className="px-4 py-6 text-center text-xs text-gray-500">No records match the filter.</div>
                                 )}
                             </div>
                         </>
                     )}
                 </div>
             </div>
+            <ConfirmationModal show={Boolean(confirmation)} onClose={() => setConfirmation(null)} title={confirmation?.title} message={confirmation?.message} processing={busy} onConfirm={() => { confirmation?.onConfirm(); setConfirmation(null); }} />
         </AuthenticatedLayout>
     );
 }

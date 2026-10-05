@@ -27,6 +27,7 @@ SYSTEM;
         ?string $goals,
         array $platforms,
         ?string $brandContext = null,
+        string $currency = 'USD',
     ): string {
         $platformList = implode(', ', $platforms);
 
@@ -48,7 +49,8 @@ Generate a comprehensive advertising proposal for the following client.
 ## CLIENT INFORMATION
 - Company Name: {$clientName}
 - Industry: {$industry}
-- Monthly Ad Budget: \${$budget}
+- Monthly Ad Budget: {$currency} {$budget}
+- All budget allocations, fees and monetary metrics must use {$currency}.
 - Advertising Platforms: {$platformList}
 
 {$goalsSection}{$websiteSection}{$brandSection}## REQUIRED OUTPUT (JSON)

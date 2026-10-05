@@ -3,8 +3,9 @@ import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { SetupStages, HandoverChecklist } from '@/Components/SetupJourney';
 import { usePolling } from '@/hooks/usePolling';
+import PolicyStatusCard from '@/Components/PolicyStatusCard';
 
-export default function SetupHome({ journey: initialJourney }) {
+export default function SetupHome({ journey: initialJourney, policyCampaigns = [], policyCampaignCount = 0 }) {
     const { data, error } = usePolling(route('api.setup-progress.index'), {
         interval: 8000, until: result => !result.is_working,
     });
@@ -18,6 +19,7 @@ export default function SetupHome({ journey: initialJourney }) {
             <Head title="Your Google Ads setup" />
             <main className="mx-auto max-w-5xl px-4 py-10">
                 <SetupStages stage={stage} />
+                {policyCampaigns.length > 0 && <div className="my-6 space-y-4">{policyCampaigns.map(campaign => <PolicyStatusCard key={campaign.id} campaign={campaign} showClear={false} showCampaignLink />)}{policyCampaignCount > policyCampaigns.length && <Link href={route('campaigns.index')} className="block text-sm font-medium text-brand-dark underline">{policyCampaignCount - policyCampaigns.length} more campaigns have issues or need a policy check. View all campaigns</Link>}</div>}
                 <p className="text-sm font-medium text-brand-dark">{journey.business.name} · One-time Google Ads setup</p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{current.title}</h1>
                 <p className="mt-3 max-w-2xl text-gray-600" role="status">{current.description}</p>

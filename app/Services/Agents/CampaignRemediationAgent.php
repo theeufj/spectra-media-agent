@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents;
 
+use App\Features\AutoHealing;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
@@ -18,6 +19,7 @@ use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
+use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\StorageHelper;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
@@ -27,6 +29,7 @@ use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Laravel\Pennant\Feature;
 
 /**
  * CampaignRemediationAgent
@@ -240,10 +243,31 @@ class CampaignRemediationAgent
             'exclude_wasteful_placements' => $this->excludeWastefulPlacements($campaign, $finding, $results),
             'fix_landing_page' => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
+            'reconcile_conversion_goals' => $this->reconcileConversionGoals($campaign, $finding, $results),
             'refresh_meta_creative' => $this->refreshMetaCreative($campaign, $finding, $results),
             'bootstrap_search_delivery' => $this->bootstrapSearchDelivery($campaign, $finding, $results),
             default => $this->alertCustomer($campaign, $finding, $results),
         };
+    }
+
+    private function reconcileConversionGoals(Campaign $campaign, array $finding, array &$results): void
+    {
+        $customer = $campaign->customer;
+        $strategy = $campaign->strategies()->find($finding['details']['strategy_id'] ?? null);
+        if (! $customer || ! $strategy || $customer->google_ads_link_status === 'revoked'
+            || ! Feature::for($customer)->active(AutoHealing::class)) {
+            $this->alertCustomer($campaign, $finding, $results);
+
+            return;
+        }
+        $state = app(ReconcileCampaignConversionGoals::class, ['customer' => $customer])->reconcile($strategy, $finding['details']['campaign_resource'] ?? null);
+        if ($state['ready']) {
+            $results['actions_taken'][] = ['type' => 'campaign_conversion_goals_verified', 'strategy_id' => $strategy->id,
+                'intent' => $state['intent'], 'changes' => $state['actions']];
+        } else {
+            $finding['message'] = AgentIssue::toSentence($state['issues']);
+            $this->alertCustomer($campaign, $finding, $results);
+        }
     }
 
     private function bootstrapSearchDelivery(Campaign $campaign, array $finding, array &$results): void

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import FormErrors from '@/Components/FormErrorSummary';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
@@ -20,7 +21,18 @@ function render(tpl, vars) {
 export default function NotificationTemplates({ templates, recipientOptions }) {
     const { flash } = usePage().props;
     const [selectedKey, setSelectedKey] = useState(templates[0]?.key ?? null);
+    const dirty = useRef(false);
+    const selectTemplate = (key) => {
+        if (key === selectedKey) return;
+        if (dirty.current && !window.confirm('This template has unsaved changes. Leave without saving?')) return;
+        dirty.current = false;
+        setSelectedKey(key);
+    };
     const selected = templates.find((t) => t.key === selectedKey) ?? null;
+    useEffect(() => router.on('before', event => {
+        if (event.detail.visit.method.toLowerCase() === 'get' && dirty.current
+            && !window.confirm('This template has unsaved changes. Leave without saving?')) event.preventDefault();
+    }), []);
 
     const grouped = useMemo(() => {
         const g = {};
@@ -69,7 +81,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                                         {items.map((t) => (
                                             <button
                                                 key={t.key}
-                                                onClick={() => setSelectedKey(t.key)}
+                                                onClick={() => selectTemplate(t.key)}
                                                 className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 ${
                                                     t.key === selectedKey ? 'bg-brand-tint-10 border-l-4 border-l-brand-primary' : ''
                                                 }`}
@@ -95,7 +107,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                             {/* Editor */}
                             <div className="lg:col-span-2">
                                 {selected ? (
-                                    <TemplateEditor key={selected.key} template={selected} recipientOptions={recipientOptions} />
+                                    <TemplateEditor key={selected.key} template={selected} recipientOptions={recipientOptions} onDirtyChange={value => { dirty.current = value; }} />
                                 ) : (
                                     <div className="bg-white shadow rounded-lg p-8 text-gray-500">Select a template to edit.</div>
                                 )}
@@ -108,14 +120,22 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
     );
 }
 
-function TemplateEditor({ template, recipientOptions }) {
-    const { data, setData, post, processing } = useForm({
+function TemplateEditor({ template, recipientOptions, onDirtyChange }) {
+    const { data, setData, post, processing, errors, isDirty, defaults } = useForm({
         key: template.key,
         subject: template.subject ?? '',
         body: template.body ?? '',
         recipients: template.recipients,
         enabled: template.enabled,
     });
+    const [testProcessing, setTestProcessing] = useState(false);
+
+    useEffect(() => {
+        onDirtyChange(isDirty);
+        const warn = (event) => { if (isDirty) { event.preventDefault(); event.returnValue = ''; } };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [isDirty, onDirtyChange]);
 
     const vars = template.variables || {};
     const defaultSubject = `✨ ${vars.title ?? template.label}`;
@@ -126,14 +146,14 @@ function TemplateEditor({ template, recipientOptions }) {
 
     const save = (e) => {
         e.preventDefault();
-        post(route('admin.notification-templates.update'), { preserveScroll: true });
+        post(route('admin.notification-templates.update'), { preserveScroll: true, onSuccess: () => defaults(data) });
     };
 
     const sendTest = () => {
         router.post(
             route('admin.notification-templates.test'),
             { key: data.key, subject: data.subject, body: data.body },
-            { preserveScroll: true }
+            { preserveScroll: true, onStart: () => setTestProcessing(true), onFinish: () => setTestProcessing(false) }
         );
     };
 
@@ -145,11 +165,12 @@ function TemplateEditor({ template, recipientOptions }) {
             </div>
 
             <form onSubmit={save} className="p-6 space-y-5">
+                                    <FormErrors errors={errors} />
                 {/* Recipients + enabled */}
                 <div className="flex flex-wrap items-center gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Recipients</label>
-                        <select
+                        <label htmlFor="recipients" className="block text-sm font-medium text-gray-700 mb-1">Recipients</label>
+                        <select id="recipients"
                             value={data.recipients}
                             onChange={(e) => setData('recipients', e.target.value)}
                             className="rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
@@ -186,8 +207,8 @@ function TemplateEditor({ template, recipientOptions }) {
 
                 {/* Subject */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                    <input
+                    <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                    <input id="subject"
                         type="text"
                         value={data.subject}
                         onChange={(e) => setData('subject', e.target.value)}
@@ -198,8 +219,8 @@ function TemplateEditor({ template, recipientOptions }) {
 
                 {/* Body */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Body</label>
-                    <textarea
+                    <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-1">Body</label>
+                    <textarea id="body"
                         value={data.body}
                         onChange={(e) => setData('body', e.target.value)}
                         rows={5}
@@ -223,17 +244,18 @@ function TemplateEditor({ template, recipientOptions }) {
                 <div className="flex items-center gap-3 pt-2">
                     <button
                         type="submit"
-                        disabled={processing}
+                        disabled={processing || !isDirty}
                         className="px-4 py-2 bg-brand-dark text-white text-sm font-medium rounded-md hover:bg-brand-darker disabled:opacity-50"
                     >
-                        {processing ? 'Saving…' : 'Save'}
+                        {processing ? 'Saving…' : isDirty ? 'Save changes' : 'Saved'}
                     </button>
                     <button
                         type="button"
+                        disabled={testProcessing}
                         onClick={sendTest}
                         className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50"
                     >
-                        Send test to me
+                        {testProcessing ? 'Sending test…' : 'Send test to me'}
                     </button>
                 </div>
             </form>

@@ -5,34 +5,29 @@ namespace Tests\Feature;
 use App\Jobs\CheckCampaignPolicyViolations;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Services\Agents\CampaignAlertService;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Google\Ads\GoogleAds\V22\Enums\PolicyReviewStatusEnum\PolicyReviewStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
- * A policy violation has to stop the ads, and the pause has to survive the
- * hourly monitor.
- *
- * It did neither. Both branches of CheckCampaignPolicyViolations logged
- * "Pausing campaign" and then wrote `status` alone: no status mutation was ever
- * sent to Google or Facebook, so the disapproved ad kept serving — and because
- * `platform_status` still read ENABLED, the next MonitorCampaignStatus run
- * reconciled `status` back to Active and recorded a false status_reconciled
- * AgentActivity for it, every hour, indefinitely.
+ * Policy checks alert without pausing campaigns. The customer-approved end
+ * date still stops spend through the shared platform sweep.
  */
 class PolicyViolationPauseTest extends TestCase
 {
     use DatabaseTransactions;
 
-    private function pause(Campaign $campaign, string $reason): void
+    private function pauseExpiredCampaign(Campaign $campaign): void
     {
-        $method = new \ReflectionMethod(CheckCampaignPolicyViolations::class, 'pauseCampaign');
+        $method = new \ReflectionMethod(CheckCampaignPolicyViolations::class, 'pauseExpiredCampaign');
         $method->setAccessible(true);
-        $method->invoke(new CheckCampaignPolicyViolations($campaign->id), $campaign, $reason);
+        $method->invoke(new CheckCampaignPolicyViolations($campaign->id), $campaign);
     }
 
     /**
@@ -104,6 +99,7 @@ class PolicyViolationPauseTest extends TestCase
             'status' => $status,
             'ad_group_status' => $groupStatus,
             'approval_status' => $approval,
+            'review_status' => PolicyReviewStatus::REVIEWED,
         ];
     }
 
@@ -123,7 +119,7 @@ class PolicyViolationPauseTest extends TestCase
         $this->assertSame('active', $campaign->fresh()->status->value);
     }
 
-    public function test_all_disapproved_enabled_ads_pause_the_campaign_and_record_why(): void
+    public function test_all_disapproved_enabled_ads_alert_without_pausing_the_campaign(): void
     {
         $campaign = $this->liveCampaign();
         $deactivator = $this->fakeDeactivator(true);
@@ -131,12 +127,16 @@ class PolicyViolationPauseTest extends TestCase
 
         $this->assertTrue($this->checkGooglePolicy($campaign, [
             $this->googleAd(PolicyApprovalStatus::DISAPPROVED),
-            $this->googleAd(PolicyApprovalStatus::APPROVED, AdGroupAdStatus::PAUSED),
+            array_replace($this->googleAd(PolicyApprovalStatus::DISAPPROVED), ['resource_name' => 'customers/1234567890/adGroupAds/1~3']),
         ]));
 
-        $this->assertSame([$campaign->id], $deactivator->pausedCampaignIds);
-        $this->assertSame('paused', $campaign->fresh()->status->value);
-        $this->assertDatabaseHas('agent_activities', [
+        $this->assertSame([], $deactivator->pausedCampaignIds);
+        $campaign->refresh();
+        $this->assertSame('active', $campaign->status->value);
+        $this->assertSame('ENABLED', $campaign->platform_status);
+        $this->assertSame('issues', CampaignAlertService::policyStatus($campaign)['status']);
+        $this->assertCount(2, CampaignAlertService::policyStatus($campaign)['issues']);
+        $this->assertDatabaseMissing('agent_activities', [
             'campaign_id' => $campaign->id,
             'action' => 'policy_paused_campaign',
         ]);
@@ -159,14 +159,14 @@ class PolicyViolationPauseTest extends TestCase
         ]);
     }
 
-    public function test_a_policy_violation_pauses_through_the_shared_platform_sweep(): void
+    public function test_an_end_date_stop_pauses_through_the_shared_platform_sweep(): void
     {
         $campaign = $this->liveCampaign();
 
         $deactivator = $this->fakeDeactivator(true);
         $this->app->instance(DeactivateCustomerService::class, $deactivator);
 
-        $this->pause($campaign, 'google_disapproved_ad');
+        $this->pauseExpiredCampaign($campaign);
 
         $this->assertSame(
             [$campaign->id],
@@ -184,7 +184,7 @@ class PolicyViolationPauseTest extends TestCase
         );
     }
 
-    public function test_a_platform_refusing_the_pause_is_reported_and_leaves_the_columns_alone(): void
+    public function test_a_platform_refusing_the_end_date_stop_is_reported_and_leaves_the_columns_alone(): void
     {
         // A campaign marked paused while its ads keep running is the worse of
         // the two states: billing filters on `status`, so we would stop charging
@@ -204,10 +204,11 @@ class PolicyViolationPauseTest extends TestCase
         });
         $this->app->instance(\Illuminate\Contracts\Debug\ExceptionHandler::class, $handler);
 
-        $this->pause($campaign, 'google_disapproved_ad');
+        $this->pauseExpiredCampaign($campaign);
 
         $this->assertCount(1, $reported);
         $this->assertStringContainsString('PERMISSION_DENIED', $reported[0]->getMessage());
+        $this->assertStringContainsString('End-date pause refused', $reported[0]->getMessage());
 
         $campaign->refresh();
 

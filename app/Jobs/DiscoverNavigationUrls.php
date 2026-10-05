@@ -141,7 +141,7 @@ class DiscoverNavigationUrls implements ShouldQueue
                 'customer_id' => $this->customer->id,
                 'nav_urls_found' => count($discoveredUrls),
             ]);
-            ExtractBrandGuidelines::dispatch($this->customer);
+            ExtractBrandGuidelines::dispatch($this->customer, force: true, sourceRefresh: true);
 
             return;
         }
@@ -159,16 +159,21 @@ class DiscoverNavigationUrls implements ShouldQueue
             'sitemap_gap' => true,
         ]), $missingUrls);
 
+        foreach ($jobs as $pageJob) {
+            \App\Models\KnowledgeBase::firstOrCreate([
+                'customer_id' => $this->customer->id, 'url' => $pageJob->url,
+            ], ['user_id' => $this->user->id, 'source_type' => 'url', 'content' => '']);
+        }
         $customer = $this->customer;
 
         Bus::batch($jobs)
             ->name("Discover Navigation: {$websiteUrl}")
-            ->then(function (Batch $batch) use ($customer) {
+            ->finally(function (Batch $batch) use ($customer) {
                 Log::info('DiscoverNavigationUrls batch completed. Dispatching brand guideline extraction.', [
                     'customer_id' => $customer->id,
                     'pages_crawled' => $batch->totalJobs,
                 ]);
-                ExtractBrandGuidelines::dispatch($customer);
+                ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true);
             })
             ->allowFailures()
             ->dispatch();
@@ -195,7 +200,7 @@ class DiscoverNavigationUrls implements ShouldQueue
             Log::info('DiscoverNavigationUrls: homepage unreadable but pages exist — continuing to brand extraction', [
                 'customer_id' => $this->customer->id,
             ]);
-            ExtractBrandGuidelines::dispatch($this->customer);
+            ExtractBrandGuidelines::dispatch($this->customer, force: true, sourceRefresh: true);
 
             return;
         }

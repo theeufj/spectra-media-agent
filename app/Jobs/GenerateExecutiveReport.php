@@ -7,6 +7,7 @@ use App\Mail\WeeklyExecutiveReport;
 use App\Models\Customer;
 use App\Services\Reporting\ExecutiveReportService;
 use App\Services\Reporting\ReportPdfService;
+use App\Support\WorkStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,7 +30,7 @@ class GenerateExecutiveReport implements ShouldQueue
 
     protected string $period;
 
-    public function __construct(int $customerId, string $period = 'weekly')
+    public function __construct(int $customerId, string $period = 'weekly', protected ?string $workRunId = null)
     {
         $this->customerId = $customerId;
         $this->period = $period;
@@ -37,6 +38,7 @@ class GenerateExecutiveReport implements ShouldQueue
 
     public function handle(ExecutiveReportService $reportService): void
     {
+        WorkStatus::update($this->customerId, 'report-'.$this->period, $this->workRunId, 'running', 'Preparing the report and PDF.');
         try {
             $customer = Customer::findOrFail($this->customerId);
 
@@ -60,6 +62,7 @@ class GenerateExecutiveReport implements ShouldQueue
 
             // Store report metadata for the Reports listing page
             $this->storeReportRecord($customer, $report, $pdfPath);
+            WorkStatus::update($this->customerId, 'report-'.$this->period, $this->workRunId, 'completed', $pdfPath ? 'Your report and PDF are ready in the list below.' : 'Your report is ready below. The PDF could not be prepared; generate the same period again to retry it.');
 
             // Skip sending if there's no meaningful data — zero spend and zero impressions
             // means the campaigns weren't running during this period.
@@ -82,7 +85,12 @@ class GenerateExecutiveReport implements ShouldQueue
                 if (isset($prefs['performance_reports']) && $prefs['performance_reports'] === false) {
                     continue;
                 }
-                Mail::to($user->email)->queue(new WeeklyExecutiveReport($user, $report));
+                try {
+                    Mail::to($user->email)->queue(new WeeklyExecutiveReport($user, $report));
+                } catch (\Throwable $e) {
+                    report($e);
+                    Log::warning('Executive report saved but email could not be queued', ['customer_id' => $customer->id, 'user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
             }
 
             Log::info("Executive report generated for customer {$customer->id}", [
@@ -103,6 +111,7 @@ class GenerateExecutiveReport implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        WorkStatus::update($this->customerId, 'report-'.$this->period, $this->workRunId, 'failed', 'Report generation could not finish. Choose the same period to retry.');
         Log::error('GenerateExecutiveReport failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

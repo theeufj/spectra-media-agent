@@ -200,7 +200,7 @@ class GenerateStrategy implements ShouldQueue
             Log::info("Starting agentic function-calling strategy generation for campaign {$this->campaign->id}");
 
             $gemini = app(GeminiService::class);
-            $searchService = app(KnowledgeBaseSearchService::class);
+            $searchService = app(KnowledgeBaseSearchService::class)->forCampaign($this->campaign->id);
             $campaignCustomerId = $this->campaign->customer_id;
             $userIds = $customerUserIds;
 

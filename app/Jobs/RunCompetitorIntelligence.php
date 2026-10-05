@@ -7,6 +7,7 @@ use App\Services\Agents\CompetitorAnalysisAgent;
 use App\Services\Agents\CompetitorDiscoveryAgent;
 use App\Services\Agents\CompetitorIntelligenceAgent;
 use App\Services\GeminiService;
+use App\Support\WorkStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -53,7 +54,7 @@ class RunCompetitorIntelligence implements ShouldQueue
      * @param  Customer  $customer  The customer to analyze
      * @param  bool  $fullRefresh  Whether to re-analyze all competitors
      */
-    public function __construct(Customer $customer, bool $fullRefresh = false)
+    public function __construct(Customer $customer, bool $fullRefresh = false, protected ?string $workRunId = null)
     {
         $this->customer = $customer;
         $this->fullRefresh = $fullRefresh;
@@ -64,6 +65,7 @@ class RunCompetitorIntelligence implements ShouldQueue
      */
     public function handle(): void
     {
+        WorkStatus::update($this->customer->id, 'competitors', $this->workRunId, 'running', 'Discovering and analysing competitors.');
         Log::info('RunCompetitorIntelligence: Starting job', [
             'customer_id' => $this->customer->id,
             'full_refresh' => $this->fullRefresh,
@@ -86,10 +88,12 @@ class RunCompetitorIntelligence implements ShouldQueue
                 ReviewCompetitiveCampaigns::dispatch($this->customer->id, true);
             }
 
+            WorkStatus::update($this->customer->id, 'competitors', $this->workRunId, empty($results['errors']) ? 'completed' : 'failed', empty($results['errors']) ? 'Competitor analysis is ready.' : 'Some analysis steps failed. Available results are below; retry to complete the analysis.');
+
             // Update customer with last analysis timestamp
-            $this->customer->update([
-                'competitor_analysis_at' => now(),
-            ]);
+            if (empty($results['errors'])) {
+                $this->customer->update(['competitor_analysis_at' => now()]);
+            }
 
             // Log results
             Log::info('RunCompetitorIntelligence: Job complete', [
@@ -193,6 +197,7 @@ class RunCompetitorIntelligence implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        WorkStatus::update($this->customer->id, 'competitors', $this->workRunId, 'failed', 'Competitor analysis could not finish. Please retry.');
         Log::error('RunCompetitorIntelligence failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

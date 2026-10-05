@@ -16,6 +16,7 @@ use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use App\Support\GoogleAdPolicy;
 use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Support\Facades\Cache;
@@ -164,7 +165,7 @@ class SelfHealingAgent
      */
     protected function healGoogleAdsCampaign(Campaign $campaign, Customer $customer, array &$results): void
     {
-        $customerId = $customer->google_ads_customer_id;
+        $customerId = $customer->cleanGoogleCustomerId();
         $campaignResourceName = $campaign->google_ads_campaign_id;
 
         if (! str_starts_with($campaignResourceName, 'customers/')) {
@@ -173,6 +174,10 @@ class SelfHealingAgent
 
         // 1. Check for disapproved ads
         $this->healGoogleDisapprovedAds($customer, $customerId, $campaignResourceName, $results, $campaign);
+
+        if (in_array('google_destination_unresolved', array_column($results['warnings'], 'type'), true)) {
+            return;
+        }
 
         // 2. Check for budget exhaustion
         $this->checkGoogleBudgetHealth($customer, $campaign, $customerId, $campaignResourceName, $results);
@@ -239,6 +244,29 @@ class SelfHealingAgent
      */
     protected function handleGoogleDisapprovedAd(Campaign $campaign, Customer $customer, string $customerId, array $ad, array &$results): void
     {
+        if (GoogleAdPolicy::isDestinationIssue($ad)) {
+            $details = GoogleAdPolicy::details($ad);
+            $message = 'Google ad destination requires attention: '.GoogleAdPolicy::summarize($ad).'. Ad copy has not been rewritten or resubmitted.';
+            $results['warnings'][] = $details + [
+                'type' => 'google_destination_unresolved',
+                'platform' => 'google_ads',
+                'severity' => 'high',
+                'message' => $message,
+                'action_required' => 'Restore access to the affected landing page, then recheck Google policy approval.',
+            ];
+            $fingerprint = hash('sha256', json_encode($details, JSON_THROW_ON_ERROR));
+            $alreadyRecorded = AgentActivity::where('campaign_id', $campaign->id)
+                ->where('action', 'google_destination_unresolved')
+                ->where('details->policy_fingerprint', $fingerprint)
+                ->where('created_at', '>=', now()->subDay())->exists();
+            if (! $alreadyRecorded) {
+                AgentActivity::record('self_healing', 'google_destination_unresolved', $message,
+                    $customer->id, $campaign->id, $details + ['policy_fingerprint' => $fingerprint], 'needs_review');
+            }
+
+            return;
+        }
+
         $maxAttempts = (int) ($this->config['max_fix_attempts'] ?? 3);
 
         // Get the policy violation reason
@@ -269,6 +297,7 @@ class SelfHealingAgent
             $customer->users()->each(fn ($user) => $user->notify(
                 new \App\Notifications\CriticalAgentAlert(
                     'self_healing',
+                    'Recurring Google ad policy violation',
                     "Recurring policy violation on Google Ads: {$violationReason}. Auto-healing disabled — manual review required.",
                     ['ad' => $ad['resource_name'], 'customer_id' => $customer->id, 'campaign_id' => $campaign->id]
                 )

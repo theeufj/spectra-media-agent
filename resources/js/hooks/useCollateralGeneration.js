@@ -7,6 +7,25 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
     const [generatingImage, setGeneratingImage] = useState(false);
     const [generatingVideo, setGeneratingVideo] = useState(false);
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals, creativeReview });
+    const savedSelections = useRef(new Map());
+    const applySavedSelection = (type, rows) => {
+        const key = type === 'ad_copy' ? 'adCopy' : type === 'image' ? 'imageCollaterals' : 'videoCollaterals';
+        rows.forEach(row => savedSelections.current.set(`${key}:${row.id}`, { ...savedSelections.current.get(`${key}:${row.id}`), ...row }));
+        setCollateral(previous => key === 'adCopy'
+            ? { ...previous, adCopy: { ...previous.adCopy, ...rows.find(row => row.id === previous.adCopy?.id) } }
+            : { ...previous, [key]: previous[key].map(item => ({ ...item, ...rows.find(row => row.id === item.id) })) });
+    };
+    const mergeSelections = data => {
+        const merge = (key, item) => {
+            if (!item) return item;
+            const id = `${key}:${item.id}`;
+            const saved = savedSelections.current.get(id);
+            if (!saved) return item;
+            if (Object.entries(saved).every(([field, value]) => item[field] === value)) savedSelections.current.delete(id);
+            return { ...item, ...saved };
+        };
+        return { ...data, adCopy: merge('adCopy', data.adCopy), imageCollaterals: data.imageCollaterals.map(item => merge('imageCollaterals', item)), videoCollaterals: data.videoCollaterals.map(item => merge('videoCollaterals', item)) };
+    };
     const [isPolling, setIsPolling] = useState(generationPending);
     const [collateralError, setCollateralError] = useState(null);
     // Refs for values accessed inside the polling interval to avoid stale closures
@@ -61,7 +80,7 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
     useEffect(() => {
         if (!isPolling || !polled) return;
 
-        const data = polled;
+        const data = mergeSelections(polled);
         const current = collateralRef.current;
 
         // Capture the baseline error count on the first response of this session
@@ -134,5 +153,5 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
         return () => clearTimeout(timeout);
     }, [isPolling, currentStrategy.id, currentStrategy.creative_candidates]);
 
-    return { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, isPolling, setIsPolling, collateralError, setCollateralError };
+    return { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError };
 }

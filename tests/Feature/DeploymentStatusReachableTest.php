@@ -100,4 +100,31 @@ class DeploymentStatusReachableTest extends TestCase
                 ->assertJsonPath('deployments.0.status', $status);
         }
     }
+
+    public function test_page_and_polling_expose_current_goal_failure_alongside_prior_readiness(): void
+    {
+        $previous = ['status' => 'ready', 'ready' => true, 'checked_at' => now()->subHour()->toIso8601String()];
+        $current = ['status' => 'unknown', 'ready' => false, 'checked_at' => now()->toIso8601String(), 'issues' => [['code' => 'conversion_goal_check_failed', 'message' => 'Google conversion goals could not be checked.']]];
+        [, $campaign] = $this->ownedCampaign(['platform' => 'Google Ads (SEM)', 'deployment_status' => 'verified', 'execution_result' => ['metadata' => ['google_readiness' => $previous, 'conversion_goal_readiness' => $current]]]);
+        $this->get(route('campaigns.deployment-status', $campaign))->assertOk()->assertInertia(fn ($page) => $page
+            ->where('deployments.0.google_readiness.status', 'ready')
+            ->where('deployments.0.conversion_goal_readiness.status', 'unknown')
+            ->where('deployments.0.conversion_goal_readiness.issues.0.message', $current['issues'][0]['message']));
+        $this->getJson(route('api.campaigns.deployment-status', $campaign))->assertOk()
+            ->assertJsonPath('deployments.0.google_readiness.status', 'ready')
+            ->assertJsonPath('deployments.0.conversion_goal_readiness.ready', false)
+            ->assertJsonPath('deployments.0.conversion_goal_readiness.status', 'unknown');
+    }
+
+    public function test_legacy_active_is_terminal_but_keeps_deployed_progress_without_claiming_verification(): void
+    {
+        [, $campaign] = $this->ownedCampaign(['deployment_status' => 'deployed']);
+        $deployedProgress = $this->getJson(route('api.campaigns.deployment-status', $campaign))->assertOk()->json('deployments.0.progress');
+        $campaign->strategies()->update(['deployment_status' => 'active']);
+        $this->getJson(route('api.campaigns.deployment-status', $campaign))->assertOk()
+            ->assertJsonPath('is_complete', true)
+            ->assertJsonPath('deployments.0.status', 'active')
+            ->assertJsonPath('deployments.0.progress', $deployedProgress);
+        $this->assertLessThan(4, $deployedProgress);
+    }
 }

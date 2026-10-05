@@ -9,6 +9,8 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
+import FormErrorSummary from '@/Components/FormErrorSummary';
+import { loadMediaDraft, saveMediaDraft, deleteMediaDraft } from '@/utils/mediaDraft';
 import InputError from '@/Components/InputError';
 import ProgressStepper, { CompactStepper } from '@/Components/ProgressStepper';
 import ProductSelection from './ProductSelection';
@@ -124,6 +126,17 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     // stagedImages: array of { file: File, isSeed: boolean }
     const [stagedImages, setStagedImages] = useState([]);
     const [stagedVideos, setStagedVideos] = useState([]);
+    const [mediaReady, setMediaReady] = useState(false);
+    const [mediaIssue, setMediaIssue] = useState(null);
+    const [mediaSaved, setMediaSaved] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+
+    const [imagePreviews, setImagePreviews] = useState([]);
+    useEffect(() => {
+        const previews = stagedImages.map(item => URL.createObjectURL(item.file));
+        setImagePreviews(previews);
+        return () => previews.forEach(url => URL.revokeObjectURL(url));
+    }, [stagedImages]);
 
     const form = useForm({
         name: '',
@@ -167,9 +180,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     useEffect(() => {
         // On mount currentStep is always 0, so this must not be gated on it —
         // the old guard meant the draft was written but never restored.
-        const savedDraft = localStorage.getItem(draftKey);
-        if (!savedDraft) return;
         try {
+            const savedDraft = localStorage.getItem(draftKey);
+            if (!savedDraft) return;
             const parsed = JSON.parse(savedDraft);
             // Current shape is { data, step }; older drafts were the bare data.
             const draft = parsed?.data ?? parsed;
@@ -188,17 +201,34 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             setCreationMode('template');
             setCurrentStep(Math.min(step, WIZARD_STEPS.length - 1));
         } catch {
-            localStorage.removeItem(draftKey);
+            try { localStorage.removeItem(draftKey); } catch { /* Storage is optional. */ }
         }
     }, [draftKey]);
 
     useEffect(() => {
         if (currentStep > 0) {
-            localStorage.setItem(draftKey, JSON.stringify({ data, step: currentStep }));
-            setDraftSavedAt(new Date());
+            try { localStorage.setItem(draftKey, JSON.stringify({ data, step: currentStep })); setDraftSavedAt(new Date()); } catch { setMediaIssue('This browser cannot save drafts. Keep this tab open until you create the campaign.'); }
         }
     }, [data, currentStep]);
     
+    useEffect(() => {
+        let cancelled = false;
+        loadMediaDraft(draftKey).then(media => {
+            if (!cancelled && media) { setStagedImages(media.images || []); setStagedVideos(media.videos || []); }
+        }).catch(() => { if (!cancelled) setMediaIssue('Media cannot be saved in this browser. Keep this tab open or reattach files after reloading.'); })
+            .finally(() => { if (!cancelled) setMediaReady(true); });
+        return () => { cancelled = true; };
+    }, [draftKey]);
+    useEffect(() => {
+        if (!mediaReady) return;
+        setMediaSaved(false);
+        const timer = setTimeout(() => {
+            saveMediaDraft(draftKey, { images: stagedImages, videos: stagedVideos }).then(() => { setMediaSaved(true); setMediaIssue(null); })
+                .catch(() => setMediaIssue('Your text draft is saved, but media could not be saved. Reattach files if you reload.'));
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [draftKey, mediaReady, stagedImages, stagedVideos]);
+
     const applyTemplate = (template) => {
         setSelectedTemplate(template.id);
         setCreationMode('template');
@@ -298,7 +328,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             // component, and the draft is what restores the work.
             onSuccess: (page) => {
                 if (!page.url.includes('/campaigns/wizard')) {
-                    localStorage.removeItem(draftKey);
+                    try { localStorage.removeItem(draftKey); } catch { /* Campaign is saved server-side. */ }
+                    deleteMediaDraft(draftKey).catch(() => {});
                 }
             },
             onError: () => {
@@ -543,6 +574,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <button
                                         key={platform.id}
                                         type="button"
+                                        aria-pressed={isSelected}
+                                        aria-label={`${platform.name}${disabledReason ? ` — ${disabledReason}` : ''}`}
                                         disabled={!isSelectable}
                                         onClick={() => {
                                             if (!isSelectable) return;
@@ -793,6 +826,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <ProductSelection
                                         customerUuid={customerUuid}
                                         selectedPages={data.selected_pages || []}
+                                        initialPages={pages}
+                                        destinationUrl={data.landing_page_url}
                                         onSelectionChange={(page) => {
                                             setData('selected_pages', page ? [page.id] : []);
                                             setData('landing_page_url', page?.url || '');
@@ -868,13 +903,15 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                             }`}
                                         >
                                             <img
-                                                src={URL.createObjectURL(item.file)}
+                                                src={imagePreviews[i]}
                                                 alt={item.file.name}
                                                 className="w-full h-full object-cover"
                                             />
                                             {/* Seed badge */}
                                             <button
                                                 type="button"
+                                                aria-pressed={item.isSeed}
+                                                aria-label={`Use ${item.file.name} as AI reference`}
                                                 title={item.isSeed ? 'Remove as AI seed' : 'Use as AI seed'}
                                                 onClick={() => setStagedImages(prev =>
                                                     prev.map((s, idx) => idx === i ? { ...s, isSeed: !s.isSeed } : s)
@@ -882,7 +919,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                                 className={`absolute bottom-1 left-1 text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${
                                                     item.isSeed
                                                         ? 'bg-brand-primary text-white'
-                                                        : 'bg-black/50 text-white opacity-0 group-hover:opacity-100'
+                                                        : 'bg-black/50 text-white opacity-100'
                                                 }`}
                                             >
                                                 {item.isSeed ? '✦ Seed' : 'Seed?'}
@@ -890,8 +927,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                             {/* Remove button */}
                                             <button
                                                 type="button"
+                                                aria-label={`Remove ${item.file.name}`}
                                                 onClick={() => setStagedImages(prev => prev.filter((_, idx) => idx !== i))}
-                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-100 transition-opacity"
                                             >
                                                 ×
                                             </button>
@@ -901,7 +939,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             )}
 
                             {stagedImages.length < 10 && (
-                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
+                                <label className="focus-within:ring-2 focus-within:ring-brand-dark flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <svg className="w-8 h-8 mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -912,9 +950,12 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         type="file"
                                         accept="image/jpeg,image/png,image/webp"
                                         multiple
-                                        className="hidden"
+                                        className="sr-only"
+                                        aria-label="Upload campaign images"
                                         onChange={(e) => {
-                                            const files = Array.from(e.target.files || []);
+                                            const chosen = Array.from(e.target.files || []);
+                                            const files = chosen.filter(file => file.size <= 10 * 1024 * 1024 && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
+                                            setUploadError(files.length < chosen.length ? 'Some images were skipped. Use JPEG, PNG or WebP up to 10MB each.' : null);
                                             setStagedImages(prev => {
                                                 const incoming = files.map(f => ({ file: f, isSeed: false }));
                                                 return [...prev, ...incoming].slice(0, 10);
@@ -949,6 +990,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                             </div>
                                             <button
                                                 type="button"
+                                                aria-label={`Remove ${file.name}`}
                                                 onClick={() => setStagedVideos(prev => prev.filter((_, idx) => idx !== i))}
                                                 className="text-red-400 hover:text-red-600 flex-shrink-0"
                                             >
@@ -962,7 +1004,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             )}
 
                             {stagedVideos.length < 3 && (
-                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
+                                <label className="focus-within:ring-2 focus-within:ring-brand-dark flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
                                     <div className="flex items-center gap-2">
                                         <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -972,9 +1014,12 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <input
                                         type="file"
                                         accept="video/mp4,video/quicktime,video/webm"
-                                        className="hidden"
+                                        className="sr-only"
+                                        aria-label="Upload campaign video"
                                         onChange={(e) => {
                                             const file = e.target.files?.[0];
+                                            if (file && (file.size > 100 * 1024 * 1024 || !['video/mp4', 'video/quicktime', 'video/webm'].includes(file.type))) { setUploadError('Use MP4, MOV or WebM up to 100MB.'); return; }
+                                            setUploadError(null);
                                             if (file) {
                                                 setStagedVideos(prev => [...prev, file].slice(0, 3));
                                             }
@@ -1023,7 +1068,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             
                             <ReviewSection title="Product Focus">
                                 <ReviewItem label="Product Focus" value={data.product_focus || 'Not specified'} />
-                                <ReviewItem label="Selected Pages" value={data.selected_pages?.length ? `${data.selected_pages.length} pages selected` : 'None'} />
+                                <ReviewItem label="Destination" value={data.landing_page_url || 'AI will choose from your included website pages'} />
                                 <ReviewItem label="Exclusions" value={data.exclusions || 'None'} />
                             </ReviewSection>
                             
@@ -1096,7 +1141,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 We fill these in from your website. Open any of them to change what we chose.
                             </p>
 
-                            <DetailPanel title="Audience & voice" summary="Who to reach and how the ads should sound" defaultOpen={! data.target_market || ! data.voice}>
+                            <DetailPanel title="Audience & voice" summary="Who to reach and how the ads should sound" defaultOpen={! data.target_market || ! data.voice || Boolean(errors.target_market || errors.voice)}>
                                 {renderStepBody(3)}
                             </DetailPanel>
 
@@ -1108,7 +1153,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 {renderStepBody(6)}
                             </DetailPanel>
 
-                            <DetailPanel title="Your own images & videos" summary="We generate these — upload your own if you'd rather">
+                            <DetailPanel title="Your own images & videos" summary="We generate these — upload your own if you'd rather" defaultOpen={Object.keys(errors).some(key => /^(images|seed_images|videos)/.test(key))}>
                                 {renderStepBody(7)}
                             </DetailPanel>
                         </div>
@@ -1197,6 +1242,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             type="button"; this closes the keyboard path.
                         */}
                         <form onSubmit={submit} onKeyDown={handleFormKeyDown}>
+                            <FormErrorSummary errors={errors} />
+                            {uploadError && <p role="alert" className="mb-4 text-sm text-red-700">{uploadError}</p>}
                             {renderStepBody(STEP_BODY[currentStep] ?? currentStep)}
                             
                             {/* Navigation Buttons */}
@@ -1243,10 +1290,11 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         </form>
                     </div>
                     
+                    {mediaIssue && <p role="status" className="mt-4 text-sm text-amber-800">{mediaIssue}</p>}
                     {/* Draft Saved Indicator — the real save time, not the render time */}
                     {currentStep > 0 && draftSavedAt && (
                         <p className="text-center text-sm text-gray-500 mt-4">
-                            Draft auto-saved • {draftSavedAt.toLocaleTimeString()}
+                            Text draft saved • {draftSavedAt.toLocaleTimeString()}{(stagedImages.length > 0 || stagedVideos.length > 0) && (mediaSaved ? ' · Media saved in this browser' : ' · Saving media…')}
                         </p>
                     )}
                 </div>
@@ -1269,6 +1317,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
  */
 const DetailPanel = ({ title, summary, defaultOpen = false, children }) => {
     const [open, setOpen] = useState(defaultOpen);
+    useEffect(() => { if (defaultOpen) setOpen(true); }, [defaultOpen]);
 
     return (
         <div className="rounded-lg border border-gray-200 bg-white">

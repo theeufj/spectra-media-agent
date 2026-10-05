@@ -1,3 +1,4 @@
+import FormErrors from '@/Components/FormErrorSummary';
 import React, { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -12,7 +13,7 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
     const boostVideosSetting = settings.find(s => s.key === 'creative_boost_video_generations');
     const boostRefinementsSetting = settings.find(s => s.key === 'creative_boost_refinements');
     
-    const { data, setData, post, processing } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         deployment_enabled: deploymentSetting ? deploymentSetting.value === '1' : false,
         campaign_testing_mode: campaignTestingModeSetting ? campaignTestingModeSetting.value === '1' : false,
         managed_billing_enabled: managedBillingSetting ? managedBillingSetting.value === '1' : true,
@@ -51,6 +52,7 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                             </div>
 
                             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                                    <FormErrors errors={errors} labels={{"deployment_enabled": "Enable Campaign Deployment", "campaign_testing_mode": "Campaign Testing Mode", "managed_billing_enabled": "Managed Ad Spend Billing", "creative_boost_price_cents": "Price (cents)", "creative_boost_image_generations": "Image Generations", "creative_boost_video_generations": "Video Generations", "creative_boost_refinements": "Refinements", "image_prompt_template": "Image generation prompt", "video_prompt_template": "Video generation prompt", "ad_copy_directives": "Ad copy house style"}} />
                                 {/* Deployment Settings Section */}
                                 <div className="border-b border-gray-200 pb-6">
                                     <h4 className="text-lg font-medium text-gray-900 mb-4">Deployment Settings</h4>
@@ -59,13 +61,13 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         <div className="flex-1">
                                             <label className="flex items-center cursor-pointer">
                                                 <div className="relative">
-                                                    <input
+                                                    <input id="deployment_enabled" aria-label="Enable Campaign Deployment"
                                                         type="checkbox"
                                                         checked={data.deployment_enabled}
                                                         onChange={(e) => setData('deployment_enabled', e.target.checked)}
-                                                        className="sr-only"
+                                                        className="sr-only peer"
                                                     />
-                                                    <div className={`block w-14 h-8 rounded-full transition ${
+                                                    <div className={`block w-14 h-8 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand-primary peer-focus-visible:ring-offset-2 ${
                                                         data.deployment_enabled 
                                                             ? 'bg-green-500' 
                                                             : 'bg-gray-300'
@@ -132,13 +134,13 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         <div className="flex-1">
                                             <label className="flex items-center cursor-pointer">
                                                 <div className="relative">
-                                                    <input
+                                                    <input id="campaign_testing_mode" aria-label="Campaign Testing Mode"
                                                         type="checkbox"
                                                         checked={data.campaign_testing_mode}
                                                         onChange={(e) => setData('campaign_testing_mode', e.target.checked)}
-                                                        className="sr-only"
+                                                        className="sr-only peer"
                                                     />
-                                                    <div className={`block w-14 h-8 rounded-full transition ${
+                                                    <div className={`block w-14 h-8 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand-primary peer-focus-visible:ring-offset-2 ${
                                                         data.campaign_testing_mode 
                                                             ? 'bg-yellow-500' 
                                                             : 'bg-green-500'
@@ -205,13 +207,13 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         <div className="flex-1">
                                             <label className="flex items-center cursor-pointer">
                                                 <div className="relative">
-                                                    <input
+                                                    <input id="managed_billing_enabled" aria-label="Managed Ad Spend Billing"
                                                         type="checkbox"
                                                         checked={data.managed_billing_enabled}
                                                         onChange={(e) => setData('managed_billing_enabled', e.target.checked)}
-                                                        className="sr-only"
+                                                        className="sr-only peer"
                                                     />
-                                                    <div className={`block w-14 h-8 rounded-full transition ${
+                                                    <div className={`block w-14 h-8 rounded-full transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand-primary peer-focus-visible:ring-offset-2 ${
                                                         data.managed_billing_enabled 
                                                             ? 'bg-purple-500' 
                                                             : 'bg-gray-300'
@@ -276,8 +278,8 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
 
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Price (cents)</label>
-                                            <input
+                                            <label htmlFor="creative_boost_price_cents" className="block text-sm font-medium text-gray-700 mb-1">Price (cents)</label>
+                                            <input id="creative_boost_price_cents" aria-label="Price (cents)"
                                                 type="number"
                                                 min="100"
                                                 value={data.creative_boost_price_cents}
@@ -287,8 +289,8 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                             <p className="text-xs text-gray-500 mt-1">${(data.creative_boost_price_cents / 100).toFixed(2)}</p>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Image Generations</label>
-                                            <input
+                                            <label htmlFor="creative_boost_image_generations" className="block text-sm font-medium text-gray-700 mb-1">Image Generations</label>
+                                            <input id="creative_boost_image_generations" aria-label="Image Generations"
                                                 type="number"
                                                 min="0"
                                                 value={data.creative_boost_image_generations}
@@ -297,8 +299,8 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Video Generations</label>
-                                            <input
+                                            <label htmlFor="creative_boost_video_generations" className="block text-sm font-medium text-gray-700 mb-1">Video Generations</label>
+                                            <input id="creative_boost_video_generations" aria-label="Video Generations"
                                                 type="number"
                                                 min="0"
                                                 value={data.creative_boost_video_generations}
@@ -307,8 +309,8 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Refinements</label>
-                                            <input
+                                            <label htmlFor="creative_boost_refinements" className="block text-sm font-medium text-gray-700 mb-1">Refinements</label>
+                                            <input id="creative_boost_refinements" aria-label="Refinements"
                                                 type="number"
                                                 min="0"
                                                 value={data.creative_boost_refinements}
@@ -353,7 +355,7 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         )}
                                     </div>
 
-                                    <textarea
+                                    <textarea id="image_prompt_template" aria-label="Image generation prompt"
                                         rows={12}
                                         value={data.image_prompt_template}
                                         onChange={(e) => setData('image_prompt_template', e.target.value)}
@@ -410,7 +412,7 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         )}
                                     </div>
 
-                                    <textarea
+                                    <textarea id="video_prompt_template" aria-label="Video generation prompt"
                                         rows={12}
                                         value={data.video_prompt_template}
                                         onChange={(e) => setData('video_prompt_template', e.target.value)}
@@ -460,7 +462,7 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                     <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
                                         Model in use: <strong className="font-mono">{adCopyModel}</strong>
                                     </div>
-                                    <textarea
+                                    <textarea id="ad_copy_directives" aria-label="Ad copy house style"
                                         rows={6}
                                         value={data.ad_copy_directives}
                                         onChange={(e) => setData('ad_copy_directives', e.target.value)}

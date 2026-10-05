@@ -31,7 +31,7 @@ const CARD_ELEMENT_OPTIONS = {
 };
 
 // Shared budget calculations
-const useBudgetCalcs = (campaign) => {
+const useBudgetCalcs = (campaign, existingCredit) => {
     const getCampaignDurationDays = () => {
         if (campaign?.start_date && campaign?.end_date) {
             const startDate = new Date(campaign.start_date);
@@ -61,7 +61,8 @@ const useBudgetCalcs = (campaign) => {
     // Show exactly what the server charges: daily × days. Substituting
     // total_budget for short campaigns showed one number on the button and
     // put a different one on the card.
-    const upfrontCharge = Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
+    const runway = Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
+    const upfrontCharge = Math.round(Math.max(0, runway - Number(existingCredit?.current_balance || 0)) * 100) / 100;
 
     return { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge };
 };
@@ -117,7 +118,7 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
                     <p className="text-lg font-semibold text-gray-900">{money(estimatedDailySpend, currency)}/day</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-sm text-gray-500">Initial Charge ({daysToCharge} days)</p>
+                    <p className="text-sm text-gray-500">Charge today (credit shortfall)</p>
                     <p className="text-2xl font-bold text-brand-dark">{money(upfrontCharge, currency)}</p>
                 </div>
             </div>
@@ -127,11 +128,11 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
 };
 
 // Form for users who already have a payment method on file — no card entry needed
-const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
+const SavedCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }) => {
     const currency = useCurrency();
     const [error, setError] = useState(null);
     const [processing, setProcessing] = useState(false);
-    const { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge } = useBudgetCalcs(campaign);
+    const { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge } = useBudgetCalcs(campaign, existingCredit);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -143,6 +144,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
                 method: 'POST',
                 json: {
                     campaign_id: campaign?.id,
+                    strategy_id: strategy?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
@@ -182,7 +184,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
             </div>
 
             {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                 </div>
             )}
@@ -202,7 +204,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & Deploy`}
+                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & review launch`}
                 </button>
             </div>
 
@@ -215,20 +217,20 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
 };
 
 // Form for users with no payment method on file — collects card via Stripe Elements
-const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
+const NewCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }) => {
     const currency = useCurrency();
     const stripe = useStripe();
     const elements = useElements();
     const [error, setError] = useState(null);
     const [processing, setProcessing] = useState(false);
-    const { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge } = useBudgetCalcs(campaign);
+    const { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge } = useBudgetCalcs(campaign, existingCredit);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
         setProcessing(true);
         setError(null);
 
-        if (!stripe || !elements) return;
+        if (!stripe || !elements) { setProcessing(false); return; }
 
         const cardElement = elements.getElement(CardElement);
         const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
@@ -248,6 +250,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
                 json: {
                     payment_method_id: paymentMethod.id,
                     campaign_id: campaign?.id,
+                    strategy_id: strategy?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
@@ -285,7 +288,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
             </div>
 
             {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                 </div>
             )}
@@ -305,7 +308,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & Deploy`}
+                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & review launch`}
                 </button>
             </div>
 
@@ -318,7 +321,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
 };
 
 // Main Modal Component
-export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, existingCredit, hasPaymentMethod }) {
+export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, strategy, existingCredit, hasPaymentMethod }) {
     const currency = useCurrency();
     const isTopUp = existingCredit && existingCredit.status === 'active';
     return (
@@ -336,9 +339,12 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                     </p>
                 </div>
 
+                {strategy && <p className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">You will review a launch for {strategy.platform}. Funding uses the campaign’s approved total budget; this credit is shared across its platforms.</p>}
                 {hasPaymentMethod ? (
                     <SavedCardForm
                         campaign={campaign}
+                        strategy={strategy}
+                        existingCredit={existingCredit}
                         onSuccess={onSuccess}
                         onCancel={onClose}
                     />
@@ -346,6 +352,8 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                     <Elements stripe={stripePromise}>
                         <NewCardForm
                             campaign={campaign}
+                            strategy={strategy}
+                            existingCredit={existingCredit}
                             onSuccess={onSuccess}
                             onCancel={onClose}
                         />

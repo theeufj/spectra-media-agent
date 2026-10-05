@@ -3,6 +3,8 @@ import { money, count, percent } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import FormErrorSummary from '@/Components/FormErrorSummary';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 /*
@@ -76,10 +78,13 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
      */
     const currency = useCurrency();
     const [showManual, setShowManual] = useState(false);
+    const [suggestionApplied, setSuggestionApplied] = useState(false);
+    const [confirmRebalance, setConfirmRebalance] = useState(false);
+    const [rebalancing, setRebalancing] = useState(false);
 
-    const { data, setData, put, processing } = useForm({
-        total_monthly_budget: allocation?.total_monthly_budget || 1000,
-        google_ads_pct: allocation?.google_ads_pct || 100,
+    const { data, setData, put, processing, errors, transform } = useForm({
+        total_monthly_budget: allocation?.total_monthly_budget ?? 1000,
+        google_ads_pct: allocation?.google_ads_pct ?? 100,
         facebook_ads_pct: allocation?.facebook_ads_pct || 0,
         microsoft_ads_pct: allocation?.microsoft_ads_pct || 0,
         linkedin_ads_pct: allocation?.linkedin_ads_pct || 0,
@@ -101,17 +106,18 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
 
     const handleSave = (e) => {
         e.preventDefault();
-        put(route('budget.update'), { preserveScroll: true });
+        transform(values => ({ ...values, ...Object.fromEntries(PLATFORMS.filter(platform => !platforms.includes(platform)).map(platform => [platform.field, 0])) })).put(route('budget.update'), { preserveScroll: true, onSuccess: () => setSuggestionApplied(false) });
     };
 
-    const handleRebalance = () => {
-        if (confirm('Rebalance now based on performance data?')) {
-            router.post(route('budget.rebalance'), {}, { preserveScroll: true });
-        }
-    };
+    const handleRebalance = () => setConfirmRebalance(true);
+    const rebalance = () => new Promise((resolve, reject) => {
+        setRebalancing(true);
+        router.post(route('budget.rebalance'), {}, { preserveScroll: true, onSuccess: () => resolve(), onError: () => reject(new Error('We could not rebalance. Check the errors on this page.')), onFinish: () => setRebalancing(false) });
+    });
 
     const handleApplySuggested = () => {
         if (recommendations?.suggested_splits) {
+            setSuggestionApplied(true);
             setData(prev => ({
                 ...prev,
                 google_ads_pct: recommendations.suggested_splits.google_ads_pct,
@@ -128,6 +134,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
     return (
         <AuthenticatedLayout>
             <Head title="Budget split" />
+            <ConfirmationModal show={confirmRebalance} onClose={() => setConfirmRebalance(false)} onConfirm={rebalance} title="Adjust platform budgets now?" message={`Agents will use your saved ${money(allocation?.total_monthly_budget ?? 0, currency)} monthly budget and recent performance to adjust the budgets on your active platforms. Review and save your settings first if they have changed.`} confirmText="Rebalance budgets" processing={rebalancing} isDestructive={false} />
             <div className="py-8">
                 <div className="mx-auto max-w-5xl">
                     <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -140,7 +147,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                         </div>
                         <div className="flex gap-2">
                             <a href={route('budget.history')} className="inline-flex min-h-[44px] items-center px-4 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">History</a>
-                            <button type="button" onClick={handleRebalance} className="inline-flex min-h-[44px] items-center px-4 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">Rebalance now</button>
+                            <button type="button" onClick={handleRebalance} disabled={rebalancing || !allocation} className="inline-flex min-h-[44px] items-center px-4 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">Rebalance now</button>
                         </div>
                     </div>
 
@@ -233,6 +240,9 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                     </div>
 
                     <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-200 p-6">
+                        <FormErrorSummary errors={errors} className="mb-4" />
+                        {suggestionApplied && <p role="status" className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">The suggested percentages are ready for review below. Save to keep this split.</p>}
+                        <p className="mb-4 text-sm text-gray-600">Save sets your allocation preferences. Rebalance now applies an adjustment to platform budgets; scheduled adjustments follow the frequency below.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label htmlFor="total_monthly_budget" className="block text-sm font-medium text-gray-700 mb-1">Total monthly budget</label>
@@ -316,6 +326,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                                 ))}
                             </div>
 
+                            {Math.abs(totalPct - 100) > 0.5 && <div role="status" className="mt-3 text-sm text-amber-800">Percentages need to total 100%. <button type="button" className="font-semibold underline" onClick={() => { if (totalPct > 0) setData(values => ({...values, ...Object.fromEntries(platforms.map(platform => [platform.field, Math.round(Number(values[platform.field] || 0) / totalPct * 1000) / 10]))})); }}>Scale this split to 100%</button></div>}
                             {!singlePlatform && (
                                 <>
                                     <button
@@ -381,7 +392,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                         <div className="mt-6 flex justify-end">
                             <button
                                 type="submit"
-                                disabled={processing}
+                                disabled={processing || Math.abs(totalPct - 100) > 0.5}
                                 className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-6 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                             >
                                 {processing ? 'Saving…' : 'Save'}

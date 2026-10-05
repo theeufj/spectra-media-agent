@@ -5,6 +5,8 @@ import { useState, useEffect, useRef } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import FormErrorSummary from '@/Components/FormErrorSummary';
+import PolicyStatusCard from '@/Components/PolicyStatusCard';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import ForecastPanel from '@/Components/ForecastPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
@@ -94,7 +96,7 @@ const CollateralSummaryCard = ({ campaign }) => {
 */
 export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const { data, setData, put, processing } = useForm({
+    const { data, setData, put, processing, errors, reset } = useForm({
         ad_copy_strategy: strategy.ad_copy_strategy,
         imagery_strategy: strategy.imagery_strategy,
         video_strategy: strategy.video_strategy,
@@ -145,23 +147,26 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                 )}
             </div>
 
-            {strategy.creative_concepts?.length > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-3">{strategy.creative_concepts.map((concept, index) => <div key={index} className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Concept {index + 1}</p><h4 className="mt-1 font-semibold text-gray-900">{concept.selling_idea}</h4><p className="mt-2 text-sm text-gray-600">{concept.evidence}</p>{concept.visual_style && <p className="mt-3 text-xs font-medium text-brand-dark">{concept.visual_style.replaceAll('_', ' ')} · {concept.composition.replaceAll('_', ' ')}</p>}<p className="mt-2 text-sm text-gray-600">{concept.visual}</p></div>)}</div>}
+            {strategy.creative_concepts?.length > 0 && <div className="mb-5 grid gap-3 sm:grid-cols-3">{strategy.creative_concepts.map((concept, index) => <div key={index} className="rounded-lg border border-gray-200 bg-white p-4"><p className="text-xs text-gray-500">Concept {index + 1}</p><h4 className="mt-1 font-semibold text-gray-900">{concept.selling_idea}</h4><p className="mt-2 text-sm text-gray-600">{concept.evidence}</p>{concept.visual_style && <p className="mt-3 text-xs font-medium text-brand-dark">{concept.visual_style.replaceAll('_', ' ')} · {(concept.composition || '').replaceAll('_', ' ')}</p>}<p className="mt-2 text-sm text-gray-600">{concept.visual}</p></div>)}</div>}
             {isEditing ? (
-                <form onSubmit={handleUpdate} className="space-y-4">
+                <form onSubmit={handleUpdate} className="space-y-4"><FormErrorSummary errors={errors} labels={{ ad_copy_strategy: 'Ad copy direction', imagery_strategy: 'Image direction', video_strategy: 'Video direction' }} fieldIds={Object.fromEntries(['ad_copy_strategy', 'imagery_strategy', 'video_strategy'].map(field => [field, `${field}-${strategy.id}`]))} />
                     <div>
-                        <label className="font-bold text-jet">Ad Copy Strategy</label>
-                        <textarea value={data.ad_copy_strategy} onChange={e => setData('ad_copy_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        <label htmlFor={`ad_copy_strategy-${strategy.id}`} className="font-bold text-jet">Ad Copy Strategy</label>
+                        <textarea id={`ad_copy_strategy-${strategy.id}`} aria-invalid={Boolean(errors.ad_copy_strategy)} aria-describedby={errors.ad_copy_strategy ? `ad_copy_strategy-error-${strategy.id}` : undefined} value={data.ad_copy_strategy} onChange={e => setData('ad_copy_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        {errors.ad_copy_strategy && <p id={`ad_copy_strategy-error-${strategy.id}`} className="mt-1 text-sm text-red-700">{errors.ad_copy_strategy}</p>}
                     </div>
                     <div>
-                        <label className="font-bold text-jet">Imagery Strategy</label>
-                        <textarea value={data.imagery_strategy} onChange={e => setData('imagery_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        <label htmlFor={`imagery_strategy-${strategy.id}`} className="font-bold text-jet">Imagery Strategy</label>
+                        <textarea id={`imagery_strategy-${strategy.id}`} aria-invalid={Boolean(errors.imagery_strategy)} aria-describedby={errors.imagery_strategy ? `imagery_strategy-error-${strategy.id}` : undefined} value={data.imagery_strategy} onChange={e => setData('imagery_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        {errors.imagery_strategy && <p id={`imagery_strategy-error-${strategy.id}`} className="mt-1 text-sm text-red-700">{errors.imagery_strategy}</p>}
                     </div>
                     {strategy.campaign_type !== 'search' && <div>
-                        <label className="font-bold text-jet">Video Strategy</label>
-                        <textarea value={data.video_strategy} onChange={e => setData('video_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        <label htmlFor={`video_strategy-${strategy.id}`} className="font-bold text-jet">Video Strategy</label>
+                        <textarea id={`video_strategy-${strategy.id}`} aria-invalid={Boolean(errors.video_strategy)} aria-describedby={errors.video_strategy ? `video_strategy-error-${strategy.id}` : undefined} value={data.video_strategy} onChange={e => setData('video_strategy', e.target.value)} className="w-full mt-1 border-gray-300 rounded-md shadow-sm" />
+                        {errors.video_strategy && <p id={`video_strategy-error-${strategy.id}`} className="mt-1 text-sm text-red-700">{errors.video_strategy}</p>}
                     </div>}
                     <div className="flex justify-end space-x-2">
-                        <button type="button" onClick={() => setIsEditing(false)} className="text-sm text-gray-600">Cancel</button>
+                        <button type="button" onClick={() => { reset(); setIsEditing(false); }} className="text-sm text-gray-600">Cancel</button>
                         <PrimaryButton disabled={processing}>Save Changes</PrimaryButton>
                     </div>
                 </form>
@@ -176,10 +181,10 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                    under its own brief. Still one click away, because someone
                    checking why a creative looks the way it does needs it.
                 */
-                <details className="group">
+                <details className="group" open={!isSignedOff}>
                     <summary className="cursor-pointer list-none text-sm text-gray-500 hover:text-gray-700 transition">
-                        <span className="group-open:hidden">Show the brief this was built from</span>
-                        <span className="hidden group-open:inline">Hide the brief</span>
+                        <span className="group-open:hidden">Show creative direction</span>
+                        <span className="hidden group-open:inline">Creative direction</span>
                     </summary>
                     <div className="mt-4 space-y-5">
                         <div>
@@ -254,7 +259,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => (
     </section>
 );
 
-export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
+export default function Show({ auth, campaign, policyStatus = campaign?.policy_checks, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
     const [campaigns, setCampaign] = useState(campaign);
     // Saves return fresh Inertia props without remounting this page. Keep the
     // review card in sync so it shows the brief that was actually saved.
@@ -553,6 +558,7 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
         >
             <Head title={`Your campaign — ${campaigns.name}`} />
             {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={1} /></div>}
+            {(campaigns.google_ads_campaign_id || campaigns.facebook_ads_campaign_id || policyStatus) && <div className="mx-auto max-w-7xl px-4 py-6"><PolicyStatusCard campaign={campaigns} policyStatus={campaigns.policy_checks ?? policyStatus} /></div>}
 
             {/* Leads the page for campaigns we generated: it is the one thing
                 standing between the customer and deploying, and without it they

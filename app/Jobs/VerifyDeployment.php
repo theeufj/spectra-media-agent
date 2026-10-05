@@ -43,7 +43,7 @@ class VerifyDeployment implements ShouldQueue
         $this->verifier = $verifier;
 
         $strategies = $this->campaign->strategies()
-            ->where('deployment_status', 'deployed')
+            ->whereIn('deployment_status', ['deployed', 'deploy_unverified'])
             ->get();
 
         if ($strategies->isEmpty()) {
@@ -94,7 +94,7 @@ class VerifyDeployment implements ShouldQueue
             foreach ($customer->users as $user) {
                 $user->notify(new \App\Notifications\DeploymentFailed(
                     $this->campaign,
-                    'We could not verify that your campaign on '.implode(', ', $unverified).' matches its reviewed settings. Our team has been alerted and is checking.'
+                    'We could not verify that your campaign on '.implode(', ', $unverified).' matches its reviewed settings. Review the deployment status for the reported differences, or contact support.'
                 ));
             }
         }

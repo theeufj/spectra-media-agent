@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
@@ -86,7 +86,7 @@ const agents = [
 const stats = [
     { value: 'Six', label: 'AI specialists per account', detail: 'working daily, not weekly' },
     { value: 'Four', label: 'ad platforms, one dashboard', detail: 'Google, Meta, Microsoft, LinkedIn' },
-    { value: 'Minutes', label: 'from URL to live campaign', detail: 'an agency takes two to four weeks' },
+    { value: 'Review first', label: 'you approve before launch', detail: 'check your profile, budget and ads' },
 ];
 
 /*
@@ -104,6 +104,7 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
     const [loadingStage, setLoadingStage] = useState(0);
     const [demoResult, setDemoResult] = useState(null);
     const [error, setError] = useState(null);
+    const demoRequest = useRef(null);
 
     const normaliseUrl = (raw) => {
         const trimmed = raw.trim();
@@ -121,13 +122,14 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
         setDemoResult(null);
         setLoadingStage(1);
 
-        const t1 = setTimeout(() => setLoadingStage(2), 5000);
-        const t2 = setTimeout(() => setLoadingStage(3), 10000);
-        const t3 = setTimeout(() => setLoadingStage(4), 18000);
+        demoRequest.current?.abort();
+        demoRequest.current = new AbortController();
+        const timeout = setTimeout(() => demoRequest.current?.abort(), 180000);
 
         try {
             const response = await fetch('/api/demo/generate-full', {
                 method: 'POST',
+                signal: demoRequest.current.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
@@ -143,27 +145,16 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                 setError(data.message || 'Something went wrong.');
             }
         } catch (err) {
-            setError('Failed to reach the server.');
+            setError(err.name === 'AbortError' ? 'We did not receive a finished preview. Your details are kept here; you can retry.' : 'We could not reach the server. Your details are kept here; please retry.');
         } finally {
-            clearTimeout(t1);
-            clearTimeout(t2);
-            clearTimeout(t3);
+            clearTimeout(timeout);
             setLoadingStage(0);
-        }
-    };
-
-    const getLoadingText = () => {
-        switch (loadingStage) {
-            case 1: return "Reading your website...";
-            case 2: return "Picking up your colours, fonts, and brand feel...";
-            case 3: return "Understanding what makes your brand stand out...";
-            case 4: return "Writing your ads...";
-            default: return "Working on it...";
         }
     };
 
     const demoForm = (
         <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
+            <p className="mb-3 text-sm text-gray-600">Preview the brand and ads we can build from your site. We use your email to follow up about the preview; creating an account is a separate step.</p>
             <form onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-3 sm:flex-row">
                     <label htmlFor="demo-first-name" className="sr-only">First name</label>
@@ -218,13 +209,10 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                     </button>
                 </div>
             </form>
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
             {loadingStage > 0 && (
                 <div className="mt-4">
-                    <div className="h-2.5 w-full rounded-full bg-gray-200">
-                        <div className="h-2.5 rounded-full bg-brand-dark transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
-                    </div>
-                    <p className="mt-2 animate-pulse text-center text-sm font-medium text-brand-darker">{getLoadingText()}</p>
+                    <p role="status" className="text-center text-sm font-medium text-brand-darker">Reading your site and preparing an ad preview. This can take a few minutes.</p>
                 </div>
             )}
         </div>

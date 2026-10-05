@@ -10,6 +10,8 @@ class BrandGuideline extends Model
 {
     use BelongsToCustomer;
 
+    protected $attributes = ['profile_version' => 1];
+
     protected $fillable = [
         'customer_id',
         'brand_voice',
@@ -30,6 +32,14 @@ class BrandGuideline extends Model
         'user_verified',
         'extracted_at',
         'last_verified_at',
+        'profile_version',
+        'approved_version',
+        'manual_overrides',
+        'proposed_profile',
+        'extraction_changes',
+        'source_suggestions',
+        'source_snapshot',
+        'source_fingerprint',
     ];
 
     protected $casts = [
@@ -49,6 +59,13 @@ class BrandGuideline extends Model
         'user_verified' => 'boolean',
         'extracted_at' => 'datetime',
         'last_verified_at' => 'datetime',
+        'profile_version' => 'integer',
+        'approved_version' => 'integer',
+        'manual_overrides' => 'array',
+        'proposed_profile' => 'array',
+        'extraction_changes' => 'array',
+        'source_suggestions' => 'array',
+        'source_snapshot' => 'array',
     ];
 
     /**

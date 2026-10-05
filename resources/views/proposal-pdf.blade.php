@@ -402,7 +402,7 @@
             <div class="platform-header">
                 {{ $strategy['platform'] ?? 'Platform' }}
                 @if(!empty($strategy['budget_allocation']))
-                    <span style="float: right; opacity: 0.9;">${{ number_format($strategy['budget_allocation'], 0) }}/mo</span>
+                    <span style="float: right; opacity: 0.9;">{{ $proposal->currency_code }} {{ number_format($strategy['budget_allocation'], 0) }}/mo</span>
                 @endif
             </div>
             <div class="platform-body">
@@ -505,7 +505,7 @@
                         <td>{{ ucfirst(str_replace('_', ' ', $item)) }}</td>
                         <td class="value">
                             @if(is_numeric($value))
-                                ${{ number_format((float)$value, 2) }}
+                                {{ $proposal->currency_code }} {{ number_format((float)$value, 2) }}
                             @else
                                 {{ $value }}
                             @endif

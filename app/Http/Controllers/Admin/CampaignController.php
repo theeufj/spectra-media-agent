@@ -45,6 +45,7 @@ class CampaignController extends Controller
         return Inertia::render('Admin/CampaignDetail', [
             'campaign' => $campaign,
             'activityLogs' => $activityLogs,
+            'policyStatus' => \App\Services\Agents\CampaignAlertService::policyStatus($campaign),
         ]);
     }
 

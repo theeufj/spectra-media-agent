@@ -11,6 +11,7 @@ use App\Models\GoogleAdsPerformanceData;
 use App\Services\ActivityLogger;
 use App\Services\Customers\DeactivateCustomerService;
 use App\Services\Customers\HandOverAccount;
+use App\Services\KnowledgeBase\KnowledgeHealth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -42,7 +43,10 @@ class CustomerController extends Controller
                 'quality' => (int) $row->getAttribute('quality'),
                 'verified' => (bool) $row->getAttribute('verified'),
             ]);
-        $kbCounts = \App\Models\KnowledgeBase::selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
+        $kbCoverage = \App\Models\KnowledgeBase::query()
+            ->whereNull('excluded_at')
+            ->selectRaw("customer_id, count(*) as selected, count(case when processing_status = 'ready' then 1 end) as ready, count(case when length(trim(coalesce(content, ''))) > 0 then 1 end) as readable")
+            ->groupBy('customer_id')->get()->keyBy('customer_id');
         $keywordCounts = \App\Models\Keyword::selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
         $signedOffCampaigns = \App\Models\Campaign::whereHas('strategies', fn ($q) => $q->whereNotNull('signed_off_at'))
             ->selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
@@ -53,9 +57,12 @@ class CustomerController extends Controller
             ->join('campaigns', 'campaigns.id', '=', 'image_collaterals.campaign_id')
             ->selectRaw('campaigns.customer_id, count(*) as c')->groupBy('campaigns.customer_id')->pluck('c', 'customer_id');
 
-        $customers->each(function ($customer) use ($guidelines, $kbCounts, $keywordCounts, $signedOffCampaigns, $adCopyCounts, $imageCounts) {
+        $customers->each(function ($customer) use ($guidelines, $kbCoverage, $keywordCounts, $signedOffCampaigns, $adCopyCounts, $imageCounts) {
             $guideline = $guidelines->get($customer->id);
-            $kb = (int) ($kbCounts[$customer->id] ?? 0);
+            $kb = $kbCoverage->get($customer->id);
+            $selectedKnowledge = (int) ($kb?->getAttribute('selected') ?? 0);
+            $readyKnowledge = (int) ($kb?->getAttribute('ready') ?? 0);
+            $readableKnowledge = (int) ($kb?->getAttribute('readable') ?? 0);
             $keywords = (int) ($keywordCounts[$customer->id] ?? 0);
             $campaignTotal = $customer->campaigns_count;
             $campaignsSigned = (int) ($signedOffCampaigns[$customer->id] ?? 0);
@@ -64,7 +71,7 @@ class CustomerController extends Controller
 
             $customer->setAttribute('coverage', [
                 'brand' => ! $guideline ? 'red' : (($guideline['verified'] && $guideline['quality'] >= 7) ? 'green' : 'orange'),
-                'knowledge' => $kb >= 5 ? 'green' : ($kb > 0 ? 'orange' : 'red'),
+                'knowledge' => $selectedKnowledge === 0 || $readableKnowledge === 0 ? 'red' : ($readyKnowledge === $selectedKnowledge ? 'green' : 'orange'),
                 'campaigns' => $campaignTotal === 0 ? 'red' : ($campaignsSigned >= $campaignTotal ? 'green' : 'orange'),
                 'creative' => ($copies > 0 && $images > 0) ? 'green' : (($copies > 0 || $images > 0) ? 'orange' : 'red'),
                 'keywords' => $keywords >= 5 ? 'green' : ($keywords > 0 ? 'orange' : 'red'),
@@ -266,7 +273,7 @@ class CustomerController extends Controller
         $knowledgePages = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
             ->latest()
             ->limit(150)
-            ->get(['id', 'url', 'source_type', 'original_filename', 'created_at', \Illuminate\Support\Facades\DB::raw('length(content) as content_length'), \Illuminate\Support\Facades\DB::raw('left(content, 300) as excerpt')]);
+            ->get(['id', 'title', 'url', 'source_type', 'original_filename', 'created_at', 'processing_status', 'processing_error', 'excluded_at', 'fetched_at', 'indexed_at', 'embedding_model', \Illuminate\Support\Facades\DB::raw('length(content) as content_length'), \Illuminate\Support\Facades\DB::raw('left(content, 300) as excerpt')]);
 
         $keywords = \App\Models\Keyword::where('customer_id', $customer->id)
             ->orderByDesc('created_at')
@@ -282,7 +289,7 @@ class CustomerController extends Controller
             'creativeBriefs' => \App\Models\CreativeBrief::where('customer_id', $customer->id)->latest()->limit(50)->get(),
             'personas' => \App\Models\Persona::where('customer_id', $customer->id)->latest()->get(),
             'proposals' => \App\Models\Proposal::where('customer_id', $customer->id)->latest()
-                ->get(['id', 'client_name', 'industry', 'budget', 'goals', 'platforms', 'status', 'created_at']),
+                ->get(['id', 'client_name', 'industry', 'budget', 'currency_code', 'goals', 'platforms', 'status', 'created_at']),
             'keywords' => $keywords,
             'negativeKeywordLists' => \App\Models\NegativeKeywordList::where('customer_id', $customer->id)->get(),
             'products' => \App\Models\Product::where('customer_id', $customer->id)->latest()->limit(12)
@@ -292,13 +299,19 @@ class CustomerController extends Controller
             'landingPageAudits' => \App\Models\LandingPageAudit::where('customer_id', $customer->id)->latest()->limit(5)
                 ->get(['id', 'url', 'message_match_score', 'cta_count', 'primary_cta', 'created_at']),
             'knowledge' => [
+                ...app(KnowledgeHealth::class)->forCustomer($customer->id),
                 'pages' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->count(),
-                'last_crawled_at' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->latest()->value('created_at'),
+                'primary_model' => config('ai.models.embedding'),
                 'harvested_total' => \App\Models\HarvestedAsset::where('customer_id', $customer->id)->count(),
                 'keywords_total' => \App\Models\Keyword::where('customer_id', $customer->id)->count(),
                 'products_total' => \App\Models\Product::where('customer_id', $customer->id)->count(),
             ],
         ]);
+    }
+
+    public function knowledgeStatus(Customer $customer, KnowledgeHealth $health)
+    {
+        return response()->json(['health' => $health->forCustomer($customer->id)]);
     }
 
     /**

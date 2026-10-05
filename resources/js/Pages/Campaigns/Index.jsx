@@ -143,9 +143,11 @@ export default function Index({ auth, campaigns = [] }) {
                             return (
                                 <div key={campaign.id} className="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-4">
                                     {/* Campaign Header - Collapsible */}
-                                    <div 
+                                    <button type="button"
+                                        aria-expanded={isExpanded}
+                                        aria-controls={`campaign-details-${campaign.id}`}
                                         onClick={() => setExpandedCampaign(isExpanded ? null : campaign.id)}
-                                        className="p-4 sm:p-6 text-gray-900 cursor-pointer hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3"
+                                        className="w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-dark p-4 sm:p-6 text-gray-900 cursor-pointer hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3"
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-3 sm:gap-4">
@@ -164,11 +166,11 @@ export default function Index({ auth, campaigns = [] }) {
                                             </span>
                                             <span className="text-sm font-semibold text-brand-dark px-3 py-1 rounded" style={{ backgroundColor: brandTint(10) }}>{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
                                         </div>
-                                    </div>
+                                    </button>
 
                                     {/* Expanded Content */}
                                     {isExpanded && (
-                                        <div className="border-t border-gray-200 p-6">
+                                        <div id={`campaign-details-${campaign.id}`} className="border-t border-gray-200 p-4 sm:p-6">
                                             {/* Campaign Details */}
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 pb-6 border-b border-gray-200">
                                                 <div>

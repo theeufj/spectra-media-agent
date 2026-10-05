@@ -22,7 +22,7 @@ class PersonaSelection
             return (clone $eligible)->whereKey($requestedId)->first();
         }
 
-        return (clone $eligible)->where('campaign_id', $campaign->id)->latest()->first()
-            ?? (clone $eligible)->whereNull('campaign_id')->latest()->first();
+        return (clone $eligible)->where('campaign_id', $campaign->id)->latest()->orderByDesc('id')->first()
+            ?? (clone $eligible)->whereNull('campaign_id')->latest()->orderByDesc('id')->first();
     }
 }

@@ -12,6 +12,7 @@ use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\Diagnostics\OfficialTroubleshootingDocs;
+use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use Carbon\Carbon;
 use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Log;
@@ -60,8 +61,11 @@ class CampaignDiagnosticsAgent
         // Platform-agnostic: conversion label setup
         $findings = array_merge($findings, $this->checkConversionTracking());
 
-        if ($campaign->google_ads_campaign_id && $campaign->customer?->google_ads_customer_id) {
-            $findings = array_merge($findings, $this->diagnoseGoogleAds($campaign));
+        if ($campaign->customer?->google_ads_customer_id) {
+            $findings = array_merge($findings, $this->checkCampaignConversionGoals($campaign));
+            if ($campaign->google_ads_campaign_id) {
+                $findings = array_merge($findings, $this->diagnoseGoogleAds($campaign));
+            }
         }
 
         if ($campaign->facebook_ads_campaign_id && $campaign->customer?->facebook_ads_account_id) {
@@ -296,6 +300,34 @@ class CampaignDiagnosticsAgent
         // performance report fails; otherwise an API hiccup hides a real stall.
         if ($finding = $this->checkSearchDeliveryStall($campaign)) {
             $findings[] = $finding;
+        }
+
+        return $findings;
+    }
+
+    /** Goal readiness is structural: inspect it without waiting for spend or conversion starvation. */
+    public function checkCampaignConversionGoals(Campaign $campaign): array
+    {
+        $findings = [];
+        foreach ($campaign->strategies as $strategy) {
+            if (! str_contains(strtolower($strategy->platform), 'google') || ! ($resource = $strategy->reusableGoogleCampaignId())) {
+                continue;
+            }
+            try {
+                $state = app(ReconcileCampaignConversionGoals::class, ['customer' => $campaign->customer])->inspect($strategy, $resource);
+            } catch (\Throwable $e) {
+                report($e);
+                $state = ['status' => 'unknown', 'ready' => false, 'repairable' => false,
+                    'issues' => [new AgentIssue('conversion_goal_check_unavailable', 'Google conversion goal readiness could not be verified. Check the account connection and retry.')]];
+            }
+            if (! $state['ready']) {
+                $findings[] = ['type' => $state['repairable'] ? 'conversion_goal_mismatch' : 'conversion_goal_needs_review',
+                    'severity' => 'critical', 'platform' => 'google_ads', 'message' => AgentIssue::toSentence($state['issues']),
+                    'details' => ['strategy_id' => $strategy->id, 'campaign_resource' => $resource,
+                        'readiness' => array_merge($state, ['issues' => array_map(fn ($issue) => AgentIssue::from($issue)->toArray(), $state['issues'])])],
+                    'can_auto_fix' => $state['repairable'], 'auto_fix_action' => $state['repairable'] ? 'reconcile_conversion_goals' : null,
+                    'recommended_action' => 'Verify the intended conversion action and its campaign-specific bidding goal. Account-wide primary settings are preserved.'];
+            }
         }
 
         return $findings;

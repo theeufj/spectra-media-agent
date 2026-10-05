@@ -37,7 +37,6 @@ export function useJobWatch(url, {
 } = {}) {
     const [phase, setPhase] = useState(enabled ? 'watching' : 'idle');
 
-    const startRef = useRef(Date.now());
     const settledRef = useRef(false);
 
     // Callbacks and predicates live in refs so inline arrows don't restart
@@ -47,16 +46,23 @@ export function useJobWatch(url, {
 
     useEffect(() => {
         if (enabled) {
-            startRef.current = Date.now();
             settledRef.current = false;
             setPhase('watching');
+            const deadline = setTimeout(() => {
+                if (!settledRef.current) {
+                    settledRef.current = true;
+                    setPhase('timeout');
+                }
+            }, timeoutMs);
+            return () => clearTimeout(deadline);
         } else {
             setPhase((p) => (p === 'watching' ? 'idle' : p));
         }
-    }, [enabled]);
+    }, [enabled, url, timeoutMs]);
 
     const { data, error, failureStreak } = usePolling(enabled ? url : null, {
         interval,
+        enabled: enabled && phase === 'watching',
         until: (result) => {
             if (settledRef.current) return true;
 
@@ -76,13 +82,6 @@ export function useJobWatch(url, {
 
                 return true;
             }
-            if (Date.now() - startRef.current > timeoutMs) {
-                settledRef.current = true;
-                setPhase('timeout');
-
-                return true;
-            }
-
             return false;
         },
     });

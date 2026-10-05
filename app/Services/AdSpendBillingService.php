@@ -581,24 +581,17 @@ class AdSpendBillingService
         string $idempotencyKey,
     ): array {
         try {
-            // Prefer an owner who can actually pay, then anyone who can.
-            //
-            // This used to take the first owner and only fall back if there was
-            // no owner at all — so an owner without a card blocked the charge
-            // while a teammate's card sat unused. sitetospend has two owners;
-            // the one listed first has no payment method and the other has an
-            // Amex, so every charge failed with "No payment method on file"
-            // against an account that plainly had one.
-            $users = $customer->users()->get();
-
-            $user = $users->first(fn ($u) => ($u->pivot->role ?? null) === 'owner' && $u->hasDefaultPaymentMethod())
-                ?? $users->first(fn ($u) => $u->hasDefaultPaymentMethod());
+            $user = $customer->adSpendPayer();
 
             if (! $user || ! $user->hasDefaultPaymentMethod()) {
                 return [
                     'success' => false,
                     'error' => 'No payment method on file for this account',
                 ];
+            }
+            $paymentMethod = $user->defaultPaymentMethod();
+            if (! $paymentMethod) {
+                return ['success' => false, 'error' => 'No payment method on file for this account'];
             }
 
             // Amount in cents for Stripe
@@ -615,7 +608,7 @@ class AdSpendBillingService
             $params = [
                 'amount' => $amountCents,
                 'currency' => strtolower($customer->billingCurrency()),
-                'payment_method' => $user->defaultPaymentMethod()->id,
+                'payment_method' => $paymentMethod->id,
                 'confirmation_method' => 'automatic',
                 'confirm' => true,
                 'description' => $description,
@@ -643,7 +636,7 @@ class AdSpendBillingService
             return [
                 'success' => true,
                 'charge_id' => $payment->id,
-                'payment_method_id' => $user->defaultPaymentMethod()->id,
+                'payment_method_id' => $paymentMethod->id,
             ];
 
         } catch (CardException $e) {

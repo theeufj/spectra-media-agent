@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
+import { fetchJson } from '@/utils/http';
+import { usePolling } from '@/hooks/usePolling';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 const SEVERITY_ROW_BG = {
@@ -20,30 +22,22 @@ export default function NotificationBell() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const dropdownRef = useRef(null);
+    const panelId = useId();
+    const [permission, setPermission] = useState(typeof window !== 'undefined' && 'Notification' in window ? window.Notification.permission : 'unsupported');
+    const [permissionBusy, setPermissionBusy] = useState(false);
+    const enableBrowserAlerts = async () => {
+        setPermissionBusy(true);
+        try { setPermission(await window.Notification.requestPermission()); } catch { setError('Browser alerts could not be enabled. Check browser permissions.'); } finally { setPermissionBusy(false); }
+    };
     
     // Fetch notifications
     const fetchNotifications = useCallback(async () => {
         try {
             setError(null);
-            const response = await fetch('/api/notifications', {
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                setNotifications(data.notifications || []);
-                setUnreadCount(data.unread_count || 0);
-            } else if (response.status === 401) {
-                // User not authenticated, silently fail
-                setNotifications([]);
-                setUnreadCount(0);
-            } else {
-                throw new Error('Failed to fetch notifications');
-            }
+            setIsLoading(true);
+            const data = await fetchJson('/api/notifications');
+            setNotifications(data.notifications || []);
+            setUnreadCount(data.unread_count || 0);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
             setError('Unable to load notifications');
@@ -52,16 +46,12 @@ export default function NotificationBell() {
         }
     }, []);
 
-    // Fetch on mount and poll
-    useEffect(() => {
-        fetchNotifications();
-        
-        // Poll every 30 seconds
-        const pollInterval = setInterval(fetchNotifications, 30000);
-        
-        return () => clearInterval(pollInterval);
-    }, [fetchNotifications]);
-    
+    const { data: polledNotifications, error: pollingError } = usePolling('/api/notifications', { interval: 30000, enabled: Boolean(auth?.user) });
+    useEffect(() => { if (polledNotifications) { setNotifications(polledNotifications.notifications || []); setUnreadCount(polledNotifications.unread_count || 0); setIsLoading(false); setError(null); } }, [polledNotifications]);
+    useEffect(() => { if (pollingError) { setIsLoading(false); setError('Unable to load notifications. The last received items remain visible.'); } }, [pollingError]);
+
+    useEffect(() => { if (!isOpen) return; const escape = event => { if (event.key === 'Escape') { setIsOpen(false); dropdownRef.current?.querySelector('button')?.focus(); } }; document.addEventListener('keydown', escape); return () => document.removeEventListener('keydown', escape); }, [isOpen]);
+
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -74,61 +64,27 @@ export default function NotificationBell() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Request browser notification permission
-    useEffect(() => {
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-            // Request permission after user interaction
-            const requestPermission = () => {
-                Notification.requestPermission();
-                document.removeEventListener('click', requestPermission);
-            };
-            document.addEventListener('click', requestPermission, { once: true });
-        }
-    }, []);
-    
     const markAsRead = async (notificationId) => {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            
-            await fetch(`/api/notifications/${notificationId}/read`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
+            await fetchJson(`/api/notifications/${notificationId}/read`, { method: 'POST' });
+
             setNotifications(prev => 
                 prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
             );
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (error) {
-            console.error('Failed to mark notification as read:', error);
+            setError('We could not mark that notification as read. Try again.');
         }
     };
     
     const markAllAsRead = async () => {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            
-            await fetch('/api/notifications/read-all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
+            await fetchJson('/api/notifications/read-all', { method: 'POST' });
+
             setNotifications(prev => prev.map(n => ({ ...n, read_at: new Date().toISOString() })));
             setUnreadCount(0);
         } catch (error) {
-            console.error('Failed to mark all as read:', error);
+            setError('We could not mark your notifications as read. Try again.');
         }
     };
 
@@ -203,6 +159,8 @@ export default function NotificationBell() {
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="relative p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 rounded-full transition-colors"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
                 aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
             >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -224,9 +182,9 @@ export default function NotificationBell() {
             
             {/* Dropdown */}
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
+                <div id={panelId} className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:top-auto sm:right-0 mt-2 w-auto sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-brand-primary to-purple-600 text-white">
+                    <div className="flex items-center justify-between px-4 py-3 bg-brand-dark text-white">
                         <h3 className="text-sm font-semibold">Notifications</h3>
                         <div className="flex items-center space-x-3">
                             {unreadCount > 0 && (
@@ -250,13 +208,14 @@ export default function NotificationBell() {
                     </div>
                     
                     {/* Notification List */}
-                    <div className="max-h-[28rem] overflow-y-auto">
-                        {isLoading ? (
+                    <div className="max-h-[min(28rem,calc(100dvh-14rem))] overflow-y-auto">
+                        {error && notifications.length > 0 && <p role="alert" className="m-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+                        {isLoading && !notifications.length ? (
                             <div className="px-4 py-8 text-center">
                                 <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                                 <p className="text-sm text-gray-500">Loading notifications...</p>
                             </div>
-                        ) : error ? (
+                        ) : error && !notifications.length ? (
                             <div className="px-4 py-8 text-center text-gray-500">
                                 <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -279,11 +238,12 @@ export default function NotificationBell() {
                             </div>
                         ) : (
                             notifications.map((notification) => (
-                                <div
+                                <button
+                                    type="button"
                                     key={notification.id}
                                     onClick={() => handleNotificationClick(notification)}
                                     className={`
-                                        px-4 py-3 border-b border-gray-100 cursor-pointer
+                                        w-full text-left px-4 py-3 border-b border-gray-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary
                                         hover:bg-gray-50 transition-colors
                                         ${getNotificationBgColor(notification)}
                                     `}
@@ -315,11 +275,12 @@ export default function NotificationBell() {
                                             <span className="w-2 h-2 bg-brand-primary rounded-full flex-shrink-0 mt-2" />
                                         )}
                                     </div>
-                                </div>
+                                </button>
                             ))
                         )}
                     </div>
                     
+                    {permission !== 'unsupported' && <div className="border-t border-gray-200 p-3 text-xs text-gray-600">{permission === 'granted' ? 'Browser alerts enabled.' : permission === 'denied' ? 'Browser alerts are blocked. You can change this in browser settings.' : <><p>Get browser alerts for campaign and billing changes.</p><button type="button" disabled={permissionBusy} onClick={enableBrowserAlerts} className="mt-2 font-semibold text-brand-dark underline">Enable browser alerts</button></>}</div>}
                     {/* Footer */}
                     {notifications.length > 0 && (
                         <div className="px-4 py-3 bg-gray-50 border-t flex items-center justify-between">

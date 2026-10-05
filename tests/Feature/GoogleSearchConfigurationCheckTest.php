@@ -23,8 +23,10 @@ class GoogleSearchConfigurationCheckTest extends TestCase
             'ads' => [['adGroupAd' => ['ad' => ['responsiveSearchAd' => ['headlines' => [['text' => $ad['headlines'][0]]],
                 'descriptions' => [['text' => $ad['descriptions'][0]]]], 'finalUrls' => $ad['final_urls']]]]],
             'assets' => [['campaignAsset' => ['asset' => 'customers/123/assets/4', 'fieldType' => 'SITELINK'], 'asset' => ['finalUrls' => ['https://example.com/pricing']]]],
-            'goals' => [['campaignConversionGoal' => ['category' => 'PURCHASE', 'biddable' => true]]],
-            'conversion_actions' => [['conversionAction' => ['category' => 'PURCHASE', 'primaryForGoal' => true]]]];
+            'goals' => [['campaignConversionGoal' => ['category' => 'PURCHASE', 'origin' => 'WEBSITE', 'biddable' => true]]],
+            'conversion_goal_config' => ['conversionGoalCampaignConfig' => ['goalConfigLevel' => 'CAMPAIGN']],
+            'conversion_actions' => [['conversionAction' => ['resourceName' => 'customers/123/conversionActions/7', 'status' => 'ENABLED',
+                'category' => 'PURCHASE', 'origin' => 'WEBSITE', 'primaryForGoal' => true]]]];
 
         return [$expected, $actual];
     }
@@ -86,6 +88,27 @@ class GoogleSearchConfigurationCheckTest extends TestCase
         [$expected, $actual] = $this->fixture();
         $actual['goals'][] = ['campaignConversionGoal' => ['category' => 'SIGNUP', 'biddable' => true]];
         $actual['conversion_actions'][] = ['conversionAction' => ['category' => 'SIGNUP', 'primaryForGoal' => true]];
-        $this->assertContains('An additional conversion category is being used for bidding.', app(GoogleSearchConfigurationCheck::class)->compare($expected, $actual));
+        $this->assertContains('An additional conversion category or origin is being used for bidding.', app(GoogleSearchConfigurationCheck::class)->compare($expected, $actual));
+    }
+
+    public function test_legacy_category_cannot_hide_a_wrong_origin_custom_goal_or_ambiguous_primary(): void
+    {
+        [$expected, $actual] = $this->fixture();
+        $check = app(GoogleSearchConfigurationCheck::class);
+        $actual['goals'][0]['campaignConversionGoal']['origin'] = 'APP';
+        $this->assertContains('The intended conversion category and origin are not enabled for campaign bidding.', $check->compare($expected, $actual));
+        $actual['goals'][0]['campaignConversionGoal']['origin'] = 'WEBSITE';
+        $actual['conversion_goal_config']['conversionGoalCampaignConfig']['customConversionGoal'] = 'customers/123/customConversionGoals/9';
+        $this->assertContains('An unexpected custom conversion goal is being used for campaign bidding.', $check->compare($expected, $actual));
+        unset($actual['conversion_goal_config']['conversionGoalCampaignConfig']['customConversionGoal']);
+        $actual['conversion_actions'][] = ['conversionAction' => array_merge($actual['conversion_actions'][0]['conversionAction'], ['resourceName' => 'customers/123/conversionActions/8'])];
+        $this->assertContains('The intended conversion category needs an explicit enabled action and origin to verify its bidding goal.', $check->compare($expected, $actual));
+    }
+
+    public function test_missing_configuration_is_unknown_even_with_matching_primary_and_biddable_goal(): void
+    {
+        [$expected, $actual] = $this->fixture();
+        unset($actual['conversion_goal_config']);
+        $this->assertContains('Campaign conversion goal configuration is unavailable for verification.', app(GoogleSearchConfigurationCheck::class)->compare($expected, $actual));
     }
 }

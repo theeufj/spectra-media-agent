@@ -163,6 +163,14 @@ class CrawlPage implements ShouldQueue
             return;
         }
 
+        $source = $this->customerId ? KnowledgeBase::firstOrCreate([
+            'customer_id' => $this->customerId, 'url' => $this->url,
+        ], ['user_id' => $this->user->id, 'source_type' => 'url', 'content' => '']) : null;
+        if ($source?->excluded_at) {
+            return;
+        }
+        $source?->update(['processing_status' => 'reading', 'processing_error' => null]);
+
         // Check robots.txt
         $parsedUrl = parse_url($this->url);
         if (isset($parsedUrl['scheme']) && isset($parsedUrl['host'])) {
@@ -189,6 +197,7 @@ class CrawlPage implements ShouldQueue
 
                 if (! $robots->allows($this->url, $userAgent)) {
                     Log::warning("CrawlPage: URL disallowed by robots.txt: {$this->url}");
+                    $source?->update(['processing_status' => 'failed', 'processing_error' => 'This page asks automated scanners not to read it. Add the information as a document or note.']);
 
                     return;
                 }
@@ -250,13 +259,12 @@ class CrawlPage implements ShouldQueue
                 // the business.
                 $this->assertNotBlocked($cleanedContent);
 
-                // Initialize Gemini Service for embedding
-                $geminiService = new GeminiService;
-                $embeddingText = substr($title."\n".$metaDescription."\n".$cleanedContent, 0, 8000); // Limit context
-                // $embeddingModel, not the configured one: a 429 falls back to a
-                // model that embeds into a different space, and a vector stored
-                // without recording its space cannot be compared or repaired.
-                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $embeddingText, [], $embeddingModel);
+                $source = app(\App\Services\KnowledgeBase\KnowledgeBaseIndexer::class)
+                    ->prepare($source, $cleanedContent, $title);
+                IndexKnowledgeBase::dispatch($source, $source->source_version);
+                if (! $this->batchId) {
+                    ExtractBrandGuidelines::dispatch(Customer::findOrFail($this->customerId), force: true, sourceRefresh: true);
+                }
 
                 CustomerPage::updateOrCreate(
                     [
@@ -269,30 +277,12 @@ class CrawlPage implements ShouldQueue
                         'page_type' => $pageType,
                         'metadata' => $metadata,
                         'content' => $cleanedContent,
-                        'embedding' => $embedding ? new Vector($embedding) : null,
-                        'embedding_model' => $embedding ? $embeddingModel : null,
+                        'embedding' => null,
+                        'embedding_model' => null,
                     ]
                 );
 
                 Log::info("Successfully crawled and stored customer page: {$this->url}");
-
-                // Also store to KnowledgeBase for brand guideline extraction
-                KnowledgeBase::updateOrCreate(
-                    // Matched on user + url, not customer: existing rows predate
-                    // the customer_id column, and adding it to the match keys
-                    // would create a duplicate instead of attributing the row.
-                    [
-                        'user_id' => $this->user->id,
-                        'url' => $this->url,
-                    ],
-                    [
-                        'customer_id' => $this->customerId,
-                        'content' => $cleanedContent,
-                        'css_content' => '',
-                        'embedding' => $embedding ? new Vector($embedding) : null,
-                        'embedding_model' => $embedding ? $embeddingModel : null,
-                    ]
-                );
 
                 // Run CRO Audit for customer pages (product/money pages)
                 if (in_array($pageType, ['product', 'money', 'landing'])) {
@@ -495,6 +485,8 @@ class CrawlPage implements ShouldQueue
         } catch (\Throwable $e) {
             report($e);
             Log::error("Error processing page {$this->url}: ".$e->getMessage());
+            $source?->update(['processing_status' => 'failed', 'processing_error' => 'We could not read this page. It may be blocking the scanner or temporarily unavailable. Retry, or add the information as a note.']);
+            throw $e;
         }
     }
 
@@ -533,6 +525,9 @@ class CrawlPage implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        KnowledgeBase::where('customer_id', $this->customerId)->where('url', $this->url)->whereNull('excluded_at')->update([
+            'processing_status' => 'failed', 'processing_error' => 'Reading this page failed after retries. Retry from the source details, or upload its text.',
+        ]);
         Log::error('CrawlPage failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

@@ -15,6 +15,7 @@ import Modal from '@/Components/Modal';
 import CreativeSizesModal from '@/Components/CreativeSizesModal';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
+import { fetchJson } from '@/utils/http';
 import { useCollateralGeneration } from '@/hooks/useCollateralGeneration';
 
 /**
@@ -30,20 +31,22 @@ import { useCollateralGeneration } from '@/hooks/useCollateralGeneration';
  * Returns the props rather than a component so the existing markup and its
  * conditional borders stay exactly as they are.
  */
-function approvalToggle({ checked, onToggle, label, enabled = true }) {
+function approvalToggle({ checked, onToggle, label, enabled = true, saving = false }) {
     if (!enabled) return {};
 
     return {
         role: 'checkbox',
         'aria-checked': checked,
+        'aria-disabled': saving,
         'aria-label': label,
         tabIndex: 0,
-        onClick: onToggle,
+        onClick: () => { if (!saving) onToggle(); },
         onKeyDown: (e) => {
+            if (e.target !== e.currentTarget) return;
             // Space is what a checkbox answers to; Enter is what people try.
             if (e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault();
-                onToggle();
+                if (!saving) onToggle();
             }
         },
     };
@@ -78,13 +81,13 @@ export function UnlockAction({ setupOnly, label, className }) {
     );
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null, brandVerified = true, googleNeedsSetup = false }) {
     const currency = useCurrency();
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
-    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, setCollateral, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview });
+    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview });
     const [editingImage, setEditingImage] = useState(null);
     const [extendingVideo, setExtendingVideo] = useState(null);
 
@@ -102,9 +105,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const [uploadingImages, setUploadingImages] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
+    const [videoUploadError, setVideoUploadError] = useState(null);
     const [imageUploadErrors, setImageUploadErrors] = useState([]);
     const [deployDropdownOpen, setDeployDropdownOpen] = useState(false);
     const deployDropdownRef = useRef(null);
+    const approvalPending = useRef(false);
+    const [savingApproval, setSavingApproval] = useState(false);
+    const [approvalMessage, setApprovalMessage] = useState(null);
+    const [approvalError, setApprovalError] = useState(null);
+    const [deployTarget, setDeployTarget] = useState(null);
+    const [deploying, setDeploying] = useState(false);
+    const [harvestError, setHarvestError] = useState(null);
 
     // Function to handle tab changes
     const handleTabChange = (platform) => {
@@ -181,61 +192,30 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         setIsPolling(true);
     };
 
-    const handleToggleCollateral = (type, id, field = 'should_deploy') => {
-        // Optimistic update — local state responds immediately; server persists in background
-        setCollateral(prev => {
-            if (type === 'ad_copy') {
-                return { ...prev, adCopy: { ...prev.adCopy, [field]: !prev.adCopy[field] } };
-            }
-            if (type === 'image') {
-                return {
-                    ...prev,
-                    imageCollaterals: prev.imageCollaterals.map(img =>
-                        img.id === id ? { ...img, [field]: !img[field] } : img
-                    ),
-                };
-            }
-            if (type === 'video') {
-                return {
-                    ...prev,
-                    videoCollaterals: prev.videoCollaterals.map(vid =>
-                        vid.id === id ? { ...vid, [field]: !vid[field] } : vid
-                    ),
-                };
-            }
-            return prev;
-        });
-
-        router.post(route('deployment.toggle-collateral'), { type, id, field }, {
-            preserveScroll: true,
-            onError: (errors) => {
-                console.error('Failed to toggle collateral status:', errors);
-            },
-        });
-    };
-
-    /**
-     * A card is one photograph stored in three ad sizes, so approving it has
-     * to approve all three. Toggling only the square deployed a campaign with
-     * its landscape and display sizes silently left behind.
-     */
-    const handleToggleConcept = (conceptGroup, field = 'should_deploy') => {
-        const next = field === 'should_deploy' ? ! conceptGroup.deployed : ! conceptGroup.cover[field];
-
-        setCollateral(prev => ({
-            ...prev,
-            imageCollaterals: prev.imageCollaterals.map(img =>
-                conceptGroup.ids.includes(img.id) ? { ...img, [field]: next } : img
-            ),
-        }));
-
-        conceptGroup.ids.forEach(id => {
-            router.post(route('deployment.toggle-collateral'), { type: 'image', id, field, value: next }, {
-                preserveScroll: true,
-                onError: (errors) => console.error('Failed to toggle collateral status:', errors),
+    const saveApproval = async (type, ids, field, value) => {
+        if (approvalPending.current) return;
+        approvalPending.current = true;
+        setSavingApproval(true);
+        setApprovalError(null);
+        setApprovalMessage(null);
+        try {
+            const result = await fetchJson(route('campaigns.collateral-approval.update', campaign.uuid), {
+                method: 'PUT', json: { type, ids, field, value },
             });
-        });
+            applySavedSelection(type, result.rows);
+            setApprovalMessage(field === 'is_seed' ? 'AI reference selection saved.' : 'Ad selection saved.');
+        } catch (error) {
+            setApprovalError(error?.body?.message || 'We could not save your selection. The previous saved selection is still shown. Please try again.');
+        } finally {
+            approvalPending.current = false;
+            setSavingApproval(false);
+        }
     };
+    const handleToggleCollateral = (type, id, field = 'should_deploy') => {
+        const asset = type === 'ad_copy' ? collateral.adCopy : collateral[type === 'image' ? 'imageCollaterals' : 'videoCollaterals'].find(item => item.id === id);
+        if (asset) saveApproval(type, [id], field, !asset[field]);
+    };
+    const handleToggleConcept = (concept, field = 'should_deploy') => saveApproval('image', concept.ids, field, field === 'should_deploy' ? !concept.deployed : !concept.cover[field]);
 
     const handleImageUpload = (strategyUuid, files) => {
         if (!files || files.length === 0) return;
@@ -266,6 +246,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const handleVideoUpload = (strategyUuid, file) => {
         if (!file) return;
         setUploadingVideo(true);
+        setVideoUploadError(null);
 
         const formData = new FormData();
         formData.append('video', file);
@@ -279,6 +260,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             },
             onError: (errors) => {
                 setUploadingVideo(false);
+                setVideoUploadError(Object.values(errors).flat().join(' '));
                 const msgs = Object.values(errors).flat();
                 toast.error('Upload failed: ' + msgs.join(' '));
             },
@@ -299,6 +281,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onSuccess: () => {
                         setIsPolling(true);
                     },
+                    onError: errors => toast.error(Object.values(errors).flat().join(' ') || 'The asset could not be deleted. Please retry.'),
                 });
             },
             isDestructive: true,
@@ -306,15 +289,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     // --- Harvested Assets ---
-    const loadHarvestedAssets = () => {
+    const loadHarvestedAssets = async () => {
         setLoadingHarvested(true);
-        fetch(route('harvested-assets.index'))
-            .then(r => r.json())
-            .then(data => {
-                setHarvestedAssets(data.assets || []);
-                setLoadingHarvested(false);
-            })
-            .catch(() => setLoadingHarvested(false));
+        setHarvestError(null);
+        try { const data = await fetchJson(route('harvested-assets.index')); setHarvestedAssets(data.assets || []); }
+        catch { setHarvestError('Website assets could not be loaded. Please retry.'); }
+        finally { setLoadingHarvested(false); }
     };
 
     const handleHarvest = () => {
@@ -346,140 +326,74 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleDeploy = async () => {
-        if (['pending', 'reviewing', 'revising'].includes(collateral.creativeReview?.status)) {
-            toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.');
-            return;
-        }
-        // Check subscription first
-        if (!hasActiveSubscription) {
-            setShowSubscriptionModal(true);
-            return;
-        }
-
-        // Check if deployment is enabled
-        if (!deploymentEnabled) {
-            setShowDeploymentDisabledModal(true);
-            return;
-        }
-
-        // Budget confirmation BEFORE money: the deploy endpoint refuses
-        // unconfirmed auto-generated campaigns, so charging the prepay first
-        // took the user's money for a deploy that was then rejected.
-        if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
-            toast.warning('Please confirm your daily budget first — taking you there now.');
-            router.visit(route('campaigns.show', campaign.uuid));
-            return;
-        }
-
-        // Payment problems block deploying regardless of balance. 'paused'
-        // lives on payment_status; the old check compared it against status,
-        // a field that never holds that value, so this warning never fired.
-        if (managedBillingEnabled && adSpendCredit?.payment_status === 'paused') {
-            toast.warning('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
-            return;
-        }
-
-        // Check if ad spend billing is set up and has enough balance for this campaign
-        if (managedBillingEnabled) {
-            const totalBudget = Number(campaign?.total_budget || 0);
-            const startDate = campaign?.start_date ? new Date(campaign.start_date) : null;
-            const endDate = campaign?.end_date ? new Date(campaign.end_date) : null;
-            const durationDays = (startDate && endDate)
-                ? Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1)
-                : 30;
-            const dailyBudget = campaign?.daily_budget
-                ? Number(campaign.daily_budget)
-                : (totalBudget > 0 ? totalBudget / durationDays : 50);
-            const daysToCharge = Math.min(7, durationDays);
-            const requiredFunds = dailyBudget * daysToCharge;
-            const currentBalance = adSpendCredit?.current_balance ?? 0;
-            const needsFunding = !adSpendCredit || currentBalance < requiredFunds;
-
-            if (needsFunding) {
-                setShowAdSpendSetupModal(true);
-                return;
-            }
-        }
-
-        setConfirmModal({
-            show: true,
-            title: setupOnly ? 'Create your ads' : 'Deploy Collateral',
-            message: setupOnly
-                ? 'These go into your Google Ads account paused — nothing spends until you switch them on.'
-                : 'Are you sure you want to deploy the selected collateral?',
-            onConfirm: () => confirmDeploy(),
-            confirmText: setupOnly ? 'Create my ads' : 'Deploy',
-            confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
-            isDestructive: false
-        });
-    };
-
-    const handleAdSpendSetupSuccess = (result) => {
-        setShowAdSpendSetupModal(false);
-        const charged = Number(result.credit_amount) || 0;
-        const balance = Number(result.new_balance) || 0;
-        // Only say "payment successful" when a charge actually occurred; otherwise the
-        // existing credit already covered the campaign and nothing was charged.
-        const message = charged > 0
-            ? `Charged ${money(charged, currency)}. Your ad spend credit is now ${money(balance, currency)}. Ready to deploy?`
-            : `You already have ${money(balance, currency)} in ad spend credit — no additional charge needed. Ready to deploy?`;
-        setConfirmModal({
-            show: true,
-            title: 'Deploy Collateral',
-            message,
-            onConfirm: () => confirmDeploy(),
-            confirmText: 'Deploy Now',
-            confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
-            isDestructive: false
-        });
-    };
-
-    const confirmDeploy = () => {
-        // On success the server redirects to the deployment-status page, whose
-        // flash toast covers the messaging — no client toast needed here.
-        router.post(route('deployment.deploy'), {
-            campaign_id: campaign.id,
+    const confirmDeploy = (strategy = deployTarget) => {
+        if (approvalPending.current || deploying) return;
+        setDeploying(true);
+        setConfirmModal(previous => ({ ...previous, show: false }));
+        router.post(route(strategy ? 'deployment.deploy-platform' : 'deployment.deploy'), {
+            campaign_id: campaign.id, ...(strategy ? { strategy_id: strategy.id } : {}),
         }, {
             preserveScroll: true,
-            onError: (errors) => {
-                console.error('Deployment errors:', errors);
-                toast.error(errors.message || 'Deployment failed. Please check the console for details.');
-            },
+            onError: errors => toast.error(Object.values(errors).flat().join(' ') || 'Deployment could not start. Please retry.'),
+            onFinish: () => setDeploying(false),
         });
     };
-
-    const handleDeployPlatform = (strategy) => {
-        setDeployDropdownOpen(false);
-
-        const review = strategy.id === currentStrategy.id ? collateral.creativeReview : strategy.creative_review;
-        if (['pending', 'reviewing', 'revising'].includes(review?.status)) {
-            toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.');
-            return;
-        }
-
-        if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
-        if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
-
+    const requestLaunchConsent = (strategy = null, fundingMessage = '') => {
+        const target = strategy ? strategy.platform : 'all signed-off platforms';
         setConfirmModal({
             show: true,
-            title: `Deploy ${strategy.platform}`,
-            message: `Deploy only the ${strategy.platform} strategy? This will create or update ads on that platform only.`,
-            onConfirm: () => {
-                router.post(route('deployment.deploy-platform'), {
-                    campaign_id: campaign.id,
-                    strategy_id: strategy.id,
-                }, {
-                    preserveScroll: true,
-                    onSuccess: () => toast.success(`${strategy.platform} deployment initiated!`),
-                    onError: (errors) => toast.error(errors.message || `${strategy.platform} deployment failed.`),
-                });
-            },
-            confirmText: `Deploy ${strategy.platform}`,
-            confirmButtonClass: 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800',
+            title: setupOnly ? `Create paused ads — ${target}` : `Launch ads — ${target}`,
+            message: `${fundingMessage ? `${fundingMessage} ` : ''}${setupOnly
+                ? `Create or update selected ads for ${target} in your account, paused. Nothing spends until you switch them on.`
+                : `Create or update selected ads for ${target}. Active campaigns can spend up to their approved platform budgets, within the campaign budget of ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day.`}`,
+            onConfirm: () => confirmDeploy(strategy),
+            confirmText: setupOnly ? 'Create paused ads' : 'Launch selected ads',
             isDestructive: false,
         });
     };
+    const handleDeploy = (strategy = null) => {
+        setDeployDropdownOpen(false);
+        setDeployTarget(strategy);
+        if (approvalPending.current) { toast.info('Wait for your ad selection to finish saving.'); return; }
+        if (deploying) return;
+        const selected = strategy ? [strategy] : allStrategies.filter(item => item.signed_off_at);
+        if (!selected.length || selected.some(item => !item.signed_off_at)) {
+            toast.warning('Review and sign off the creative direction before launching.');
+            router.visit(route('campaigns.show', campaign.uuid)); return;
+        }
+        if (selected.some(item => ['pending', 'reviewing', 'revising'].includes((item.id === currentStrategy.id ? collateral.creativeReview : item.creative_review)?.status))) {
+            toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.'); return;
+        }
+        if (!brandVerified) {
+            toast.warning('Review and approve your current brand profile before launch.');
+            router.visit(route('brand-guidelines.index', { review: 1 })); return;
+        }
+        if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
+        if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
+        if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
+            toast.warning('Confirm your daily budget before launch.'); router.visit(route('campaigns.show', campaign.uuid)); return;
+        }
+        if (!setupOnly && managedBillingEnabled && adSpendCredit?.payment_status === 'paused') {
+            toast.warning('Ad spend billing is paused. Update your payment method in Billing → Ad Spend before launch.'); return;
+        }
+        if (googleNeedsSetup && selected.some(item => /google/i.test(item.platform))) {
+            requestLaunchConsent(strategy, 'Our team needs to finish your Google account setup. This request queues that work; no ad spend will be charged now.'); return;
+        }
+        if (!setupOnly && managedBillingEnabled) {
+            const duration = campaign.start_date && campaign.end_date ? Math.max(1, Math.ceil((new Date(campaign.end_date) - new Date(campaign.start_date)) / 86400000) + 1) : 30;
+            const daily = Number(campaign.daily_budget || 0) || Number(campaign.total_budget || 0) / duration;
+            if (!adSpendCredit || Number(adSpendCredit.current_balance) < daily * Math.min(7, duration)) { setShowAdSpendSetupModal(true); return; }
+        }
+        requestLaunchConsent(strategy);
+    };
+    const handleAdSpendSetupSuccess = result => {
+        setShowAdSpendSetupModal(false);
+        const charged = Number(result.credit_amount) || 0;
+        requestLaunchConsent(deployTarget, charged > 0
+            ? `Charged ${money(charged, currency)} for campaign ad spend credit. Balance: ${money(Number(result.new_balance) || 0, currency)}.`
+            : `Your existing campaign credit covers this launch. No additional charge was needed.`);
+    };
+    const handleDeployPlatform = strategy => handleDeploy(strategy);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -511,7 +425,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     <div className="relative" ref={deployDropdownRef}>
                         <div className="flex">
                             <button
-                                onClick={handleDeploy}
+                                onClick={() => handleDeploy()}
+                                disabled={savingApproval || deploying}
                                 className="px-4 py-2 bg-brand-dark text-white rounded-l-lg hover:bg-brand-darker transition font-medium"
                             >
                                 {/* Deploy is our word for it. To someone who paid us
@@ -524,6 +439,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                 onClick={() => setDeployDropdownOpen(o => !o)}
                                 className="px-2 py-2 bg-brand-dark text-white rounded-r-lg hover:bg-brand-darker transition border-l border-white/30"
                                 aria-label={setupOnly ? 'Create ads for one platform' : 'Deploy individual platform'}
+                                aria-expanded={deployDropdownOpen}
+                                aria-controls="platform-launch-options"
+                                onKeyDown={event => { if (event.key === 'Escape') setDeployDropdownOpen(false); }}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -531,7 +449,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             </button>
                         </div>
                         {deployDropdownOpen && (
-                            <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                            <div id="platform-launch-options" onKeyDown={event => { if (event.key === 'Escape') { setDeployDropdownOpen(false); deployDropdownRef.current?.querySelector('button[aria-controls]')?.focus(); } }} className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                                 <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
                                     {setupOnly ? 'Create for one platform' : 'Deploy single platform'}
                                 </div>
@@ -568,7 +486,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 onClose={() => setShowAdSpendSetupModal(false)}
                 onSuccess={handleAdSpendSetupSuccess}
                 campaign={campaign}
-                campaignName={campaign.name}
+                campaignName={deployTarget ? `${campaign.name} — ${deployTarget.platform}` : campaign.name}
+                strategy={deployTarget}
                 existingCredit={adSpendCredit}
                 hasPaymentMethod={hasPaymentMethod}
             />
@@ -589,6 +508,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 <div className="max-w-7xl mx-auto">
 
                     {setupOnly && <SetupStages stage={2} />}
+                    <div aria-live="polite" className="mb-4">{savingApproval ? 'Saving ad selection…' : approvalMessage}</div>
+                    {approvalError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-800">{approvalError}</p>}
                     {['deploying', 'deployed', 'verified'].includes(currentStrategy.deployment_status) && (
                         <div role="status" className={`mb-6 rounded-lg border p-5 ${currentStrategy.deployment_status === 'deploying' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-green-200 bg-green-50 text-green-900'}`}>
                             <h2 className="font-semibold">{currentStrategy.deployment_status === 'deploying'
@@ -626,7 +547,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     </section>}
                     {/* Runtime collateral generation failure banner */}
                     {collateralError && (
-                        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div role="alert" className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
                             <div className="flex items-start gap-3">
                                 <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -642,7 +563,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                     {/* Collateral generation error banner */}
                     {Object.keys(collateralErrors).length > 0 && (
-                        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div role="alert" className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
                             <div className="flex items-start gap-3">
                                 <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -672,6 +593,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <Link
                                             key={strategyItem.id}
                                             href={route('campaigns.collateral.show', { campaign: campaign.uuid, strategy: strategyItem.uuid })}
+                                            aria-current={currentStrategy.id === strategyItem.id ? 'page' : undefined}
                                             onClick={() => handleTabChange(strategyItem.platform)}
                                             className={`
                                                 ${activeTab === strategyItem.platform
@@ -758,6 +680,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     className={`mt-3 p-4 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
                                                     {...approvalToggle({
                                                         checked: Boolean(collateral.adCopy.should_deploy),
+                                                        saving: savingApproval,
                                                         onToggle: () => handleToggleCollateral('ad_copy', collateral.adCopy.id),
                                                         label: 'Include this ad copy in deployment',
                                                     })}
@@ -785,8 +708,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
-                                                                        navigator.clipboard.writeText(copyText);
-                                                                        toast.success('Ad copy copied to clipboard!');
+                                                                        navigator.clipboard.writeText(copyText).then(() => toast.success('Ad copy copied to clipboard!')).catch(() => toast.error('Copy failed. Select the text and copy it manually.'));
                                                                     }}
                                                                     className="px-3 py-1 text-xs font-medium text-brand-dark bg-brand-tint-10 rounded-md hover:bg-brand-tint-20"
                                                                 >
@@ -874,7 +796,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 {generatingImage ? 'Generating...' : '✨ Generate Image'}
                                             </button>
 
-                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-brand-dark hover:text-brand-darker cursor-pointer transition flex items-center gap-2 ${uploadingImages ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-brand-dark focus-within:ring-offset-2 hover:border-brand-dark hover:text-brand-darker cursor-pointer transition flex items-center gap-2 ${uploadingImages ? 'opacity-50 pointer-events-none' : ''}`}>
                                                 {uploadingImages ? (
                                                     <>
                                                         <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -890,7 +812,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     type="file"
                                                     multiple
                                                     accept="image/jpeg,image/png,image/webp"
-                                                    className="hidden"
+                                                    className="sr-only"
                                                     onChange={(e) => handleImageUpload(strategyItem.uuid, e.target.files)}
                                                     disabled={uploadingImages}
                                                 />
@@ -916,6 +838,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             )}
                                         </div>
 
+                                        {harvestError && <p role="alert" className="mt-3 text-sm text-red-700">{harvestError} <button onClick={loadHarvestedAssets} className="underline">Retry</button></p>}
                                         {/* Harvested Assets Panel */}
                                         {showHarvestedPanel && isSubscribed && (
                                             <div className="mt-4 border border-green-200 rounded-lg p-4 bg-green-50/50">
@@ -1082,6 +1005,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         className={`border-2 ${concept.deployed ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
                                                         {...approvalToggle({
                                                             checked: concept.deployed,
+                                                            saving: savingApproval,
                                                             onToggle: () => handleToggleConcept(concept),
                                                             label: 'Include this image in deployment',
                                                         })}
@@ -1095,12 +1019,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleToggleConcept(concept, 'is_seed'); }}
+                                                                disabled={savingApproval}
+                                                                aria-pressed={Boolean(image.is_seed)}
                                                                 title={image.is_seed
                                                                     ? 'This image guides the AI as visual reference. Click to stop using it as a seed.'
                                                                     : 'Use this image as visual reference for AI-generated creatives.'}
                                                                 className={`px-2 py-0.5 rounded-full text-xs font-medium shadow ${image.is_seed
                                                                     ? 'bg-purple-600 text-white'
-                                                                    : 'bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity'}`}
+                                                                    : 'bg-white/90 text-gray-600 opacity-100 transition-opacity'}`}
                                                             >
                                                                 {image.is_seed ? '✦ AI Seed' : '✦ Use as AI seed'}
                                                             </button>
@@ -1115,7 +1041,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <p className="text-white text-xs font-medium">{setupOnly ? 'Preview — unlocks when your US$999 is paid' : 'Preview - Upgrade to download'}</p>
                                                             </div>
                                                         )}
-                                                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-100 transition-opacity">
                                                             {isSubscribed ? (
                                                                 <div className="flex gap-2 flex-wrap justify-center px-2">
                                                                     {image.source !== 'uploaded' && (() => {
@@ -1295,7 +1221,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 <input
                                                     type="file"
                                                     accept="video/mp4,video/quicktime,video/webm"
-                                                    className="hidden"
+                                                    className="sr-only"
                                                     onChange={(e) => handleVideoUpload(strategyItem.uuid, e.target.files?.[0])}
                                                     disabled={uploadingVideo}
                                                 />
@@ -1308,6 +1234,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             </span>
                                         </div>
 
+                                        {videoUploadError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{videoUploadError}</p>}
                                         {/* Display generated + uploaded videos */}
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
                                             <>
@@ -1325,6 +1252,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             className={`border-2 ${video.status === 'completed' && video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md ${video.status === 'completed' ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2' : ''}`}
                                                             {...approvalToggle({
                                                                 checked: Boolean(video.should_deploy),
+                                                                saving: savingApproval,
                                                                 onToggle: () => handleToggleCollateral('video', video.id),
                                                                 label: 'Include this video in deployment',
                                                                 enabled: video.status === 'completed',
@@ -1339,7 +1267,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 </div>
                                                             )}
                                                             {video.status === 'completed' ? (
-                                                                <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
+                                                                <video onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()} controls src={video.cloudfront_url} className="w-full h-auto"></video>
                                                             ) : video.status === 'failed' ? (
                                                                 <div className="p-6 text-center bg-red-50">
                                                                     <svg className="mx-auto mb-2 w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
@@ -1369,7 +1297,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     e.stopPropagation();
                                                                     setExtendingVideo(video);
                                                                 }}
-                                                                className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-100 transition-opacity"
                                                                 title={`Extend video by 7 seconds (${(creativeUsage?.max_extensions_per_video ?? 3) - (video.refinement_depth ?? 0)} extensions remaining)`}
                                                             >
                                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1382,7 +1310,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         {/* Delete button — available for all videos */}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('video', video.id); }}
-                                                            className="absolute bottom-2 left-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="absolute bottom-2 left-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-100 transition-opacity"
                                                         >
                                                             <span>Delete</span>
                                                         </button>

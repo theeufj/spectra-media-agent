@@ -4,7 +4,6 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Contracts\Ads\AssetPerformanceSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -99,13 +98,14 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerfo
 
             return $assets;
 
-        } catch (GoogleAdsException $e) {
+        } catch (\Throwable $e) {
             Log::error('GetAdPerformanceByAsset: Query failed', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
 
-            return ['headlines' => [], 'descriptions' => []];
+            report($e);
+            throw $e;
         }
     }
 
@@ -123,7 +123,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerfo
                  'asset.image_asset.full_size.url, '.
                  'asset.name, '.
                  'asset.type, '.
-                 'campaign_asset.performance_label, '.
+                 'campaign_asset.status, '.
                  'metrics.impressions, '.
                  'metrics.clicks, '.
                  'metrics.conversions, '.
@@ -140,16 +140,16 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerfo
 
             foreach ($response->getIterator() as $googleAdsRow) {
                 $asset = $googleAdsRow->getAsset();
-                $campaignAsset = $googleAdsRow->getCampaignAsset();
                 $metrics = $googleAdsRow->getMetrics();
 
                 $images[] = [
                     'name' => $asset->getName(),
                     'url' => $asset->getImageAsset()?->getFullSize()?->getUrl() ?? '',
-                    'performance_label' => $this->formatPerformanceLabel($campaignAsset->getPerformanceLabel()),
+                    // CampaignAsset has no performance_label field in the V22 API.
+                    'performance_label' => 'UNKNOWN',
                     'impressions' => $metrics->getImpressions(),
                     'clicks' => $metrics->getClicks(),
-                    'ctr' => $metrics->getClicks() > 0
+                    'ctr' => $metrics->getImpressions() > 0
                         ? round(($metrics->getClicks() / $metrics->getImpressions()) * 100, 2)
                         : 0,
                     'conversions' => $metrics->getConversions(),
@@ -162,13 +162,14 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerfo
 
             return $images;
 
-        } catch (GoogleAdsException $e) {
+        } catch (\Throwable $e) {
             Log::error('GetAdPerformanceByAsset: Image query failed', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
 
-            return [];
+            report($e);
+            throw $e;
         }
     }
 

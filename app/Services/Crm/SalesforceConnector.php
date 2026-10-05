@@ -52,7 +52,7 @@ class SalesforceConnector implements CrmConnectorInterface
         if (! $response->successful()) {
             Log::warning('Salesforce fetchClosedLeads failed', ['status' => $response->status()]);
 
-            return [];
+            throw new \RuntimeException('Salesforce sales sync was refused (HTTP '.$response->status().').');
         }
 
         $leads = [];

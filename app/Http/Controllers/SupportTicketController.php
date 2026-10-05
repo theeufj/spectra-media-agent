@@ -88,6 +88,7 @@ class SupportTicketController extends Controller
      */
     public function show(Request $request, SupportTicket $supportTicket)
     {
+        abort_unless($supportTicket->user_id === $request->user()->id, 404);
         $this->authorize('view', $supportTicket);
 
         $supportTicket->load(['user', 'customer', 'assignee']);
@@ -95,5 +96,15 @@ class SupportTicketController extends Controller
         return Inertia::render('SupportTickets/Show', [
             'ticket' => $supportTicket,
         ]);
+    }
+
+    public function reply(Request $request, SupportTicket $supportTicket)
+    {
+        abort_unless($supportTicket->user_id === $request->user()->id, 404);
+        $this->authorize('update', $supportTicket);
+        $validated = $request->validate(['message' => 'required|string|min:2|max:5000']);
+        $supportTicket->appendMessage('customer', trim($validated['message']), [], reopen: true);
+
+        return back()->with('message', 'Your reply has been saved and the ticket is open for the team.')->with('type', 'success');
     }
 }

@@ -3,6 +3,9 @@ import { money, count, percent, dateTime } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
+import StructuredDetails from '@/Components/StructuredDetails';
+import ConfirmationModal from '@/Components/ConfirmationModal';
+import { useToast } from '@/Components/Toast';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 /* ─── Icons ─── */
@@ -138,7 +141,9 @@ function ActivityFeed({ activities }) {
             {activities.map((a) => (
                 <div
                     key={a.id}
-                    className="bg-white rounded-lg border border-gray-100 p-3 hover:border-gray-200 transition cursor-pointer"
+                    role="button" tabIndex={0} aria-expanded={expanded === a.id}
+                    onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setExpanded(expanded === a.id ? null : a.id); } }}
+                    className="bg-white rounded-lg border border-gray-100 p-3 hover:border-gray-200 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-dark"
                     onClick={() => setExpanded(expanded === a.id ? null : a.id)}
                 >
                     <div className="flex items-start gap-2">
@@ -161,9 +166,7 @@ function ActivityFeed({ activities }) {
                         </div>
                     </div>
                     {expanded === a.id && a.details && (
-                        <pre className="mt-2 text-xs bg-gray-50 rounded p-2 overflow-x-auto text-gray-600 max-h-32 overflow-y-auto">
-                            {JSON.stringify(a.details, null, 2)}
-                        </pre>
+                        <div className="mt-2 max-h-64 overflow-y-auto rounded bg-gray-50 p-3 text-xs"><StructuredDetails value={a.details} /></div>
                     )}
                 </div>
             ))}
@@ -173,9 +176,13 @@ function ActivityFeed({ activities }) {
 
 /* ─── Optimization Queue ─── */
 function OptimizationQueue({ recommendations }) {
+    const [confirmation, setConfirmation] = useState(null);
+    const [pending, setPending] = useState(null);
+    const toast = useToast();
     const handleAction = (id, action) => {
+        setPending(id);
         router.post(route(`strategy.war-room.recommendations.${action}`, id), {}, {
-            preserveScroll: true,
+            preserveScroll: true, onFinish: () => setPending(null), onError: () => toast.error('We could not save your decision. Try again.'),
         });
     };
 
@@ -189,6 +196,10 @@ function OptimizationQueue({ recommendations }) {
 
     return (
         <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            <ConfirmationModal show={Boolean(confirmation)} onClose={() => setConfirmation(null)} title="Approve this campaign change?" message={`${confirmation?.campaign_name ?? 'This campaign'}: ${confirmation?.rationale ?? ''} Approving queues the supported change to your live campaign.`} confirmText="Approve change" onConfirm={() => new Promise((resolve, reject) => {
+                setPending(confirmation.id);
+                router.post(route('strategy.war-room.recommendations.approve', confirmation.id), {}, { preserveScroll: true, onSuccess: resolve, onError: errors => reject(new Error(Object.values(errors).join(' ') || 'The change could not be approved.')), onFinish: () => setPending(null) });
+            })} />
             {recommendations.map((r) => (
                 <div key={r.id} className="bg-white rounded-lg border border-gray-100 p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -206,12 +217,14 @@ function OptimizationQueue({ recommendations }) {
                     {r.requires_approval && (
                         <div className="flex items-center gap-2 mt-2">
                             <button
-                                onClick={() => handleAction(r.id, 'approve')}
+                                disabled={pending === r.id}
+                                onClick={() => setConfirmation(r)}
                                 className="text-xs px-2.5 py-1 bg-green-50 text-green-700 rounded-md hover:bg-green-100 font-medium transition"
                             >
                                 Approve
                             </button>
                             <button
+                                disabled={pending === r.id}
                                 onClick={() => handleAction(r.id, 'reject')}
                                 className="text-xs px-2.5 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 font-medium transition"
                             >
@@ -254,7 +267,7 @@ function PerformanceSnapshot({ performance }) {
 
     return (
         <div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {metrics.map((m) => (
                     <div key={m.label} className="bg-white rounded-lg border border-gray-100 p-3 text-center">
                         <p className="text-xs text-gray-500 uppercase tracking-wider">{m.label}</p>
@@ -459,7 +472,7 @@ function CompetitorPinPanel({ competitors }) {
                         value={data.url}
                         onChange={(e) => setData('url', e.target.value)}
                         placeholder="https://competitor.com"
-                        className="h-11 flex-1 rounded-lg border border-gray-200 px-3 text-xs focus:border-brand-dark focus:ring-brand-dark"
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 text-xs focus:border-brand-dark focus:ring-brand-dark"
                     />
                     {/*
                         disabled:opacity-50 composites the white label down to

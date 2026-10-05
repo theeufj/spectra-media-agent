@@ -2,6 +2,7 @@ import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
+import { fetchJson } from '@/utils/http';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const StatusBadge = ({ status }) => {
@@ -76,33 +77,50 @@ const ApiCard = ({ api }) => {
 export default function SystemHealth({ health }) {
     const [healthData, setHealthData] = React.useState(health);
     const [refreshing, setRefreshing] = React.useState(false);
+    const [refreshError, setRefreshError] = React.useState(null);
+    const [checkedAt, setCheckedAt] = React.useState(null);
+    const refreshController = React.useRef(null);
+    React.useEffect(() => () => refreshController.current?.abort(), []);
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     const refreshHealth = async () => {
+        refreshController.current?.abort();
+        const controller = new AbortController();
+        refreshController.current = controller;
         setRefreshing(true);
+        setRefreshError(null);
+        const deadline = setTimeout(() => {
+            setRefreshError('Health checks timed out. The last loaded results remain below. Retry using Refresh.');
+            setRefreshing(false);
+            controller.abort();
+        }, 30000);
+        controller.signal.addEventListener('abort', () => clearTimeout(deadline), { once: true });
         try {
-            const response = await fetch(route('admin.health.check'));
-            const data = await response.json();
+            const data = await fetchJson(route('admin.health.check'), { signal: controller.signal });
+            if (controller.signal.aborted) return;
             setHealthData(data);
-        } catch (error) {
-            console.error('Failed to refresh health data:', error);
+            setCheckedAt(new Date().toLocaleString());
+        } catch {
+            if (!controller.signal.aborted) setRefreshError('Health checks could not refresh. The last loaded results remain below. Retry using Refresh.');
+        } finally {
+            clearTimeout(deadline);
+            if (!controller.signal.aborted) setRefreshing(false);
         }
-        setRefreshing(false);
     };
 
     const handleRetryJob = (jobId) => {
         router.post(route('admin.health.retry-job', jobId), {}, { preserveScroll: true });
     };
 
-    const handleDeleteJob = (jobId) => {
+    const handleDeleteJob = (job) => {
         setConfirmModal({
             show: true,
             title: 'Delete Failed Job',
-            message: 'Are you sure you want to delete this failed job?',
+            message: `Remove the failure record for ${job.job} on the ${job.queue} queue (ID ${job.id}). This will not retry the job.`,
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.delete(route('admin.health.delete-job', jobId), { preserveScroll: true });
+                router.delete(route('admin.health.delete-job', job.id), { preserveScroll: true });
             },
         });
     };
@@ -111,7 +129,7 @@ export default function SystemHealth({ health }) {
         setConfirmModal({
             show: true,
             title: 'Delete All Failed Jobs',
-            message: 'Are you sure you want to delete ALL failed jobs?',
+            message: `Remove all ${healthData.queue.failed} failed job records. This will clear their recovery history without retrying them.`,
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
@@ -130,6 +148,8 @@ export default function SystemHealth({ health }) {
                 <SideNav />
                 <div className="min-w-0 flex-1 p-8">
                     <div className="max-w-6xl mx-auto">
+                        {refreshError && <p role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-800">{refreshError}</p>}
+                        {checkedAt && <p className="mb-3 text-xs text-gray-500">Last successful refresh: {checkedAt}</p>}
                         {/* Header with refresh */}
                         <div className="flex justify-between items-center mb-6">
                             <div>
@@ -269,7 +289,7 @@ export default function SystemHealth({ health }) {
                                                             Retry
                                                         </button>
                                                         <button
-                                                            onClick={() => handleDeleteJob(job.id)}
+                                                            onClick={() => handleDeleteJob(job)}
                                                             className="text-xs text-red-600 hover:text-red-800"
                                                         >
                                                             Delete

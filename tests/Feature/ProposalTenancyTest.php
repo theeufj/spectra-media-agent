@@ -31,7 +31,7 @@ class ProposalTenancyTest extends TestCase
         return [
             'client_name' => 'Acme Roofing',
             'industry' => 'Construction',
-            'website_url' => 'https://acme-roofing.test',
+            'website_url' => 'https://8.8.8.8',
             'budget' => 5000,
             'goals' => 'Book more quotes.',
             'platforms' => ['Google Ads'],

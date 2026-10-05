@@ -7,6 +7,7 @@ use App\Mail\MonthlyExecutiveReport;
 use App\Models\Customer;
 use App\Services\Reporting\ExecutiveReportService;
 use App\Services\Reporting\ReportPdfService;
+use App\Support\WorkStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,13 +28,14 @@ class GenerateMonthlyReport implements ShouldQueue
 
     protected int $customerId;
 
-    public function __construct(int $customerId)
+    public function __construct(int $customerId, protected ?string $workRunId = null)
     {
         $this->customerId = $customerId;
     }
 
     public function handle(ExecutiveReportService $reportService, ReportPdfService $pdfService): void
     {
+        WorkStatus::update($this->customerId, 'report-monthly', $this->workRunId, 'running', 'Preparing the report and PDF.');
         try {
             $customer = Customer::findOrFail($this->customerId);
 
@@ -51,6 +53,7 @@ class GenerateMonthlyReport implements ShouldQueue
 
             // Store report metadata for the Reports page
             $this->storeReportRecord($customer, $report, $pdfPath);
+            WorkStatus::update($this->customerId, 'report-monthly', $this->workRunId, 'completed', $pdfPath ? 'Your report and PDF are ready in the list below.' : 'Your report is ready below. The PDF could not be prepared; generate the same period again to retry it.');
 
             // Email to all users
             foreach ($customer->users as $user) {
@@ -61,7 +64,12 @@ class GenerateMonthlyReport implements ShouldQueue
                 if (isset($prefs['performance_reports']) && $prefs['performance_reports'] === false) {
                     continue;
                 }
-                Mail::to($user->email)->queue(new MonthlyExecutiveReport($user, $report, $pdfPath));
+                try {
+                    Mail::to($user->email)->queue(new MonthlyExecutiveReport($user, $report, $pdfPath));
+                } catch (\Throwable $e) {
+                    report($e);
+                    Log::warning('Monthly report saved but email could not be queued', ['customer_id' => $customer->id, 'user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
             }
 
             Log::info("Monthly report generated for customer {$customer->id}", [
@@ -82,6 +90,7 @@ class GenerateMonthlyReport implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        WorkStatus::update($this->customerId, 'report-monthly', $this->workRunId, 'failed', 'Report generation could not finish. Choose the same period to retry.');
         Log::error('GenerateMonthlyReport failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

@@ -160,10 +160,10 @@ class GeminiService
 
     // ─── Auth ────────────────────────────────────────────────────────────────
 
-    private function getAccessToken(): string
+    private function getAccessToken(?int $timeout = null): string
     {
         // Tokens expire after 60 min; cache for 50 to ensure we never send a stale one.
-        return Cache::remember('gcp_vertex_access_token', 3000, function () {
+        return Cache::remember('gcp_vertex_access_token', 3000, function () use ($timeout) {
             // Laravel 12 does not call putenv() for .env values, so google/auth's
             // getenv('GOOGLE_APPLICATION_CREDENTIALS') check always returns false.
             // Load the credentials file explicitly via the Laravel config instead.
@@ -190,17 +190,17 @@ class GeminiService
                 ['https://www.googleapis.com/auth/cloud-platform'],
                 $keyData
             );
-            $token = $credentials->fetchAuthToken();
+            $token = $credentials->fetchAuthToken($timeout === null ? null : \Google\Auth\HttpHandler\HttpHandlerFactory::build(new \GuzzleHttp\Client(['timeout' => $timeout, 'connect_timeout' => min(2, $timeout)])));
 
             return $token['access_token'];
         });
     }
 
-    private function authHeaders(): array
+    private function authHeaders(?int $timeout = null): array
     {
         return [
             'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer '.$this->getAccessToken(),
+            'Authorization' => 'Bearer '.$this->getAccessToken($timeout),
         ];
     }
 
@@ -821,9 +821,10 @@ class GeminiService
         $throttleKey = 'gemini_embedding_rpm';
         $perMinute = max(1, (int) config('ai.embedding_rpm', 4));
         $waited = 0;
+        $maxWait = max(0, min(120_000, (int) ($context['embedding_wait_ms'] ?? 120_000)));
         while (! RateLimiter::attempt($throttleKey, $perMinute, fn () => null, 60)) {
-            if ($waited >= 120_000) {
-                Log::error('GeminiService: Embedding throttle wait exceeded 120s — aborting');
+            if ($waited >= $maxWait) {
+                Log::info('GeminiService: Embedding capacity busy; caller can retry or use text search');
 
                 return null;
             }
@@ -832,6 +833,7 @@ class GeminiService
         }
 
         $startTime = hrtime(true);
+        $timeout = max(1, min(300, (int) ($context['embedding_timeout_seconds'] ?? 300)));
 
         // Which endpoint a model needs is a property of the model, so it lives
         // in config alongside the model names rather than as a literal here.
@@ -846,8 +848,13 @@ class GeminiService
                 $payload = ['instances' => [['content' => $text]]];
             }
 
-            $response = Http::withHeaders($this->authHeaders())
-                ->timeout(300)
+            $headers = $this->authHeaders($timeout);
+            $remaining = $timeout - (hrtime(true) - $startTime) / 1e9;
+            if ($remaining <= 0) {
+                return null;
+            }
+            $response = Http::withHeaders($headers)
+                ->connectTimeout(min(2, $remaining))->timeout($remaining)
                 ->post($url, $payload);
 
             if ($response->failed()) {
@@ -861,7 +868,11 @@ class GeminiService
                     Log::warning("GeminiService: 429 on {$model}, falling back to {$fallbackModel}");
                     $fbUrl = "{$this->vertexBaseUrl}{$fallbackModel}:predict";
                     $fbPayload = ['instances' => [['content' => $text]]];
-                    $fbResponse = Http::withHeaders($this->authHeaders())->timeout(300)->post($fbUrl, $fbPayload);
+                    $remaining = $timeout - (hrtime(true) - $startTime) / 1e9;
+                    if ($remaining <= 0) {
+                        return null;
+                    }
+                    $fbResponse = Http::withHeaders($headers)->connectTimeout(min(2, $remaining))->timeout($remaining)->post($fbUrl, $fbPayload);
                     if ($fbResponse->successful()) {
                         $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
                         $approxTokens = (int) (strlen($text) / 4);

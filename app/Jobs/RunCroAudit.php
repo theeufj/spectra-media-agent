@@ -6,6 +6,7 @@ use App\Mail\CROAuditComplete;
 use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\LandingPageCROAuditService;
+use App\Support\WorkStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,14 +26,18 @@ class RunCroAudit implements ShouldQueue
     public function __construct(
         public int $customerId,
         public string $url,
+        public ?string $workRunId = null,
     ) {}
 
     public function handle(): void
     {
+        WorkStatus::update($this->customerId, 'cro-audit', $this->workRunId, 'running', 'Working on your request.');
         $customer = Customer::find($this->customerId);
 
         if (! $customer) {
             Log::warning('RunCroAudit: Customer not found', ['customer_id' => $this->customerId]);
+
+            WorkStatus::update($this->customerId, 'cro-audit', $this->workRunId, 'failed', 'The account or website is no longer available.');
 
             return;
         }
@@ -47,6 +52,7 @@ class RunCroAudit implements ShouldQueue
 
             $customer->increment('cro_audits_used');
 
+            WorkStatus::update($this->customerId, 'cro-audit', $this->workRunId, 'completed', 'Audit results are ready.');
             Log::info('RunCroAudit: Completed', [
                 'customer_id' => $this->customerId,
                 'url' => $this->url,
@@ -56,7 +62,12 @@ class RunCroAudit implements ShouldQueue
             // Everyone on the account, not whoever the query returned first —
             // the same fan-out the rest of the product does.
             foreach ($customer->users as $user) {
-                Mail::to($user)->send(new CROAuditComplete($user, $audit, count($audit->issues ?? [])));
+                try {
+                    Mail::to($user)->send(new CROAuditComplete($user, $audit, count($audit->issues ?? [])));
+                } catch (\Throwable $e) {
+                    report($e);
+                    Log::warning('CRO audit saved but email could not be sent', ['customer_id' => $customer->id, 'user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
             }
         } catch (\Throwable $e) {
             Log::error('RunCroAudit: Failed', [
@@ -73,6 +84,7 @@ class RunCroAudit implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        WorkStatus::update($this->customerId, 'cro-audit', $this->workRunId, 'failed', 'This request could not finish. Retry using the same form.');
         Log::error('RunCroAudit failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

@@ -1,4 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import AdminSearch from '@/Components/AdminSearch';
 
 const NavLink = ({ href, active, children }) => (
@@ -22,6 +23,7 @@ const SectionHeader = ({ children }) => (
 
 export default function SideNav() {
     const { url } = usePage();
+    const [expanded, setExpanded] = useState(false);
 
     /*
      * w-64 is a quarter of a 390px screen, and the admin shell is a plain flex
@@ -32,11 +34,14 @@ export default function SideNav() {
      */
     return (
         <div className="w-full shrink-0 bg-white shadow-lg lg:min-h-screen lg:w-64">
-            <div className="px-6 py-4">
+            <div className="px-6 py-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-800">Admin Menu</h2>
+                <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls="admin-navigation" className="lg:hidden rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700">
+                    {expanded ? 'Close menu' : 'Open menu'}
+                </button>
             </div>
             <AdminSearch />
-            <nav className="mt-4 px-4">
+            <nav id="admin-navigation" aria-label="Administration" className={`${expanded ? 'block' : 'hidden'} lg:block mt-4 px-4 pb-4`}>
                 {/* Users & Customers */}
                 <SectionHeader>Users & Customers</SectionHeader>
                 <div className="space-y-2">

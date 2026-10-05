@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { fetchJson } from '@/utils/http';
+import { useToast } from '@/Components/Toast';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 const SEVERITY_ROW_BG = {
@@ -13,10 +15,13 @@ const SEVERITY_ROW_BG = {
 };
 
 export default function NotificationsIndex({ notifications, dynamicNotifications, unreadCount }) {
+    const toast = useToast();
     const [localNotifications, setLocalNotifications] = useState([
         ...dynamicNotifications,
         ...(notifications?.data || [])
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+
+    useEffect(() => setLocalNotifications([...dynamicNotifications, ...(notifications?.data || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))), [notifications, dynamicNotifications]);
 
     const getNotificationIcon = (type) => {
         const icons = {
@@ -77,75 +82,35 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
 
     const markAsRead = async (notificationId) => {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            
-            await fetch(`/api/notifications/${notificationId}/read`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
+            await fetchJson(`/api/notifications/${notificationId}/read`, { method: 'POST' });
+
             setLocalNotifications(prev => 
                 prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
             );
         } catch (error) {
-            console.error('Failed to mark notification as read:', error);
+            toast.error('We could not mark this notification as read. Try again.');
         }
     };
 
     const markAllAsRead = async () => {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            
-            await fetch('/api/notifications/read-all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
+            await fetchJson('/api/notifications/read-all', { method: 'POST' });
+
             setLocalNotifications(prev => 
                 prev.map(n => ({ ...n, read_at: new Date().toISOString() }))
             );
         } catch (error) {
-            console.error('Failed to mark all as read:', error);
+            toast.error('We could not mark notifications as read. Try again.');
         }
     };
 
     const deleteNotification = async (notificationId) => {
-        // Only delete persistent notifications (not dynamic ones)
-        if (notificationId.toString().includes('-')) {
-            // Dynamic notification - just remove from local state
-            setLocalNotifications(prev => prev.filter(n => n.id !== notificationId));
-            return;
-        }
-
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            
-            await fetch(`/api/notifications/${notificationId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'same-origin',
-            });
-            
+            await fetchJson(`/api/notifications/${notificationId}`, { method: 'DELETE' });
+
             setLocalNotifications(prev => prev.filter(n => n.id !== notificationId));
         } catch (error) {
-            console.error('Failed to delete notification:', error);
+            toast.error('We could not remove this notification. Try again.');
         }
     };
 
@@ -211,8 +176,8 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     <span className="text-2xl flex-shrink-0">
                                                         {notification.icon || getNotificationIcon(notification.type)}
                                                     </span>
-                                                    <div 
-                                                        className="flex-1 min-w-0 cursor-pointer"
+                                                    <button type="button"
+                                                        className="flex-1 min-w-0 cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-brand-primary"
                                                         onClick={() => handleNotificationClick(notification)}
                                                     >
                                                         <p className="text-sm font-semibold text-gray-900">
@@ -231,7 +196,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                                 </span>
                                                             )}
                                                         </div>
-                                                    </div>
+                                                    </button>
                                                     <div className="flex items-center space-x-2 flex-shrink-0">
                                                         <button
                                                             onClick={() => markAsRead(notification.id)}
@@ -275,8 +240,8 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     <span className="text-2xl flex-shrink-0 opacity-60">
                                                         {notification.icon || getNotificationIcon(notification.type)}
                                                     </span>
-                                                    <div 
-                                                        className="flex-1 min-w-0 cursor-pointer"
+                                                    <button type="button"
+                                                        className="flex-1 min-w-0 cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-brand-primary"
                                                         onClick={() => handleNotificationClick(notification)}
                                                     >
                                                         <p className="text-sm font-medium text-gray-700">
@@ -295,7 +260,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                                 </span>
                                                             )}
                                                         </div>
-                                                    </div>
+                                                    </button>
                                                     <button
                                                         onClick={() => deleteNotification(notification.id)}
                                                         className="p-1 text-gray-500 hover:text-red-600 transition-colors flex-shrink-0"

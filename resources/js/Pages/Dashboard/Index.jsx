@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePage, router } from '@inertiajs/react';
+import { Head, Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useMemo } from 'react';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react';
 import axios from 'axios';
@@ -16,6 +16,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { platform as platformOf, platformHex, platformLabel } from '@/utils/platforms';
 import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
+import PolicyStatusCard from '@/Components/PolicyStatusCard';
 
 // ─── Platform constants ─────────────────────────────────────────
 /*
@@ -199,6 +200,7 @@ function Sparkline({ points, color, label, format }) {
  * and its own peak labelled, compares the shapes without lying about either.
  */
 function DailyChart({ data }) {
+    const currency = useCurrency();
     if (!data || data.length === 0) return null;
 
     const labels = [data[0]?.date, data[data.length - 1]?.date].filter(Boolean);
@@ -207,6 +209,7 @@ function DailyChart({ data }) {
         <div className="space-y-5">
             <Sparkline points={data.map((d) => ({ date: d.date, value: d.cost }))} color={SERIES.cost} label="Cost" />
             <Sparkline points={data.map((d) => ({ date: d.date, value: d.revenue }))} color={SERIES.revenue} label="Revenue" />
+            <details className="text-xs text-gray-600"><summary className="cursor-pointer font-medium">Read the daily figures</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-left"><thead><tr><th>Date</th><th>Spend</th><th>Revenue</th></tr></thead><tbody>{data.map(day => <tr key={day.date}><td className="py-1">{day.date}</td><td>{money(day.cost, currency)}</td><td>{money(day.revenue, currency)}</td></tr>)}</tbody></table></div></details>
             {/* Two endpoint labels rather than a rotated tick under every bar. */}
             <div className="flex justify-between text-xs text-gray-500">
                 {labels.map((d) => <span key={d}>{d}</span>)}
@@ -273,7 +276,7 @@ function PlatformComparisonBar({ platform, metric, maxValue }) {
 function TabBtn({ children }) {
     return (
         <Tab className={({ selected }) =>
-            `shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition focus:outline-none ${
+            `shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                 selected
                     ? 'bg-white text-brand-darker shadow-sm border border-gray-200'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
@@ -294,6 +297,7 @@ export default function Dashboard({ auth }) {
         usageStats, creativeUsage, pendingTasks, healthAlerts, agentActivities, flash,
         platformData: allPlatformData, campaignBreakdown, dailyTrend: allDailyTrend,
         projections, crossPlatformComparison, funnel, trackingStatus,
+        policyCampaigns = [], policyCampaignCount = 0,
     } = usePage().props;
 
     const activeCustomer = auth.user?.active_customer;
@@ -302,16 +306,23 @@ export default function Dashboard({ auth }) {
     const [campaignRoi, setCampaignRoi] = useState(null);
     const [showFlash, setShowFlash] = useState(!!flash?.success);
     const [loading, setLoading] = useState(false);
+    const [performanceError, setPerformanceError] = useState(null);
+    const [loadAttempt, setLoadAttempt] = useState(0);
     const [selectedDays, setSelectedDays] = useState(initialDays || 30);
 
     // Fetch per-campaign data when a campaign is selected
     useEffect(() => {
+        setPerformanceError(null);
         if (!selectedCampaign) {
+            setLoading(false);
             setPerformanceData(null);
             setCampaignRoi(null);
             return;
         }
+        const controller = new AbortController();
         setLoading(true);
+        setPerformanceData(null);
+        setCampaignRoi(null);
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(endDate.getDate() - selectedDays);
@@ -321,14 +332,16 @@ export default function Dashboard({ auth }) {
             days: selectedDays,
         };
         Promise.all([
-            axios.get(route('api.campaigns.performance', { campaign: selectedCampaign.uuid, ...params })),
-            axios.get(route('api.campaigns.roi', { campaign: selectedCampaign.uuid, days: selectedDays })),
+            axios.get(route('api.campaigns.performance', { campaign: selectedCampaign.uuid, ...params }), { signal: controller.signal }),
+            axios.get(route('api.campaigns.roi', { campaign: selectedCampaign.uuid, days: selectedDays }), { signal: controller.signal }),
         ]).then(([perfRes, roiRes]) => {
+            if (controller.signal.aborted) return;
             setPerformanceData(perfRes.data);
             setCampaignRoi(roiRes.data);
-        }).catch(err => console.error('Error fetching campaign data:', err))
-          .finally(() => setLoading(false));
-    }, [selectedCampaign, selectedDays]);
+        }).catch(() => { if (!controller.signal.aborted) setPerformanceError('We could not load performance for this campaign. The selected campaign and date range have been kept.'); })
+          .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [selectedCampaign, selectedDays, loadAttempt]);
 
     // Derived KPIs from account-wide data
     const accountKpis = useMemo(() => {
@@ -344,9 +357,9 @@ export default function Dashboard({ auth }) {
     }, [allPlatformData]);
 
     // Show campaign-specific or account-wide KPIs
-    const displayKpis = selectedCampaign && campaignRoi?.summary ? campaignRoi.summary : accountKpis;
-    const displayPlatformData = selectedCampaign && campaignRoi?.platformData ? campaignRoi.platformData : (allPlatformData || {});
-    const displayDailyTrend = selectedCampaign && campaignRoi?.dailyTrend ? campaignRoi.dailyTrend : (allDailyTrend || []);
+    const displayKpis = selectedCampaign ? (campaignRoi?.summary || {}) : accountKpis;
+    const displayPlatformData = selectedCampaign ? (campaignRoi?.platformData || {}) : (allPlatformData || {});
+    const displayDailyTrend = selectedCampaign ? (campaignRoi?.dailyTrend || []) : (allDailyTrend || []);
 
     const handleDaysChange = (d) => {
         setSelectedDays(d);
@@ -376,7 +389,7 @@ export default function Dashboard({ auth }) {
                         )}
                         <div className="inline-flex rounded-lg border border-gray-200 bg-white">
                             {[7, 14, 30, 90].map(d => (
-                                <button key={d} onClick={() => handleDaysChange(d)}
+                                <button key={d} aria-pressed={selectedDays === d} onClick={() => handleDaysChange(d)}
                                     className={`px-3 py-1.5 text-xs font-medium transition rounded-lg ${selectedDays === d ? 'bg-brand-dark text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                                 >{d}d</button>
                             ))}
@@ -390,6 +403,7 @@ export default function Dashboard({ auth }) {
             <div className="py-6 sm:py-10">
                 <div className="max-w-7xl mx-auto">
                     <SetupProgressNav />
+                    {policyCampaigns.length > 0 && <div className="my-6 space-y-4">{policyCampaigns.map(campaign => <PolicyStatusCard key={campaign.id} campaign={campaign} showClear={false} showCampaignLink />)}{policyCampaignCount > policyCampaigns.length && <Link href={route('campaigns.index')} className="block text-sm font-medium text-brand-dark underline">{policyCampaignCount - policyCampaigns.length} more campaigns have issues or need a policy check. View all campaigns</Link>}</div>}
 
                     {trackingStatus?.provisioned && !trackingStatus?.installed && (
                         <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -476,15 +490,16 @@ export default function Dashboard({ auth }) {
                                 <TabPanel className="space-y-6 focus:outline-none">
                                     {loading && <div className="p-8 bg-white rounded-xl border border-gray-200 text-center text-gray-500">Loading campaign data…</div>}
 
-                                    {!loading && (
+                                    {performanceError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><p>{performanceError}</p><button type="button" className="mt-3 font-semibold underline" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Try loading again</button></div>}
+                                    {!loading && !performanceError && (
                                         <>
                                             {/* KPI Cards */}
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                                 <KpiCard label="Ad Spend" value={money(displayKpis.cost || 0, currency, { maximumFractionDigits: 0 })} sub={`${selectedDays} days`} />
                                                 <KpiCard label="Revenue" value={money(displayKpis.revenue || 0, currency, { maximumFractionDigits: 0 })} />
-                                                <KpiCard label="ROAS" value={`${displayKpis.roas || 0}x`} sub={displayKpis.roas >= 3 ? 'Strong' : displayKpis.roas >= 1 ? 'Moderate' : 'Needs attention'} color={displayKpis.roas >= 2 ? 'text-green-600' : displayKpis.roas >= 1 ? 'text-yellow-600' : 'text-red-600'} />
+                                                <KpiCard label="ROAS" value={Number(displayKpis.cost) > 0 ? `${displayKpis.roas || 0}x` : '—'} sub={!(Number(displayKpis.cost) > 0) ? 'Awaiting spend' : displayKpis.roas >= 3 ? 'Strong' : displayKpis.roas >= 1 ? 'Moderate' : 'Needs attention'} color={!(Number(displayKpis.cost) > 0) ? 'text-gray-500' : displayKpis.roas >= 2 ? 'text-green-600' : displayKpis.roas >= 1 ? 'text-yellow-600' : 'text-red-600'} />
                                                 <KpiCard label="Conversions" value={count(displayKpis.conversions || 0)} color="text-green-600" />
-                                                <KpiCard label="Avg CPA" value={money(displayKpis.cpa || 0, currency)} />
+                                                <KpiCard label="Avg CPA" value={Number(displayKpis.conversions) > 0 ? money(displayKpis.cpa || 0, currency) : '—'} />
                                             </div>
 
                                             {/* Spend Allocation */}

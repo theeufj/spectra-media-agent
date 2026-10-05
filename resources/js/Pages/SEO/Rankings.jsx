@@ -1,5 +1,7 @@
+import { useState } from 'react';
+import WorkStatusBanner from '@/Components/WorkStatusBanner';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, Link } from '@inertiajs/react';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -46,26 +48,30 @@ function TrendSparkline({ data }) {
     );
 }
 
-export default function Rankings({ summary, rankings = [], trends = {} }) {
+export default function Rankings({ summary, rankings = [], trends = {}, rankingRun = null }) {
+    const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(rankingRun?.status));
+    const [submitting, setSubmitting] = useState(false);
     return (
         <AuthenticatedLayout>
             <Head title="SEO Rankings" />
             <div className="py-8">
                 <div className="mx-auto max-w-6xl">
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                         <div>
-                            <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
+                            <Link href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</Link>
                             <h1 className="text-2xl font-bold text-gray-900">Keyword Rankings</h1>
                             <p className="mt-1 text-sm text-gray-500">Track your keyword positions across search engines.</p>
                         </div>
                         <button
-                            onClick={() => router.post(route('seo.rankings.track'), {}, { preserveScroll: true })}
+                            disabled={workBusy || submitting}
+                            onClick={() => { setSubmitting(true); router.post(route('seo.rankings.track'), {}, { preserveScroll: true, onFinish: () => setSubmitting(false) }); }}
                             className="px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker"
                         >
                             Track Now
                         </button>
                     </div>
 
+                    <WorkStatusBanner initialRun={rankingRun} url={route('seo.work-status')} task="rankings" label="Rank tracking" reloadOnly={['summary', 'rankings', 'trends', 'rankingRun']} onBusyChange={setWorkBusy} />
                     {/* Summary */}
                     {summary && (
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">

@@ -1,12 +1,16 @@
+import { money } from '@/utils/format';
+import FormErrors from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { fetchJson } from '@/utils/http';
 import SideNav from './SideNav';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import PolicyStatusCard from '@/Components/PolicyStatusCard';
+import GoogleReadinessCard from '@/Components/GoogleReadinessCard';
 
 // Performance Stats Component
-const PerformanceStats = ({ stats, loading }) => {
+const PerformanceStats = ({ stats, loading, currency }) => {
     if (loading) {
         return (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -29,7 +33,7 @@ const PerformanceStats = ({ stats, loading }) => {
         { label: 'Conversions', value: (stats.conversions || 0).toFixed(1), color: 'text-purple-600', bg: 'bg-purple-50' },
         { label: 'CTR', value: `${(stats.ctr || 0).toFixed(2)}%`, color: 'text-brand-dark', bg: 'bg-brand-tint-10' },
         { label: 'CPC', value: `$${(stats.cpc || 0).toFixed(2)}`, color: 'text-orange-600', bg: 'bg-orange-50' },
-        { label: 'CPA', value: stats.cpa > 0 ? `$${stats.cpa.toFixed(2)}` : '-', color: 'text-pink-600', bg: 'bg-pink-50' },
+        { label: 'CPA', value: stats.cpa > 0 ? money(stats.cpa, currency) : '-', color: 'text-pink-600', bg: 'bg-pink-50' },
     ];
 
     return (
@@ -45,14 +49,14 @@ const PerformanceStats = ({ stats, loading }) => {
 };
 
 export default function CampaignDetail({ auth }) {
-    const { campaign, flash, activityLogs = [] } = usePage().props;
+    const { campaign, flash, activityLogs = [], policyStatus = campaign?.policy_checks } = usePage().props;
     const [isEditing, setIsEditing] = useState(false);
     const [expandedStrategy, setExpandedStrategy] = useState(null);
     const [performanceData, setPerformanceData] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(true);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
-    const { data, setData, put, processing } = useForm({
+    const { data, setData, put, processing, errors } = useForm({
         name: campaign.name,
         daily_budget: campaign.daily_budget,
         total_budget: campaign.total_budget,
@@ -65,24 +69,29 @@ export default function CampaignDetail({ auth }) {
     const owner = customer?.users?.[0];
     const strategies = campaign.strategies || [];
 
-    // Fetch performance data
+    const [performanceError, setPerformanceError] = useState(null);
+    const [retryPerformance, setRetryPerformance] = useState(0);
     useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+        setPerformanceData(null);
+        setPerformanceError(null);
+        setPerformanceLoading(Boolean(campaign.google_ads_campaign_id));
+        let deadline;
         if (campaign.google_ads_campaign_id) {
-            setPerformanceLoading(true);
-            axios.get(route('admin.campaigns.performance', { campaign: campaign.uuid }))
-                .then(response => {
-                    // API returns { summary: {...}, daily_data: [...] }
-                    setPerformanceData(response.data.summary || response.data);
-                    setPerformanceLoading(false);
-                })
-                .catch(error => {
-                    console.error("Error fetching performance data:", error);
-                    setPerformanceLoading(false);
-                });
-        } else {
-            setPerformanceLoading(false);
+            deadline = setTimeout(() => {
+                setPerformanceError('Performance data timed out for this campaign.');
+                setPerformanceLoading(false);
+                active = false;
+                controller.abort();
+            }, 30000);
+            fetchJson(route('admin.campaigns.performance', { campaign: campaign.uuid }), { signal: controller.signal })
+                .then(data => { if (active) setPerformanceData(data.summary || data); })
+                .catch(() => { if (active) setPerformanceError('Performance data could not load for this campaign.'); })
+                .finally(() => { clearTimeout(deadline); if (active) setPerformanceLoading(false); });
         }
-    }, [campaign.id]);
+        return () => { active = false; clearTimeout(deadline); controller.abort(); };
+    }, [campaign.uuid, campaign.google_ads_campaign_id, retryPerformance]);
 
     const handleUpdate = (e) => {
         e.preventDefault();
@@ -127,6 +136,7 @@ export default function CampaignDetail({ auth }) {
                 <SideNav />
                 <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+                        <PolicyStatusCard campaign={campaign} policyStatus={policyStatus} admin />
                         {/* Back Button */}
                         <div>
                             <Link
@@ -141,6 +151,7 @@ export default function CampaignDetail({ auth }) {
                         </div>
 
                         {/* Flash Messages */}
+                        {performanceError && <div role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-800">{performanceError} <button type="button" onClick={() => setRetryPerformance(value => value + 1)} className="ml-2 underline">Retry</button></div>}
                         {flash?.message && (
                             <div className={`p-4 rounded-lg ${flash.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                 {flash.message}
@@ -193,10 +204,11 @@ export default function CampaignDetail({ auth }) {
                                 {/* Campaign Details */}
                                 {isEditing ? (
                                     <form onSubmit={handleUpdate} className="mt-6 space-y-4">
+                                    <FormErrors errors={errors} />
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700">Name</label>
-                                                <input
+                                                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
+                                                <input id="name"
                                                     type="text"
                                                     value={data.name}
                                                     onChange={(e) => setData('name', e.target.value)}
@@ -204,8 +216,8 @@ export default function CampaignDetail({ auth }) {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700">Daily Budget ($)</label>
-                                                <input
+                                                <label htmlFor="daily_budget" className="block text-sm font-medium text-gray-700">Daily Budget ({customer?.currency_code})</label>
+                                                <input id="daily_budget"
                                                     type="number"
                                                     value={data.daily_budget}
                                                     onChange={(e) => setData('daily_budget', e.target.value)}
@@ -213,8 +225,8 @@ export default function CampaignDetail({ auth }) {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700">Total Budget ($)</label>
-                                                <input
+                                                <label htmlFor="total_budget" className="block text-sm font-medium text-gray-700">Total Budget ({customer?.currency_code})</label>
+                                                <input id="total_budget"
                                                     type="number"
                                                     value={data.total_budget}
                                                     onChange={(e) => setData('total_budget', e.target.value)}
@@ -286,7 +298,7 @@ export default function CampaignDetail({ auth }) {
                                     <h3 className="text-lg font-semibold text-gray-900 mb-4">
                                         Performance (Last 30 Days)
                                     </h3>
-                                    <PerformanceStats stats={performanceData} loading={performanceLoading} />
+                                    <PerformanceStats stats={performanceData} loading={performanceLoading} currency={customer?.currency_code} />
                                     {!performanceLoading && !performanceData && (
                                         <p className="text-gray-500 text-center py-4">No performance data available</p>
                                     )}
@@ -328,6 +340,8 @@ export default function CampaignDetail({ auth }) {
                                                         </svg>
                                                     </div>
                                                 </button>
+
+                                                {strategy.platform?.toLowerCase().includes('google') && (strategy.google_ads_campaign_id || strategy.execution_result?.metadata?.google_readiness || strategy.execution_result?.metadata?.conversion_goal_readiness || ['deployed', 'verified', 'active', 'deploy_unverified'].includes(strategy.deployment_status)) && <div className="px-4 pb-4"><GoogleReadinessCard readiness={strategy.execution_result?.metadata?.google_readiness} conversionGoals={strategy.execution_result?.metadata?.conversion_goal_readiness} admin /></div>}
                                                 
                                                 {expandedStrategy === strategy.id && (
                                                     <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">

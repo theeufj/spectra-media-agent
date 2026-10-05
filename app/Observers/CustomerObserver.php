@@ -2,10 +2,15 @@
 
 namespace App\Observers;
 
+use App\Jobs\CrawlSitemap;
 use App\Jobs\ScrapeCustomerWebsite;
 use App\Jobs\SendGoogleAdsLinkInvitation;
 use App\Jobs\SetupConversionTracking;
 use App\Models\Customer;
+use App\Models\KnowledgeBase;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class CustomerObserver
@@ -56,6 +61,26 @@ class CustomerObserver
                 'old_website' => $customer->getOriginal('website'),
                 'new_website' => $customer->website,
             ]);
+
+            $oldHost = strtolower((string) parse_url((string) $customer->getOriginal('website'), PHP_URL_HOST));
+            foreach (KnowledgeBase::where('customer_id', $customer->id)->where('source_type', 'url')->whereNull('excluded_at')->get() as $source) {
+                if ($oldHost && strtolower((string) parse_url((string) $source->url, PHP_URL_HOST)) === $oldHost) {
+                    $source->update(['excluded_at' => now()]);
+                }
+            }
+            $customer->brandGuideline?->update([
+                'user_verified' => false,
+                'approved_version' => null,
+                'profile_version' => $customer->brandGuideline->profile_version + 1,
+                'extraction_warning' => 'The website address changed. This profile needs a fresh source review before new ads use it.',
+            ]);
+            $owner = Auth::user() ?? $customer->users()->first();
+            if ($owner) {
+                DB::afterCommit(function () use ($customer, $owner) {
+                    Cache::forget("crawl:budget:{$customer->id}");
+                    CrawlSitemap::forCustomer($customer, $owner);
+                });
+            }
 
             dispatch(new ScrapeCustomerWebsite($customer));
 

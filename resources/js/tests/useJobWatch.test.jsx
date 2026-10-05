@@ -105,6 +105,9 @@ describe('useJobWatch', () => {
         await act(() => vi.advanceTimersByTimeAsync(5000));
 
         expect(getByTestId('phase').textContent).toBe('disconnected');
+        const calls = fetchJson.mock.calls.length;
+        await act(() => vi.advanceTimersByTimeAsync(10000));
+        expect(fetchJson.mock.calls.length).toBe(calls);
     });
 
     it('a transient failure does not disconnect the watch', async () => {
@@ -142,5 +145,16 @@ describe('useJobWatch', () => {
 
         await act(() => vi.advanceTimersByTimeAsync(0));
         expect(getByTestId('phase').textContent).toBe('watching');
+    });
+
+    it('times out and aborts even if the status request never settles', async () => {
+        fetchJson.mockImplementation(() => new Promise(() => {}));
+        const { getByTestId } = render(<Harness enabled options={{ interval: 1000, timeoutMs: 2500, isDone: () => false }} />);
+        const signal = fetchJson.mock.calls[0][1].signal;
+        await act(() => vi.advanceTimersByTimeAsync(2500));
+        expect(getByTestId('phase').textContent).toBe('timeout');
+        expect(signal.aborted).toBe(true);
+        await act(() => vi.advanceTimersByTimeAsync(10000));
+        expect(fetchJson).toHaveBeenCalledTimes(1);
     });
 });

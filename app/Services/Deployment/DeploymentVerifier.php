@@ -9,6 +9,7 @@ use App\Services\FacebookAds\CampaignService;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\LinkedInAds\CampaignService as LinkedInCampaignService;
 use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Answers one question: do the platform objects this strategy claims to have
@@ -48,7 +49,7 @@ class DeploymentVerifier
         $platformIds = $strategy->execution_result['platform_ids'] ?? [];
 
         return match ($this->platformKey($strategy->platform)) {
-            'google' => $this->verifyGoogleAds($strategy, $customer, $platformIds, $verifyConfiguration),
+            'google' => $this->verifyGoogleAds($strategy, $customer, $verifyConfiguration),
             'facebook' => $this->verifyFacebookAds($strategy, $customer, $platformIds),
             'microsoft' => $this->verifyMicrosoftAds($strategy, $customer, $platformIds),
             'linkedin' => $this->verifyLinkedInAds($strategy, $customer, $platformIds),
@@ -91,36 +92,52 @@ class DeploymentVerifier
         return $id === null || $id === '' ? null : (string) $id;
     }
 
-    private function verifyGoogleAds(Strategy $strategy, Customer $customer, array $platformIds, bool $verifyConfiguration): bool
+    private function googleCampaignResource(Strategy $strategy, Customer $customer): ?string
     {
-        $googleCampaignId = $this->platformCampaignId($platformIds)
-            ?? $strategy->campaign->google_ads_campaign_id
-            ?? null;
+        // A strategy's current object is authoritative. Legacy parent fallback
+        // belongs only to the first Google strategy, as the reuse helper enforces.
+        $id = $strategy->google_ads_campaign_id ?: ($this->platformCampaignId($strategy->execution_result['platform_ids'] ?? [])
+            ?? $strategy->reusableGoogleCampaignId());
+        if (! $id) {
+            return null;
+        }
 
-        if (! $googleCampaignId || ! $customer->google_ads_customer_id) {
+        return str_starts_with($id, 'customers/') ? $id : 'customers/'.$customer->cleanGoogleCustomerId().'/campaigns/'.$id;
+    }
+
+    private function verifyGoogleAds(Strategy $strategy, Customer $customer, bool $verifyConfiguration): bool
+    {
+        $resourceName = $this->googleCampaignResource($strategy, $customer);
+        if (! $resourceName || ! $customer->google_ads_customer_id) {
             return false;
         }
-
         $customerId = $customer->cleanGoogleCustomerId();
-
-        // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
-        $resourceName = $googleCampaignId;
-        if (! str_starts_with($resourceName, 'customers/')) {
-            $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
-        }
-
-        $exists = (new GetCampaignStatus($customer))($customerId, $resourceName) !== null;
-        if (! $exists || ! $verifyConfiguration || ! in_array(strtolower($strategy->campaign_type ?? 'search'), ['search', 'sem'], true)) {
+        $exists = app(GetCampaignStatus::class, ['customer' => $customer])($customerId, $resourceName) !== null;
+        $baseline = $strategy->execution_result['metadata']['google_search_baseline'] ?? [];
+        $type = strtolower($strategy->campaign_type ?? 'search');
+        $isSearch = in_array($type, ['search', 'sem'], true) || $type === 'display' && ($baseline['version'] ?? null) === 1;
+        if (! $exists || ! $verifyConfiguration || ! $isSearch) {
             return $exists;
         }
-        $baseline = $strategy->execution_result['metadata']['google_search_baseline'] ?? [];
         $snapshot = app(\App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration::class, ['customer' => $customer])
             ->read($customerId, $resourceName);
         $issues = app(GoogleSearchConfigurationCheck::class)->compare($baseline, $snapshot);
-        $execution = $strategy->execution_result ?? [];
-        $execution['metadata']['configuration_verification'] = ['checked_at' => now()->toIso8601String(),
-            'passed' => $issues === [], 'issues' => $issues];
-        $strategy->forceFill(['execution_result' => $execution, 'deployment_error' => $issues ? implode(' ', $issues) : null])->save();
+        $issues = DB::transaction(function () use ($strategy, $customer, $resourceName, $baseline, $issues) {
+            $locked = Strategy::whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            $execution = $locked->execution_result ?? [];
+            if (($execution['metadata']['google_search_baseline'] ?? []) != $baseline
+                || $this->googleCampaignResource($locked, $customer) !== $resourceName) {
+                $issues[] = 'The reviewed Google configuration changed during verification. Check it again before marking the deployment verified.';
+            }
+            // API reads happen outside the transaction. Merge only this result
+            // into the latest row so concurrent readiness/goal ownership survives.
+            $execution['metadata']['configuration_verification'] = ['checked_at' => now()->toIso8601String(),
+                'passed' => $issues === [], 'issues' => $issues];
+            $locked->forceFill(['execution_result' => $execution, 'deployment_error' => $issues ? implode(' ', $issues) : null])->save();
+
+            return $issues;
+        }, 3);
+        $strategy->refresh();
         \App\Models\AgentActivity::record('deployment', $issues ? 'configuration_mismatch' : 'configuration_verified',
             $issues ? 'Google campaign settings need review: '.implode(' ', $issues) : 'Google campaign settings match the reviewed deployment.',
             $customer->id, $strategy->campaign_id, ['strategy_id' => $strategy->id, 'issues' => $issues], $issues ? 'needs_review' : 'completed');

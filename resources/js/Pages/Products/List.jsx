@@ -1,93 +1,19 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Head } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
-export default function List({ products = [], filter }) {
+export default function List({ products = [], filter, search: initialSearch = '', pagination = {}, feed = null }) {
     const currency = useCurrency();
-    const statusColors = {
-        approved: 'bg-green-100 text-green-700',
-        disapproved: 'bg-red-100 text-red-700',
-        pending: 'bg-yellow-100 text-yellow-700',
-        expiring: 'bg-orange-100 text-orange-700',
-    };
-
-    const filters = [
-        { label: 'All', value: '' },
-        { label: 'Approved', value: 'approved' },
-        { label: 'Disapproved', value: 'disapproved' },
-        { label: 'Pending', value: 'pending' },
-    ];
-
-    return (
-        <AuthenticatedLayout>
-            <Head title="Products" />
-            <div className="py-8">
-                <div className="mx-auto max-w-6xl">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-                            <p className="mt-1 text-sm text-gray-500">{products.length} products shown</p>
-                        </div>
-                        <a href={route('products.index')} className="text-sm text-gray-500 hover:text-gray-700">← Feeds</a>
-                    </div>
-
-                    {/* Filters */}
-                    <div className="flex gap-2 mb-4">
-                        {filters.map(f => (
-                            <a key={f.value} href={route('products.list', f.value ? { status: f.value } : {})} className={`text-xs px-3 py-1.5 rounded-lg ${(filter || '') === f.value ? 'bg-brand-tint-20 text-brand-darker font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</a>
-                        ))}
-                    </div>
-
-                    {products.length > 0 ? (
-                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Availability</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Clicks</th>
-                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Conv.</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {products.map(p => (
-                                        <tr key={p.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    {p.image_link && <img src={p.image_link} alt="" className="w-10 h-10 rounded object-cover" />}
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-900 line-clamp-1">{p.title}</p>
-                                                        <p className="text-xs text-gray-500">{p.brand || p.offer_id}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm">
-                                                {p.sale_price ? (
-                                                    <div><span className="line-through text-gray-500">{money(p.price, currency)}</span> <span className="text-red-600">{money(p.sale_price, currency)}</span></div>
-                                                ) : (
-                                                    <span className="text-gray-900">{p.price ? money(p.price, currency) : '—'}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded ${p.availability === 'in_stock' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{(p.availability || '').replace('_', ' ')}</span></td>
-                                            <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded ${statusColors[p.status] || 'bg-gray-100 text-gray-500'}`}>{p.status}</span></td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-600">{count(p.clicks ?? 0)}</td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-600">{p.conversions || 0}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    ) : (
-                        <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
-                            <h3 className="text-sm font-medium text-gray-900">No products found</h3>
-                            <p className="mt-1 text-sm text-gray-500">Sync a product feed to see products here.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </AuthenticatedLayout>
-    );
+    const [search, setSearch] = useState(initialSearch);
+    const filters = [['All', ''], ['Approved', 'approved'], ['Disapproved', 'disapproved'], ['Pending', 'pending'], ['Expiring', 'expiring']];
+    const params = status => ({ ...(status ? { status } : {}), ...(search ? { search } : {}), ...(feed ? { feed } : {}) });
+    return <AuthenticatedLayout><Head title="Products" /><main className="mx-auto max-w-6xl space-y-5 px-4 py-8">
+        <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-gray-900">Products</h1><p className="mt-1 text-sm text-gray-500">{pagination.total ?? products.length} products match · {pagination.from || (products.length ? 1 : 0)}–{pagination.to || products.length} shown</p></div><Link href={route('products.index')} className="min-h-[44px] py-3 text-sm text-brand-dark underline">Manage feeds</Link></header>
+        <form className="flex flex-col gap-3 sm:flex-row" onSubmit={event => { event.preventDefault(); router.get(route('products.list'), params(filter)); }}><label htmlFor="product-search" className="sr-only">Search products by title, brand or ID</label><input id="product-search" className="min-w-0 flex-1 rounded-lg border-gray-300 text-sm" placeholder="Search title, brand or product ID" value={search} onChange={event => setSearch(event.target.value)} /><button className="min-h-[44px] rounded-lg bg-brand-dark px-5 text-sm font-medium text-white">Search</button></form>
+        <nav aria-label="Product status" className="flex flex-wrap gap-2">{filters.map(([label, value]) => <Link key={value} href={route('products.list', params(value))} aria-current={(filter || '') === value ? 'page' : undefined} className={`min-h-[44px] rounded-lg px-3 py-3 text-sm ${(filter || '') === value ? 'bg-brand-tint-10 font-semibold text-brand-darker' : 'bg-gray-100 text-gray-700'}`}>{label}</Link>)}</nav>
+        {products.length ? <div className="grid gap-4 md:grid-cols-2">{products.map(product => <article key={product.id} className="rounded-xl border bg-white p-5"><div className="flex items-start gap-3">{product.image_link && <img src={product.image_link} alt="" className="h-14 w-14 shrink-0 rounded object-cover" />}<div className="min-w-0 flex-1"><h2 className="break-words font-semibold text-gray-900">{product.title}</h2><p className="mt-1 text-xs text-gray-500">{product.brand || product.offer_id}</p><p className="mt-2 text-sm">{product.sale_price ? <><span className="mr-2 text-gray-500 line-through">{money(product.price, product.currency_code || currency)}</span><span>{money(product.sale_price, product.currency_code || currency)}</span></> : money(product.price, product.currency_code || currency)}</p></div></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-gray-500">Eligibility</dt><dd className={`mt-1 font-medium ${product.status === 'disapproved' ? 'text-red-700' : 'text-gray-900'}`}>{product.status}</dd></div><div><dt className="text-xs text-gray-500">Availability</dt><dd className="mt-1">{(product.availability || 'unknown').replaceAll('_', ' ')}</dd></div><div><dt className="text-xs text-gray-500">Clicks</dt><dd>{count(product.clicks || 0)}</dd></div><div><dt className="text-xs text-gray-500">Conversions</dt><dd>{count(product.conversions || 0)}</dd></div></dl>{product.status === 'disapproved' && <details open className="mt-4 rounded-lg bg-red-50 p-3"><summary className="cursor-pointer text-sm font-semibold text-red-800">Why this product cannot advertise</summary><ul className="mt-2 space-y-2 text-sm text-red-800">{(product.disapproval_reasons?.length ? product.disapproval_reasons : ['Merchant Center has not supplied an issue description yet. Check this product in Merchant Center.']).map((issue, index) => <li key={index}>{typeof issue === 'string' ? issue : issue.description || issue.message || issue.code || 'Check Merchant Center for issue details.'}</li>)}</ul><a href="https://merchants.google.com/" target="_blank" rel="noreferrer" className="mt-3 inline-block min-h-[44px] py-3 text-sm font-medium text-red-800 underline">Resolve in Merchant Center</a></details>}{product.link && <a href={product.link} target="_blank" rel="noreferrer" className="mt-3 inline-block min-h-[44px] py-3 text-sm text-brand-dark underline">Open product page</a>}</article>)}</div> : <section className="rounded-xl border bg-white p-8 text-center"><h2 className="font-semibold">{filter || search ? 'No products match these filters' : 'No products synced yet'}</h2><p className="mt-2 text-sm text-gray-600">{filter || search ? 'Try another status or clear the search.' : 'Add or sync a feed to inspect product eligibility.'}</p><Link className="mt-4 inline-block min-h-[44px] py-3 text-sm text-brand-dark underline" href={route(filter || search ? 'products.list' : 'products.index')}>{filter || search ? 'Clear filters' : 'Manage feeds'}</Link></section>}
+        {(pagination.previous || pagination.next) && <nav aria-label="Product pages" className="flex justify-between">{pagination.previous ? <Link className="min-h-[44px] rounded-lg border px-4 py-3 text-sm" href={pagination.previous}>Previous page</Link> : <span />}{pagination.next && <Link className="min-h-[44px] rounded-lg border px-4 py-3 text-sm" href={pagination.next}>Next page</Link>}</nav>}
+    </main></AuthenticatedLayout>;
 }

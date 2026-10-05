@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePage, router, Link } from '@inertiajs/react';
+import { Head, usePage, router, Link, useForm } from '@inertiajs/react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
@@ -8,21 +8,20 @@ import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
 import { startTour } from '@/Components/OnboardingTour';
-import { useState } from 'react';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 
 export default function Edit({ auth, mustVerifyEmail, status, googleApiConnection, facebookApiConnection, planSlug, starterPlatform }) {
     const { customers } = usePage().props;
-    const [formData, setFormData] = useState({
+    const { data: formData, setData: setFormData, post: createCustomer, processing: isCreating, errors } = useForm({
         name: '',
         business_type: '',
         description: '',
         country: '',
-        timezone: 'America/New_York',
-        currency_code: 'USD',
+        timezone: auth.user?.active_customer?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        currency_code: auth.user?.active_customer?.currency_code || 'USD',
         website: '',
         phone: '',
     });
-    const [isCreating, setIsCreating] = useState(false);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -34,25 +33,19 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
 
     const handleCreateCustomer = (e) => {
         e.preventDefault();
-        setIsCreating(true);
-        
-        router.post(route('customers.store'), formData, {
+        createCustomer(route('customers.store'), {
             onSuccess: () => {
                 setFormData({
                     name: '',
                     business_type: '',
                     description: '',
                     country: '',
-                    timezone: 'America/New_York',
-                    currency_code: 'USD',
+                    timezone: auth.user?.active_customer?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+                    currency_code: auth.user?.active_customer?.currency_code || 'USD',
                     website: '',
                     phone: '',
                 });
-                setIsCreating(false);
             },
-            onError: () => {
-                setIsCreating(false);
-            }
         });
     };
 
@@ -176,7 +169,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                             Connections
                         </h2>
 
-                        <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                        {auth.user?.isAdmin && <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         {/*
                             Admin only.
 
@@ -241,10 +234,11 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                             </div>
                         </section>
                         )}
-                    </div>
+                    </div>}
+                    {!auth.user?.isAdmin && <div className="rounded-lg border border-gray-200 bg-white p-6"><h3 className="font-semibold text-gray-900">Ad account access and website tracking</h3><p className="mt-2 text-sm text-gray-600">Spectra manages platform credentials for your business. Review account access and conversion tracking in business settings.</p>{auth.user?.active_customer && <Link href={route('customers.edit', auth.user.active_customer.uuid)} className="mt-3 inline-block text-sm font-medium text-brand-dark underline">Review business settings</Link>}</div>}
 
                     {/* Facebook API connection */}
-                    <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                    {auth.user?.isAdmin && <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <section className="max-w-xl">
                             <header className="flex items-start justify-between">
                                 <div>
@@ -285,7 +279,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                 )}
                             </div>
                         </section>
-                    </div>
+                    </div>}
 
                                         <h2 id="customers" className="scroll-mt-24 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
                             Customer accounts
@@ -300,6 +294,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                 </p>
                             </header>
                             <form onSubmit={handleCreateCustomer} className="mt-6 space-y-6 max-w-4xl">
+                                <FormErrorSummary errors={errors} />
                                 {/* Row 1: Name and Business Type */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>

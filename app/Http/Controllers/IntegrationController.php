@@ -40,6 +40,14 @@ class IntegrationController extends Controller
         ]);
     }
 
+    public function status(Request $request)
+    {
+        $customer = $this->getActiveCustomer($request);
+        abort_unless($customer !== null, 404);
+
+        return response()->json(['integrations' => CrmIntegration::where('customer_id', $customer->id)->get()]);
+    }
+
     public function connect(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
@@ -68,13 +76,13 @@ class IntegrationController extends Controller
             if (! $connector->testConnection()) {
                 $integration->update(['status' => 'error', 'last_error' => 'Connection test failed']);
 
-                return back()->with('error', 'Could not connect. Check your credentials.');
+                return back()->withErrors(['access_token' => 'Could not connect. Check the API token and its CRM permissions. Your entries have been kept.']);
             }
         } catch (\Throwable $e) {
             report($e);
             $integration->update(['status' => 'error', 'last_error' => SafeError::capture($e, 'Integration connection failed')]);
 
-            return back()->with('error', SafeError::message($e, "We couldn't connect that integration."));
+            return back()->withErrors(['access_token' => SafeError::message($e, "We couldn't connect that integration. Check your token and try again.")]);
         }
 
         return back()->with('success', ucfirst($validated['provider']).' connected successfully.');
@@ -84,7 +92,7 @@ class IntegrationController extends Controller
     {
         $customer = $this->getActiveCustomer($request);
         if (! $customer || $integration->customer_id !== $customer->id) {
-            abort(403);
+            abort(404);
         }
 
         $integration->update([
@@ -99,13 +107,17 @@ class IntegrationController extends Controller
     {
         $customer = $this->getActiveCustomer($request);
         if (! $customer || $integration->customer_id !== $customer->id) {
-            abort(403);
+            abort(404);
         }
 
         if (! $integration->isConnected()) {
             return back()->with('error', 'Integration is not connected.');
         }
 
+        if ($integration->status === 'syncing' && $integration->updated_at->gt(now()->subMinutes(15))) {
+            return back()->with('success', 'This CRM sync is already running. Progress will update here.');
+        }
+        $integration->update(['status' => 'syncing', 'last_error' => null]);
         SyncCrmConversions::dispatch($integration->id);
 
         return back()->with('success', 'Sync started. Conversions will be processed in the background.');
@@ -124,6 +136,17 @@ class IntegrationController extends Controller
 
         return Inertia::render('Integrations/Conversions', [
             'conversions' => $conversions,
+        ]);
+    }
+
+    public function conversionStatus(Request $request)
+    {
+        $customer = $this->getActiveCustomer($request);
+        abort_unless($customer !== null, 404);
+
+        return response()->json([
+            'conversions' => OfflineConversion::where('customer_id', $customer->id)->orderByDesc('conversion_time')->limit(100)->get(),
+            'pending_count' => OfflineConversion::where('customer_id', $customer->id)->where('upload_status', 'pending')->count(),
         ]);
     }
 

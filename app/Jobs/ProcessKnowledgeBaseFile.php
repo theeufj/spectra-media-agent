@@ -4,26 +4,32 @@ namespace App\Jobs;
 
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
-use App\Services\GeminiService;
 use App\Services\StorageHelper;
-use App\Support\Embeddings;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Pgvector\Laravel\Vector;
 use Smalot\PdfParser\Parser;
 
 class ProcessKnowledgeBaseFile implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public bool $deleteWhenMissingModels = true;
+
+    public int $tries = 3;
+
+    public int $timeout = 180;
+
     /**
      * @var \App\Models\KnowledgeBase
      */
     public $knowledgeBase;
+
+    private ?string $expectedFilePath = null;
 
     /**
      * Create a new job instance.
@@ -31,6 +37,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
     public function __construct(KnowledgeBase $knowledgeBase)
     {
         $this->knowledgeBase = $knowledgeBase;
+        $this->expectedFilePath = $knowledgeBase->file_path;
     }
 
     /**
@@ -38,62 +45,61 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
      */
     public function handle(): void
     {
+        if (! $this->isCurrentDocument()) {
+            return;
+        }
         try {
-            $filePath = $this->knowledgeBase->file_path;
-            if (! $filePath) {
-                throw new \RuntimeException('The uploaded document has no storage path.');
-            }
+            $started = DB::transaction(function () {
+                $this->knowledgeBase = KnowledgeBase::whereKey($this->knowledgeBase->id)->lockForUpdate()->firstOrFail();
+                if (! $this->isCurrentDocument()) {
+                    return false;
+                }
+                $this->knowledgeBase->update(['processing_status' => 'reading', 'processing_error' => null]);
 
-            $content = match ($this->knowledgeBase->source_type) {
+                return true;
+            });
+            if (! $started) {
+                return;
+            }
+            $filePath = $this->knowledgeBase->file_path;
+            $content = $filePath ? match ($this->knowledgeBase->source_type) {
                 'pdf' => $this->extractPdfContent($filePath),
                 'text' => $this->extractTextContent($filePath),
                 default => '',
-            };
+            } : $this->knowledgeBase->content;
             if (trim($content) === '') {
-                throw new \RuntimeException('No readable content was found in the uploaded document.');
+                throw new \RuntimeException('No readable content was found. For a scanned PDF, upload a text version.');
             }
-
-            // The business description remains usable even if embedding is
-            // unavailable. A failed AI call must not erase the uploaded text.
-            $this->knowledgeBase->update([
-                'content' => $content, 'embedding' => null, 'embedding_model' => null,
-            ]);
-
-            $gemini = app(GeminiService::class);
-            $vectors = [];
-            $models = [];
-            // Splitting locally avoids an extra generative call and preserves
-            // every passage instead of asking a model to rewrite the source.
-            foreach (Embeddings::split($content) as $chunk) {
-                $vector = $gemini->embedContent(config('ai.models.embedding'), $chunk, [], $model);
-                if ($vector !== null && $model !== null) {
-                    $vectors[] = $vector;
-                    $models[] = $model;
+            $source = DB::transaction(function () use ($content) {
+                $this->knowledgeBase = KnowledgeBase::whereKey($this->knowledgeBase->id)->lockForUpdate()->firstOrFail();
+                if (! $this->isCurrentDocument()) {
+                    return null;
                 }
-            }
 
-            // pgvector stores ONE vector per document, not a matrix of chunks.
-            // A rate-limit fallback can also change spaces at the same size.
-            $singleModel = count(array_unique($models)) === 1;
-            $average = $singleModel ? Embeddings::average($vectors) : null;
-            $this->knowledgeBase->update([
-                'embedding' => $average ? new Vector($average) : null,
-                'embedding_model' => $average ? $models[0] : null,
-            ]);
+                return app(\App\Services\KnowledgeBase\KnowledgeBaseIndexer::class)->prepare($this->knowledgeBase, $content);
+            });
+            if (! $source) {
+                return;
+            }
+            IndexKnowledgeBase::dispatch($source, $source->source_version);
 
             $customer = Customer::find($this->knowledgeBase->customer_id);
-            if ($customer && ! $customer->brandGuideline()->exists()) {
-                ExtractBrandGuidelines::dispatch($customer);
+            if ($customer) {
+                ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true);
             }
 
             Log::info('Uploaded knowledge base document processed', [
                 'kb_id' => $this->knowledgeBase->id,
-                'embedded_chunks' => count($vectors),
+                'status' => 'indexing',
             ]);
         } catch (\Throwable $e) {
             Log::error('Knowledge base document processing failed', [
                 'kb_id' => $this->knowledgeBase->id,
                 'error' => $e->getMessage(),
+            ]);
+            KnowledgeBase::whereKey($this->knowledgeBase->id)->where('file_path', $this->expectedFilePath)->whereNull('excluded_at')->update([
+                'processing_status' => 'failed',
+                'processing_error' => 'We could not read this document. Check that it contains selectable text, or paste the information as a note.',
             ]);
             // Let the queue retry and report terminal failure normally.
             throw $e;
@@ -172,8 +178,16 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        KnowledgeBase::whereKey($this->knowledgeBase->id)->where('file_path', $this->expectedFilePath)->whereNull('excluded_at')->update(['processing_status' => 'failed', 'processing_error' => 'Document reading did not finish. Refresh this source, replace the file, or add a business note.']);
         Log::error('ProcessKnowledgeBaseFile failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    private function isCurrentDocument(): bool
+    {
+        $this->knowledgeBase->refresh();
+
+        return ! $this->knowledgeBase->excluded_at && $this->knowledgeBase->file_path === $this->expectedFilePath;
     }
 }

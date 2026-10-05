@@ -57,12 +57,13 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     public function heal(?Campaign $campaign = null): array
     {
         $actions = [];
-        $customerId = $this->customer->google_ads_customer_id;
+        $customerId = $this->customer->cleanGoogleCustomerId();
         if (! $customerId) {
             return $actions;
         }
 
         try {
+            $this->requireMutationAllowed($campaign);
             $this->ensureClient();
 
             $filter = "campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED'";
@@ -86,19 +87,23 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                 if (! in_array($g['strength'], self::HEAL_STRENGTHS, true)) {
                     continue;
                 }
-                $result = $this->healGroup($customerId, $g);
+                $result = $this->healGroup($customerId, $g, $campaign);
                 if ($result) {
                     $actions[] = $result;
                 }
             }
         } catch (\Throwable $e) {
+            report($e);
+            if ($campaign) {
+                throw $e;
+            }
             $this->logError('HealAssetGroupStrength: heal failed: '.$e->getMessage());
         }
 
         return $actions;
     }
 
-    private function healGroup(string $customerId, array $group): ?array
+    private function healGroup(string $customerId, array $group, ?Campaign $campaign): ?array
     {
         $existing = $this->existingAssets($customerId, $group['id']);
 
@@ -116,7 +121,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         // Idempotent: only fills when genuinely absent, so it won't regenerate each pass.
         // The logo is intentionally left for a human — it should be the real brand mark,
         // not an AI guess.
-        $imagesAdded = $this->healImages($customerId, $group, $existing);
+        $imagesAdded = $this->healImages($customerId, $group, $existing, $campaign);
 
         $missingMedia = [];
         if (($existing['media']['LOGO'] ?? 0) === 0) {
@@ -143,10 +148,11 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         // asset group and trips CONCURRENT_MODIFICATION against Google's ad-strength recalc.
         $added = [];
         $linkOps = [];
-        $creator = new CreateTextAsset($this->customer);
+        $creator = app(CreateTextAsset::class, ['customer' => $this->customer]);
 
         foreach (self::SPEC as $type => $spec) {
             foreach (($generated[$type] ?? []) as $text) {
+                $this->requireMutationAllowed($campaign);
                 $assetRes = $creator($customerId, $text);
                 if (! $assetRes) {
                     continue;
@@ -162,7 +168,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             }
         }
 
-        if (! empty($linkOps) && ! $this->batchLink($customerId, $linkOps)) {
+        if (! empty($linkOps) && ! $this->batchLink($customerId, $linkOps, $campaign)) {
             $added = []; // link failed; assets created but not attached
         }
 
@@ -193,7 +199,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
      * requires before upload. Only fills genuine gaps (idempotent by count). Returns the
      * number of images added.
      */
-    private function healImages(string $customerId, array $group, array $existing): int
+    private function healImages(string $customerId, array $group, array $existing, ?Campaign $campaign): int
     {
         $specs = [];
         if (($existing['media']['MARKETING_IMAGE'] ?? 0) === 0) {
@@ -212,8 +218,8 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         }
 
         $brand = $this->customer->name ?? 'the brand';
-        $creator = new CreateImageAsset($this->customer);
-        $linker = new LinkAssetGroupAsset($this->customer);
+        $creator = app(CreateImageAsset::class, ['customer' => $this->customer]);
+        $linker = app(LinkAssetGroupAsset::class, ['customer' => $this->customer]);
         $added = 0;
 
         foreach ($specs as $spec) {
@@ -222,6 +228,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                     ."no text, no logos, no watermarks, no people's faces. Suitable as a Google Ads asset. "
                     ."Aspect ratio {$spec['ratio']}.";
 
+                $this->requireMutationAllowed($campaign);
                 $result = $this->gemini->generateImage($prompt, config('ai.models.image'));
                 if (! $result || empty($result['data'])) {
                     // Don't fail silently — a broken/unavailable image model here means
@@ -232,6 +239,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                     continue;
                 }
 
+                $this->requireMutationAllowed($campaign);
                 // Crop/resize to the exact dimensions Google validates against.
                 $manager = new ImageManager(new Driver);
                 $image = $manager->read(base64_decode($result['data']))->cover($spec['w'], $spec['h']);
@@ -243,11 +251,17 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                     continue;
                 }
 
+                $this->requireMutationAllowed($campaign);
                 $assetRes = $creator($customerId, $publicUrl, 'Auto image '.now()->format('Y-m-d'));
+                $this->requireMutationAllowed($campaign);
                 if ($assetRes && $linker($customerId, $group['res'], $assetRes, $spec['field'])) {
                     $added++;
                 }
             } catch (\Throwable $e) {
+                report($e);
+                if ($campaign) {
+                    throw $e;
+                }
                 $this->logError('HealAssetGroupStrength: image heal failed: '.$e->getMessage());
             }
         }
@@ -256,9 +270,10 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     }
 
     /** Link all assets in one atomic mutate, retrying transient concurrent-modification. */
-    private function batchLink(string $customerId, array $ops): bool
+    private function batchLink(string $customerId, array $ops, ?Campaign $campaign): bool
     {
         for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $this->requireMutationAllowed($campaign);
             try {
                 $this->client->getAssetGroupAssetServiceClient()->mutateAssetGroupAssets(
                     new MutateAssetGroupAssetsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => $ops])
@@ -271,6 +286,10 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
 
                     continue;
                 }
+                report($e);
+                if ($campaign) {
+                    throw $e;
+                }
                 $this->logError('HealAssetGroupStrength: batch link failed: '.$e->getMessage());
 
                 return false;
@@ -278,6 +297,19 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         }
 
         return false;
+    }
+
+    /** Keep manual account-wide runs available; automated campaign runs re-read every hold. */
+    private function requireMutationAllowed(?Campaign $campaign): void
+    {
+        if (! $campaign) {
+            return;
+        }
+        $guard = app(\App\Services\GoogleAds\GoogleAdStrengthRepair::class);
+        $strategy = $guard->strategyForCampaign($campaign);
+        if (! $strategy || ($blocked = $guard->campaignMutationBlocked($campaign, $strategy))) {
+            throw new \DomainException($blocked ?? 'strategy_not_approved');
+        }
     }
 
     /**

@@ -10,7 +10,7 @@ const PLATFORM_OPTIONS = [
     'TikTok Ads',
 ];
 
-export default function Create() {
+export default function Create({ currencyCode = 'USD' }) {
     const { data, setData, post, processing, errors } = useForm({
         client_name: '',
         industry: '',
@@ -105,15 +105,15 @@ export default function Create() {
                         {/* Monthly Budget */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Monthly Ad Budget (USD) <span className="text-red-500">*</span>
+                                Monthly Ad Budget ({currencyCode}) <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 text-xs">{currencyCode}</span>
                                 <input
                                     type="number"
                                     value={data.budget}
                                     onChange={e => setData('budget', e.target.value)}
-                                    className="w-full pl-8 rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
+                                    className="w-full pl-14 rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     placeholder="5000"
                                     min="100"
                                     step="100"

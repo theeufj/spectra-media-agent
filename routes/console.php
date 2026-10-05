@@ -182,6 +182,7 @@ Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlap
 
 // Policy compliance checks - detects disapprovals and policy violations
 Schedule::job(new Scheduled\DispatchCampaignPolicyViolationChecks)->name('check-campaign-policy-violations')->hourly()->withoutOverlapping();
+Schedule::job(new Scheduled\DispatchGoogleCampaignReadinessChecks)->name('check-google-campaign-readiness')->hourly()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
 Schedule::job(new Scheduled\GetKeywordQualityScores)->name('get-keyword-quality-scores')->daily()->withoutOverlapping();

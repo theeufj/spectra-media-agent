@@ -16,6 +16,8 @@ import { fetchJson } from '@/utils/http';
  * @param {(data: any) => boolean} options.until  return true to stop polling
  * @param {(data: unknown) => any} options.parse validate the transport contract
  * @param {boolean}     options.immediate fetch once on mount (default true)
+ * @param {number}      options.requestTimeout ms before aborting a stalled request
+ * @param {number}      options.maxFailures stop after consecutive failures (default 4)
  */
 export function usePolling(url, options = {}) {
     const {
@@ -24,6 +26,9 @@ export function usePolling(url, options = {}) {
         until = () => false,
         immediate = true,
         parse = (value) => value,
+        requestTimeout = 30000,
+        maxFailures = 4,
+        restartKey = 0,
     } = options;
 
     const [data, setData] = useState(null);
@@ -51,10 +56,18 @@ export function usePolling(url, options = {}) {
         let cancelled = false;
         let inFlight = false;
         let timer = null;
+        let controller = null;
+        let requestTimer = null;
+        let stopped = false;
+        let consecutiveFailures = 0;
 
+        setData(null);
+        setError(null);
+        setFailureStreak(0);
         setIsPolling(true);
 
         const stop = () => {
+            stopped = true;
             if (timer) clearInterval(timer);
             timer = null;
             if (!cancelled) setIsPolling(false);
@@ -62,21 +75,37 @@ export function usePolling(url, options = {}) {
 
         const tick = async () => {
             // Skip rather than stack up if the previous request hasn't returned.
-            if (inFlight) return;
+            if (inFlight || stopped || cancelled) return;
             inFlight = true;
+            controller = new AbortController();
             try {
-                const result = parseRef.current(await fetchJson(url));
+                const timeout = new Promise((_, reject) => {
+                    requestTimer = setTimeout(() => {
+                        controller.abort();
+                        const failure = new Error('The status request timed out.');
+                        failure.name = 'TimeoutError';
+                        reject(failure);
+                    }, requestTimeout);
+                });
+                const result = parseRef.current(await Promise.race([
+                    fetchJson(url, { signal: controller.signal }), timeout,
+                ]));
                 if (cancelled) return;
                 setData(result);
                 setError(null);
                 setFailureStreak(0);
+                consecutiveFailures = 0;
                 if (untilRef.current(result)) stop();
             } catch (e) {
                 if (!cancelled) {
                     setError(e);
                     setFailureStreak((n) => n + 1);
+                    consecutiveFailures += 1;
+                    if (consecutiveFailures >= maxFailures) stop();
                 }
             } finally {
+                clearTimeout(requestTimer);
+                requestTimer = null;
                 inFlight = false;
             }
         };
@@ -87,8 +116,10 @@ export function usePolling(url, options = {}) {
         return () => {
             cancelled = true;
             if (timer) clearInterval(timer);
+            clearTimeout(requestTimer);
+            controller?.abort();
         };
-    }, [url, interval, enabled, immediate]);
+    }, [url, interval, enabled, immediate, requestTimeout, maxFailures, restartKey]);
 
     return { data, error, isPolling, failureStreak };
 }

@@ -124,6 +124,22 @@ class SupportChatController extends Controller
         ]);
     }
 
+    public function session(Request $request): JsonResponse
+    {
+        $ticket = SupportTicket::where('user_id', $request->user()->id)
+            ->where('source', 'chatbot')
+            ->where('customer_id', session('active_customer_id'))
+            ->whereIn('status', ['open', 'in_progress'])
+            ->latest('updated_at')->first();
+
+        return response()->json([
+            'ticket_id' => $ticket?->id,
+            'messages' => collect($ticket->transcript ?? [])->map(fn ($turn) => [
+                'role' => $turn['role'], 'text' => $turn['text'],
+            ]),
+        ]);
+    }
+
     private function openTicket(User $user, string $message): SupportTicket
     {
         return SupportTicket::create([
@@ -150,14 +166,7 @@ class SupportChatController extends Controller
      */
     private function appendToTranscript(SupportTicket $ticket, string $role, string $text, array $meta = []): void
     {
-        $ticket->refresh();
-
-        $ticket->update([
-            'transcript' => [
-                ...($ticket->transcript ?? []),
-                ['role' => $role, 'text' => $text, 'at' => now()->toIso8601String(), ...$meta],
-            ],
-        ]);
+        $ticket->appendMessage($role, $text, $meta);
     }
 
     /**

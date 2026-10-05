@@ -1,36 +1,67 @@
 import { Transition } from '@headlessui/react';
 import { Link } from '@inertiajs/react';
-import { createContext, useContext, useState } from 'react';
+import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState } from 'react';
 
 const DropDownContext = createContext();
 
 const Dropdown = ({ children }) => {
     const [open, setOpen] = useState(false);
+    const root = useRef(null);
+    const contentId = useId();
+
+    useEffect(() => {
+        if (!open) return;
+        const dismiss = (event) => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+                root.current?.querySelector('[data-dropdown-trigger]')?.focus();
+            }
+        };
+        const outside = (event) => { if (!root.current?.contains(event.target)) setOpen(false); };
+        document.addEventListener('keydown', dismiss);
+        document.addEventListener('pointerdown', outside);
+        return () => {
+            document.removeEventListener('keydown', dismiss);
+            document.removeEventListener('pointerdown', outside);
+        };
+    }, [open]);
 
     const toggleOpen = () => {
         setOpen((previousState) => !previousState);
     };
 
     return (
-        <DropDownContext.Provider value={{ open, setOpen, toggleOpen }}>
-            <div className="relative">{children}</div>
+        <DropDownContext.Provider value={{ open, setOpen, toggleOpen, root, contentId }}>
+            <div ref={root} className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>{children}</div>
         </DropDownContext.Provider>
     );
 };
 
 const Trigger = ({ children }) => {
-    const { open, setOpen, toggleOpen } = useContext(DropDownContext);
+    const { open, toggleOpen, setOpen, root, contentId } = useContext(DropDownContext);
+    const decorate = (element) => {
+        if (!isValidElement(element)) return element;
+        if (element.type === 'span' || element.type === 'div') {
+            return cloneElement(element, {}, Children.map(element.props.children, decorate));
+        }
+        return cloneElement(element, {
+            'aria-expanded': open,
+            'aria-controls': contentId,
+            'data-dropdown-trigger': true,
+            onKeyDown: (event) => {
+                element.props.onKeyDown?.(event);
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setOpen(true);
+                    requestAnimationFrame(() => root.current?.querySelector('[data-dropdown-content] a, [data-dropdown-content] button')?.focus());
+                }
+            },
+        });
+    };
 
     return (
         <>
-            <div onClick={toggleOpen}>{children}</div>
-
-            {open && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setOpen(false)}
-                ></div>
-            )}
+            <div onClick={toggleOpen}>{Children.map(children, decorate)}</div>
         </>
     );
 };
@@ -41,7 +72,7 @@ const Content = ({
     contentClasses = 'py-1 bg-white',
     children,
 }) => {
-    const { open, setOpen } = useContext(DropDownContext);
+    const { open, setOpen, contentId } = useContext(DropDownContext);
 
     let alignmentClasses = 'origin-top';
 
@@ -71,6 +102,8 @@ const Content = ({
                 leaveTo="opacity-0 scale-95"
             >
                 <div
+                    id={contentId}
+                    data-dropdown-content
                     className={`absolute z-50 mt-2 rounded-lg shadow-lg ring-1 ring-gray-200 ${alignmentClasses} ${widthClasses}`}
                     onClick={() => setOpen(false)}
                 >

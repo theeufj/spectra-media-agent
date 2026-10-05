@@ -20,11 +20,18 @@ export default function AdminSearch() {
     const [results, setResults] = React.useState([]);
     const [open, setOpen] = React.useState(false);
     const [loading, setLoading] = React.useState(false);
+    const [failed, setFailed] = React.useState(false);
     const containerRef = React.useRef(null);
 
     React.useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+        setResults([]);
+        setFailed(false);
+        setLoading(false);
+        setOpen(false);
         if (term.trim().length < 2) {
-            setResults([]);
+            setOpen(false);
             return undefined;
         }
 
@@ -32,18 +39,36 @@ export default function AdminSearch() {
         // prefixes nobody wanted results for.
         const timer = setTimeout(async () => {
             setLoading(true);
+            setOpen(true);
+            const deadline = setTimeout(() => {
+                if (!active) return;
+                setFailed(true);
+                setLoading(false);
+                active = false;
+                controller.abort();
+            }, 30000);
+            controller.signal.addEventListener('abort', () => clearTimeout(deadline), { once: true });
             try {
-                const data = await fetchJson(`${route('admin.search')}?q=${encodeURIComponent(term)}`);
+                const data = await fetchJson(`${route('admin.search')}?q=${encodeURIComponent(term)}`, { signal: controller.signal });
+                if (!active) return;
                 setResults(data.results || []);
                 setOpen(true);
             } catch {
+                if (!active) return;
                 setResults([]);
+                setFailed(true);
+                setOpen(true);
             } finally {
-                setLoading(false);
+                clearTimeout(deadline);
+                if (active) setLoading(false);
             }
         }, 250);
 
-        return () => clearTimeout(timer);
+        return () => {
+            active = false;
+            controller.abort();
+            clearTimeout(timer);
+        };
     }, [term]);
 
     React.useEffect(() => {
@@ -83,7 +108,8 @@ export default function AdminSearch() {
                 <div className="absolute left-4 right-4 z-20 mt-1 max-h-96 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
                     {loading && <p className="px-3 py-2 text-sm text-gray-500">Searching…</p>}
 
-                    {!loading && results.length === 0 && (
+                    {!loading && failed && <p role="alert" className="px-3 py-2 text-sm text-red-700">Search could not load. Try changing the query.</p>}
+                    {!loading && !failed && results.length === 0 && (
                         <p className="px-3 py-2 text-sm text-gray-500">No matches for “{term}”.</p>
                     )}
 

@@ -30,7 +30,7 @@ class LandingController extends Controller
                 'plans' => $plans,
                 'meta' => $this->meta(
                     'Real Property Ads — Google Ads Built for Real Estate Agents',
-                    'Get more listings and sell faster with AI-built Google Ads campaigns made for real estate agents. Launch your first property campaign in minutes.',
+                    'Get more listings and sell faster with AI-built Google Ads campaigns made for real estate agents. Review your business profile, budget and ads before launch.',
                     'Real Property Ads — More Listings. More Closings.',
                     'Stop paying for generic ads. Real Property Ads builds a Google campaign tailored to each property listing, automatically.',
                 ),
@@ -126,7 +126,7 @@ class LandingController extends Controller
             return \Inertia\Inertia::render('RealEstateHowItWorks', [
                 'meta' => $this->meta(
                     'How It Works — Real Property Ads',
-                    'From listing URL to a live Google Ads campaign in under five minutes. See how Real Property Ads works for real estate agents.',
+                    'From listing URL to a reviewed Google Ads campaign. See how Real Property Ads works for real estate agents.',
                 ),
             ]);
         }
@@ -175,9 +175,12 @@ class LandingController extends Controller
 
         if (($tenant['key'] ?? '') === 'realpropertyads') {
             return \Inertia\Inertia::render('RealEstatePricing', [
+                'plans' => Plan::active()->ordered()->where('is_free', false)->get(),
+                'faqs' => $this->faqs('pricing', $this->setupFeeUsd()),
+                'setupFeeUsd' => $this->setupFeeUsd(),
                 'meta' => $this->meta(
                     'Pricing — Real Property Ads',
-                    'One simple package for real estate agents: $1,000 to launch your property campaign, then $500 a month until it sells. No lock-in.',
+                    'Choose current ongoing management plans or a one-time Google Ads build for your property campaigns. Review your profile and ads before launch; ad spend is separate.',
                 ),
             ]);
         }

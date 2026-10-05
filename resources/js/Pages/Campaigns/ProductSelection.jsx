@@ -1,107 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import InputLabel from '@/Components/InputLabel';
+import React, { useEffect, useState } from 'react';
+import { fetchJson } from '@/utils/http';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 
-export default function ProductSelection({ customerUuid, selectedPages, onSelectionChange }) {
+export default function ProductSelection({ customerUuid, selectedPages = [], initialPages = [], destinationUrl = '', onSelectionChange }) {
     const [pages, setPages] = useState([]);
     const [loading, setLoading] = useState(false);
     const [query, setQuery] = useState('');
-    const [selectedPageObject, setSelectedPageObject] = useState(null);
-
+    const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
+    const [selected, setSelected] = useState(null);
+    const selectedId = selectedPages[0];
     useEffect(() => {
-        if (customerUuid) {
-            const timer = setTimeout(() => {
-                fetchPages(query);
-            }, 300);
-            return () => clearTimeout(timer);
-        }
-    }, [customerUuid, query]);
-
-    const fetchPages = async (searchQuery) => {
-        setLoading(true);
-        try {
-            const response = await axios.get(route('api.customers.pages.index', { 
-                customer: customerUuid,
-                search: searchQuery
-            }));
-            setPages(response.data.data);
-        } catch (error) {
-            console.error("Failed to fetch product pages", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSelection = (page) => {
-        setSelectedPageObject(page);
-        onSelectionChange(page ?? null);
-    };
-
-    return (
-        <div className="space-y-1">
-            <InputLabel value="Campaign Destination (Landing Page)" />
-            <Combobox value={selectedPageObject} onChange={handleSelection}>
-                <div className="relative mt-1">
-                    <div className="relative w-full cursor-default overflow-hidden rounded-md bg-white text-left shadow-sm focus:outline-none sm:text-sm">
-                        <ComboboxInput
-                            className="w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm py-2 pl-3 pr-10 text-sm leading-5 text-gray-900"
-                            displayValue={(page) => page?.title || ''}
-                            onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Search for a product page..."
-                        />
-                        <ComboboxButton className="absolute inset-y-0 right-0 flex items-center pr-2">
-                            <svg className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </ComboboxButton>
-                    </div>
-                    <ComboboxOptions className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm">
-                        {loading ? (
-                            <div className="relative cursor-default select-none px-4 py-2 text-gray-700">Loading...</div>
-                        ) : pages.length === 0 ? (
-                            <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
-                                {query !== '' ? 'Nothing found.' : 'No pages available.'}
-                            </div>
-                        ) : (
-                            pages.map((page) => (
-                                <ComboboxOption
-                                    key={page.id}
-                                    className={({ active }) =>
-                                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                            active ? 'bg-brand-dark text-white' : 'text-gray-900'
-                                        }`
-                                    }
-                                    value={page}
-                                >
-                                    {({ selected, active }) => (
-                                        <>
-                                            <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                                {page.title || 'Untitled Page'}
-                                            </span>
-                                            {selected ? (
-                                                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${active ? 'text-white' : 'text-brand-dark'}`}>
-                                                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                    </svg>
-                                                </span>
-                                            ) : null}
-                                            <span className={`block truncate text-xs ${active ? 'text-white/80' : 'text-gray-500'}`}>
-                                                {page.url}
-                                            </span>
-                                        </>
-                                    )}
-                                </ComboboxOption>
-                            ))
-                        )}
-                    </ComboboxOptions>
-                </div>
-            </Combobox>
-            {selectedPageObject && (
-                <div className="text-xs text-gray-500">
-                    Selected: {selectedPageObject.url}
-                </div>
-            )}
-        </div>
-    );
+        const known = initialPages.find(page => String(page.id) === String(selectedId));
+        setSelected(selectedId ? known || { id: selectedId, title: destinationUrl || 'Saved landing page', url: destinationUrl } : null);
+        if (!customerUuid || !selectedId || known) return;
+        const controller = new AbortController();
+        fetchJson(route('api.customers.pages.index', { customer: customerUuid, ids: [selectedId] }), { signal: controller.signal }).then(result => {
+            if (!controller.signal.aborted && result.data?.[0]) setSelected(result.data[0]);
+        }).catch(failure => { if (failure.name !== 'AbortError') setError('We could not load the saved landing page. Its destination is still kept in your draft.'); });
+        return () => controller.abort();
+    }, [customerUuid, selectedId, destinationUrl]);
+    useEffect(() => {
+        if (!customerUuid) return;
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            setLoading(true); setError(null);
+            try {
+                const result = await fetchJson(route('api.customers.pages.index', { customer: customerUuid, search: query }), { signal: controller.signal });
+                if (!controller.signal.aborted) setPages(result.data || []);
+            } catch (failure) {
+                if (!controller.signal.aborted) setError('We could not load website pages. Retry or keep the saved destination.');
+            } finally { if (!controller.signal.aborted) setLoading(false); }
+        }, 300);
+        return () => { controller.abort(); clearTimeout(timer); };
+    }, [customerUuid, query, retry]);
+    return <div className="space-y-2">
+        <label htmlFor="campaign-destination" className="block text-sm font-medium text-gray-700">Campaign destination</label>
+        <Combobox value={selected} by="id" onChange={page => { setSelected(page); onSelectionChange(page ?? null); }}>
+            <div className="relative"><ComboboxInput id="campaign-destination" className="w-full rounded-lg border-gray-300 py-3 pr-10 text-sm" displayValue={page => page?.title || page?.url || ''} onChange={event => setQuery(event.target.value)} placeholder="Search included website pages" /><ComboboxButton aria-label="Show landing page choices" className="absolute inset-y-0 right-0 min-w-[44px] px-3">⌄</ComboboxButton><ComboboxOptions className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white p-1 shadow-lg ring-1 ring-black/10">{loading ? <p role="status" className="p-3 text-sm">Loading pages…</p> : pages.length ? pages.map(page => <ComboboxOption key={page.id} value={page} className="cursor-pointer rounded p-3 text-sm data-[focus]:bg-brand-tint-10"><span className="block font-medium">{page.title || page.url}</span><span className="block break-all text-xs text-gray-500">{page.url}</span></ComboboxOption>) : <p className="p-3 text-sm text-gray-600">{error ? 'Pages could not be loaded.' : query ? 'No included pages match this search.' : 'No included website pages yet. Add a source in your knowledge base.'}</p>}</ComboboxOptions></div>
+        </Combobox>
+        {selected && <p className="break-all text-xs text-gray-600">Saved destination: {selected.url || destinationUrl}</p>}
+        {error && <div role="alert" className="text-sm text-red-700">{error} <button type="button" className="min-h-[44px] px-2 underline" onClick={() => setRetry(value => value + 1)}>Retry</button></div>}
+    </div>;
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 export default function Create() {
@@ -34,6 +35,7 @@ export default function Create() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            <FormErrorSummary errors={errors} />
                             <div>
                                 <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
                                     Category

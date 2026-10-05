@@ -22,19 +22,29 @@ class GenerateProposal implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(protected Proposal $proposal) {}
+    protected ?string $generationToken = null;
+
+    public function __construct(protected Proposal $proposal)
+    {
+        $this->generationToken = $proposal->generation_started_at?->toIso8601String();
+    }
 
     public function handle(GeminiService $geminiService, ProposalPdfService $pdfService): void
     {
+        if (! $this->matchesGeneration()) {
+            return;
+        }
         try {
             Log::info("GenerateProposal: Starting for proposal #{$this->proposal->id}");
 
+            $this->proposal->update(['generation_step' => 'reading', 'generation_started_at' => $this->proposal->generation_started_at ?? now(), 'error' => null]);
             // Step 1: Crawl client website (if provided)
             $websiteContent = null;
             if ($this->proposal->website_url) {
                 $websiteContent = $this->crawlWebsite($this->proposal->website_url);
             }
 
+            $this->proposal->update(['generation_step' => 'writing']);
             // Step 2: Generate proposal via Gemini
             $prompt = ProposalPrompt::build(
                 clientName: $this->proposal->client_name,
@@ -43,6 +53,7 @@ class GenerateProposal implements ShouldQueue
                 budget: (float) $this->proposal->budget,
                 goals: $this->proposal->goals,
                 platforms: $this->proposal->platforms ?? ['Google Ads'],
+                currency: $this->proposal->currency_code,
             );
 
             $response = $geminiService->generateContent(
@@ -53,19 +64,16 @@ class GenerateProposal implements ShouldQueue
             );
 
             if (! $response || empty($response['text'])) {
-                $this->proposal->markFailed('AI generation returned empty response.');
-
-                return;
+                throw new \RuntimeException('AI generation returned empty response.');
             }
 
             // Parse JSON from response
             $proposalData = $this->parseJson($response['text']);
             if (! $proposalData) {
-                $this->proposal->markFailed('Failed to parse proposal JSON from AI response.');
-
-                return;
+                throw new \RuntimeException('Failed to parse proposal JSON from AI response.');
             }
 
+            $this->proposal->update(['generation_step' => 'illustrating']);
             // Step 3: Generate hero image for the proposal
             $heroImage = $this->generateHeroImage($geminiService);
 
@@ -73,6 +81,7 @@ class GenerateProposal implements ShouldQueue
                 $proposalData['hero_image'] = $heroImage;
             }
 
+            $this->proposal->update(['generation_step' => 'pdf']);
             // Step 4: Generate PDF
             $pdfPath = $pdfService->generate($this->proposal, $proposalData);
 
@@ -83,7 +92,8 @@ class GenerateProposal implements ShouldQueue
 
         } catch (\Throwable $e) {
             Log::error("GenerateProposal: Failed for proposal #{$this->proposal->id}: {$e->getMessage()}");
-            $this->proposal->markFailed($e->getMessage());
+            report($e);
+            throw $e;
         }
     }
 
@@ -199,8 +209,20 @@ class GenerateProposal implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        if (! $this->matchesGeneration()) {
+            return;
+        }
+        $this->proposal->markFailed('We could not finish generating this proposal. Your inputs are saved; retry to continue.');
         Log::error('GenerateProposal failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    private function matchesGeneration(): bool
+    {
+        $this->proposal->refresh();
+
+        return $this->proposal->isGenerating() && ($this->generationToken === null
+            || $this->generationToken === $this->proposal->generation_started_at?->toIso8601String());
     }
 }

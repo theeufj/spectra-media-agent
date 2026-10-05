@@ -460,7 +460,7 @@ class CampaignHealthChecker
         if ($campaign->google_ads_campaign_id && $campaign->customer) {
             try {
                 $customer = $campaign->customer;
-                $customerId = $customer->google_ads_customer_id;
+                $customerId = $customer->cleanGoogleCustomerId();
                 $resource = $campaign->google_ads_campaign_id;
 
                 if (! str_starts_with($resource, 'customers/')) {
@@ -476,12 +476,14 @@ class CampaignHealthChecker
                     }
 
                     if (($ad['approval_status'] ?? 0) === PolicyApprovalStatus::DISAPPROVED) {
-                        $topics = array_map(fn ($t) => $t['topic'] ?? 'unknown', $ad['policy_topics'] ?? []);
                         $health['issues'][] = [
                             'type' => 'google_ad_disapproved',
                             'severity' => 'high',
-                            'message' => 'A Google ad was disapproved'.(! empty($topics) ? ' for: '.implode(', ', $topics) : '').'. Our team is working to resolve this.',
-                            'details' => 'Policy topics: '.implode(', ', $topics),
+                            'message' => 'A Google ad was disapproved: '.\App\Support\GoogleAdPolicy::summarize($ad).'.',
+                            'details' => \App\Support\GoogleAdPolicy::details($ad),
+                            'action_required' => \App\Support\GoogleAdPolicy::isDestinationIssue($ad)
+                                ? 'Restore access to the affected landing page, then recheck Google policy approval.'
+                                : 'Review the policy decision and correct the affected ad before resubmitting.',
                         ];
                     } elseif (($ad['approval_status'] ?? 0) === PolicyApprovalStatus::APPROVED_LIMITED) {
                         $limited++;
@@ -500,6 +502,11 @@ class CampaignHealthChecker
                 Log::warning('CampaignHealthChecker: Could not check Google ad status', [
                     'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
                 ]);
+                $health['warnings'][] = [
+                    'type' => 'google_ad_policy_unknown',
+                    'severity' => 'high',
+                    'message' => 'Google ad policy status could not be checked. Approval and delivery have not been verified.',
+                ];
             }
         }
 

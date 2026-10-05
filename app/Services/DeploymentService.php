@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
+use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
@@ -13,6 +14,7 @@ use App\Services\Agents\MicrosoftAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class DeploymentService
@@ -80,28 +82,7 @@ class DeploymentService
             // Execute with agent
             $result = $agent->execute($context);
 
-            // Store execution results in strategy
-            $strategy->execution_plan = $result->plan ? $result->plan->toArray() : null;
-            $strategy->execution_result = [
-                'success' => $result->success,
-                'platform_ids' => $result->platformIds,
-                'execution_time' => $result->executionTime,
-                'errors' => $result->errors,
-                'warnings' => $result->warnings,
-                'metadata' => $result->metadata,
-                'executed_at' => now()->toIso8601String(),
-            ];
-            $strategy->execution_time = $result->executionTime;
-            $strategy->execution_errors = $result->errors;
-            $strategy->deployment_status = $result->success ? 'deployed' : 'failed';
-            // One normaliser, on the result. This line and the caller's error
-            // string below used to build the message two different ways, so
-            // deployment_error held raw JSON for Google/Facebook failures while
-            // the API response held the sentence — and Microsoft/LinkedIn, which
-            // populated neither, stored an empty string for both.
-            $strategy->deployment_error = $result->success ? null : $result->errorMessage();
-            $strategy->deployed_at = $result->success ? now() : null;
-            $strategy->save();
+            self::persistAgentResult($strategy, $result);
 
             if ($result->success) {
                 Log::info('DeploymentService: Successfully deployed with agent', [
@@ -162,6 +143,55 @@ class DeploymentService
         }
     }
 
+    /** Preserve readiness written by a repair or verifier during deployment. */
+    protected static function persistAgentResult(Strategy $strategy, ExecutionResult $result): void
+    {
+        DB::transaction(function () use ($strategy, $result) {
+            $locked = Strategy::whereKey($strategy->id)->lockForUpdate()->firstOrFail();
+            $metadata = array_replace($locked->execution_result['metadata'] ?? [], $result->metadata);
+            if (isset($locked->execution_result['metadata']['conversion_goal_readiness'])) {
+                $metadata['conversion_goal_readiness'] = self::mergeGoalReadiness(
+                    $locked->execution_result['metadata']['conversion_goal_readiness'],
+                    $result->metadata['conversion_goal_readiness'] ?? [],
+                );
+            }
+            $locked->forceFill([
+                'execution_plan' => $result->plan?->toArray(),
+                'execution_result' => [
+                    'success' => $result->success,
+                    'platform_ids' => $result->platformIds,
+                    'execution_time' => $result->executionTime,
+                    'errors' => $result->errors,
+                    'warnings' => $result->warnings,
+                    'metadata' => $metadata,
+                    'executed_at' => now()->toIso8601String(),
+                ],
+                'execution_time' => $result->executionTime,
+                'execution_errors' => $result->errors,
+                'deployment_status' => $result->success ? 'deployed' : 'failed',
+                'deployment_error' => $result->success ? null : $result->errorMessage(),
+                'deployed_at' => $result->success ? now() : null,
+            ])->save();
+        });
+        $strategy->refresh();
+    }
+
+    private static function mergeGoalReadiness(array $current, array $incoming): array
+    {
+        $currentTime = isset($current['checked_at']) && is_string($current['checked_at'])
+            ? strtotime($current['checked_at']) : false;
+        $incomingTime = isset($incoming['checked_at']) && is_string($incoming['checked_at'])
+            ? strtotime($incoming['checked_at']) : false;
+
+        // The locked row may contain a check completed while execution was in
+        // flight. On equal timestamps, that latest persisted writer also wins.
+        if ($currentTime !== false && ($incomingTime === false || $incomingTime <= $currentTime)) {
+            return $current;
+        }
+
+        return array_replace($current, $incoming);
+    }
+
     /**
      * Deploy using legacy deployment strategies.
      */
@@ -201,7 +231,7 @@ class DeploymentService
 
                 return [
                     'success' => false,
-                    'error' => "Deployment failed for {$strategy->platform}",
+                    'error' => $strategy->deployment_error ?: "Deployment failed for {$strategy->platform}",
                 ];
             }
 

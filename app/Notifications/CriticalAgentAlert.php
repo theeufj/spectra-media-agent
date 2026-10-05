@@ -115,7 +115,10 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
 
         // Deduplicate: same alert type + campaign within 24 hours sends only once per user
         $campaignId = $this->details['campaign_id'] ?? 'global';
-        $cacheKey = "notif:critical:{$this->alertType}:{$campaignId}:{$notifiable->id}";
+        // A recovered incident may recur within the same day. Its new identity
+        // must reach the customer even while the previous alert is on cooldown.
+        $incident = isset($this->details['dedupe_key']) ? ':'.hash('sha256', (string) $this->details['dedupe_key']) : '';
+        $cacheKey = "notif:critical:{$this->alertType}:{$campaignId}:{$notifiable->id}{$incident}";
         if (Cache::has($cacheKey)) {
             return [];
         }
@@ -136,7 +139,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         }
 
         if (! empty($this->details['issues'])) {
-            $mail->line('Here is what we fixed:');
+            $mail->line('Reported issues:');
             foreach ($this->details['issues'] as $issue) {
                 $issueText = is_array($issue) ? ($issue['message'] ?? json_encode($issue)) : $issue;
                 $mail->line("- {$issueText}");
@@ -153,7 +156,9 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
             $mail->line('You do not need to take any action — our agents automatically resolved this for you.');
         }
 
-        if (! empty($this->details['campaign_id'])) {
+        if (! empty($this->details['action_url'])) {
+            $mail->action('View Campaign', $this->details['action_url']);
+        } elseif (! empty($this->details['campaign_id'])) {
             $mail->action('View Campaign', route('campaigns.show', $this->details['campaign_id']));
         }
 

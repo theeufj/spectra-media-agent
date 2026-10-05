@@ -175,7 +175,7 @@ class OnboardingFlowTest extends TestCase
         $this->assertFalse($tracking['installed']);
     }
 
-    public function test_a_returning_customer_who_has_launched_before_is_not_re_gated(): void
+    public function test_a_returning_customer_must_approve_the_current_profile_before_launching_again(): void
     {
         [$user, $customer] = $this->userWithCustomer();
         $this->guideline($customer, verified: false);
@@ -186,7 +186,7 @@ class OnboardingFlowTest extends TestCase
             ->withSession(['active_customer_id' => $customer->id])
             ->post('/deployment/deploy', ['campaign_id' => $campaign->id]);
 
-        $location = $response->headers->get('Location');
-        $this->assertStringNotContainsString('brand-guidelines', (string) $location);
+        $response->assertRedirect(route('brand-guidelines.index', ['review' => 1], absolute: false));
+        $this->assertSame(\App\Enums\CampaignStatus::Draft, $campaign->fresh()->status);
     }
 }

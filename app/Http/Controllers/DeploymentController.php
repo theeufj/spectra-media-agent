@@ -9,6 +9,7 @@ use App\Models\ActivityLog;
 use App\Models\Campaign;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class DeploymentController extends Controller
@@ -80,10 +81,18 @@ class DeploymentController extends Controller
 
     /**
      * Handles the final deployment of the selected collateral.
-     *
-     * @return \Illuminate\Http\JsonResponse
      */
-    public function deploy(Request $request): \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
+    public function deploy(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        return $this->launch($request);
+    }
+
+    public function deployPlatform(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        return $this->launch($request, singlePlatform: true);
+    }
+
+    private function launch(Request $request, bool $singlePlatform = false): \Illuminate\Http\RedirectResponse
     {
         $user = $request->user();
 
@@ -97,6 +106,7 @@ class DeploymentController extends Controller
         // Validate campaign ID
         $validated = $request->validate([
             'campaign_id' => 'required|integer|exists:campaigns,id',
+            'strategy_id' => $singlePlatform ? 'required|integer|exists:strategies,id' : 'nullable|integer',
         ]);
 
         // Get campaign and verify ownership
@@ -107,14 +117,12 @@ class DeploymentController extends Controller
             return redirect()->route('quick-start');
         }
 
-        if ($campaign->customer_id !== $customer->id) {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Unauthorized access to this campaign.',
-            ]);
-        }
+        $this->authorize('view', $campaign);
+        abort_unless($campaign->customer_id === $customer->id, 404);
+        $strategyId = $singlePlatform ? $campaign->strategies()->findOrFail($validated['strategy_id'])->id : null;
+        $selected = fn () => $campaign->strategies()->when($strategyId !== null, fn ($query) => $query->whereKey($strategyId));
 
-        if ($campaign->strategies()->whereNotNull('signed_off_at')
+        if ($selected()->whereNotNull('signed_off_at')
             ->whereIn('creative_review->status', ['pending', 'reviewing', 'revising'])->exists()) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Your creative is still being prepared and checked. Review the finished set before creating your ads.']);
         }
@@ -124,11 +132,8 @@ class DeploymentController extends Controller
         //    looked at them and confirmed they represent the business before
         //    the first ad ever runs. Customers who have launched before are
         //    not re-gated.
-        $hasLaunchedBefore = $customer->campaigns()
-            ->whereIn('status', ['active', 'paused', 'completed', 'ended', 'pending_admin_deployment'])
-            ->exists();
-
-        if (! $hasLaunchedBefore && ! $customer->brandGuideline()->where('user_verified', true)->exists()) {
+        $brand = $customer->brandGuideline;
+        if (! $brand?->user_verified || ($brand->approved_version !== null && $brand->approved_version !== $brand->profile_version)) {
             ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — brand profile not confirmed for campaign '{$campaign->name}'", $campaign, [
                 'campaign_id' => $campaign->id,
                 'reason' => 'brand_guideline_unverified',
@@ -136,7 +141,7 @@ class DeploymentController extends Controller
 
             return redirect()->route('brand-guidelines.index', ['review' => 1])->with('flash', [
                 'type' => 'error',
-                'message' => 'One last check before your first launch: review your brand profile and confirm it represents your business — every ad we write starts from it.',
+                'message' => 'Review and confirm the current brand profile before creating ads. Every ad we write starts from this profile.',
             ]);
         }
 
@@ -173,7 +178,7 @@ class DeploymentController extends Controller
         }
 
         // 4. Check if at least one strategy is signed off
-        $signedOffCount = $campaign->strategies()->whereNotNull('signed_off_at')->count();
+        $signedOffCount = $selected()->whereNotNull('signed_off_at')->count();
         if ($signedOffCount === 0) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
@@ -210,7 +215,7 @@ class DeploymentController extends Controller
         // strategies' statuses, send another raw email, and repeat the same
         // success message with nothing new happening.
         if ($campaign->status === CampaignStatus::PendingAdminDeployment) {
-            return redirect()->back()->with('flash', [
+            return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
                 'type' => 'info',
                 'message' => 'This campaign is already with our team for launch — we\'ll notify you as soon as it\'s live.',
             ]);
@@ -219,25 +224,19 @@ class DeploymentController extends Controller
         // A deploy already in flight: don't reset its status rows (that blinds
         // verification), and don't dispatch again (ShouldBeUnique would drop
         // it silently while we claimed success).
-        if ($campaign->strategies()->where('deployment_status', 'deploying')->exists()) {
+        if ($campaign->strategies()->whereIn('deployment_status', ['queued', 'deploying'])->exists()) {
             return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
                 'type' => 'info',
                 'message' => 'A deployment is already running for this campaign — here\'s its progress.',
             ]);
         }
 
-        // Reset deployment_status on all signed-off strategies so an explicit
-        // "Deploy All" always re-deploys, even if previously marked deployed/verified.
-        $campaign->strategies()
-            ->whereNotNull('signed_off_at')
-            ->update(['deployment_status' => null]);
-
         // Google readiness: no account ID, or an account whose manager link
         // isn't active. Both used to reach the execution agent and die with
         // PERMISSION_DENIED after the card had been charged — the link-status
         // case even triggered the identity-verification email, the wrong
         // remedy entirely. Queue for the admin team instead.
-        $hasGoogleStrategy = $campaign->strategies()
+        $hasGoogleStrategy = $selected()
             ->whereNotNull('signed_off_at')
             ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
             ->exists();
@@ -283,13 +282,45 @@ class DeploymentController extends Controller
                 'reason' => $reason,
             ]);
 
-            return redirect()->back()->with('flash', [
+            return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
                 'type' => 'success',
-                'message' => 'Your campaign has been submitted! Our team will complete the setup and launch your ads within 24 hours. We\'ll notify you when it\'s live.',
+                'message' => 'Your campaign is with our team for account setup. We will notify you when the ads have been created.',
             ]);
         }
 
-        DeployCampaign::dispatch($campaign, useAgents: true);
+        // Money problems are actionable before dispatch, rather than a delayed worker failure.
+        $managedBilling = Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds();
+        $credit = $customer->adSpendCredit()->first();
+        if ($managedBilling && $credit && ! $credit->isInGoodStanding()) {
+            return redirect()->route('billing.ad-spend')->with('flash', [
+                'type' => 'error', 'message' => 'Update your ad spend payment method before creating ads. Your billing account needs attention.',
+            ]);
+        }
+
+        $queued = DB::transaction(function () use ($campaign, $selected) {
+            $locked = Campaign::query()->lockForUpdate()->findOrFail($campaign->id);
+            if ($locked->strategies()->whereIn('deployment_status', ['queued', 'deploying'])->exists()) {
+                return false;
+            }
+            $selected()->whereNotNull('signed_off_at')->update(['deployment_status' => 'queued', 'deployment_error' => null]);
+
+            return true;
+        });
+        if ($queued) {
+            try {
+                DeployCampaign::dispatch($campaign, useAgents: true, strategyId: $strategyId);
+            } catch (\Throwable $e) {
+                report($e);
+                $selected()->where('deployment_status', 'queued')->update([
+                    'deployment_status' => 'failed',
+                    'deployment_error' => 'We could not queue your ads for creation. Please try again.',
+                ]);
+
+                return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
+                    'type' => 'error', 'message' => 'We could not queue your ads for creation. Please try again.',
+                ]);
+            }
+        }
 
         ActivityLog::log('campaign_deployed', "Campaign '{$campaign->name}' deployment initiated ({$signedOffCount} strategies)", $campaign, [
             'campaign_id' => $campaign->id,
@@ -305,84 +336,6 @@ class DeploymentController extends Controller
         return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
             'type' => 'success',
             'message' => 'Deployment started — you can watch each platform\'s progress here.',
-        ]);
-    }
-
-    /**
-     * Deploy a single platform strategy.
-     */
-    public function deployPlatform(Request $request)
-    {
-        $user = $request->user();
-
-        $validated = $request->validate([
-            'campaign_id' => 'required|integer|exists:campaigns,id',
-            'strategy_id' => 'required|integer|exists:strategies,id',
-        ]);
-
-        $campaign = Campaign::findOrFail($validated['campaign_id']);
-        $customer = $this->getActiveCustomer($request);
-
-        if (! $customer) {
-            return redirect()->route('quick-start');
-        }
-
-        if ($campaign->customer_id !== $customer->id) {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Unauthorized access to this campaign.',
-            ]);
-        }
-
-        $strategy = $campaign->strategies()->findOrFail($validated['strategy_id']);
-
-        if (in_array($strategy->creative_review['status'] ?? '', ['pending', 'reviewing', 'revising'], true)) {
-            return back()->with('flash', ['type' => 'error', 'message' => 'Your creative is still being prepared and checked. Review the finished set before creating your ads.']);
-        }
-
-        // Re-use the same subscription + deployment-enabled checks as the full deploy.
-        if (! $user->hasSubscriptionAccess($customer)) {
-            return redirect()->route('subscription.pricing')->with('flash', [
-                'type' => 'error',
-                'message' => 'You must have an active subscription to deploy campaigns.',
-            ]);
-        }
-
-        if (! Setting::get('deployment_enabled', true)) {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Deployment is currently disabled.',
-            ]);
-        }
-
-        if (! $strategy->signed_off_at) {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => "The {$strategy->platform} strategy must be signed off before deploying.",
-            ]);
-        }
-
-        // Reset deployment_status so the idempotency guard allows re-deployment of this strategy.
-        $strategy->update(['deployment_status' => null]);
-
-        DeployCampaign::dispatch($campaign, useAgents: true, strategyId: $strategy->id);
-
-        Log::info('Single-platform deploy dispatched', [
-            'campaign_id' => $campaign->id,
-            'strategy_id' => $strategy->id,
-            'platform' => $strategy->platform,
-            'user_id' => $user->id,
-        ]);
-
-        ActivityLog::log('campaign_deployed', "Single-platform deployment initiated for '{$strategy->platform}' on campaign '{$campaign->name}'", $campaign, [
-            'campaign_id' => $campaign->id,
-            'strategy_id' => $strategy->id,
-            'platform' => $strategy->platform,
-        ]);
-
-        return redirect()->back()->with('flash', [
-            'type' => 'success',
-            'message' => "{$strategy->platform} deployment has been initiated!",
         ]);
     }
 }

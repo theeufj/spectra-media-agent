@@ -81,8 +81,9 @@ class ScanCompletionSignalTest extends TestCase
         Queue::fake();
         $customer = Customer::factory()->create();
         $guideline = $this->structuredGuideline($customer);
-        // Old enough to pass the freshness skip, so extraction actually runs.
+        // The previous analysis is old enough that extraction actually runs.
         $guideline->created_at = now()->subDays(2);
+        $guideline->extracted_at = now()->subDays(2);
         $guideline->save();
 
         $user = User::factory()->create();
@@ -107,9 +108,10 @@ class ScanCompletionSignalTest extends TestCase
         $user = User::factory()->create();
         $customer->users()->attach($user->id, ['role' => 'owner']);
         $guideline = $this->structuredGuideline($customer);
-        // Backdated so the duplicate-run freshness skip doesn't trigger and
-        // extraction genuinely executes.
+        // Backdate the analysis itself: creating a row earlier does not mean
+        // its current extraction is stale.
         $guideline->created_at = now()->subDays(2);
+        $guideline->extracted_at = now()->subDays(2);
         $guideline->save();
 
         /** @var BrandGuidelineExtractorService&\Mockery\MockInterface $extractor */

@@ -549,13 +549,6 @@ parameters:
 			path: app/Jobs/AutomatedCampaignMaintenance.php
 
 		-
-			message: '#^Right side of \|\| is always false\.$#'
-			identifier: booleanOr.rightAlwaysFalse
-			count: 1
-			path: app/Jobs/CheckCampaignPolicyViolations.php
-
-
-		-
 			message: '#^Strict comparison using \=\=\= between string\|null and false will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -744,12 +737,6 @@ parameters:
 			path: app/Jobs/RunPerformanceAnomalyCheck.php
 
 		-
-			message: '#^Offset ''actions'' on array\{actions\: array\<string\>, warnings\: array\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
 			message: '#^Offset ''added'' on array\{asset_group\: string, ad_strength\: string, added\: array, missing_media\: array\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -757,12 +744,6 @@ parameters:
 
 		-
 			message: '#^Offset ''missing_media'' on array\{asset_group\: string, ad_strength\: string, added\: array, missing_media\: array\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
-			message: '#^Offset ''warnings'' on array\{actions\: array\<string\>, warnings\: array\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Jobs/RunSelfHealingChecks.php
@@ -796,18 +777,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: app/Jobs/UploadOfflineConversions.php
-
-		-
-			message: '#^Parameter \#1 \$string of function strtolower expects string, array given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/VerifyAdApproval.php
-
-		-
-			message: '#^Parameter \#3 \$message of class App\\Notifications\\CriticalAgentAlert constructor expects string, array\<string, array\|int\|string\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/VerifyAdApproval.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
@@ -1223,12 +1192,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/PreLaunchComplianceAgent.php
-
-		-
-			message: '#^Parameter \#3 \$message of class App\\Notifications\\CriticalAgentAlert constructor expects string, array\<string, mixed\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
 
 		-
 			message: '#^Property App\\Services\\Agents\\SelfHealingAgent\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'

@@ -43,7 +43,7 @@ class SeoAuditService
 
         $html = $this->fetchPage($url);
         if (! $html) {
-            return $this->createAudit($url, 0, ['critical' => ['Page could not be fetched']], []);
+            throw new \RuntimeException('The page could not be read for an SEO audit.');
         }
 
         $meta = $this->analyzeMeta($html, $url);

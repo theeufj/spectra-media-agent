@@ -1,16 +1,15 @@
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, useForm, Link } from '@inertiajs/react';
 
 export default function Settings({ customer, canWhiteLabel }) {
     const branding = customer?.report_branding || {};
-    const [form, setForm] = useState({
+    const { data: form, setData: setForm, post, processing: saving, errors } = useForm({
         enabled: branding.enabled || false,
         company_name: branding.company_name || '',
         logo_url: branding.logo_url || '',
         primary_color: branding.primary_color || '#f97316',
     });
-    const [saving, setSaving] = useState(false);
 
     if (!canWhiteLabel) {
         return (
@@ -27,12 +26,12 @@ export default function Settings({ customer, canWhiteLabel }) {
                                 White-label report branding is available on the Agency plan.
                             </p>
                             <div className="mt-6">
-                                <a
+                                <Link
                                     href={route('pricing')}
                                     className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors"
                                 >
                                     View Plans
-                                </a>
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -43,11 +42,7 @@ export default function Settings({ customer, canWhiteLabel }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        setSaving(true);
-        router.post(route('reports.branding.update'), form, {
-            preserveScroll: true,
-            onFinish: () => setSaving(false),
-        });
+        post(route('reports.branding.update'), { preserveScroll: true });
     };
 
     return (
@@ -63,6 +58,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                         </p>
                     </div>
 
+                    <FormErrorSummary errors={errors} labels={{ company_name: 'Company name', logo_url: 'Logo URL', primary_color: 'Brand colour' }} className="mb-4" />
                     <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
                         {/* Enable toggle */}
                         <div className="p-6">
@@ -73,6 +69,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                 </div>
                                 <button
                                     type="button"
+                                    role="switch" aria-checked={form.enabled} aria-label="Enable white-label report branding"
                                     onClick={() => setForm({ ...form, enabled: !form.enabled })}
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                                         form.enabled ? 'bg-brand-dark' : 'bg-gray-200'

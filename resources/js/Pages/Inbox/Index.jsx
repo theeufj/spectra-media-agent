@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
+import Modal from '@/Components/Modal';
+import ConfirmationModal from '@/Components/ConfirmationModal';
+import FormErrorSummary from '@/Components/FormErrorSummary';
+import { DialogTitle } from '@headlessui/react';
+import { fetchJson } from '@/utils/http';
+import { useToast } from '@/Components/Toast';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -28,14 +34,12 @@ function filesize(bytes) {
 // ─── Compose / Reply Modal ─────────────────────────────────────────────────────
 
 function ComposeModal({ inbox, onClose, replyTo = null }) {
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, transform, isDirty } = useForm({
         to: replyTo ? replyTo.from : '',
         cc: '',
         bcc: '',
         subject: replyTo ? (replyTo.subject.startsWith('Re: ') ? replyTo.subject : `Re: ${replyTo.subject}`) : '',
-        html: replyTo
-            ? `<br/><br/><blockquote style="border-left:3px solid #ccc;padding-left:1em;color:#555;">${replyTo.html_body ?? replyTo.text_body ?? ''}</blockquote>`
-            : '',
+        text: replyTo ? `\n\nOn ${formatDate(replyTo.created_at)}, ${replyTo.from} wrote:\n${replyTo.text_body || 'See the original message in this conversation.'}` : '',
         thread_id: replyTo?.thread_id ?? '',
         in_reply_to: replyTo?.message_id ?? '',
         references: replyTo?.message_id ?? '',
@@ -43,43 +47,42 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
 
     const fileRef = useRef();
     const [files, setFiles] = useState([]);
+    const [showDiscard, setShowDiscard] = useState(false);
+    const requestClose = () => { if (processing) return; if (isDirty || files.length) setShowDiscard(true); else onClose(); };
 
     const submit = (e) => {
         e.preventDefault();
-        const fd = new FormData();
-        Object.entries(data).forEach(([k, v]) => v != null && fd.append(k, v));
-        files.forEach((f) => fd.append('attachments[]', f));
-        router.post(route('inbox.send'), fd, {
+        if (processing) return;
+        transform(values => ({ ...values, attachments: files })).post(route('inbox.send'), {
             forceFormData: true,
-            preserveState: true,
             preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="w-full max-w-3xl mx-4 bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col"
-                style={{ height: '75vh' }}>
+        <Modal show maxWidth="3xl" closeable={!processing} onClose={requestClose}>
+            <ConfirmationModal show={showDiscard} onClose={() => setShowDiscard(false)} title="Discard this draft?" message="This message has not been sent. Discarding removes the text and attachments." confirmText="Discard draft" isDestructive onConfirm={onClose} />
+            <div className="w-full bg-white flex flex-col" style={{ height: '75dvh' }}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 bg-gray-800 rounded-t-xl text-white shrink-0">
-                    <span className="font-semibold">{replyTo ? 'Reply' : 'New Message'}</span>
-                    <button onClick={onClose} className="text-gray-300 hover:text-white">
+                    <DialogTitle className="font-semibold">{replyTo ? 'Reply' : 'New Message'}</DialogTitle>
+                    <button type="button" aria-label="Close draft" onClick={requestClose} className="text-gray-300 hover:text-white">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
 
-                <form onSubmit={submit} className="flex flex-col flex-1 overflow-hidden">
+                <form onSubmit={submit} className="flex flex-col flex-1 overflow-hidden"><FormErrorSummary errors={errors} className="m-3" />
                     {/* Fields */}
                     <div className="border-b border-gray-200 shrink-0">
                         {['to', 'cc', 'bcc'].map((field) => (
                             <div key={field} className="flex items-center border-b border-gray-100 last:border-0">
-                                <span className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">
-                                    {field}
-                                </span>
+                                <label htmlFor={field} className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">{field}</label>
                                 <input
+                                    id={field}
+                                    aria-invalid={Boolean(errors[field])}
                                     type="text"
                                     value={data[field]}
                                     onChange={(e) => setData(field, e.target.value)}
@@ -90,10 +93,10 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                             </div>
                         ))}
                         <div className="flex items-center">
-                            <span className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">
-                                Subject
-                            </span>
+                            <label htmlFor="subject" className="w-16 text-xs font-semibold text-gray-500 uppercase px-5 py-2.5 shrink-0">Subject</label>
                             <input
+                                id="subject"
+                                aria-invalid={Boolean(errors.subject)}
                                 type="text"
                                 value={data.subject}
                                 onChange={(e) => setData('subject', e.target.value)}
@@ -105,10 +108,11 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
 
                     {/* Body */}
                     <textarea
-                        className="flex-1 p-5 text-sm resize-none outline-none border-0 focus:ring-0 font-sans"
+                        aria-label="Message body"
+                        className="min-h-0 flex-1 p-5 text-sm resize-none outline-none border-0 focus:ring-0 font-sans"
                         placeholder="Compose your message..."
-                        value={data.html}
-                        onChange={(e) => setData('html', e.target.value)}
+                        value={data.text}
+                        onChange={(e) => setData('text', e.target.value)}
                     />
 
                     {/* Attachments list */}
@@ -146,7 +150,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                         </button>
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className="ml-auto text-sm text-gray-500 hover:text-gray-600"
                         >
                             Discard
@@ -161,7 +165,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                     </div>
                 </form>
             </div>
-        </div>
+        </Modal>
     );
 }
 
@@ -249,7 +253,7 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
 
     if (!thread) {
         return (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="hidden lg:flex flex-1 items-center justify-center text-gray-500">
                 <div className="text-center">
                     <svg className="w-16 h-16 mx-auto mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -262,10 +266,10 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
     }
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
             {/* Thread header */}
             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-                <button onClick={onClose} className="text-gray-500 hover:text-gray-600 lg:hidden">
+                <button aria-label="Back to conversations" onClick={onClose} className="text-gray-500 hover:text-gray-600 lg:hidden">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
@@ -334,35 +338,16 @@ function SettingsPane({ inbox }) {
     const [forwardTo, setForwardTo] = useState(inbox.forward_to ?? '');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [saveError, setSaveError] = useState(null);
 
-    const save = (e) => {
-        e.preventDefault();
-        setSaving(true);
-        setSaved(false);
-        fetch(route('inbox.forwarding.update'), {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-            },
-            body: JSON.stringify({ forward_to: forwardTo || null }),
-        })
-            .then((r) => r.json())
-            .then(() => { setSaved(true); setTimeout(() => setSaved(false), 3000); })
-            .finally(() => setSaving(false));
+    const updateForwarding = async (value) => {
+        setSaving(true); setSaved(false); setSaveError(null);
+        try { const result = await fetchJson(route('inbox.forwarding.update'), { method: 'PATCH', json: { forward_to: value || null } }); setForwardTo(result.forward_to || ''); setSaved(true); }
+        catch (error) { setSaveError(error?.body?.errors?.forward_to?.[0] || 'Forwarding could not be saved. Check the address and try again.'); }
+        finally { setSaving(false); }
     };
-
-    const clear = () => {
-        setForwardTo('');
-        fetch(route('inbox.forwarding.update'), {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-            },
-            body: JSON.stringify({ forward_to: null }),
-        }).then(() => { setSaved(true); setTimeout(() => setSaved(false), 3000); });
-    };
+    const save = (e) => { e.preventDefault(); updateForwarding(forwardTo); };
+    const clear = () => updateForwarding(null);
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50 p-8">
@@ -387,10 +372,10 @@ function SettingsPane({ inbox }) {
                         </div>
                     </div>
 
-                    <form onSubmit={save} className="space-y-3">
+                    <form onSubmit={save} className="space-y-3">{saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
                         <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Forward to address</label>
-                            <input
+                            <label htmlFor="forward_to" className="block text-xs font-medium text-gray-600 mb-1">Forward to address</label>
+                            <input id="forward_to"
                                 type="email"
                                 value={forwardTo}
                                 onChange={(e) => setForwardTo(e.target.value)}
@@ -444,13 +429,15 @@ export default function InboxIndex({ inbox, threads }) {
     const [readThreadIds, setReadThreadIds] = useState(new Set());
     const [folder, setFolder] = useState('inbox');
     const [refreshing, setRefreshing] = useState(false);
+    const [search, setSearch] = useState('');
+    const toast = useToast();
 
     const refresh = () => {
         setRefreshing(true);
         router.reload({ onFinish: () => setRefreshing(false) });
     };
 
-    const visibleThreads = threads.filter((t) => {
+    const visibleThreads = threads.filter((thread) => `${thread.subject} ${thread.from} ${thread.snippet}`.toLowerCase().includes(search.toLowerCase())).filter((t) => {
         if (folder === 'inbox') return t.has_inbound;
         if (folder === 'sent')  return t.has_outbound;
         return true;
@@ -460,13 +447,7 @@ export default function InboxIndex({ inbox, threads }) {
 
     const openThread = (threadId) => {
         setSelectedThreadId(threadId);
-        setReadThreadIds((prev) => new Set([...prev, threadId]));
-        fetch(route('inbox.threads.read', threadId), {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-            },
-        });
+        fetchJson(route('inbox.threads.read', threadId), { method: 'POST' }).then(() => setReadThreadIds(prev => new Set([...prev, threadId]))).catch(() => toast.error('We could not mark this conversation as read. Try again.'));
     };
 
     const closeThread = () => setSelectedThreadId(null);
@@ -521,12 +502,13 @@ export default function InboxIndex({ inbox, threads }) {
     ];
 
     return (
-        <AuthenticatedLayout>
+        <AuthenticatedLayout contained={false}>
             <Head title={`Inbox — ${inbox.email_address}`} />
 
-            <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-gray-50">
+            <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-gray-50 lg:flex-row">
+                <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white p-3 lg:hidden"><label className="sr-only" htmlFor="inbox-folder">Folder</label><select id="inbox-folder" value={folder} onChange={event => switchFolder(event.target.value)} className="rounded-lg border-gray-300 text-sm">{folders.map(item => <option key={item.key} value={item.key}>{item.label}{item.badge ? ` (${item.badge})` : ''}</option>)}</select><button type="button" onClick={() => { setReplyTo(null); setCompose(true); }} className="rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white">Compose</button><button type="button" onClick={refresh} disabled={refreshing} className="ml-auto text-sm text-brand-dark underline">{refreshing ? 'Refreshing…' : 'Refresh'}</button></div>
                 {/* ── Sidebar ── */}
-                <div className="w-56 shrink-0 bg-white border-r border-gray-200 flex flex-col">
+                <div className="hidden w-56 shrink-0 bg-white border-r border-gray-200 lg:flex lg:flex-col">
                     {/* Account */}
                     <div className="px-4 py-4 border-b border-gray-100">
                         <div className="flex items-center gap-2">
@@ -592,9 +574,9 @@ export default function InboxIndex({ inbox, threads }) {
 
                 {/* ── Thread list (hidden in settings) ── */}
                 {folder !== 'settings' && (
-                    <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
+                    <div className={`min-h-0 w-full lg:w-80 lg:shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-1 lg:flex-none flex-col'}`}>
                         <div className="px-4 py-3 border-b border-gray-100">
-                            <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
+                            <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1><label htmlFor="inbox-search" className="sr-only">Search conversations</label><input id="inbox-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" className="mt-2 w-full rounded-lg border-gray-300 text-sm" />
                             <p className="text-xs text-gray-500">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
                         </div>
 

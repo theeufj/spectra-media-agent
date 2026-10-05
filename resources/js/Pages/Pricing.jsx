@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTenant } from '@/hooks/useTenant';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
@@ -22,6 +23,9 @@ const trustSeals = [
  */
 export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999 }) {
     useEffect(() => { trackConversion('pricing_visit'); }, []);
+    const tenant = useTenant();
+    const brand = tenant?.name || 'sitetospend';
+    const lowestPlan = [...plans].filter(plan => plan.price_cents > 0).sort((a, b) => a.price_cents - b.price_cents)[0];
 
     return (
         <>
@@ -44,7 +48,7 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                             What is actually true: you can build the whole thing and
                             look at it. Putting it live is what you pay for.
                         */
-                        sub="Build a campaign and see the ads we'd run before you pay anything. A plan is what puts them live."
+                        sub="Explore your business profile free. Choose ongoing management or a one-time campaign build. Ad spend is separate from your service fee."
                     />
 
                     {/* Comparison Table */}
@@ -64,7 +68,7 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                                         <tr>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"><span className="sr-only">Comparison</span></th>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Traditional Agency</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-brand-dark">sitetospend AI</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-brand-dark">{brand} AI</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 bg-white">
@@ -79,8 +83,8 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                                                 apart. Check `plans` in sitetospend_prod, not the
                                                 dev database, before touching this figure.
                                             */
-                                            ['Cost', 'US$2,500 - US$5,000 / month', 'From US$149 / month'],
-                                            ['Setup Time', '2-4 Weeks', '< 5 Minutes'],
+                                            ['Cost', 'Retainer and ad spend', lowestPlan?.formatted_price || 'See current plans below'],
+                                            ['Setup', 'Agency intake and briefing', 'URL scan, profile review and ad approval'],
                                             ['Brand Matching', 'Manual PDF creation (billed extra)', 'Reads your website automatically'],
                                             ['Ad Creative', 'Limited revisions, extra cost', 'AI writes and generates images for you'],
                                             ['Optimisation', 'Weekly manual checks', 'Every hour, automatically'],
@@ -139,7 +143,7 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                             <div className="mb-8 text-center sm:mb-12">
                                 <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Frequently Asked Questions</h2>
-                                <p className="mt-3 text-base text-gray-600 sm:mt-4 sm:text-lg">How sitetospend works, answered.</p>
+                                <p className="mt-3 text-base text-gray-600 sm:mt-4 sm:text-lg">How {brand} works, answered.</p>
                             </div>
 
                             <FaqAccordion items={faqs} />
@@ -151,7 +155,7 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                         body="Start creating smarter, faster campaigns with AI-powered optimization."
                         primaryCta={{ href: '/register', label: 'Get started free' }}
                         secondaryCta={{ href: '/features', label: 'Explore features' }}
-                        note="Free to explore · No credit card required · Live in minutes"
+                        note="Free to explore · Review before launch · Ad spend charged separately"
                     />
                 </main>
 

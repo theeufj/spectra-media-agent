@@ -28,7 +28,8 @@ function getDemoUrl() {
  */
 export default function Register({ enabledPlatforms = [] }) {
     const demoUrl = getDemoUrl();
-    const demoDomain = demoUrl ? new URL(demoUrl).hostname.replace(/^www\./, '') : '';
+    let demoDomain = '';
+    try { demoDomain = demoUrl ? new URL(demoUrl).hostname.replace(/^www\./, '') : ''; } catch { /* Ignore malformed demo links; registration still works. */ }
 
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
@@ -36,7 +37,7 @@ export default function Register({ enabledPlatforms = [] }) {
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',
-        demo_url: demoUrl,
+        demo_url: demoDomain ? demoUrl : '',
     });
 
     // Fire a conversion for visitors arriving from the landing page demo — they've already

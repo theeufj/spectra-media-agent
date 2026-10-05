@@ -32,6 +32,9 @@ class Proposal extends Model
         'industry',
         'website_url',
         'budget',
+        'currency_code',
+        'generation_step',
+        'generation_started_at',
         'goals',
         'platforms',
         'status',
@@ -46,6 +49,7 @@ class Proposal extends Model
         'proposal_data' => 'array',
         'budget' => 'decimal:2',
         'completed_at' => 'datetime',
+        'generation_started_at' => 'datetime',
     ];
 
     public function setWebsiteUrlAttribute(?string $value): void
@@ -77,6 +81,8 @@ class Proposal extends Model
     {
         $this->update([
             'status' => self::STATUS_READY,
+            'generation_step' => 'completed',
+            'error' => null,
             'proposal_data' => $data,
             'pdf_path' => $pdfPath,
             'completed_at' => now(),
@@ -87,6 +93,7 @@ class Proposal extends Model
     {
         $this->update([
             'status' => self::STATUS_FAILED,
+            'generation_step' => 'failed',
             'error' => $error,
         ]);
     }

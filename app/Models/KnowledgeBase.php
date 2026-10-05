@@ -33,6 +33,14 @@ class KnowledgeBase extends Model
         'file_path',
         'source_type',
         'original_filename',
+        'title',
+        'processing_status',
+        'processing_error',
+        'excluded_at',
+        'fetched_at',
+        'indexed_at',
+        'content_hash',
+        'source_version',
     ];
 
     /**
@@ -44,5 +52,23 @@ class KnowledgeBase extends Model
      */
     protected $casts = [
         'embedding' => Vector::class,
+        'excluded_at' => 'datetime',
+        'fetched_at' => 'datetime',
+        'indexed_at' => 'datetime',
+        'source_version' => 'integer',
     ];
+
+    protected $hidden = ['embedding', 'css_content', 'file_path'];
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<KnowledgeBaseChunk, $this> */
+    public function chunks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(KnowledgeBaseChunk::class);
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Customer, $this> */
+    public function customer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
 }

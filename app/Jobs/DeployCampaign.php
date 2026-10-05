@@ -121,10 +121,9 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             Log::warning("DeployCampaign: Campaign {$this->campaign->id} failed compliance check, aborting deployment.", [
                 'failures' => $complianceResult['failures'],
             ]);
-            $this->notifyUsers(new \App\Notifications\DeploymentFailed(
-                $this->campaign,
-                'Pre-launch compliance check failed: '.implode('; ', array_column($complianceResult['failures'], 'message'))
-            ));
+            $message = 'Pre-launch compliance check failed: '.implode('; ', array_column($complianceResult['failures'], 'message'));
+            $this->failPendingStrategies($message);
+            $this->notifyUsers(new \App\Notifications\DeploymentFailed($this->campaign, $message));
 
             return;
         }
@@ -151,6 +150,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                     'customer_id' => $customer->id,
                 ]);
 
+                $this->failPendingStrategies('Your media allowance is used up. Add a creative boost or upgrade before trying again.');
                 $this->notifyUsers(new \App\Notifications\DeploymentFailed(
                     $this->campaign,
                     'Your media allowance for this period is used up. Upgrade your plan or add a creative boost to publish more ads.'
@@ -481,6 +481,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         // Dispatch verification job after 60s to confirm objects exist on platforms
         if ($successCount > 0) {
             VerifyDeployment::dispatch($this->campaign)->delay(now()->addSeconds(60));
+            CheckGoogleCampaignReadiness::dispatch($this->campaign->id)->delay(now()->addMinutes(5));
         }
     }
 
@@ -506,8 +507,17 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
      * new self-serve account is the card charge in handle(), which is exactly
      * the failure the user can actually fix themselves.
      */
+    private function failPendingStrategies(string $message): void
+    {
+        $this->campaign->strategies()
+            ->when($this->strategyId !== null, fn ($query) => $query->whereKey($this->strategyId))
+            ->whereIn('deployment_status', ['queued', 'deploying'])
+            ->update(['deployment_status' => 'failed', 'deployment_error' => $message]);
+    }
+
     public function failed(\Throwable $exception): void
     {
+        $this->failPendingStrategies('Deployment could not finish. Review the issue below and try again.');
         Log::error('DeployCampaign failed: '.$exception->getMessage(), [
             'campaign_id' => $this->campaign->id ?? null,
             'exception' => $exception->getTraceAsString(),

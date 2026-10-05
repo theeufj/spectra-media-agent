@@ -7,7 +7,9 @@ use App\Models\Customer;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CustomerController extends Controller
@@ -212,12 +214,26 @@ class CustomerController extends Controller
             ])->withInput();
         }
 
-        $customer->update($validated);
+        if ($customer->google_ads_customer_id) {
+            foreach (['currency_code', 'timezone', 'country'] as $field) {
+                if (isset($validated[$field]) && $validated[$field] !== $customer->{$field}) {
+                    throw ValidationException::withMessages([$field => 'These Google Ads account settings are permanent. Contact support before changing the account.']);
+                }
+            }
+        }
+        DB::transaction(fn () => $customer->update($validated));
 
         Log::info('Customer profile updated', [
             'customer_id' => $customer->id,
             'updated_by' => $user->id,
         ]);
+
+        if ($customer->wasChanged('website') && $customer->website) {
+            session(['active_customer_id' => $customer->id]);
+
+            return redirect()->route('quick-start.scanning', ['after' => $customer->brandGuideline?->refresh()->updated_at?->toIso8601String()])
+                ->with('success', 'Website updated. We are scanning it and preparing a profile draft for your review. Previous website pages are excluded; your supplied documents are kept.');
+        }
 
         return redirect()->back()->with('success', 'Customer profile updated successfully.');
     }

@@ -88,6 +88,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             'negatives_added' => 0,
             'budget_adjustments' => 0,
             'creative_adjustments' => 0,
+            'ad_strength_repairs' => 0,
+            'ad_strength_unresolved' => 0,
             'errors' => 0,
         ];
 
@@ -164,6 +166,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 if ($campaign->google_ads_campaign_id) {
                     $extensionResults = $extensionAgent->manage($campaign);
                     $summary['creative_adjustments'] += count($extensionResults['created'] ?? []) + count($extensionResults['rotated'] ?? []);
+                    $summary['errors'] += count($extensionResults['errors'] ?? []);
+                    $summary['healing_warnings'] += count($extensionResults['unresolved'] ?? []);
                 }
 
                 // 2d. Bid adjustments by device and daypart (Google only)
@@ -178,9 +182,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     $summary['keywords_added'] += count($qsResults['actions'] ?? []);
                 }
 
+                $strengthResults = ['actions' => [], 'errors' => [], 'unresolved' => []];
                 // 2f. RSA Ad Strength optimizer — push POOR/AVERAGE ads toward EXCELLENT (Google only)
                 if ($campaign->google_ads_campaign_id) {
-                    $qsAgent->checkAdStrength($campaign);
+                    $strengthResults = $qsAgent->checkAdStrength($campaign);
+                    $summary['ad_strength_repairs'] += count($strengthResults['actions'] ?? []);
+                    $summary['ad_strength_unresolved'] += count($strengthResults['unresolved'] ?? []);
+                    $summary['errors'] += count($strengthResults['errors'] ?? []);
                 }
 
                 // 2g. Broad match expansion — add BROAD variants of PHRASE/EXACT keywords
@@ -200,10 +208,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
                 // 4. Run Creative Intelligence
                 $creativeResults = $creativeAgent->analyze($campaign);
+                $summary['errors'] += count($creativeResults['errors'] ?? []);
                 $summary['creative_adjustments'] += count($creativeResults['recommendations'] ?? []);
                 // If it generated variations, that's an action
-                $summary['creative_adjustments'] += count($creativeResults['generated_variations']['headlines'] ?? []);
-                $summary['creative_adjustments'] += count($creativeResults['generated_variations']['descriptions'] ?? []);
+                $summary['creative_adjustments'] += count($creativeResults['new_variations']['headlines'] ?? []);
+                $summary['creative_adjustments'] += count($creativeResults['new_variations']['descriptions'] ?? []);
 
                 $summary['campaigns_processed']++;
 
@@ -214,8 +223,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $negAdded = count($miningResults['negatives_added'] ?? []);
                 $budgetAdj = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => ($a['type'] ?? '') === 'budget_updated'));
                 $creative = count($creativeResults['recommendations'] ?? [])
-                            + count($creativeResults['generated_variations']['headlines'] ?? [])
-                            + count($creativeResults['generated_variations']['descriptions'] ?? []);
+                            + count($creativeResults['new_variations']['headlines'] ?? [])
+                            + count($creativeResults['new_variations']['descriptions'] ?? []);
 
                 $customerDigests[$customerId][$campaign->name] = [
                     'total_changes' => $healed + $kwAdded + $negAdded + $budgetAdj + $creative,
@@ -234,6 +243,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                         'mining' => $miningResults,
                         'budget' => $budgetResults,
                         'creative' => $creativeResults,
+                        'ad_strength' => $strengthResults,
+                        'extensions' => $extensionResults ?? [],
                     ],
                 ]);
 
@@ -242,7 +253,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $keywordsAdded = count($miningResults['keywords_added'] ?? []);
                 $negativesAdded = count($miningResults['negatives_added'] ?? []);
                 $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => $a['type'] === 'budget_updated'));
-                $creativeGenCount = count($creativeResults['generated_variations']['headlines'] ?? []) + count($creativeResults['generated_variations']['descriptions'] ?? []);
+                $creativeGenCount = count($creativeResults['new_variations']['headlines'] ?? []) + count($creativeResults['new_variations']['descriptions'] ?? []);
 
                 if ($healingActionCount > 0) {
                     AgentActivity::record('maintenance', 'self_healed', "Fixed {$healingActionCount} issue(s) in \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['actions' => $healingResults['actions_taken'] ?? []]);
@@ -313,11 +324,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
         $totalActions = ($summary['healing_actions'] ?? 0) + ($summary['keywords_added'] ?? 0)
             + ($summary['negatives_added'] ?? 0) + ($summary['creative_adjustments'] ?? 0)
-            + ($summary['budget_adjustments'] ?? 0);
+            + ($summary['budget_adjustments'] ?? 0) + $summary['ad_strength_repairs'];
         $this->finishRun($runStart,
             actions: $totalActions,
             errors: $summary['errors'] ?? 0,
-            warnings: $summary['healing_warnings'] ?? 0,
+            warnings: ($summary['healing_warnings'] ?? 0) + $summary['ad_strength_unresolved'],
             scope: ($summary['campaigns_processed'] ?? 0).' campaigns',
             details: $summary
         );

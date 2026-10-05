@@ -10,6 +10,7 @@ import {
     DocumentTextIcon,
     SparklesIcon,
 } from '@heroicons/react/24/outline';
+import WorkStatusBanner from '@/Components/WorkStatusBanner';
 import { brandTint } from '@/Components/Marketing/Hero';
 
 /*
@@ -146,7 +147,7 @@ function ReportDetail({ report, currency }) {
     );
 }
 
-export default function Index({ reports = [], canWhiteLabel }) {
+export default function Index({ reports = [], canWhiteLabel, runs = {} }) {
     const currency = useCurrency();
 
     // Was a module-level helper hardcoding '$'. A report is the customer's own
@@ -154,6 +155,9 @@ export default function Index({ reports = [], canWhiteLabel }) {
     const money = (n) => (n === null || n === undefined ? '—' : formatMoney(n, currency));
 
     const [generating, setGenerating] = useState(false);
+    const [weeklyBusy, setWeeklyBusy] = useState(['queued', 'running'].includes(runs['report-weekly']?.status));
+    const [monthlyBusy, setMonthlyBusy] = useState(['queued', 'running'].includes(runs['report-monthly']?.status));
+    const busy = generating || weeklyBusy || monthlyBusy;
     const [expanded, setExpanded] = useState(null);
     const rows = useMemo(() => dedupeByPeriod(reports), [reports]);
 
@@ -191,7 +195,7 @@ export default function Index({ reports = [], canWhiteLabel }) {
                             <button
                                 type="button"
                                 onClick={() => handleGenerate('weekly')}
-                                disabled={generating}
+                                disabled={busy}
                                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                             >
                                 <ArrowPathIcon className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} aria-hidden="true" />
@@ -200,7 +204,7 @@ export default function Index({ reports = [], canWhiteLabel }) {
                             <button
                                 type="button"
                                 onClick={() => handleGenerate('monthly')}
-                                disabled={generating}
+                                disabled={busy}
                                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                             >
                                 <DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
@@ -209,6 +213,8 @@ export default function Index({ reports = [], canWhiteLabel }) {
                         </div>
                     </div>
 
+                    <WorkStatusBanner initialRun={runs['report-weekly']} url={route('reports.status')} task="report-weekly" label="Weekly report" reloadOnly={['reports', 'runs']} onBusyChange={setWeeklyBusy} />
+                    <WorkStatusBanner initialRun={runs['report-monthly']} url={route('reports.status')} task="report-monthly" label="Monthly report" reloadOnly={['reports', 'runs']} onBusyChange={setMonthlyBusy} />
                     {canWhiteLabel && (
                         <div
                             className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border p-4"
@@ -370,7 +376,7 @@ export default function Index({ reports = [], canWhiteLabel }) {
                             <button
                                 type="button"
                                 onClick={() => handleGenerate('weekly')}
-                                disabled={generating}
+                                disabled={busy}
                                 className="mt-6 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600"
                             >
                                 Generate the first one

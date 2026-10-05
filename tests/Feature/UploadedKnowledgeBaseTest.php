@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Jobs\ExtractBrandGuidelines;
+use App\Jobs\IndexKnowledgeBase;
 use App\Jobs\ProcessKnowledgeBaseFile;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
+use App\Services\KnowledgeBase\KnowledgeBaseIndexer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -43,6 +45,9 @@ class UploadedKnowledgeBaseTest extends TestCase
         });
 
         (new ProcessKnowledgeBaseFile($document))->handle();
+        Queue::assertPushed(IndexKnowledgeBase::class, 1);
+        $this->assertSame('indexing', $document->fresh()->processing_status);
+        (new IndexKnowledgeBase($document))->handle(app(KnowledgeBaseIndexer::class), app(GeminiService::class));
 
         $document->refresh();
         $this->assertSame($content, $document->content);
@@ -67,11 +72,16 @@ class UploadedKnowledgeBaseTest extends TestCase
         });
 
         (new ProcessKnowledgeBaseFile($document))->handle();
+        Queue::assertPushed(IndexKnowledgeBase::class, 1);
+        $this->assertSame('indexing', $document->fresh()->processing_status);
+        (new IndexKnowledgeBase($document))->handle(app(KnowledgeBaseIndexer::class), app(GeminiService::class));
 
         $document->refresh();
         $this->assertSame($content, $document->content);
         $this->assertNull($document->embedding);
         $this->assertNull($document->getAttribute('embedding_model'));
+        $this->assertSame('needs_attention', $document->processing_status);
+        $this->assertSame(['test-space-1', 'test-space-2'], $document->chunks()->orderBy('position')->pluck('embedding_model')->all());
     }
 
     public function test_embedding_failure_does_not_block_using_the_uploaded_business_content(): void
@@ -82,6 +92,9 @@ class UploadedKnowledgeBaseTest extends TestCase
         });
 
         (new ProcessKnowledgeBaseFile($document))->handle();
+        Queue::assertPushed(IndexKnowledgeBase::class, 1);
+        $this->assertSame('indexing', $document->fresh()->processing_status);
+        (new IndexKnowledgeBase($document))->handle(app(KnowledgeBaseIndexer::class), app(GeminiService::class));
 
         $this->assertSame('Property campaign setup for real estate agents.', $document->fresh()->content);
         $this->assertNull($document->fresh()->embedding);

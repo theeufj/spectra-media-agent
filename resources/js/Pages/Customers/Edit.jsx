@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
@@ -120,11 +121,11 @@ export default function Edit({ auth, customer: initialCustomer }) {
             user={auth.user}
             header={
                 <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                    Edit Customer Profile - {initialCustomer.name}
+                    Edit Business Profile — {initialCustomer.name}
                 </h2>
             }
         >
-            <Head title="Edit Customer Profile" />
+            <Head title="Edit Business Profile" />
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
@@ -143,12 +144,13 @@ export default function Edit({ auth, customer: initialCustomer }) {
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-6 text-gray-900">
                             <form onSubmit={submit} className="space-y-6">
+                                <FormErrorSummary errors={errors} />
                                 {/* Basic Information */}
                                 <div>
                                     <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
-                                            <InputLabel htmlFor="name" value="Customer Name *" />
+                                            <InputLabel htmlFor="name" value="Business Name *" />
                                             <TextInput
                                                 id="name"
                                                 name="name"
@@ -235,6 +237,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             <select
                                                 id="country"
                                                 name="country"
+                                                disabled={Boolean(initialCustomer.google_ads_customer_id)}
                                                 value={data.country}
                                                 className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                 onChange={(e) => setData('country', e.target.value)}
@@ -248,7 +251,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             </select>
                                             <InputError message={errors.country} className="mt-2" />
                                             <p className="mt-1 text-sm text-gray-500">
-                                                Required for Google Ads account
+                                                {initialCustomer.google_ads_customer_id ? 'Fixed on your Google Ads account' : 'Confirm before your Google Ads account is created'}
                                             </p>
                                         </div>
 
@@ -257,6 +260,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             <select
                                                 id="timezone"
                                                 name="timezone"
+                                                disabled={Boolean(initialCustomer.google_ads_customer_id)}
                                                 value={data.timezone}
                                                 className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                 onChange={(e) => setData('timezone', e.target.value)}
@@ -270,7 +274,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             </select>
                                             <InputError message={errors.timezone} className="mt-2" />
                                             <p className="mt-1 text-sm text-gray-500">
-                                                Required for Google Ads account
+                                                {initialCustomer.google_ads_customer_id ? 'Fixed on your Google Ads account' : 'Confirm before your Google Ads account is created'}
                                             </p>
                                         </div>
 
@@ -279,6 +283,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             <TextInput
                                                 id="currency_code"
                                                 name="currency_code"
+                                                disabled={Boolean(initialCustomer.google_ads_customer_id)}
                                                 value={data.currency_code}
                                                 className="mt-1 block w-full"
                                                 placeholder="USD"
@@ -287,7 +292,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                             />
                                             <InputError message={errors.currency_code} className="mt-2" />
                                             <p className="mt-1 text-sm text-gray-500">
-                                                3-letter ISO code (e.g., USD, EUR, GBP)
+                                                {initialCustomer.google_ads_customer_id ? 'Fixed on your Google Ads account' : 'Confirm before your Google Ads account is created'}
                                             </p>
                                         </div>
                                     </div>

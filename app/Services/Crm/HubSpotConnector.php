@@ -62,7 +62,7 @@ class HubSpotConnector implements CrmConnectorInterface
 
             if (! $response->successful()) {
                 Log::warning('HubSpot fetchClosedLeads failed', ['status' => $response->status()]);
-                break;
+                throw new \RuntimeException('HubSpot sales sync was refused (HTTP '.$response->status().').');
             }
 
             $data = $response->json();

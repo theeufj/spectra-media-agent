@@ -1,6 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import StructuredDetails from '@/Components/StructuredDetails';
+import { useToast } from '@/Components/Toast';
 import { LightBulbIcon } from '@heroicons/react/24/outline';
 
 const decodePaginationLabel = (html) =>
@@ -33,7 +35,7 @@ const STATUS_COLORS = {
     dismissed: 'bg-gray-100 text-gray-600',
 };
 
-function BriefCard({ brief, onAction, onDismiss }) {
+function BriefCard({ brief, onAction, onDismiss, pending }) {
     const [expanded, setExpanded] = useState(false);
     const context = brief.context ?? {};
 
@@ -54,7 +56,7 @@ function BriefCard({ brief, onAction, onDismiss }) {
                             </span>
                         </div>
                         <p className="text-sm font-semibold text-gray-900 truncate">
-                            {brief.campaign?.name ?? `Campaign #${brief.campaign_id}`}
+                            {brief.campaign?.uuid ? <Link href={route('campaigns.show', brief.campaign.uuid)} className="text-brand-dark underline">{brief.campaign.name}</Link> : brief.campaign?.name ?? `Campaign #${brief.campaign_id}`}
                         </p>
                     </div>
                     <span className="text-xs text-gray-500 shrink-0">
@@ -68,6 +70,7 @@ function BriefCard({ brief, onAction, onDismiss }) {
                 {Object.keys(context).length > 0 && (
                     <div className="mt-3">
                         <button
+                            aria-expanded={expanded}
                             onClick={() => setExpanded(e => !e)}
                             className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
                         >
@@ -102,7 +105,7 @@ function BriefCard({ brief, onAction, onDismiss }) {
                                 {context.generated_variants && (
                                     <div>
                                         <p className="font-semibold mb-1">Generated variants:</p>
-                                        <pre className="whitespace-pre-wrap text-gray-600">{JSON.stringify(context.generated_variants, null, 2)}</pre>
+                                        <StructuredDetails value={context.generated_variants} />
                                     </div>
                                 )}
                                 {context.reason && <p><span className="font-semibold">Reason:</span> {context.reason}</p>}
@@ -112,15 +115,18 @@ function BriefCard({ brief, onAction, onDismiss }) {
                     </div>
                 )}
 
-                {brief.status === 'pending' && (
-                    <div className="mt-4 flex gap-2">
+                {brief.campaign?.uuid && <p className="mt-4 text-xs text-gray-600">Review and update the <Link href={route('campaigns.show', brief.campaign.uuid)} className="text-brand-dark underline">campaign creative</Link>, then mark this brief completed. This button records progress; it does not change live ads.</p>}
+                {['pending', 'in_review'].includes(brief.status) && (
+                    <div className="mt-4 flex flex-wrap gap-2">
                         <button
+                            disabled={pending === brief.id}
                             onClick={() => onAction(brief.id)}
                             className="px-3 py-1.5 text-xs font-medium bg-brand-dark text-white rounded hover:bg-brand-darker transition"
                         >
-                            Mark actioned
+                            {pending === brief.id ? 'Saving…' : 'Mark completed'}
                         </button>
                         <button
+                            disabled={pending === brief.id}
                             onClick={() => onDismiss(brief.id)}
                             className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition"
                         >
@@ -135,6 +141,8 @@ function BriefCard({ brief, onAction, onDismiss }) {
 
 export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
     const { flash } = usePage().props;
+    const toast = useToast();
+    const [pending, setPending] = useState(null);
 
     const tabs = [
         { key: 'pending',   label: 'Pending',   count: counts.pending   ?? 0 },
@@ -149,11 +157,13 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
     }
 
     function handleAction(id) {
-        router.post(route('creative-briefs.action', id), {}, { preserveScroll: true });
+        setPending(id);
+        router.post(route('creative-briefs.action', id), {}, { preserveScroll: true, onError: () => toast.error('We could not update this brief. Try again.'), onFinish: () => setPending(null) });
     }
 
     function handleDismiss(id) {
-        router.post(route('creative-briefs.dismiss', id), {}, { preserveScroll: true });
+        setPending(id);
+        router.post(route('creative-briefs.dismiss', id), {}, { preserveScroll: true, onError: () => toast.error('We could not dismiss this brief. Try again.'), onFinish: () => setPending(null) });
     }
 
     /*
@@ -248,7 +258,7 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
                             <BriefCard
                                 key={brief.id}
                                 brief={brief}
-                                onAction={handleAction}
+                                pending={pending} onAction={handleAction}
                                 onDismiss={handleDismiss}
                             />
                         ))}

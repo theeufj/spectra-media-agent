@@ -1,29 +1,32 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import { UsersIcon, SparklesIcon } from '@heroicons/react/24/outline';
 
-function PersonaCard({ persona, onToggle, onDelete }) {
+function PersonaCard({ persona, onToggle, onDelete, onEdit, selected }) {
     const tone = persona.tone_adjustments || {};
     const demo = persona.demographics || {};
 
     return (
         <div className={`bg-white rounded-lg border ${persona.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'} p-5`}>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-gray-900">{persona.name}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded ${persona.source === 'ai_generated' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
                         {persona.source === 'ai_generated' ? 'AI' : 'Manual'}
                     </span>
                 </div>
-                <div className="flex items-center gap-1">
-                    <button onClick={() => onToggle(persona)} className={`text-xs px-2 py-1 rounded ${persona.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {persona.is_active ? 'Active' : 'Inactive'}
+                <div className="flex flex-wrap items-center gap-1">
+                    <button aria-pressed={selected} onClick={() => onToggle(persona)} className={`text-xs px-2 py-1 rounded ${persona.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {selected ? 'Used for new ads' : 'Use for new ads'}
                     </button>
+                    <button onClick={() => onEdit(persona)} className="min-h-[44px] px-2 text-xs font-medium text-brand-dark">Edit</button>
                     <button onClick={() => onDelete(persona)} className="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded">Delete</button>
                 </div>
             </div>
 
+            <p className="mb-2 text-xs text-gray-500">{persona.campaign?.name || 'Account default'} · Used in {persona.ad_copies_count || 0} generated ad {persona.ad_copies_count === 1 ? 'copy' : 'copies'}</p>
             <p className="text-sm text-gray-600 mb-3">{persona.description}</p>
 
             {demo.age_range && (
@@ -63,6 +66,10 @@ function PersonaCard({ persona, onToggle, onDelete }) {
 
 export default function Index({ personas, campaigns }) {
     const [showCreate, setShowCreate] = useState(false);
+    const [editingPersona, setEditingPersona] = useState(null);
+    const editor = useRef(null);
+    const selectedByScope = {};
+    personas.filter(persona => persona.is_active).forEach(persona => { selectedByScope[persona.campaign_id || 'account'] ??= persona.id; });
     const generateForm = useForm({ campaign_id: '', count: 1 });
     const createForm = useForm({
         name: '', description: '', messaging_angle: '', campaign_id: '',
@@ -79,14 +86,23 @@ export default function Index({ personas, campaigns }) {
     const handleCreate = (e) => {
         e.preventDefault();
         const data = { ...createForm.data, pain_points: createForm.data.pain_points.filter(p => p.trim()) };
-        createForm.transform(() => data).post(route('personas.store'), {
+        createForm.transform(() => data)[editingPersona ? 'put' : 'post'](editingPersona ? route('personas.update', editingPersona.id) : route('personas.store'), {
             preserveScroll: true,
-            onSuccess: () => { setShowCreate(false); createForm.reset(); },
+            onSuccess: () => { setShowCreate(false); setEditingPersona(null); createForm.reset(); },
         });
     };
 
     const handleToggle = (persona) => {
-        router.put(route('personas.update', persona.id), { is_active: !persona.is_active }, { preserveScroll: true });
+        const selected = selectedByScope[persona.campaign_id || 'account'] === persona.id;
+        router.put(route('personas.update', persona.id), { is_active: !selected, use_for_generation: !selected }, { preserveScroll: true });
+    };
+
+    const handleEdit = persona => {
+        setEditingPersona(persona);
+        setShowCreate(true);
+        createForm.clearErrors();
+        createForm.setData({ name: persona.name, description: persona.description, messaging_angle: persona.messaging_angle || '', campaign_id: persona.campaign_id || '', pain_points: persona.pain_points || [''], tone_adjustments: persona.tone_adjustments || { formality: 'balanced', urgency: 'medium', emotion: 'balanced' } });
+        requestAnimationFrame(() => editor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     };
 
     const handleDelete = (persona) => {
@@ -100,13 +116,13 @@ export default function Index({ personas, campaigns }) {
             <Head title="Audience Personas" />
             <div className="py-8">
                 <div className="mx-auto max-w-5xl">
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>
                             <p className="mt-1 text-sm text-gray-500">The latest active campaign persona guides new ad copy; if none exists, the latest active account-wide persona is used. Personas do not change existing ads or platform audience targeting.</p>
                         </div>
                         {personas.length > 0 && (
-                            <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
+                            <button onClick={() => { setShowCreate(!showCreate); setEditingPersona(null); createForm.reset(); createForm.clearErrors(); }} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
                                 {showCreate ? 'Cancel' : '+ Create Persona'}
                             </button>
                         )}
@@ -126,17 +142,18 @@ export default function Index({ personas, campaigns }) {
                     {personas.length > 0 && (
                         <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
                             <h3 className="text-sm font-semibold text-gray-900 mb-3">Generate more with AI</h3>
-                            <form onSubmit={handleGenerate} className="flex items-end gap-4">
+                            <FormErrorSummary errors={generateForm.errors} labels={{ campaign_id: 'Campaign', count: 'Number of personas' }} fieldIds={{ campaign_id: 'generate-campaign', count: 'generate-count' }} />
+                            <form onSubmit={handleGenerate} className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end">
                                 <div className="flex-1">
                                     <label className="block text-xs text-gray-600 mb-1">Campaign (optional)</label>
-                                    <select value={generateForm.data.campaign_id} onChange={e => generateForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
+                                    <select id="generate-campaign" aria-label="Campaign for persona generation" value={generateForm.data.campaign_id} onChange={e => generateForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="">All campaigns</option>
                                         {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-600 mb-1">Count</label>
-                                    <select value={generateForm.data.count} onChange={e => generateForm.setData('count', parseInt(e.target.value))} className="rounded-lg border-gray-300 text-sm">
+                                    <select id="generate-count" aria-label="Number of personas to generate" value={generateForm.data.count} onChange={e => generateForm.setData('count', parseInt(e.target.value))} className="rounded-lg border-gray-300 text-sm">
                                         {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
                                     </select>
                                 </div>
@@ -149,28 +166,28 @@ export default function Index({ personas, campaigns }) {
 
                     {/* Manual Create Form */}
                     {showCreate && (
-                        <form onSubmit={handleCreate} className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-4">Create Persona Manually</h3>
+                        <form ref={editor} onSubmit={handleCreate} className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-4">{editingPersona ? 'Edit persona' : 'Create persona manually'}</h3><FormErrorSummary errors={createForm.errors} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Name</label>
-                                    <input type="text" value={createForm.data.name} onChange={e => createForm.setData('name', e.target.value)} placeholder="e.g. Budget-Conscious Buyer" className="w-full rounded-lg border-gray-300 text-sm" required />
+                                    <label htmlFor="name" className="block text-xs text-gray-600 mb-1">Name</label>
+                                    <input type="text" id="name" aria-invalid={Boolean(createForm.errors["name"]) } value={createForm.data.name} onChange={e => createForm.setData('name', e.target.value)} placeholder="e.g. Budget-Conscious Buyer" className="w-full rounded-lg border-gray-300 text-sm" required />
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Campaign</label>
-                                    <select value={createForm.data.campaign_id} onChange={e => createForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
+                                    <label htmlFor="campaign_id" className="block text-xs text-gray-600 mb-1">Campaign</label>
+                                    <select id="campaign_id" aria-invalid={Boolean(createForm.errors["campaign_id"]) } value={createForm.data.campaign_id} onChange={e => createForm.setData('campaign_id', e.target.value)} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="">None</option>
                                         {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
                             </div>
                             <div className="mb-4">
-                                <label className="block text-xs text-gray-600 mb-1">Description</label>
-                                <textarea value={createForm.data.description} onChange={e => createForm.setData('description', e.target.value)} rows={2} className="w-full rounded-lg border-gray-300 text-sm" required />
+                                <label htmlFor="description" className="block text-xs text-gray-600 mb-1">Description</label>
+                                <textarea id="description" aria-invalid={Boolean(createForm.errors["description"]) } value={createForm.data.description} onChange={e => createForm.setData('description', e.target.value)} rows={2} className="w-full rounded-lg border-gray-300 text-sm" required />
                             </div>
                             <div className="mb-4">
-                                <label className="block text-xs text-gray-600 mb-1">Messaging Angle</label>
-                                <input type="text" value={createForm.data.messaging_angle} onChange={e => createForm.setData('messaging_angle', e.target.value)} placeholder="e.g. Emphasize value and ROI" className="w-full rounded-lg border-gray-300 text-sm" />
+                                <label htmlFor="messaging_angle" className="block text-xs text-gray-600 mb-1">Messaging Angle</label>
+                                <input type="text" id="messaging_angle" aria-invalid={Boolean(createForm.errors["messaging_angle"]) } value={createForm.data.messaging_angle} onChange={e => createForm.setData('messaging_angle', e.target.value)} placeholder="e.g. Emphasize value and ROI" className="w-full rounded-lg border-gray-300 text-sm" />
                             </div>
                             <div className="mb-4">
                                 <label className="block text-xs text-gray-600 mb-1">Pain Points</label>
@@ -180,33 +197,33 @@ export default function Index({ personas, campaigns }) {
                                             const pts = [...createForm.data.pain_points];
                                             pts[i] = e.target.value;
                                             createForm.setData('pain_points', pts);
-                                        }} className="flex-1 rounded-lg border-gray-300 text-sm" placeholder="Pain point..." />
+                                        }} aria-label={`Pain point ${i + 1}`} className="min-w-0 flex-1 rounded-lg border-gray-300 text-sm" placeholder="Pain point..." />
                                         {i === createForm.data.pain_points.length - 1 && (
                                             <button type="button" onClick={() => createForm.setData('pain_points', [...createForm.data.pain_points, ''])} className="text-xs text-gray-500 hover:text-gray-700">+ Add</button>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                            <div className="grid grid-cols-3 gap-4 mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                                 <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Formality</label>
-                                    <select value={createForm.data.tone_adjustments.formality} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, formality: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
+                                    <label htmlFor="tone_adjustments.formality" className="block text-xs text-gray-600 mb-1">Formality</label>
+                                    <select id="tone_adjustments.formality" aria-invalid={Boolean(createForm.errors["tone_adjustments.formality"]) } value={createForm.data.tone_adjustments.formality} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, formality: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="casual">Casual</option>
                                         <option value="balanced">Balanced</option>
                                         <option value="formal">Formal</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Urgency</label>
-                                    <select value={createForm.data.tone_adjustments.urgency} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, urgency: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
+                                    <label htmlFor="tone_adjustments.urgency" className="block text-xs text-gray-600 mb-1">Urgency</label>
+                                    <select id="tone_adjustments.urgency" aria-invalid={Boolean(createForm.errors["tone_adjustments.urgency"]) } value={createForm.data.tone_adjustments.urgency} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, urgency: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
                                         <option value="high">High</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Emotion</label>
-                                    <select value={createForm.data.tone_adjustments.emotion} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, emotion: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
+                                    <label htmlFor="tone_adjustments.emotion" className="block text-xs text-gray-600 mb-1">Emotion</label>
+                                    <select id="tone_adjustments.emotion" aria-invalid={Boolean(createForm.errors["tone_adjustments.emotion"]) } value={createForm.data.tone_adjustments.emotion} onChange={e => createForm.setData('tone_adjustments', { ...createForm.data.tone_adjustments, emotion: e.target.value })} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="rational">Rational</option>
                                         <option value="balanced">Balanced</option>
                                         <option value="emotional">Emotional</option>
@@ -215,7 +232,7 @@ export default function Index({ personas, campaigns }) {
                             </div>
                             <div className="flex justify-end">
                                 <button type="submit" disabled={createForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
-                                    {createForm.processing ? 'Creating...' : 'Create Persona'}
+                                    {createForm.processing ? 'Saving…' : editingPersona ? 'Save persona' : 'Create persona'}
                                 </button>
                             </div>
                         </form>
@@ -262,7 +279,7 @@ export default function Index({ personas, campaigns }) {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {personas.map(p => (
-                                <PersonaCard key={p.id} persona={p} onToggle={handleToggle} onDelete={handleDelete} />
+                                <PersonaCard key={p.id} persona={p} onToggle={handleToggle} onDelete={handleDelete} onEdit={handleEdit} selected={selectedByScope[p.campaign_id || 'account'] === p.id} />
                             ))}
                         </div>
                     )}

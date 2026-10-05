@@ -1,3 +1,4 @@
+import FormErrors from '@/Components/FormErrorSummary';
 import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -25,7 +26,7 @@ const statusLabels = {
 };
 
 export default function Show({ ticket }) {
-    const { data, setData, put, processing } = useForm({
+    const { data, setData, put, processing, errors } = useForm({
         status: ticket.status,
         priority: ticket.priority,
         admin_response: ticket.admin_response || '',
@@ -144,7 +145,7 @@ export default function Show({ ticket }) {
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
                                                             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                                                {isBot ? 'Assistant' : 'Customer'}
+                                                                {isBot ? 'Assistant' : turn.role === 'admin' ? `Support${turn.name ? ` · ${turn.name}` : ''}` : 'Customer'}
                                                             </span>
                                                             {turn.at && (
                                                                 <span className="text-xs text-gray-500">
@@ -169,10 +170,11 @@ export default function Show({ ticket }) {
                             </div>
 
                             <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                                    <FormErrors errors={errors} />
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                        <select
+                                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                        <select id="status"
                                             value={data.status}
                                             onChange={(e) => setData('status', e.target.value)}
                                             className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -184,8 +186,8 @@ export default function Show({ ticket }) {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                                        <select
+                                        <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                        <select id="priority"
                                             value={data.priority}
                                             onChange={(e) => setData('priority', e.target.value)}
                                             className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -199,10 +201,10 @@ export default function Show({ ticket }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label htmlFor="admin_response" className="block text-sm font-medium text-gray-700 mb-1">
                                         Admin Response
                                     </label>
-                                    <textarea
+                                    <textarea id="admin_response"
                                         value={data.admin_response}
                                         onChange={(e) => setData('admin_response', e.target.value)}
                                         placeholder="Write your response to the user..."

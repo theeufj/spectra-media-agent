@@ -46,9 +46,9 @@ class GetGoogleAdsRecommendations extends BaseGoogleAdsService
 
             return $recommendations;
         } catch (GoogleAdsException $e) {
-            $this->logError('GetGoogleAdsRecommendations: '.$e->getMessage());
+            $this->logError('GetGoogleAdsRecommendations: '.$e->getMessage(), $e);
 
-            return [];
+            throw $e;
         }
     }
 }

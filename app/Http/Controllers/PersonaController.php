@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Persona;
 use App\Services\PersonaGeneratorService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class PersonaController extends Controller
@@ -16,12 +17,12 @@ class PersonaController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $personas = Persona::where('customer_id', $customer->id)
+        $personas = Persona::where('customer_id', $customer->id)->with('campaign:id,name')->withCount('adCopies')
             ->orderByDesc('is_active')
-            ->orderByDesc('created_at')
+            ->orderByDesc('created_at')->orderByDesc('id')
             ->get();
 
-        $campaigns = $customer->campaigns()->select('id', 'name')->orderByDesc('created_at')->get();
+        $campaigns = $customer->campaigns()->select('id', 'name')->orderByDesc('created_at')->orderByDesc('id')->get();
 
         return Inertia::render('Personas/Index', [
             'personas' => $personas,
@@ -37,7 +38,7 @@ class PersonaController extends Controller
         }
 
         $validated = $request->validate([
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_id' => 'nullable|integer',
             'count' => 'integer|min:1|max:6',
         ]);
 
@@ -45,6 +46,7 @@ class PersonaController extends Controller
             ? $customer->campaigns()->findOrFail($validated['campaign_id'])
             : null;
 
+        $this->authorize('create', Persona::class);
         $service = app(PersonaGeneratorService::class);
         $personas = $service->generate($customer, $campaign, $validated['count'] ?? 1);
 
@@ -63,7 +65,7 @@ class PersonaController extends Controller
         }
 
         $validated = $request->validate([
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_id' => 'nullable|integer',
             'name' => 'required|string|max:100',
             'description' => 'required|string|max:500',
             'demographics' => 'nullable|array',
@@ -73,6 +75,10 @@ class PersonaController extends Controller
             'tone_adjustments' => 'nullable|array',
         ]);
 
+        $this->authorize('create', Persona::class);
+        if (! empty($validated['campaign_id'])) {
+            $customer->campaigns()->findOrFail($validated['campaign_id']);
+        }
         Persona::create([
             'customer_id' => $customer->id,
             ...$validated,
@@ -89,7 +95,12 @@ class PersonaController extends Controller
             return redirect()->route('dashboard');
         }
 
+        $this->authorize('update', $persona);
         $validated = $request->validate([
+            'campaign_id' => 'nullable|integer',
+            'use_for_generation' => 'nullable|boolean',
+            'pain_points' => 'nullable|array',
+            'pain_points.*' => 'string|max:500',
             'name' => 'string|max:100',
             'description' => 'string|max:500',
             'messaging_angle' => 'nullable|string|max:500',
@@ -97,7 +108,19 @@ class PersonaController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $persona->update($validated);
+        if (! empty($validated['campaign_id'])) {
+            $customer->campaigns()->findOrFail($validated['campaign_id']);
+        }
+        $useForGeneration = $validated['use_for_generation'] ?? false;
+        unset($validated['use_for_generation']);
+        DB::transaction(function () use ($customer, $persona, $validated, $useForGeneration) {
+            $customer->newQuery()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
+            $persona->update($validated);
+            if ($useForGeneration) {
+                Persona::where('customer_id', $customer->id)->where('campaign_id', $persona->campaign_id)->whereKeyNot($persona->id)->update(['is_active' => false]);
+                $persona->update(['is_active' => true]);
+            }
+        });
 
         return back()->with('success', 'Persona updated.');
     }
@@ -109,6 +132,7 @@ class PersonaController extends Controller
             return redirect()->route('dashboard');
         }
 
+        $this->authorize('delete', $persona);
         $persona->delete();
 
         return back()->with('success', 'Persona deleted.');

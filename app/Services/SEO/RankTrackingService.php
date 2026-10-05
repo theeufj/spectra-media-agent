@@ -39,24 +39,32 @@ class RankTrackingService
         $results = [];
 
         foreach ($keywords as $keyword) {
-            $ranking = $this->checkRanking($keyword, $domain);
-            $results[] = $ranking;
+            try {
+                $ranking = $this->checkRanking($keyword, $domain);
 
-            SeoRanking::updateOrCreate(
-                [
-                    'customer_id' => $this->customer->id,
-                    'keyword' => $keyword,
-                    'date' => now()->toDateString(),
-                ],
-                [
-                    'domain' => $domain,
-                    'position' => $ranking['position'],
-                    'url' => $ranking['url'],
-                    'search_engine' => 'google',
-                    'previous_position' => $ranking['previous_position'],
-                    'change' => $ranking['change'],
-                ]
-            );
+                SeoRanking::updateOrCreate(
+                    [
+                        'customer_id' => $this->customer->id,
+                        'keyword' => $keyword,
+                        'date' => now()->toDateString(),
+                    ],
+                    [
+                        'domain' => $domain,
+                        'position' => $ranking['position'],
+                        'url' => $ranking['url'],
+                        'search_engine' => 'google',
+                        'previous_position' => $ranking['previous_position'],
+                        'change' => $ranking['change'],
+                    ]
+                );
+                $results[] = $ranking;
+            } catch (\Throwable $e) {
+                report($e);
+                Log::warning('RankTracking: Keyword could not be measured', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+                // Keep previous measurements rather than replacing them with a
+                // false "not ranked" result when a provider is unavailable.
+                $results[] = ['keyword' => $keyword, 'failed' => true];
+            }
         }
 
         Log::info('RankTracking: Completed', [
@@ -120,14 +128,14 @@ class RankTrackingService
             if (! $this->firecrawl->isConfigured()) {
                 Log::debug('RankTracking: Firecrawl not configured');
 
-                return ['position' => null, 'url' => null];
+                throw new \RuntimeException('No ranking data provider is configured for this keyword.');
             }
 
             // Fetch up to 100 results to find position
             $response = $this->firecrawl->search($keyword, 100);
 
             if (! $response['success']) {
-                return ['position' => null, 'url' => null];
+                throw new \RuntimeException('The ranking data provider could not complete this search.');
             }
 
             foreach ($response['results'] as $index => $item) {
@@ -142,10 +150,9 @@ class RankTrackingService
 
             return ['position' => null, 'url' => null]; // Not found in results
         } catch (\Throwable $e) {
-            report($e);
             Log::debug('RankTracking: Search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
 
-            return ['position' => null, 'url' => null];
+            throw $e;
         }
     }
 

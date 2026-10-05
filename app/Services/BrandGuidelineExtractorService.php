@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Exceptions\BrandExtractionFailed;
 use App\Models\BrandGuideline;
 use App\Models\Customer;
+use App\Models\KnowledgeBase;
 use App\Prompts\BrandGuidelineExtractionPrompt;
+use App\Services\Brands\BrandProfileReview;
 use App\Services\Onboarding\PlaceholderSiteDetector;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +30,10 @@ class BrandGuidelineExtractorService
      */
     protected function canExtractGuidelines(Customer $customer): bool
     {
+        if ($customer->brandGuideline()->exists()) {
+            return true;
+        }
+
         // Was users()->first()->resolveCurrentPlan(), and false when nobody
         // was attached — brand extraction runs during onboarding, which is
         // exactly when that is true.
@@ -123,6 +129,22 @@ class BrandGuidelineExtractorService
         }
     }
 
+    /** A content revision, independent of queue/index timestamps. */
+    public static function sourceFingerprint(Customer $customer): string
+    {
+        $sources = KnowledgeBase::where('customer_id', $customer->id)->orderBy('id')->get();
+        $evidence = $sources->whereNull('excluded_at')->filter(fn ($source) => trim((string) $source->content) !== '')
+            ->map(fn ($source) => ['id' => $source->id, 'url' => $source->url, 'title' => $source->title ?: $source->original_filename, 'type' => $source->source_type, 'content' => hash('sha256', (string) $source->content)])->values()->all();
+        $pages = \App\Models\CustomerPage::where('customer_id', $customer->id)->whereNotIn('url', $sources->pluck('url')->filter()->all())->orderBy('id')->get();
+        foreach ($pages as $page) {
+            if (trim((string) $page->content) !== '' && (! $customer->website || parse_url($page->url, PHP_URL_HOST) === parse_url($customer->website, PHP_URL_HOST))) {
+                $evidence[] = ['page' => $page->id, 'url' => $page->url, 'title' => $page->title, 'content' => hash('sha256', (string) $page->content)];
+            }
+        }
+
+        return hash('sha256', json_encode([$customer->website, $evidence], JSON_THROW_ON_ERROR));
+    }
+
     public function extractGuidelines(Customer $customer): ?BrandGuideline
     {
         try {
@@ -137,36 +159,39 @@ class BrandGuidelineExtractorService
                 return null;
             }
 
-            // Step 1: Gather content from CustomerPage (primary) and KnowledgeBase (fallback)
-            // Sort pages so service/money pages come first for higher weight in extraction
-            $pages = \App\Models\CustomerPage::where('customer_id', $customer->id)
-                ->orderByRaw("CASE
-                    WHEN page_type IN ('service', 'money', 'product') THEN 1
-                    WHEN page_type IN ('landing', 'about') THEN 2
-                    WHEN page_type IN ('category', 'homepage') THEN 3
-                    ELSE 4
-                END")
-                ->get(['url', 'content', 'page_type']);
-
-            $customerPageChunks = $pages->map(function ($page) {
-                $typeLabel = strtoupper($page->page_type ?? 'UNKNOWN');
-
-                return "--- PAGE TYPE: {$typeLabel} | URL: {$page->url} ---\n\n{$page->content}";
-            })->all();
-
-            $manualBriefs = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
-                ->where('source_type', 'text')->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')->latest('updated_at')->pluck('content')
-                ->map(fn ($content) => "--- BUSINESS DESCRIPTION SUPPLIED BY THE CUSTOMER ---\n".$content)->all();
-            $websiteContent = self::budgetedContent(array_merge($manualBriefs, $customerPageChunks));
-
-            // Fallback to KnowledgeBase if no CustomerPage data
-            if (empty($websiteContent)) {
-                $websiteContent = self::budgetedContent(
-                    \App\Models\KnowledgeBase::where('customer_id', $customer->id)
-                        ->pluck('content')
-                        ->all()
-                );
+            // Included uploads and business briefs are first-class evidence. URL
+            // mirrors must not duplicate a CustomerPage or resurrect an excluded source.
+            $sourceFingerprint = self::sourceFingerprint($customer);
+            $allSources = KnowledgeBase::where('customer_id', $customer->id)->get();
+            $included = $allSources->whereNull('excluded_at')->filter(fn ($source) => trim((string) $source->content) !== '')
+                ->sortBy(fn ($source) => $source->source_type === 'url' ? 1 : 0);
+            $entries = [];
+            foreach ($included as $source) {
+                $label = $source->title ?: $source->original_filename ?: $source->url ?: 'Business information';
+                $entries[] = ['content' => "--- SOURCE: {$label} | URL: {$source->url} ---\n".$source->content,
+                    'source' => ['id' => $source->id, 'label' => $label, 'url' => $source->url, 'type' => $source->source_type, 'version' => $source->source_version, 'content_hash' => $source->content_hash ?: hash('sha256', (string) $source->content), 'updated_at' => $source->updated_at?->toIso8601String()]];
             }
+            $knownUrls = $allSources->pluck('url')->filter()->all();
+            $pages = \App\Models\CustomerPage::where('customer_id', $customer->id)->whereNotIn('url', $knownUrls)
+                ->orderByRaw("CASE WHEN page_type IN ('service', 'money', 'product') THEN 1 WHEN page_type IN ('landing', 'about') THEN 2 ELSE 3 END")->get()
+                ->filter(fn ($page) => ! $customer->website || parse_url($page->url, PHP_URL_HOST) === parse_url($customer->website, PHP_URL_HOST));
+            foreach ($pages as $page) {
+                $entries[] = ['content' => "--- PAGE TYPE: {$page->page_type} | URL: {$page->url} ---\n".$page->content,
+                    'source' => ['id' => null, 'label' => $page->title ?: $page->url, 'url' => $page->url, 'type' => 'url', 'updated_at' => $page->updated_at?->toIso8601String()]];
+            }
+            $chunks = [];
+            $sourceSnapshot = [];
+            $used = 0;
+            foreach ($entries as $entry) {
+                if ($used >= 120000) {
+                    break;
+                }
+                $piece = mb_substr($entry['content'], 0, min(8000, 120000 - $used));
+                $chunks[] = $piece;
+                $sourceSnapshot[] = $entry['source'];
+                $used += mb_strlen($piece);
+            }
+            $websiteContent = implode("\n\n---SOURCE BREAK---\n\n", $chunks);
 
             if (empty($websiteContent)) {
                 Log::warning("No knowledge base content found for customer {$customer->id}");
@@ -197,7 +222,7 @@ class BrandGuidelineExtractorService
             }
 
             // Step 2: Scrape and analyze homepage for visual elements
-            $visualAnalysis = $this->analyzeVisualStyle($customer->website);
+            $visualAnalysis = $customer->website ? $this->analyzeVisualStyle($customer->website) : [];
 
             // Step 3: Build extraction prompt
             $prompt = (new BrandGuidelineExtractionPrompt(
@@ -249,28 +274,19 @@ class BrandGuidelineExtractorService
                 throw BrandExtractionFailed::because('the model omitted required fields');
             }
 
-            // Step 7: Store brand guidelines
-            $brandGuideline = BrandGuideline::updateOrCreate(
-                ['customer_id' => $customer->id],
-                [
-                    'brand_voice' => $guidelines['brand_voice'],
-                    'tone_attributes' => $guidelines['tone_attributes'],
-                    'writing_patterns' => $guidelines['writing_patterns'] ?? null,
-                    'color_palette' => $guidelines['color_palette'],
-                    'typography' => $guidelines['typography'],
-                    'visual_style' => $guidelines['visual_style'],
-                    'messaging_themes' => $guidelines['messaging_themes'],
-                    'unique_selling_propositions' => $guidelines['unique_selling_propositions'],
-                    'target_audience' => $guidelines['target_audience'],
-                    'competitor_differentiation' => $guidelines['competitor_differentiation'] ?? null,
-                    'brand_personality' => $guidelines['brand_personality'],
-                    'do_not_use' => $guidelines['do_not_use'] ?? [],
-                    'service_lines' => $guidelines['service_lines'] ?? [],
-                    'extraction_quality_score' => $guidelines['extraction_quality_score'] ?? 50,
-                    'extraction_warning' => $extractionWarning,
-                    'extracted_at' => now(),
-                ]
-            );
+            $review = app(BrandProfileReview::class);
+            $profile = array_replace(array_fill_keys(BrandProfileReview::FIELDS, []), \Illuminate\Support\Arr::only($guidelines, BrandProfileReview::FIELDS));
+            $metadata = [
+                'extraction_quality_score' => $guidelines['extraction_quality_score'] ?? 50,
+                'extraction_warning' => $extractionWarning,
+                'extracted_at' => now(),
+                'source_snapshot' => $sourceSnapshot,
+                'source_fingerprint' => $sourceFingerprint,
+            ];
+            $existing = BrandGuideline::where('customer_id', $customer->id)->first();
+            $brandGuideline = $existing
+                ? $review->propose($existing, $profile, $metadata)
+                : BrandGuideline::create($profile + $metadata + ['customer_id' => $customer->id, 'user_verified' => false]);
 
             Log::info('Successfully extracted brand guidelines', [
                 'customer_id' => $customer->id,

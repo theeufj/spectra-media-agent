@@ -32,6 +32,15 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         Log::info("Starting Google Ads deployment for Campaign ID: {$campaign->id}, Strategy ID: {$strategy->id}");
 
         try {
+            if (in_array($strategy->campaign_type, ['search', 'display'], true)) {
+                $destination = app(AdDestinationCheck::class)->check($campaign->landing_page_url);
+                if ($destination['status'] !== 'reachable') {
+                    $strategy->forceFill(['deployment_error' => $destination['message'], 'deployment_status' => 'failed',
+                        'execution_result' => ['success' => false, 'metadata' => ['destination_check' => $destination]]])->save();
+
+                    return false;
+                }
+            }
             $customerId = $this->customer->google_ads_customer_id;
 
             // Use explicit campaign_type field instead of fragile detection

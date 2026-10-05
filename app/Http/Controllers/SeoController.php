@@ -10,14 +10,15 @@ use App\Models\SeoAudit;
 use App\Models\SeoRanking;
 use App\Services\SEO\BacklinkAnalysisService;
 use App\Services\SEO\RankTrackingService;
+use App\Support\WorkStatus;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class SeoController extends Controller
 {
-    private function resolveCustomer(Request $request)
+    private function resolveCustomer(Request $request): ?\App\Models\Customer
     {
-        return $request->user()->customer ?? $request->user()->customers()->first();
+        return $this->getActiveCustomer($request);
     }
 
     public function index(Request $request)
@@ -54,6 +55,7 @@ class SeoController extends Controller
 
         return Inertia::render('SEO/Index', [
             'latestAudit' => $latestAudit,
+            'auditRun' => WorkStatus::get($customer->id, 'seo-audit'),
             'audits' => $audits,
             'rankingSummary' => $rankingSummary,
             'topRankings' => $topRankings,
@@ -77,7 +79,10 @@ class SeoController extends Controller
             'url' => ['required', 'url', 'max:500', new \App\Rules\SafePublicUrl],
         ]);
 
-        RunSeoAudit::dispatch($customer->id, $validated['url']);
+        $runId = WorkStatus::start($customer->id, 'seo-audit', ['url' => $validated['url']]);
+        if ($runId) {
+            RunSeoAudit::dispatch($customer->id, $validated['url'], $runId);
+        }
 
         return back()->with('success', 'SEO audit started. Results will appear shortly.');
     }
@@ -124,6 +129,7 @@ class SeoController extends Controller
         return Inertia::render('SEO/Rankings', [
             'summary' => $summary,
             'rankings' => $rankings,
+            'rankingRun' => WorkStatus::get($customer->id, 'rankings'),
             'trends' => $trends,
         ]);
     }
@@ -136,7 +142,10 @@ class SeoController extends Controller
             return redirect()->route('customers.create');
         }
 
-        TrackKeywordRankings::dispatch($customer->id);
+        $runId = WorkStatus::start($customer->id, 'rankings');
+        if ($runId) {
+            TrackKeywordRankings::dispatch($customer->id, $runId);
+        }
 
         return back()->with('success', 'Keyword rank tracking started.');
     }
@@ -166,7 +175,7 @@ class SeoController extends Controller
     public function backlinkStatus(Request $request)
     {
         $customer = $this->resolveCustomer($request);
-        abort_unless($customer, 404);
+        abort_unless($customer !== null, 404);
         $domain = BacklinkAnalysisService::domain($customer);
         abort_unless($domain !== null, 422, 'Set your website URL before running an analysis.');
 
@@ -176,7 +185,7 @@ class SeoController extends Controller
     public function refreshBacklinks(Request $request)
     {
         $customer = $this->resolveCustomer($request);
-        abort_unless($customer, 404);
+        abort_unless($customer !== null, 404);
         $domain = BacklinkAnalysisService::domain($customer);
         if (! $domain) {
             return back()->with('flash', ['type' => 'warning', 'message' => 'Set your website URL before running an analysis.']);
@@ -212,6 +221,7 @@ class SeoController extends Controller
             : collect();
 
         return Inertia::render('SEO/Competitors', [
+            'competitorRun' => WorkStatus::get($customer->id, 'competitors'),
             'domain' => $domain,
             'competitors' => $competitors,
             'canAccessCompetitors' => $canAccess,
@@ -243,7 +253,10 @@ class SeoController extends Controller
             ]);
         }
 
-        RunCompetitorIntelligence::dispatch($customer, true);
+        $runId = WorkStatus::start($customer->id, 'competitors');
+        if ($runId) {
+            RunCompetitorIntelligence::dispatch($customer, true, $runId);
+        }
 
         return back()->with('flash', [
             'type' => 'success',
@@ -251,11 +264,23 @@ class SeoController extends Controller
         ]);
     }
 
+    public function workStatus(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer !== null, 404);
+        $runs = [];
+        foreach (['seo-audit', 'cro-audit', 'rankings', 'competitors'] as $task) {
+            $runs[$task] = WorkStatus::get($customer->id, $task);
+        }
+
+        return response()->json(['runs' => $runs]);
+    }
+
     public function competitorActions(Request $request)
     {
         abort_unless($request->user()->hasFeature('competitor_analysis'), 403);
         $customer = $this->resolveCustomer($request);
-        abort_unless($customer, 404);
+        abort_unless($customer !== null, 404);
 
         return response()->json(app(\App\Services\Competition\CompetitiveActionReport::class)->forCustomer($customer));
     }
@@ -264,7 +289,7 @@ class SeoController extends Controller
     {
         abort_unless($request->user()->hasFeature('competitor_analysis'), 403);
         $customer = $this->resolveCustomer($request);
-        abort_unless($customer, 404);
+        abort_unless($customer !== null, 404);
         $key = 'competitive_review:'.$customer->id;
         $existing = \Illuminate\Support\Facades\Cache::get($key);
         if (in_array($existing['status'] ?? '', ['queued', 'running'], true)) {

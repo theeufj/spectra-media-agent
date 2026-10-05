@@ -359,11 +359,25 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         Log::info("GoogleAdsExecutionAgent: Starting plan execution for Campaign {$campaign->id}");
 
         try {
-            // Setup Conversion Tracking (Best Effort)
-            $this->setupConversionTracking($customerId, $result, $campaign);
-
+            // Check the exact selected destination, including its attribution
+            // query string, before creating campaign or ad objects.
             $campaignStructure = $plan->getCampaignStructure();
             $campaignType = $campaignStructure['type'] ?? 'search';
+            $finalUrl = (new LandingUrlBuilder($this->customer))->getFinalUrl($campaign, $strategy, $plan);
+            if ($finalUrl || in_array($campaignType, ['search', 'display', 'performance_max', 'demand_gen'], true)) {
+                $destination = app(\App\Services\Deployment\AdDestinationCheck::class)->check($finalUrl);
+                $result->addMetadata('destination_check', $destination);
+                if ($destination['status'] !== 'reachable') {
+                    $result->addError('destination_unavailable', $destination['message']);
+                    AgentActivity::record('deployment', 'destination_check_failed', $destination['message'],
+                        $this->customer->id, $campaign->id, ['strategy_id' => $strategy->id, 'destination_check' => $destination], 'failed');
+
+                    return $result;
+                }
+            }
+
+            // Setup Conversion Tracking (Best Effort)
+            $this->setupConversionTracking($customerId, $result, $campaign);
 
             // Prefer Performance Max over plain Search when assets are ready AND
             // the account has enough conversion history for PMax to bid sensibly.

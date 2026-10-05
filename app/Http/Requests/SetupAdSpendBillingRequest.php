@@ -19,7 +19,8 @@ class SetupAdSpendBillingRequest extends FormRequest
             'days_to_charge' => 'sometimes|integer|min:1|max:30',
             // Lets the server refuse to charge for a campaign that isn't
             // ready to deploy (e.g. auto-generated budget not yet confirmed).
-            'campaign_id' => 'sometimes|nullable|integer|exists:campaigns,id',
+            'campaign_id' => 'nullable|required_with:strategy_id|integer|exists:campaigns,id',
+            'strategy_id' => 'sometimes|nullable|integer|exists:strategies,id',
         ];
     }
 }

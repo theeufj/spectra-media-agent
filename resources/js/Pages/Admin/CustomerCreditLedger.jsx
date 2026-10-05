@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
 import SideNav from './SideNav';
+import { money } from '@/utils/format';
 
-const fmt = (n) => '$' + Number(n).toFixed(2);
+
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 
 const typeMeta = {
@@ -17,6 +18,7 @@ export default function CustomerCreditLedger({ auth }) {
     const { customer, credit, transactions } = usePage().props;
     const [expanded, setExpanded] = useState(null);
 
+    const fmt = (amount) => money(amount, customer.currency_code);
     const toggle = (id) => setExpanded(prev => prev === id ? null : id);
 
     const title = customer.business_name || customer.name || `Customer #${customer.id}`;
@@ -95,7 +97,6 @@ export default function CustomerCreditLedger({ auth }) {
                                             <React.Fragment key={tx.id}>
                                                 <tr
                                                     className={`${hasBreakdown ? 'cursor-pointer hover:bg-gray-50' : ''} ${isOpen ? 'bg-gray-50' : ''}`}
-                                                    onClick={() => hasBreakdown && toggle(tx.id)}
                                                 >
                                                     <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{fmtDate(tx.created_at)}</td>
                                                     <td className="px-4 py-3 text-sm text-gray-900">
@@ -105,7 +106,7 @@ export default function CustomerCreditLedger({ auth }) {
                                                             </span>
                                                             <span className="text-gray-600 truncate max-w-xs">{tx.description}</span>
                                                             {hasBreakdown && (
-                                                                <span className="ml-auto text-xs text-gray-500">{isOpen ? '▲ Hide' : '▼ Platforms'}</span>
+                                                                <button type="button" onClick={() => toggle(tx.id)} aria-expanded={isOpen} aria-controls={`ledger-breakdown-${tx.id}`} className="ml-auto rounded px-2 py-1 text-xs text-gray-600 focus:ring-2 focus:ring-brand-primary">{isOpen ? 'Hide platform spend' : 'Show platform spend'}</button>
                                                             )}
                                                         </div>
                                                         {tx.stripe_charge_id && (
@@ -125,7 +126,7 @@ export default function CustomerCreditLedger({ auth }) {
 
                                                 {/* Platform breakdown row */}
                                                 {isOpen && (
-                                                    <tr className="bg-gray-50">
+                                                    <tr id={`ledger-breakdown-${tx.id}`} className="bg-gray-50">
                                                         <td></td>
                                                         <td colSpan={4} className="px-4 pb-3 pt-1">
                                                             <div className="flex gap-6 pl-2 border-l-2 border-red-200">

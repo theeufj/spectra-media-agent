@@ -13,13 +13,29 @@ class PublicWebsiteFetcher
 {
     public function get(string $url): Response
     {
+        return $this->fetch($url, 'Mozilla/5.0 (compatible; SiteToSpend/1.0)', 30, 10);
+    }
+
+    /** A preliminary desktop crawl check; Google uses its own network and IPs. */
+    public function getForAd(string $url): Response
+    {
+        return $this->fetch($url, 'AdsBot-Google (+http://www.google.com/adsbot.html)', 12, 5, true);
+    }
+
+    private function fetch(string $url, string $userAgent, float $timeout, float $connectTimeout, bool $boundTotal = false): Response
+    {
+        $deadline = microtime(true) + $timeout;
         for ($hop = 0; $hop < 6; $hop++) {
             $addresses = $this->addresses($url);
             $host = parse_url($url, PHP_URL_HOST);
             $port = parse_url($url, PHP_URL_PORT) ?: (str_starts_with($url, 'https:') ? 443 : 80);
             $address = str_contains($addresses[0], ':') ? '['.$addresses[0].']' : $addresses[0];
-            $response = Http::withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; SiteToSpend/1.0)', 'Accept-Encoding' => 'identity'])
-                ->timeout(30)->connectTimeout(10)->withOptions([
+            $remaining = $boundTotal ? $deadline - microtime(true) : $timeout;
+            if ($remaining <= 0) {
+                throw new \RuntimeException('Destination check timed out while following redirects.');
+            }
+            $response = Http::withHeaders(['User-Agent' => $userAgent, 'Accept-Encoding' => 'identity'])
+                ->timeout($remaining)->connectTimeout(min($connectTimeout, $remaining))->withOptions([
                     'allow_redirects' => false,
                     'proxy' => '',
                     'decode_content' => false,

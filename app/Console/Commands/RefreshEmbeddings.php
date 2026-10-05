@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Models\CustomerPage;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
-use App\Support\Embeddings;
+use App\Services\KnowledgeBase\KnowledgeBaseIndexer;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Pgvector\Laravel\Vector;
@@ -116,10 +116,12 @@ class RefreshEmbeddings extends Command
 
     private function refreshKnowledgeBases(GeminiService $gemini, string $model): void
     {
-        $query = $this->scope(
-            KnowledgeBase::whereNotNull('content')->where('content', '!=', ''),
-            $model,
-        );
+        $query = KnowledgeBase::whereNotNull('customer_id')->whereNull('excluded_at')->whereNotNull('content')->where('content', '!=', '');
+        if ($this->option('mismatched')) {
+            $query->where(fn ($rows) => $rows->whereNull('embedding_model')->orWhere('embedding_model', '!=', $model)
+                ->orWhereDoesntHave('chunks', fn ($chunks) => $chunks->whereColumn('knowledge_base_chunks.source_version', 'knowledge_bases.source_version'))
+                ->orWhereHas('chunks', fn ($chunks) => $chunks->whereColumn('knowledge_base_chunks.source_version', 'knowledge_bases.source_version')->where(fn ($vectors) => $vectors->whereNull('embedding_model')->orWhere('embedding_model', '!=', $model))));
+        }
 
         $total = (clone $query)->count();
         $this->info("Re-embedding {$total} knowledge bases...");
@@ -139,63 +141,18 @@ class RefreshEmbeddings extends Command
 
     private function refreshKnowledgeBase(GeminiService $gemini, string $model, KnowledgeBase $kb): void
     {
-        /*
-           This read json_decode($kb->content) and returned early unless the
-           result was an array. The column holds the cleaned page text, not
-           JSON, and always has — so the guard was true for every row in the
-           table and the command re-embedded nothing, ever. It still advanced
-           the progress bar and still printed "Done.", which is why it read as
-           a working repair tool for as long as it existed.
-        */
-        $chunks = Embeddings::split((string) $kb->content);
-
-        if ($chunks === []) {
-            return;
-        }
-
-        $allEmbeddings = [];
-        $usedModels = [];
-
-        foreach ($chunks as $chunk) {
-            if (trim($chunk) === '') {
-                continue;
+        $indexer = app(KnowledgeBaseIndexer::class);
+        $source = $kb;
+        try {
+            $source = $indexer->prepare($kb, (string) $kb->content);
+            if (! $indexer->index($source, $gemini, $source->source_version, $model, ! $this->option('mismatched'))) {
+                $this->warn(" Source #{$kb->id} still needs preparation. Its text remains searchable.");
+                \App\Jobs\IndexKnowledgeBase::dispatch($source, $source->source_version);
             }
-
-            $embedding = $gemini->embedContent($model, $chunk, [], $usedModel);
-
-            if ($embedding) {
-                $allEmbeddings[] = $embedding;
-                $usedModels[] = $usedModel;
-            } else {
-                $this->warn(" Failed chunk for KB #{$kb->id}");
-            }
-
-            usleep(100_000); // 100ms rate-limit buffer
+        } catch (\Throwable $e) {
+            report($e);
+            $source->update(['processing_status' => 'needs_attention', 'processing_error' => 'We could not finish preparing this source. Your readable text is retained. Retry from the source details.']);
+            $this->warn(" Failed source #{$kb->id}. Text retained.");
         }
-
-        if ($allEmbeddings === []) {
-            return;
-        }
-
-        // One vector per row, averaged — $allEmbeddings is a list of chunk
-        // vectors, and handing that to new Vector() builds a nested array
-        // where the column expects a flat one.
-        $averaged = Embeddings::average($allEmbeddings);
-
-        if ($averaged === null) {
-            $this->warn(" Chunk embeddings could not be combined for KB #{$kb->id}");
-
-            return;
-        }
-
-        $kb->update([
-            // new Vector(), matching every other write path — the column casts
-            // to Vector and a raw array went in as a JSON-ish literal.
-            'embedding' => new Vector($averaged),
-            // A file whose chunks fell back mid-run is not in a single space.
-            'embedding_model' => count(array_unique(array_filter($usedModels))) === 1
-                ? reset($usedModels)
-                : null,
-        ]);
     }
 }

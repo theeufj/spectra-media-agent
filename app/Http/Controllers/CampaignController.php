@@ -273,6 +273,8 @@ class CampaignController extends Controller
                 'ad_copies_count' => $strategy->ad_copies_count,
                 'images_count' => $strategy->image_collaterals_count,
                 'videos_count' => $strategy->video_collaterals_count,
+                'google_readiness' => $strategy->execution_result['metadata']['google_readiness'] ?? null,
+                'conversion_goal_readiness' => $strategy->execution_result['metadata']['conversion_goal_readiness'] ?? null,
             ];
         });
 
@@ -523,6 +525,7 @@ class CampaignController extends Controller
 
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaignData,
+            'policyStatus' => \App\Services\Agents\CampaignAlertService::policyStatus($campaign),
             // Regeneration is a paid action; the page needs to say so instead
             // of letting a free user click into an unexplained pricing
             // redirect.
@@ -930,6 +933,8 @@ class CampaignController extends Controller
                 'images_count' => $strategy->image_collaterals_count,
                 'videos_count' => $strategy->video_collaterals_count,
                 'progress' => $this->calculateDeploymentProgress($strategy),
+                'google_readiness' => $strategy->execution_result['metadata']['google_readiness'] ?? null,
+                'conversion_goal_readiness' => $strategy->execution_result['metadata']['conversion_goal_readiness'] ?? null,
             ];
         });
 
@@ -947,7 +952,7 @@ class CampaignController extends Controller
             'deployments' => $deployments,
             'overall_progress' => $overallProgress,
             'is_complete' => $deployments->isNotEmpty() && $deployments->every(
-                fn ($deployment) => in_array($deployment['status'], ['verified', 'failed', 'deploy_unverified', 'skipped_plan'], true)
+                fn ($deployment) => in_array($deployment['status'], ['verified', 'active', 'failed', 'deploy_unverified', 'skipped_plan'], true)
             ),
         ]);
     }
@@ -965,12 +970,12 @@ class CampaignController extends Controller
         }
 
         // Step 2: Deployment started
-        if (in_array($strategy->deployment_status, ['deploying', 'deployed', 'verified'], true)) {
+        if (in_array($strategy->deployment_status, ['deploying', 'deployed', 'verified', 'active'], true)) {
             $progress++;
         }
 
         // Step 3: Live on the platform
-        if ($strategy->deployed_at || in_array($strategy->deployment_status, ['deployed', 'verified'], true)) {
+        if ($strategy->deployed_at || in_array($strategy->deployment_status, ['deployed', 'verified', 'active'], true)) {
             $progress++;
         }
 

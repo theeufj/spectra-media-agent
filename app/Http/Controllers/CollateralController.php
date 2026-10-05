@@ -78,6 +78,8 @@ class CollateralController extends Controller
 
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
+            'brandVerified' => (bool) ($customer->brandGuideline?->user_verified && ($customer->brandGuideline->approved_version === null || $customer->brandGuideline->approved_version === $customer->brandGuideline->profile_version)),
+            'googleNeedsSetup' => ! $customer->google_ads_customer_id || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true),
             'reviewSummary' => [
                 'business_name' => $customer->name,
                 'destination' => $strategy->bidding_strategy['landing_page_url'] ?? $campaign->landing_page_url ?: $customer->website,
@@ -95,7 +97,7 @@ class CollateralController extends Controller
             // Teammate-aware: a member on a company plan has access through
             // the owner's subscription.
             'hasActiveSubscription' => $user->hasSubscriptionAccess($campaign->customer),
-            'hasPaymentMethod' => $user->hasDefaultPaymentMethod(),
+            'hasPaymentMethod' => $customer->adSpendPayer() !== null,
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
             // Mirrors DeployCampaign's own rule: self-funded accounts are
             // billed by the platform directly, so never show them the

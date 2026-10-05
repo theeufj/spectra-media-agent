@@ -25,10 +25,7 @@ const ROOT = join(process.cwd(), 'resources/js');
  * here rather than blocking. Remove an entry when you migrate it; do not add
  * one to make a new page pass.
  */
-const KNOWN_UNMIGRATED = [
-    'Pages/Proposals/Show.jsx',
-    'Components/NotificationBell.jsx',
-];
+const KNOWN_UNMIGRATED = [];
 
 function jsxFiles(dir) {
     const out = [];

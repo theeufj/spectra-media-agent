@@ -5,16 +5,27 @@ namespace App\Jobs;
 use App\Models\CrmIntegration;
 use App\Models\OfflineConversion;
 use App\Services\Crm\CrmConnectorFactory;
+use App\Support\SafeError;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class SyncCrmConversions implements ShouldQueue
+class SyncCrmConversions implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $timeout = 300;
+
+    public $uniqueFor = 900;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->crmIntegrationId;
+    }
 
     public function __construct(
         protected int $crmIntegrationId
@@ -84,10 +95,9 @@ class SyncCrmConversions implements ShouldQueue
                 UploadOfflineConversions::dispatch($integration->customer_id);
             }
         } catch (\Throwable $e) {
-            report($e);
             $integration->update([
                 'status' => 'error',
-                'last_error' => $e->getMessage(),
+                'last_error' => SafeError::message($e, 'The CRM sync could not be completed.'),
             ]);
             Log::error('SyncCrmConversions: Failed', [
                 'integration_id' => $integration->id,
@@ -108,7 +118,7 @@ class SyncCrmConversions implements ShouldQueue
         if ($integration && $integration->status === 'syncing') {
             $integration->update([
                 'status' => 'error',
-                'last_error' => $exception->getMessage(),
+                'last_error' => SafeError::message($exception, 'The CRM sync could not be completed.'),
             ]);
         }
 

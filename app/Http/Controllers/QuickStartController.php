@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CrawlSitemap;
+use App\Jobs\IndexKnowledgeBase;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
+use App\Services\KnowledgeBase\KnowledgeBaseIndexer;
 use App\Services\Onboarding\WebsiteIdentity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,7 @@ class QuickStartController extends Controller
         $user = Auth::user();
 
         // If the user came from the landing page demo, prefill their URL and
-        // let the page submit itself. Processing directly here was a GET with
+        // let them check it and choose their service. Processing directly here was a GET with
         // no browser timezone, so every demo signup was created as UTC/US —
         // the round-trip through the form is what carries the real locale.
         return Inertia::render('QuickStart', [
@@ -62,20 +64,30 @@ class QuickStartController extends Controller
             'business_name' => 'required|string|max:255',
             'business_description' => 'required|string|min:300|max:12000',
         ]);
-        // One editable source, even if a client retries a submission. Never discard crawl evidence.
+        // A stable supplied source cannot collide with the crawler's homepage
+        // key. Prepare retains old passages and versions the edited brief.
         \Illuminate\Support\Facades\DB::transaction(function () use ($customer, $request, $data) {
             $customer->newQuery()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
             $customer->update(['name' => $data['business_name']]);
             $brief = \App\Models\KnowledgeBase::firstOrNew([
                 'customer_id' => $customer->id, 'source_type' => 'text', 'original_filename' => 'onboarding-business-brief.txt', 'file_path' => null,
             ]);
-            $brief->fill(['url' => $customer->website ?? '', 'user_id' => $request->user()->id, 'content' => $data['business_description']]);
-            if ($brief->isDirty() || ($brief->updated_at?->lt(now()->subMinutes(10)) && ! $customer->brandGuideline?->user_verified)) {
-                $brief->fill(['embedding' => null, 'embedding_model' => null]);
-                $brief->updated_at = now();
-                $brief->save();
-                $customer->brandGuideline?->update(['user_verified' => false]);
-                \App\Jobs\ExtractBrandGuidelines::dispatch($customer, force: true)->afterCommit();
+            $title = 'Business brief — '.$data['business_name'];
+            $sourceUrl = 'note:onboarding-'.$customer->id;
+            $retryDue = $brief->updated_at?->lt(now()->subMinutes(10)) ?? true;
+            $changed = ! $brief->exists || $brief->content !== $data['business_description'] || $brief->title !== $title || $brief->excluded_at !== null || $brief->url !== $sourceUrl;
+            $brief->fill(['url' => $sourceUrl, 'user_id' => $request->user()->id, 'content' => $brief->content ?? '', 'excluded_at' => null]);
+            $brief->save();
+            if ($changed || ($retryDue && $brief->processing_status !== 'ready')) {
+                $prepared = app(KnowledgeBaseIndexer::class)->prepare($brief, $data['business_description'], $title);
+                IndexKnowledgeBase::dispatch($prepared, $prepared->source_version)->afterCommit();
+            }
+            if ($changed) {
+                $brand = $customer->brandGuideline;
+                $brand?->update(['user_verified' => false, 'approved_version' => null, 'profile_version' => $brand->profile_version + 1]);
+            }
+            if ($changed || ($retryDue && ! $customer->brandGuideline?->user_verified)) {
+                \App\Jobs\ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true)->afterCommit();
             }
         });
 

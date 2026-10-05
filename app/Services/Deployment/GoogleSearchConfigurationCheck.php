@@ -115,24 +115,72 @@ class GoogleSearchConfigurationCheck
                 }
             }
         }
-        if ($goal = $expected['conversion_category'] ?? null) {
-            $biddable = collect($actual['goals'] ?? [])->contains(fn ($row) => ($row['campaignConversionGoal']['category'] ?? '') === $goal && ($row['campaignConversionGoal']['biddable'] ?? false));
-            $primary = collect($actual['conversion_actions'] ?? [])->contains(fn ($row) => ($row['conversionAction']['category'] ?? '') === $goal && ($row['conversionAction']['primaryForGoal'] ?? false));
-            if (! $biddable || ! $primary) {
-                $issues[] = 'The intended conversion category has no active primary action and campaign bidding goal.';
-            }
-            foreach ($actual['conversion_actions'] ?? [] as $row) {
-                $other = $row['conversionAction'] ?? [];
-                if (($other['primaryForGoal'] ?? false) && ($other['category'] ?? '') !== $goal
-                    && collect($actual['goals'] ?? [])->contains(fn ($row) => ($row['campaignConversionGoal']['category'] ?? '') === ($other['category'] ?? '') && ($row['campaignConversionGoal']['biddable'] ?? false))) {
-                    $issues[] = 'An additional conversion category is being used for bidding.';
-                }
+        if ($intent = $expected['conversion_goal'] ?? null) {
+            $issues = array_merge($issues, $this->conversionGoalIssues($intent, $actual));
+        } elseif ($goal = $expected['conversion_category'] ?? null) {
+            $primaries = array_values(array_filter(array_column($actual['conversion_actions'] ?? [], 'conversionAction'),
+                fn ($action) => ($action['status'] ?? '') === 'ENABLED' && ($action['category'] ?? '') === $goal && ($action['primaryForGoal'] ?? false)));
+            if (count($primaries) !== 1 || empty($primaries[0]['origin']) || empty($primaries[0]['resourceName'])) {
+                $issues[] = 'The intended conversion category needs an explicit enabled action and origin to verify its bidding goal.';
+            } else {
+                $issues = array_merge($issues, $this->conversionGoalIssues(['mode' => 'category', 'category' => $goal,
+                    'origin' => $primaries[0]['origin'], 'action_resource' => $primaries[0]['resourceName']], $actual));
             }
         } else {
             $issues[] = 'The campaign has no explicit conversion goal to verify.';
         }
 
         return array_values(array_unique($issues));
+    }
+
+    public function conversionGoalIssues(array $intent, array $actual): array
+    {
+        if (empty($actual['conversion_goal_config']['conversionGoalCampaignConfig'])) {
+            return ['Campaign conversion goal configuration is unavailable for verification.'];
+        }
+        if (! in_array($intent['mode'] ?? '', ['category', 'custom'], true)) {
+            return ['The intended conversion goal mode is unavailable for verification.'];
+        }
+        $custom = $actual['conversion_goal_config']['conversionGoalCampaignConfig']['customConversionGoal'] ?? null;
+        $goals = array_column($actual['goals'] ?? [], 'campaignConversionGoal');
+        $actions = array_column($actual['conversion_actions'] ?? [], 'conversionAction');
+        $action = collect($actions)->firstWhere('resourceName', $intent['action_resource'] ?? null);
+        if (! $action || ($action['status'] ?? '') !== 'ENABLED' || ($action['category'] ?? null) !== ($intent['category'] ?? null)
+            || ($action['origin'] ?? null) !== ($intent['origin'] ?? null)) {
+            return ['The intended conversion action is missing, disabled or has a different category or origin.'];
+        }
+        if ($intent['mode'] === 'custom') {
+            $definition = collect(array_column($actual['custom_conversion_goals'] ?? [], 'customConversionGoal'))->firstWhere('resourceName', $custom);
+            if (! $custom || $custom !== ($intent['custom_goal'] ?? null) || ($definition['status'] ?? '') !== 'ENABLED'
+                || ($definition['conversionActions'] ?? []) !== [$intent['action_resource']]) {
+                return ['The campaign custom goal does not match the selected conversion action.'];
+            }
+            if (collect($goals)->contains(fn ($goal) => $goal['biddable'] ?? false)) {
+                return ['Additional campaign conversion goals are being used alongside the intended custom goal.'];
+            }
+
+            return [];
+        }
+        if ($custom) {
+            return ['An unexpected custom conversion goal is being used for campaign bidding.'];
+        }
+        if (! ($action['primaryForGoal'] ?? false)) {
+            return ['The intended conversion action is secondary and is not selected by a campaign custom goal.'];
+        }
+        if (count(array_filter($actions, fn ($other) => ($other['status'] ?? '') === 'ENABLED'
+            && ($other['primaryForGoal'] ?? false) && ($other['category'] ?? '') === $intent['category']
+            && ($other['origin'] ?? '') === $intent['origin'])) !== 1) {
+            return ['Several primary conversion actions share the intended category and origin. Select the intended action with a campaign custom goal.'];
+        }
+        $matching = fn ($goal) => ($goal['category'] ?? '') === $intent['category'] && ($goal['origin'] ?? '') === $intent['origin'];
+        if (! collect($goals)->contains(fn ($goal) => $matching($goal) && ($goal['biddable'] ?? false))) {
+            return ['The intended conversion category and origin are not enabled for campaign bidding.'];
+        }
+        if (collect($goals)->contains(fn ($goal) => ! $matching($goal) && ($goal['biddable'] ?? false))) {
+            return ['An additional conversion category or origin is being used for bidding.'];
+        }
+
+        return [];
     }
 
     private function keyword(string $text, string $match): string

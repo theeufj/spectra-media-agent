@@ -95,7 +95,7 @@ class NotificationController extends Controller
             report($e);
             \Log::error('NotificationController error: '.$e->getMessage());
 
-            return response()->json(['notifications' => [], 'unread_count' => 0]);
+            return response()->json(['message' => 'Notifications could not be loaded. Please try again.'], 503);
         }
     }
 
@@ -202,7 +202,9 @@ class NotificationController extends Controller
             \Log::warning('Failed to fetch campaigns ready to deploy: '.$e->getMessage());
         }
 
-        return $notifications;
+        $hidden = session('hidden_notifications', []);
+
+        return $notifications->reject(fn ($notification) => in_array($notification['id'], $hidden, true))->values();
     }
 
     /**
@@ -222,10 +224,11 @@ class NotificationController extends Controller
             return response()->json(['success' => true]);
         }
 
-        // Handle persistent notifications
+        // Handle persistent notifications, scoped to the reader.
+        abort_unless(Notification::whereKey($notificationId)->where('user_id', $request->user()->id)->exists(), 404);
         $success = $this->notificationService->markAsRead($notificationId);
 
-        return response()->json(['success' => $success]);
+        return response()->json(['success' => $success], $success ? 200 : 404);
     }
 
     /**
@@ -276,6 +279,14 @@ class NotificationController extends Controller
 
         if (! $user) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        if (preg_match('/^(signoff|deploy|deployed)-[0-9]+$/', $notificationId)) {
+            $dynamic = $this->getDynamicNotifications($user, session('active_customer_id'));
+            abort_unless($dynamic->contains('id', $notificationId), 404);
+            session(['hidden_notifications' => array_values(array_unique([...session('hidden_notifications', []), $notificationId]))]);
+
+            return response()->json(['success' => true]);
         }
 
         $notification = Notification::where('id', $notificationId)

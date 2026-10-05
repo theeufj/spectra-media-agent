@@ -22,12 +22,14 @@ class GoogleAdImprovementVerificationTest extends TestCase
         $resource = 'customers/123/adGroupAds/1~2';
         $reader = Mockery::mock(ReadCampaignConfiguration::class);
         $reader->shouldReceive('ads')->andReturn([['adGroupAd' => ['resourceName' => $resource,
-            'adStrength' => 'POOR', 'ad' => ['responsiveSearchAd' => ['headlines' => [['text' => 'Google Ads Management']],
+            'adStrength' => 'POOR', 'policySummary' => ['approvalStatus' => 'APPROVED', 'reviewStatus' => 'REVIEWED'], 'ad' => ['responsiveSearchAd' => ['headlines' => [['text' => 'Google Ads Management']],
                 'descriptions' => [['text' => 'Manage your campaigns.']]]]]]]);
         $this->app->bind(ReadCampaignConfiguration::class, fn () => $reader);
         (new VerifyGoogleAdImprovement($campaign, $resource, 4, ['Google Ads Management'], ['Manage your campaigns.']))->handle();
         $activity = AgentActivity::where('campaign_id', $campaign->id)->latest('id')->first();
-        $this->assertSame('ad_copy_update_verified', $activity->action);
+        $this->assertSame('ad_copy_update_submitted', $activity->action);
+        $this->assertSame('pending', $activity->status);
+        $this->assertSame('still_weak', $activity->details['reason']);
         $this->assertTrue($activity->details['copy_matches']);
         $this->assertDatabaseMissing('agent_activities', ['campaign_id' => $campaign->id, 'action' => 'ad_strength_improved']);
     }

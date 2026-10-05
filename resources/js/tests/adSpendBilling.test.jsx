@@ -180,7 +180,7 @@ describe('ad spend setup modal', () => {
             />
         );
 
-        fireEvent.click(getByText(/Deploy$/));
+        fireEvent.click(getByText(/Pay .* & review launch$/));
 
         await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
@@ -188,6 +188,7 @@ describe('ad spend setup modal', () => {
         expect(url).toBe('/billing/ad-spend/setup-for-deployment');
         expect(init.headers['X-CSRF-TOKEN']).toBeDefined();
         expect(init.headers.Accept).toBe('application/json');
+        expect(JSON.parse(init.body)).toMatchObject({ campaign_id: 9, daily_budget: 30, days_to_charge: 7 });
     });
 
     it('shows the server’s refusal instead of a generic error', async () => {
@@ -212,7 +213,7 @@ describe('ad spend setup modal', () => {
             />
         );
 
-        fireEvent.click(getByText(/Deploy$/));
+        fireEvent.click(getByText(/Pay .* & review launch$/));
 
         expect(await findByText('Please confirm this campaign’s daily budget before funding it.')).toBeInTheDocument();
     });

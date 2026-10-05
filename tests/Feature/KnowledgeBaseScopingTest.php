@@ -6,7 +6,7 @@ use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\User;
 use App\Services\KnowledgeBaseSearchService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 /**
@@ -23,7 +23,7 @@ use Tests\TestCase;
  */
 class KnowledgeBaseScopingTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     /**
      * A user owning two unrelated customers — the exact production shape.

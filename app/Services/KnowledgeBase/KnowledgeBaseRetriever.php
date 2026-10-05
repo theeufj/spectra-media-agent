@@ -4,121 +4,34 @@ namespace App\Services\KnowledgeBase;
 
 use App\Models\Customer;
 use App\Services\GeminiService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Services\KnowledgeBaseSearchService;
 
-/**
- * Find the pages of a customer's own site that answer a question.
- *
- * The crawl stores every page's text alongside a 3072-dimension embedding in a
- * real pgvector column, so relevance is a `<=>` ordering in the database. The
- * one other place that searches this data
- * (KnowledgeBaseController@search) loads every row into PHP and computes
- * cosine similarity in a loop — fine for a handful of pages, and the largest
- * account has 1,236.
- *
- * TENANT SCOPING IS NOT OPTIONAL HERE. Every query is bound to one customer_id
- * in SQL, not filtered afterwards. This content feeds AI prompts, and a
- * mis-scoped retrieval would put one customer's website into another
- * customer's campaign.
- */
 class KnowledgeBaseRetriever
 {
-    /** Per-page character cap. Enough to convey what a page sells; short enough that ten fit in a prompt. */
-    private const EXCERPT_CHARS = 1200;
-
-    /**
-     * Shorter than this and the row is chrome, not content — a nav bar, a
-     * cookie banner, or a crawler error captured as if it were the page. One
-     * production store has 1,236 crawled pages and 3 above this threshold;
-     * without the filter a prompt would be padded with 100-character
-     * fragments that say nothing about the business.
-     */
-    private const MIN_CONTENT_CHARS = 300;
-
     public function __construct(private readonly GeminiService $gemini) {}
 
-    /**
-     * The customer's own pages most relevant to a question, most relevant first.
-     *
-     * Returns an empty array rather than throwing when embeddings are missing
-     * or the embedding call fails — callers should degrade to whatever they had
-     * before, not lose their whole job to a retrieval miss.
-     *
-     * @return list<array{url: string, excerpt: string}>
-     */
     public function search(Customer $customer, string $question, int $limit = 10): array
     {
-        // An explicit onboarding brief is useful even before an embedding exists.
-        // Reading it directly also avoids an unnecessary provider call after a failed crawl.
-        $briefs = DB::table('knowledge_bases')->where('customer_id', $customer->id)
-            ->where('source_type', 'text')->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')->whereRaw('length(content) >= ?', [self::MIN_CONTENT_CHARS])
-            ->latest('updated_at')->limit(max(1, $limit))->get(['content'])
-            ->map(fn ($row) => ['url' => (string) $customer->website, 'excerpt' => $this->excerpt((string) $row->content)])->all();
-        if ($briefs !== []) {
-            return $briefs;
+        $limit = max(1, min(20, $limit));
+        $service = new KnowledgeBaseSearchService($this->gemini);
+
+        // A brief supplements retrieved passages; it never replaces the corpus.
+        $brief = \App\Models\KnowledgeBase::where('customer_id', $customer->id)->whereNull('excluded_at')
+            ->where('original_filename', 'onboarding-business-brief.txt')->whereNull('file_path')
+            ->latest('updated_at')->first();
+        $hasBrief = $brief && trim($brief->content) !== '';
+        $hasAdditionalSources = ! $hasBrief || \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+            ->whereNull('excluded_at')->whereKeyNot($brief->id)->where('content', '!=', '')->exists()
+            || \App\Models\CustomerPage::where('customer_id', $customer->id)->whereNotNull('embedding')
+                ->whereNotExists(fn ($sources) => $sources->selectRaw('1')->from('knowledge_bases')
+                    ->whereColumn('knowledge_bases.customer_id', 'customer_pages.customer_id')->whereColumn('knowledge_bases.url', 'customer_pages.url'))->exists();
+        $results = $hasAdditionalSources && (! $hasBrief || $limit > 1)
+            ? $service->passages($customer->id, $question, $hasBrief ? $limit - 1 : $limit, 'first_campaign', $hasBrief ? [$brief->id] : []) : [];
+        if ($hasBrief) {
+            array_unshift($results, ['url' => $customer->website ?? '', 'excerpt' => '[Business brief, version '.$brief->source_version.'] '.mb_substr($brief->content, 0, 1200)]);
+            \Illuminate\Support\Facades\DB::table('knowledge_retrievals')->insert(['customer_id' => $customer->id, 'knowledge_base_id' => $brief->id, 'source_version' => $brief->source_version, 'purpose' => 'first_campaign', 'query' => $question, 'positions' => json_encode([0]), 'retrieved_at' => now()]);
         }
 
-        try {
-            $queryEmbedding = $this->gemini->embedContent(
-                config('ai.models.embedding'),
-                $question,
-                ['customer_id' => $customer->id],
-                $queryModel,
-            );
-
-            if (! is_array($queryEmbedding) || $queryEmbedding === [] || ! $queryModel) {
-                Log::warning('KnowledgeBaseRetriever: no query embedding', ['customer_id' => $customer->id]);
-
-                return [];
-            }
-
-            // pgvector wants a bracketed literal, and it must be bound as a
-            // parameter — never interpolated, even though the values are floats
-            // we generated.
-            $vector = '['.implode(',', array_map(fn ($v) => (float) $v, $queryEmbedding)).']';
-
-            $rows = DB::select(
-                <<<'SQL'
-                SELECT url, content
-                FROM knowledge_bases
-                WHERE customer_id = ?
-                  AND embedding IS NOT NULL
-                  AND embedding_model = ?
-                  AND content IS NOT NULL
-                  AND length(content) >= ?
-                ORDER BY embedding <=> ?::vector
-                LIMIT ?
-                SQL,
-                [$customer->id, $queryModel, self::MIN_CONTENT_CHARS, $vector, $limit],
-            );
-
-            return array_map(fn ($row) => [
-                'url' => (string) $row->url,
-                'excerpt' => $this->excerpt((string) $row->content),
-            ], $rows);
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('KnowledgeBaseRetriever failed', [
-                'customer_id' => $customer->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-    }
-
-    /**
-     * Crawled page text carries navigation, cookie banners and footers. Collapse
-     * the whitespace so the excerpt spends its budget on prose rather than on
-     * the blank lines between menu items.
-     */
-    private function excerpt(string $content): string
-    {
-        $clean = trim(preg_replace('/\s+/', ' ', $content) ?? $content);
-
-        return mb_strlen($clean) > self::EXCERPT_CHARS
-            ? mb_substr($clean, 0, self::EXCERPT_CHARS).'…'
-            : $clean;
+        return array_map(fn ($result) => ['url' => (string) $result['url'], 'excerpt' => $result['excerpt']], array_slice($results, 0, $limit));
     }
 }

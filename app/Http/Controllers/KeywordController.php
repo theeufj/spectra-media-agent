@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Campaign;
 use App\Models\Keyword;
 use App\Models\KeywordQualityScore;
 use App\Models\NegativeKeywordList;
@@ -10,6 +11,7 @@ use App\Services\KeywordClusteringService;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class KeywordController extends Controller
@@ -55,6 +57,7 @@ class KeywordController extends Controller
 
         return Inertia::render('Keywords/Research', [
             'customer' => $customer->only('id', 'uuid', 'name', 'business_type', 'website'),
+            'campaigns' => $customer->campaigns()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -121,9 +124,13 @@ class KeywordController extends Controller
             'keywords' => 'required|array|min:1',
             'keywords.*.text' => 'required|string|max:200',
             'keywords.*.match_type' => 'required|string|in:BROAD,PHRASE,EXACT',
-            'campaign_id' => 'nullable|integer|exists:campaigns,id',
+            'campaign_id' => ['nullable', 'integer', Rule::exists('campaigns', 'id')->where('customer_id', $customer->id)],
             'source' => 'nullable|string|max:50',
         ]);
+
+        if (! empty($validated['campaign_id'])) {
+            $this->authorize('update', Campaign::findOrFail($validated['campaign_id']));
+        }
 
         $created = 0;
         foreach ($validated['keywords'] as $kw) {
@@ -150,7 +157,7 @@ class KeywordController extends Controller
 
         return back()->with('flash', [
             'type' => 'success',
-            'message' => "Added {$created} keywords to your portfolio.",
+            'message' => "Saved {$created} keywords to ".(! empty($validated['campaign_id']) ? 'your campaign plan.' : 'your portfolio.'),
         ]);
     }
 
@@ -302,16 +309,15 @@ class KeywordController extends Controller
     public function updateNegativeList(Request $request, NegativeKeywordList $list)
     {
         $customer = $this->getActiveCustomer($request);
-        if (! $customer || $list->customer_id !== $customer->id) {
-            return back();
-        }
+        abort_unless($customer && $list->customer_id === $customer->id, 404);
+        $this->authorize('update', $list);
 
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:100',
-            'keywords' => 'sometimes|array',
+            'name' => 'sometimes|required|string|max:100',
+            'keywords' => 'sometimes|required|array|min:1',
             'keywords.*' => 'string|max:200',
             'applied_to_campaigns' => 'sometimes|array',
-            'applied_to_campaigns.*' => 'integer',
+            'applied_to_campaigns.*' => ['integer', Rule::exists('campaigns', 'id')->where('customer_id', $customer->id)],
         ]);
 
         $list->update($validated);
@@ -322,9 +328,8 @@ class KeywordController extends Controller
     public function destroyNegativeList(Request $request, NegativeKeywordList $list)
     {
         $customer = $this->getActiveCustomer($request);
-        if (! $customer || $list->customer_id !== $customer->id) {
-            return back();
-        }
+        abort_unless($customer && $list->customer_id === $customer->id, 404);
+        $this->authorize('delete', $list);
 
         $list->delete();
 

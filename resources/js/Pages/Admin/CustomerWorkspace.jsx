@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import SideNav from './SideNav';
+import { money } from '@/utils/format';
+import { useJobWatch } from '@/hooks/useJobWatch';
 
 /**
  * Admin monitoring view of everything a customer's workspace has produced:
@@ -16,11 +18,21 @@ export default function CustomerWorkspace({ auth }) {
         landingPageAudits = [],
     } = usePage().props;
     const [lightbox, setLightbox] = useState(null);
+    const [repairing, setRepairing] = useState(null);
+    const knowledgeWatch = useJobWatch(route('admin.customers.knowledge-status', customer.uuid), {
+        enabled: knowledge.pending > 0,
+        timeoutMs: 20 * 60 * 1000,
+        isDone: result => result?.health?.pending === 0,
+        onDone: () => router.reload({ only: ['knowledge', 'knowledgePages'], preserveScroll: true }),
+    });
+    const retrySource = (id) => {
+        setRepairing(id);
+        router.post(route('knowledge-base.retry', id), {}, { preserveScroll: true, onFinish: () => setRepairing(null) });
+    };
 
     // Traffic-light per section: green = has data, orange = partial/needs a
     // look, red = empty. "Partial" is judged against what downstream
-    // generation actually needs (e.g. five substantive pages is the
-    // first-campaign gate), not arbitrary thresholds.
+    // generation actually needs, including readable and indexed knowledge.
     const allStrategies = campaigns.flatMap(c => c.strategies || []);
     const activeImages = [
         ...campaigns.flatMap(c => c.image_collaterals || []),
@@ -40,7 +52,7 @@ export default function CustomerWorkspace({ auth }) {
             ? 'green'
             : (activeImages.length > 0 || adCopyCount > 0 ? 'orange' : 'red'),
         harvested: knowledge.harvested_total > 0 ? 'green' : 'red',
-        knowledge: knowledge.pages >= 5 ? 'green' : (knowledge.pages > 0 ? 'orange' : 'red'),
+        knowledge: !knowledge.selected || !knowledge.readable ? 'red' : (knowledge.ready === knowledge.selected && !knowledge.mismatched_passages ? 'green' : 'orange'),
         keywords: (knowledge.keywords_total + strategyKeywordCount) >= 5
             ? 'green'
             : ((knowledge.keywords_total + strategyKeywordCount) > 0 ? 'orange' : 'red'),
@@ -92,8 +104,8 @@ export default function CustomerWorkspace({ auth }) {
 
                     {/* Knowledge summary strip */}
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                        <StatTile label="Knowledge pages" value={knowledge.pages} warn={knowledge.pages < 5} />
-                        <StatTile label="Last crawled" value={knowledge.last_crawled_at ? new Date(knowledge.last_crawled_at).toLocaleDateString() : 'never'} warn={!knowledge.last_crawled_at} />
+                        <StatTile label="Ready sources" value={`${knowledge.ready}/${knowledge.selected}`} warn={knowledge.ready !== knowledge.selected || !knowledge.selected} />
+                        <StatTile label="Last fetched" value={knowledge.fetched_at ? new Date(knowledge.fetched_at).toLocaleString() : 'never'} warn={!knowledge.fetched_at} />
                         <StatTile label="Harvested assets" value={knowledge.harvested_total} />
                         <StatTile label="Campaigns" value={campaigns.length} />
                         <StatTile label="Keywords" value={knowledge.keywords_total} />
@@ -199,7 +211,7 @@ export default function CustomerWorkspace({ auth }) {
                                 <div className="flex items-center gap-2 text-xs">
                                     <StatusChip value={campaign.status} />
                                     <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">
-                                        ${Number(campaign.daily_budget || 0).toFixed(0)}/day
+                                        {money(campaign.daily_budget || 0, customer.currency_code)}/day
                                     </span>
                                     {campaign.auto_generated_at && (
                                         <span className={`px-2 py-0.5 rounded-full font-medium ${campaign.budget_confirmed_at ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -304,17 +316,31 @@ export default function CustomerWorkspace({ auth }) {
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.knowledge}>Knowledge Base</SectionTitle></h2>
                         <p className="text-xs text-gray-500 mb-4">
-                            What the AI knows about this business — every campaign is written from this text.
-                            Showing {knowledgePages.length} of {knowledge.pages} entries.
+                            {knowledge.readable} readable sources selected for future AI work. {knowledge.excluded} excluded.
+                            Showing {knowledgePages.length} of {knowledge.total} sources.
                         </p>
+                        {['disconnected', 'timeout'].includes(knowledgeWatch.phase) && <p role="alert" className="mb-4 rounded bg-amber-50 p-3 text-sm text-amber-900">Live knowledge updates stopped. <button type="button" onClick={() => router.reload({ only: ['knowledge', 'knowledgePages'], preserveScroll: true })} className="underline">Refresh status</button></p>}
+                        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <StatTile label="Indexed passages" value={`${knowledge.indexed_passages}/${knowledge.passages}`} warn={knowledge.indexed_passages < knowledge.passages} />
+                            <StatTile label="Waiting" value={knowledge.pending} warn={knowledge.pending > 0} />
+                            <StatTile label="Need attention" value={knowledge.failed + knowledge.needs_attention} warn={knowledge.failed + knowledge.needs_attention > 0} />
+                            <StatTile label="Different model" value={knowledge.mismatched_passages} warn={knowledge.mismatched_passages > 0} />
+                        </div>
+                        <p className="mb-4 text-xs text-gray-500">Primary embedding model: {knowledge.primary_model}. Last successful indexing: {knowledge.indexed_at ? new Date(knowledge.indexed_at).toLocaleString() : 'never'}. Readable sources remain available through text search while indexing is pending.</p>
                         {knowledgePages.length === 0 ? (
-                            <p className="text-sm text-red-600">Empty. Anything generated for this customer is written blind.</p>
+                            <p className="text-sm text-red-600">No sources have been added. Open the customer's workspace to build its knowledge.</p>
                         ) : (
                             <div className="divide-y divide-gray-100">
                                 {knowledgePages.map((page) => (
                                     <div key={page.id} className="py-2">
-                                        <Collapsible label={`${page.url || page.original_filename || 'Untitled'} · ${page.source_type || 'crawl'} · ${Math.round((page.content_length || 0) / 100) / 10}k chars`}>
+                                        <Collapsible label={`${page.title || page.url || page.original_filename || 'Untitled'} · ${page.excluded_at ? 'excluded' : page.processing_status?.replaceAll('_', ' ') || 'not indexed'} · ${Math.round((page.content_length || 0) / 100) / 10}k chars`}>
                                             <p className="text-gray-600 whitespace-pre-wrap">{page.excerpt}{(page.content_length || 0) > 300 ? '…' : ''}</p>
+                                            {page.processing_error && <p className="mt-2 text-sm text-red-700">{page.processing_error}</p>}
+                                            <p className="mt-2 text-xs text-gray-500">Fetched: {page.fetched_at ? new Date(page.fetched_at).toLocaleString() : 'not fetched'} · Indexed: {page.indexed_at ? new Date(page.indexed_at).toLocaleString() : 'not indexed'}</p>
+                                            <div className="mt-3 flex flex-wrap gap-3">
+                                                <Link href={route('knowledge-base.show', page.id)} className="text-sm text-brand-dark underline">Review source and passages</Link>
+                                                {!page.excluded_at && !['queued', 'reading', 'indexing'].includes(page.processing_status) && <button type="button" disabled={repairing !== null} onClick={() => retrySource(page.id)} className="text-sm text-brand-dark underline disabled:opacity-50">{repairing === page.id ? 'Queuing…' : page.url ? 'Refresh and index' : 'Retry indexing'}</button>}
+                                            </div>
                                         </Collapsible>
                                     </div>
                                 ))}
@@ -414,7 +440,7 @@ export default function CustomerWorkspace({ auth }) {
                                             <p className="text-xs text-gray-500">{proposal.goals}</p>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
-                                            {proposal.budget && <span className="text-gray-600">${Number(proposal.budget).toLocaleString()}</span>}
+                                            {proposal.budget && <span className="text-gray-600">{money(proposal.budget, proposal.currency_code || customer.currency_code)}</span>}
                                             <StatusChip value={proposal.status} />
                                         </div>
                                     </div>
@@ -543,7 +569,7 @@ const Collapsible = ({ label, children }) => {
 
     return (
         <div className="border border-gray-100 rounded">
-            <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            <button type="button" aria-expanded={open} onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 <span>{label}</span>
                 <span className="text-gray-500">{open ? '−' : '+'}</span>
             </button>

@@ -35,6 +35,7 @@ class ProposalPdfService
             return $filename;
 
         } catch (\Throwable $e) {
+            report($e);
             Log::error("ProposalPdfService: Failed to generate PDF for proposal #{$proposal->id}: {$e->getMessage()}");
 
             return null;

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Customer;
 use App\Services\SEO\SeoAuditService;
+use App\Support\WorkStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,12 +23,16 @@ class RunSeoAudit implements ShouldQueue
     public function __construct(
         public int $customerId,
         public string $url,
+        public ?string $workRunId = null,
     ) {}
 
     public function handle(): void
     {
+        WorkStatus::update($this->customerId, 'seo-audit', $this->workRunId, 'running', 'Working on your request.');
         $customer = Customer::find($this->customerId);
         if (! $customer) {
+            WorkStatus::update($this->customerId, 'seo-audit', $this->workRunId, 'failed', 'The account or website is no longer available.');
+
             return;
         }
 
@@ -35,6 +40,7 @@ class RunSeoAudit implements ShouldQueue
             $service = new SeoAuditService($customer);
             $audit = $service->audit($this->url);
 
+            WorkStatus::update($this->customerId, 'seo-audit', $this->workRunId, 'completed', 'Audit results are ready.');
             Log::info('RunSeoAudit: Complete', [
                 'customer_id' => $this->customerId,
                 'url' => $this->url,
@@ -47,6 +53,7 @@ class RunSeoAudit implements ShouldQueue
                 'url' => $this->url,
                 'error' => $e->getMessage(),
             ]);
+            throw $e;
         }
     }
 
@@ -55,6 +62,7 @@ class RunSeoAudit implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        WorkStatus::update($this->customerId, 'seo-audit', $this->workRunId, 'failed', 'This request could not finish. Retry using the same form.');
         Log::error('RunSeoAudit failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

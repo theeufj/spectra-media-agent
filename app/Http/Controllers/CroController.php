@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\RunCroAudit;
 use App\Models\LandingPageAudit;
+use App\Support\WorkStatus;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -12,7 +13,7 @@ class CroController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $customer = $user->customers()->find(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
 
         if (! $customer) {
             return redirect()->route('dashboard');
@@ -30,10 +31,11 @@ class CroController extends Controller
             ->orderByDesc('created_at')
             ->paginate(20);
 
-        $domain = parse_url($customer->website_url ?? '', PHP_URL_HOST);
+        $domain = parse_url($customer->website ?? '', PHP_URL_HOST);
 
         return Inertia::render('SEO/CroIndex', [
             'audits' => $audits,
+            'auditRun' => WorkStatus::get($customer->id, 'cro-audit'),
             'auditsUsed' => $auditsUsed,
             'maxAudits' => $maxAudits,
             'canRunAudit' => $canRunAudit,
@@ -43,7 +45,7 @@ class CroController extends Controller
 
     public function show(Request $request, LandingPageAudit $audit)
     {
-        $customer = $request->user()->customers()->find(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
 
         if (! $customer || $audit->customer_id !== $customer->id) {
             abort(403);
@@ -62,7 +64,7 @@ class CroController extends Controller
         ]);
 
         $user = $request->user();
-        $customer = $user->customers()->find(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
 
         if (! $customer) {
             return redirect()->route('dashboard');
@@ -76,7 +78,10 @@ class CroController extends Controller
             ]);
         }
 
-        RunCroAudit::dispatch($customer->id, $validated['url']);
+        $runId = WorkStatus::start($customer->id, 'cro-audit', ['url' => $validated['url']]);
+        if ($runId) {
+            RunCroAudit::dispatch($customer->id, $validated['url'], $runId);
+        }
 
         return redirect()->route('seo.cro')->with('success', 'CRO audit started! Results will appear below shortly.');
     }

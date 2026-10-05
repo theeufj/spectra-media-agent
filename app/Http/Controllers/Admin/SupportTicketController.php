@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\SupportTicket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class SupportTicketController extends Controller
@@ -88,7 +89,13 @@ class SupportTicketController extends Controller
             $validated['resolved_at'] = now();
         }
 
-        $supportTicket->update($validated);
+        DB::transaction(function () use ($supportTicket, $validated, $request) {
+            $ticket = SupportTicket::query()->lockForUpdate()->findOrFail($supportTicket->id);
+            if (! empty($validated['admin_response']) && $validated['admin_response'] !== $ticket->admin_response) {
+                $ticket->appendMessage('admin', $validated['admin_response'], ['name' => $request->user()->name]);
+            }
+            $ticket->update($validated);
+        });
 
         return back()->with('message', 'Ticket updated successfully.')->with('type', 'success');
     }

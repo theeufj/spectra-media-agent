@@ -114,4 +114,43 @@ describe('usePolling', () => {
         expect(getByTestId('error').textContent).toBe('');
         expect(getByTestId('data').textContent).toContain('ok');
     });
+
+    it('aborts a stalled request at its deadline and allows the next poll', async () => {
+        fetchJson.mockImplementationOnce(() => new Promise(() => {})).mockResolvedValue({ recovered: true });
+        const { getByTestId } = render(<Harness url="/status" options={{ interval: 1000, requestTimeout: 1500 }} />);
+        const signal = fetchJson.mock.calls[0][1].signal;
+        await act(() => vi.advanceTimersByTimeAsync(1500));
+        expect(signal.aborted).toBe(true);
+        expect(getByTestId('error').textContent).toBe('error');
+        await act(() => vi.advanceTimersByTimeAsync(500));
+        expect(getByTestId('data').textContent).toContain('recovered');
+    });
+
+    it('aborts old requests and ignores their response when the endpoint changes', async () => {
+        let release;
+        fetchJson.mockImplementationOnce(() => new Promise(resolve => { release = resolve; })).mockResolvedValue({ customer: 'new' });
+        const { getByTestId, rerender, unmount } = render(<Harness url="/old" />);
+        const signal = fetchJson.mock.calls[0][1].signal;
+        rerender(<Harness url="/new" />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        await act(async () => release({ customer: 'old' }));
+        expect(signal.aborted).toBe(true);
+        expect(getByTestId('data').textContent).toContain('new');
+        const latestSignal = fetchJson.mock.calls[1][1].signal;
+        unmount();
+        expect(latestSignal.aborted).toBe(true);
+    });
+
+    it('stops after consecutive failures and explicitly rearms for a recovery attempt', async () => {
+        fetchJson.mockRejectedValue(new Error('offline'));
+        const { getByTestId, rerender } = render(<Harness url="/status" options={{ interval: 1000, restartKey: 0 }} />);
+        await act(() => vi.advanceTimersByTimeAsync(20000));
+        expect(fetchJson).toHaveBeenCalledTimes(4);
+        expect(getByTestId('polling').textContent).toBe('no');
+        fetchJson.mockResolvedValue({ recovered: true });
+        rerender(<Harness url="/status" options={{ interval: 1000, restartKey: 1 }} />);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(getByTestId('data').textContent).toContain('recovered');
+        expect(getByTestId('polling').textContent).toBe('yes');
+    });
 });

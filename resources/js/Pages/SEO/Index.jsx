@@ -1,5 +1,7 @@
+import WorkStatusBanner from '@/Components/WorkStatusBanner';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router } from '@inertiajs/react';
+import { Head, useForm, router, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
@@ -29,17 +31,14 @@ function StatCard({ label, value, color }) {
     );
 }
 
-export default function Index({ latestAudit, audits = [], rankingSummary, topRankings = [], competitors = [], domain }) {
-    const [auditUrl, setAuditUrl] = useState(domain ? `https://${domain}` : '');
-    const [running, setRunning] = useState(false);
+export default function Index({ latestAudit, audits = [], rankingSummary, topRankings = [], competitors = [], domain, auditRun = null }) {
+    const form = useForm({ url: auditRun?.context?.url || (domain ? `https://${domain}` : '') });
+    const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(auditRun?.status));
+    const running = form.processing || workBusy;
 
     const handleRunAudit = (e) => {
         e.preventDefault();
-        setRunning(true);
-        router.post(route('seo.audit'), { url: auditUrl }, {
-            preserveScroll: true,
-            onFinish: () => setRunning(false),
-        });
+        form.post(route('seo.audit'), { preserveScroll: true });
     };
 
     return (
@@ -47,26 +46,27 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
             <Head title="SEO Tools" />
             <div className="py-8">
                 <div className="mx-auto max-w-6xl">
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">SEO Tools & Optimization</h1>
                             <p className="mt-1 text-sm text-gray-500">Audit your site, track rankings, and analyze backlinks.</p>
                         </div>
                         <div className="flex gap-2">
-                            <a href={route('seo.rankings')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Rankings</a>
-                            <a href={route('seo.backlinks')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Backlinks</a>
-                            <a href={route('seo.competitors')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Competitors</a>
+                            <Link href={route('seo.rankings')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Rankings</Link>
+                            <Link href={route('seo.backlinks')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Backlinks</Link>
+                            <Link href={route('seo.competitors')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Competitors</Link>
                         </div>
                     </div>
 
                     {/* Run Audit */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-3">Run SEO Audit</h2>
-                        <form onSubmit={handleRunAudit} className="flex gap-3">
-                            <input
+                        <FormErrorSummary errors={form.errors} labels={{ url: 'Website URL' }} className="mb-3" />
+                        <form onSubmit={handleRunAudit} className="flex flex-col gap-3 sm:flex-row">
+                            <input id="url" aria-label="Website URL"
                                 type="url"
-                                value={auditUrl}
-                                onChange={(e) => setAuditUrl(e.target.value)}
+                                value={form.data.url}
+                                onChange={(e) => form.setData('url', e.target.value)}
                                 placeholder="https://example.com"
                                 className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-brand-primary focus:border-brand-primary"
                                 required
@@ -81,6 +81,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                         </form>
                     </div>
 
+                    <WorkStatusBanner initialRun={auditRun} url={route('seo.work-status')} task="seo-audit" label="SEO audit" reloadOnly={['latestAudit', 'audits', 'auditRun']} onBusyChange={setWorkBusy} />
                     {/* Overview */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white rounded-lg border border-gray-200 p-6 flex justify-center">
@@ -115,7 +116,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Quick Wins</h2>
                                 {latestAudit?.id && (
-                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">View Full Audit</a>
+                                    <Link href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">View Full Audit</Link>
                                 )}
                             </div>
                             <div className="space-y-3">
@@ -143,7 +144,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Top Keywords Detected</h2>
                                 {latestAudit?.id && (
-                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">Full Analysis</a>
+                                    <Link href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">Full Analysis</Link>
                                 )}
                             </div>
                             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -171,7 +172,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Top Rankings</h2>
-                                <a href={route('seo.rankings')} className="text-sm text-brand-dark hover:underline">View All</a>
+                                <Link href={route('seo.rankings')} className="text-sm text-brand-dark hover:underline">View All</Link>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
@@ -206,7 +207,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             <h2 className="text-lg font-semibold text-gray-900 mb-3">Audit History</h2>
                             <div className="space-y-2">
                                 {audits.map((audit) => (
-                                    <a key={audit.id} href={route('seo.audit.detail', audit.id)} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 border border-gray-100">
+                                    <Link key={audit.id} href={route('seo.audit.detail', audit.id)} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 border border-gray-100">
                                         <div>
                                             <p className="text-sm font-medium text-gray-900">{audit.url}</p>
                                             <p className="text-xs text-gray-500">{new Date(audit.created_at).toLocaleDateString()}</p>
@@ -214,7 +215,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                         <span className={`text-lg font-bold ${audit.score >= 80 ? 'text-green-600' : audit.score >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
                                             {audit.score}
                                         </span>
-                                    </a>
+                                    </Link>
                                 ))}
                             </div>
                         </div>

@@ -2,347 +2,414 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\CrawlSitemap;
+use App\Jobs\CrawlPage;
+use App\Jobs\DiscoverKnowledgeSources;
+use App\Jobs\ExtractBrandGuidelines;
+use App\Jobs\IndexKnowledgeBase;
 use App\Jobs\ProcessKnowledgeBaseFile;
 use App\Models\KnowledgeBase;
-use App\Services\GeminiService;
+use App\Models\KnowledgeImport;
+use App\Rules\SafePublicUrl;
+use App\Services\KnowledgeBase\KnowledgeBaseIndexer;
+use App\Services\KnowledgeBase\KnowledgeHealth;
+use App\Services\KnowledgeBaseSearchService;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class KnowledgeBaseController extends Controller
 {
-    /**
-     * Display a listing of all knowledge base entries for the authenticated user.
-     *
-     * @return \Inertia\Response
-     */
-    public function index()
+    public function index(Request $request, KnowledgeHealth $health)
     {
-        $user = Auth::user();
-        $knowledgeBases = $user->knowledgeBases()
-            ->paginate(10);
+        $customer = $this->getActiveCustomer($request);
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
+        $knowledgeHealth = $health->forCustomer($customer->id);
+        $filters = $request->validate(['q' => 'nullable|string|max:255', 'status' => 'nullable|string|in:ready,pending,needs_attention,failed,excluded']);
+        $sources = KnowledgeBase::where('customer_id', $customer->id);
+        if ($filters['q'] ?? null) {
+            $like = '%'.addcslashes($filters['q'], '%_\\').'%';
+            $sources->where(fn ($query) => $query->where('title', 'ilike', $like)->orWhere('url', 'ilike', $like)->orWhere('original_filename', 'ilike', $like));
+        }
+        if (($filters['status'] ?? '') === 'excluded') {
+            $sources->whereNotNull('excluded_at');
+        } elseif ($filters['status'] ?? null) {
+            $sources->whereNull('excluded_at');
+            ($filters['status'] === 'pending') ? $sources->whereIn('processing_status', ['queued', 'reading', 'indexing']) : $sources->where('processing_status', $filters['status']);
+        }
 
         return Inertia::render('KnowledgeBase/Index', [
-            'knowledgeBases' => $knowledgeBases,
+            'knowledgeBases' => $sources->latest('updated_at')->select([
+                'id', 'title', 'url', 'source_type', 'original_filename', 'processing_status', 'processing_error',
+                'excluded_at', 'fetched_at', 'indexed_at', 'source_version', 'created_at', 'updated_at',
+            ])->selectRaw('left(content, 180) as preview')->paginate(15)->withQueryString(),
+            'customer' => $customer->only('id', 'name', 'website'), 'health' => $knowledgeHealth,
+            'imports' => $this->imports($customer->id), 'filters' => $filters,
+            'sourceLimit' => $this->sourceLimit($customer),
+            'brandProfile' => $customer->brandGuideline()->first(),
         ]);
     }
 
-    /**
-     * create is the handler for showing the sitemap submission form.
-     *
-     * @return \Inertia\Response
-     */
-    public function create()
+    public function create(Request $request)
     {
-        // Render the React component we created earlier.
-        return Inertia::render('KnowledgeBase/Create');
-    }
-
-    /**
-     * store is the handler for processing the sitemap submission or file upload.
-     * It validates the request and dispatches the appropriate background job.
-     *
-     * @param  Request  $request  The incoming HTTP request.
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function store(Request $request)
-    {
-        $user = Auth::user();
-
-        // Check limits for free users
-        if (! $user->subscribed('default') && $user->subscription_status !== 'active') {
-            // Limit to 3 Knowledge Base entries (URLs/Files)
-            $count = $user->knowledgeBases()->count();
-            if ($count >= 3) {
-                return redirect()->back()->with('error', 'Free tier limit reached (3 URLs/Files). Please upgrade to add more sources.');
-            }
+        $customer = $this->getActiveCustomer($request);
+        if (! $customer) {
+            return redirect()->route('quick-start');
         }
 
-        // Check if a file is being uploaded
-        if ($request->hasFile('document')) {
-            return $this->handleFileUpload($request, $user);
-        }
-
-        // Otherwise, handle sitemap URL submission
-        $validated = $request->validate([
-            'sitemap_url' => ['required', 'url', new \App\Rules\SafePublicUrl],
-        ]);
-
-        $customerId = session('active_customer_id');
-        CrawlSitemap::dispatch($user, $validated['sitemap_url'], $customerId);
-
-        return redirect()->back()->with('success', 'Crawl started! We\'re scanning your sitemap now. This may take a few minutes depending on the number of pages.');
+        return Inertia::render('KnowledgeBase/Create', ['customer' => $customer->only('id', 'name', 'website'), 'sourceLimit' => $this->sourceLimit($customer), 'sourceCount' => KnowledgeBase::where('customer_id', $customer->id)->whereNull('excluded_at')->count()]);
     }
 
-    /**
-     * Handle file uploads (PDF or Text documents).
-     */
-    private function handleFileUpload(Request $request, $user)
+    public function store(Request $request, KnowledgeBaseIndexer $indexer)
     {
-        $request->validate([
-            'document' => 'required|file|mimes:pdf,txt|max:10240', // Max 10MB
-        ]);
-
-        $file = $request->file('document');
-        $originalName = $file->getClientOriginalName();
-        $extension = $file->getClientOriginalExtension();
-        $sourceType = $extension === 'pdf' ? 'pdf' : 'text';
-
-        // Generate a unique filename to avoid conflicts
-        $filename = uniqid('kb_', true).'.'.$extension;
-        $s3Path = "knowledge-base/{$user->id}/{$filename}";
-
-        try {
-            \Log::info('Starting file upload', [
-                'user_id' => $user->id,
-                'original_name' => $originalName,
-                'source_type' => $sourceType,
-                's3_path' => $s3Path,
-                'file_size' => $file->getSize(),
-                'file_mime' => $file->getMimeType(),
-            ]);
-
-            // Verify S3 config
-            $s3Config = config('filesystems.disks.s3');
-            \Log::info('S3 Configuration', [
-                'driver' => $s3Config['driver'] ?? null,
-                'key' => substr($s3Config['key'] ?? '', 0, 10).'***',
-                'secret' => substr($s3Config['secret'] ?? '', 0, 10).'***',
-                'key_exists' => ! empty($s3Config['key']),
-                'secret_exists' => ! empty($s3Config['secret']),
-                'bucket' => $s3Config['bucket'] ?? null,
-                'region' => $s3Config['region'] ?? null,
-                'url' => $s3Config['url'] ?? null,
-                'endpoint' => $s3Config['endpoint'] ?? null,
-            ]);
-
-            // Try uploading file with error capture
+        $customer = $this->getActiveCustomer($request);
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
+        $this->authorize('create', KnowledgeBase::class);
+        $mode = $request->input('mode', $request->hasFile('document') ? 'document' : 'website');
+        if ($mode === 'website') {
+            $this->checkLimit($customer, 1);
+            $data = $request->validate(['website_url' => ['required_without:sitemap_url', 'nullable', 'url', new SafePublicUrl], 'sitemap_url' => ['required_without:website_url', 'nullable', 'url', new SafePublicUrl]]);
+            $import = KnowledgeImport::create(['customer_id' => $customer->id, 'user_id' => $request->user()->id, 'website_url' => $data['website_url'] ?? $data['sitemap_url']]);
             try {
-                $fileContents = file_get_contents($file->getRealPath());
-                [$s3Path, $cloudFrontUrl] = StorageHelper::put($s3Path, $fileContents, $file->getMimeType());
+                Bus::dispatch(new DiscoverKnowledgeSources($import));
+            } catch (\Throwable $e) {
+                report($e);
+                $import->update(['status' => 'failed', 'error' => 'Page discovery could not start. Your address is saved. Try again, add an individual page, or write a business note.']);
 
-                \Log::info('File upload result', [
-                    'user_id' => $user->id,
-                    'path' => $s3Path,
-                    'url' => $cloudFrontUrl,
-                ]);
-            } catch (\Throwable $uploadError) {
-                \Log::error('S3 upload exception: '.$uploadError->getMessage(), [
-                    'user_id' => $user->id,
-                    's3_path' => $s3Path,
-                    'exception' => get_class($uploadError),
-                    'code' => $uploadError->getCode(),
-                    'message' => $uploadError->getMessage(),
-                    'file' => $uploadError->getFile(),
-                    'line' => $uploadError->getLine(),
-                ]);
-
-                return redirect()->back()->withErrors(['document' => 'Upload Error: '.$uploadError->getMessage()]);
+                return redirect()->route('knowledge-base.index')->with('flash', ['type' => 'error', 'message' => $import->error]);
             }
 
-            \Log::info('File URL constructed', [
-                'user_id' => $user->id,
-                'url' => $cloudFrontUrl,
-            ]);
-
-            // Create knowledge base entry
-            $knowledgeBase = KnowledgeBase::create([
-                'user_id' => $user->id,
-                // Every other read of this table filters on customer_id
-                // (BrandGuidelineController, SetupProgressController,
-                // CampaignController, CustomerPageController), so an upload that
-                // did not stamp one produced a row nothing could ever find.
-                'customer_id' => $this->getActiveCustomer($request)?->id,
-                'url' => $cloudFrontUrl, // Store CloudFront URL
-                'file_path' => $s3Path,
-                'source_type' => $sourceType,
-                'original_filename' => $originalName,
-                'content' => '', // Will be filled by the job
-            ]);
-
-            \Log::info('Knowledge base entry created', [
-                'user_id' => $user->id,
-                'kb_id' => $knowledgeBase->id,
-                'url' => $knowledgeBase->url,
-            ]);
-
-            // Dispatch job to extract content from file
-            ProcessKnowledgeBaseFile::dispatch($knowledgeBase);
-
-            \Log::info('File processing job dispatched', [
-                'user_id' => $user->id,
-                'kb_id' => $knowledgeBase->id,
-            ]);
-
-            return redirect()->route('dashboard')->with('success', 'File uploaded! We are processing your document and will extract the content shortly.');
-        } catch (\Throwable $e) {
-            report($e);
-            \Illuminate\Support\Facades\Log::error('File upload error: '.$e->getMessage());
-
-            return redirect()->back()->withErrors(['document' => 'Failed to upload file. Please try again.']);
+            return redirect()->route('knowledge-base.index')->with('success', 'Finding public pages. You can choose which ones to include before we read them.');
         }
+        if ($mode === 'page') {
+            $data = $request->validate(['page_url' => ['required', 'url', new SafePublicUrl]]);
+            $source = $this->addSource($customer, ['url' => $data['page_url']], ['user_id' => $request->user()->id, 'source_type' => 'url', 'content' => '']);
+            $source->update(['excluded_at' => null, 'processing_status' => 'queued']);
+            $queued = $this->queueSource($source, fn () => Bus::dispatch(new CrawlPage($request->user(), $source->url, $customer->id)));
+        } elseif ($mode === 'note') {
+            $data = $request->validate(['title' => 'required|string|max:255', 'content' => 'required|string|max:100000']);
+            $source = $this->addSource($customer, ['url' => 'note:'.\Illuminate\Support\Str::uuid()], ['user_id' => $request->user()->id, 'source_type' => 'text', 'title' => $data['title'], 'content' => '']);
+            $source = $indexer->prepare($source, $data['content']);
+            $queued = $this->queueSource($source, fn () => Bus::dispatch(new IndexKnowledgeBase($source, $source->source_version)));
+            ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true);
+        } elseif ($mode === 'document') {
+            $request->validate(['document' => 'required|file|mimes:pdf,txt|max:10240']);
+            $this->checkLimit($customer, 1);
+            $file = $request->file('document');
+            if (! $file instanceof \Illuminate\Http\UploadedFile) {
+                throw ValidationException::withMessages(['document' => 'Choose a PDF or text file.']);
+            }
+            [$path, $url] = $this->storeDocument($file, $customer->id);
+            try {
+                $source = $this->addSource($customer, ['url' => $url], ['user_id' => $request->user()->id,
+                    'file_path' => $path, 'source_type' => $file->getMimeType() === 'application/pdf' ? 'pdf' : 'text',
+                    'title' => mb_substr($file->getClientOriginalName(), 0, 255), 'original_filename' => mb_substr($file->getClientOriginalName(), 0, 255), 'content' => '']);
+            } catch (\Throwable $e) {
+                $this->deleteDocument($path);
+                throw $e;
+            }
+            $queued = $this->queueSource($source, fn () => Bus::dispatch(new ProcessKnowledgeBaseFile($source)));
+        } else {
+            throw ValidationException::withMessages(['mode' => 'Choose a website, page, document, or note.']);
+        }
+
+        return redirect()->route('knowledge-base.show', $source)->with('flash', ['type' => $queued ? 'success' : 'error', 'message' => $queued ? 'Source added. Its reading and preparation status will update here. Existing ads keep their approved content.' : 'Your source is saved, but processing could not start. Retry from source details.']);
     }
 
-    /**
-     * Delete a knowledge base entry and remove the associated file from S3.
-     *
-     * @param  KnowledgeBase  $knowledgeBase  The knowledge base entry to delete.
-     * @return \Illuminate\Http\RedirectResponse
-     */
+    public function show(Request $request, KnowledgeBase $knowledgeBase, KnowledgeHealth $health)
+    {
+        $this->authorize('view', $knowledgeBase);
+        if ($knowledgeBase->customer_id) {
+            $health->reconcile($knowledgeBase->customer_id);
+            $knowledgeBase->refresh();
+        }
+        $version = (int) $request->input('version', $knowledgeBase->source_version);
+        abort_unless($version >= 1 && $version <= $knowledgeBase->source_version, 404);
+        $passages = $knowledgeBase->chunks()->where('source_version', $version)->orderBy('position')->get(['position', 'content', 'embedding_model']);
+        $retrievals = DB::table('knowledge_retrievals')->where('knowledge_base_id', $knowledgeBase->id)->where('customer_id', $knowledgeBase->customer_id)->latest('retrieved_at')->limit(20)->get();
+
+        return Inertia::render('KnowledgeBase/Show', [
+            'source' => $knowledgeBase, 'customer' => $knowledgeBase->customer?->only('id', 'name'),
+            'version' => $version, 'versions' => $knowledgeBase->chunks()->distinct()->orderByDesc('source_version')->pluck('source_version'),
+            'passages' => $passages, 'retrievals' => $retrievals,
+            'editableNote' => $knowledgeBase->source_type === 'text' && ! $knowledgeBase->file_path,
+            'fileRevision' => hash('sha256', $knowledgeBase->file_path ?? ''),
+        ]);
+    }
+
+    public function update(Request $request, KnowledgeBase $knowledgeBase, KnowledgeBaseIndexer $indexer)
+    {
+        $this->authorize('update', $knowledgeBase);
+        $data = $request->validate(['title' => 'sometimes|required|string|max:255', 'included' => 'sometimes|boolean', 'content' => 'sometimes|required|string|max:100000', 'source_version' => 'required|integer']);
+        DB::transaction(function () use ($data, $knowledgeBase, $indexer) {
+            \App\Models\Customer::whereKey($knowledgeBase->customer_id)->lockForUpdate()->firstOrFail();
+            $source = KnowledgeBase::whereKey($knowledgeBase->id)->lockForUpdate()->firstOrFail();
+            if ($source->source_version !== (int) $data['source_version']) {
+                throw ValidationException::withMessages(['content' => 'This source changed while you were editing. Reload and review its latest version.']);
+            }
+            if (array_key_exists('content', $data)) {
+                abort_unless($source->source_type === 'text' && ! $source->file_path, 422);
+                $source = $indexer->prepare($source, $data['content'], $data['title'] ?? null);
+                IndexKnowledgeBase::dispatch($source, $source->source_version)->afterCommit();
+            }
+            if (($data['included'] ?? false) && $source->excluded_at) {
+                $this->checkLimit(\App\Models\Customer::findOrFail($source->customer_id), 1);
+            }
+            $source->update([
+                'title' => $data['title'] ?? $source->title,
+                'excluded_at' => array_key_exists('included', $data) ? ($data['included'] ? null : now()) : $source->excluded_at,
+            ]);
+            if (array_key_exists('included', $data) && $data['included'] && $source->processing_status !== 'ready') {
+                $source->update(['processing_status' => 'indexing', 'processing_error' => null]);
+                IndexKnowledgeBase::dispatch($source, $source->source_version)->afterCommit();
+            }
+        });
+        if ($knowledgeBase->customer) {
+            ExtractBrandGuidelines::dispatch($knowledgeBase->customer, force: true, sourceRefresh: true);
+        }
+
+        return back()->with('success', 'Source updated. Review the proposed business-profile changes before approving them.');
+    }
+
+    public function retry(Request $request, KnowledgeBase $knowledgeBase)
+    {
+        $this->authorize('update', $knowledgeBase);
+        $knowledgeBase = DB::transaction(function () use ($knowledgeBase, $request) {
+            $source = KnowledgeBase::whereKey($knowledgeBase->id)->lockForUpdate()->firstOrFail();
+            if ($source->excluded_at) {
+                throw ValidationException::withMessages(['source' => 'Include this source before refreshing it.']);
+            }
+            $indexOnly = $request->boolean('index_only') || (! $source->file_path && $source->source_type === 'text');
+            $source->update(['processing_status' => $indexOnly ? 'indexing' : 'queued', 'processing_error' => null]);
+
+            return $source;
+        });
+        if ($request->boolean('index_only') || (! $knowledgeBase->file_path && $knowledgeBase->source_type === 'text')) {
+            $queued = $this->queueSource($knowledgeBase, fn () => Bus::dispatch(new IndexKnowledgeBase($knowledgeBase, $knowledgeBase->source_version)));
+        } elseif ($knowledgeBase->file_path) {
+            $queued = $this->queueSource($knowledgeBase, fn () => Bus::dispatch(new ProcessKnowledgeBaseFile($knowledgeBase)));
+        } else {
+            $queued = $this->queueSource($knowledgeBase, fn () => Bus::dispatch(new CrawlPage($request->user(), $knowledgeBase->url, $knowledgeBase->customer_id)));
+        }
+
+        return back()->with('flash', ['type' => $queued ? 'success' : 'error', 'message' => $queued ? 'Refresh queued. Previous versions remain available in the source history.' : 'Processing could not start. Your source is saved; retry from source details.']);
+    }
+
+    public function replace(Request $request, KnowledgeBase $knowledgeBase)
+    {
+        $this->authorize('update', $knowledgeBase);
+        $data = $request->validate(['document' => 'required|file|mimes:pdf,txt|max:10240', 'source_version' => 'required|integer', 'file_revision' => 'required|string|size:64'], ['file_revision.required' => 'Reload this source before replacing its file.']);
+        abort_unless($knowledgeBase->file_path !== null && $knowledgeBase->source_type !== 'url', 422, 'Only an uploaded document can be replaced.');
+        $file = $request->file('document');
+        if (! $file instanceof \Illuminate\Http\UploadedFile) {
+            throw ValidationException::withMessages(['document' => 'Choose a PDF or text file.']);
+        }
+        [$path, $url] = $this->storeDocument($file, $knowledgeBase->customer_id);
+        try {
+            [$source, $oldPath] = DB::transaction(function () use ($knowledgeBase, $data, $file, $path, $url) {
+                $source = KnowledgeBase::whereKey($knowledgeBase->id)->lockForUpdate()->firstOrFail();
+                if ($source->source_version !== (int) $data['source_version'] || ! hash_equals(hash('sha256', $source->file_path ?? ''), $data['file_revision'])) {
+                    throw ValidationException::withMessages(['document' => 'This source changed. Review its current version before replacing it.']);
+                }
+                $oldPath = $source->file_path;
+                $source->update(['file_path' => $path, 'url' => $url, 'original_filename' => mb_substr($file->getClientOriginalName(), 0, 255),
+                    'source_type' => $file->getMimeType() === 'application/pdf' ? 'pdf' : 'text', 'processing_status' => 'queued', 'processing_error' => null]);
+
+                return [$source, $oldPath];
+            });
+        } catch (\Throwable $e) {
+            $this->deleteDocument($path);
+            throw $e;
+        }
+        $queued = $this->queueSource($source, fn () => Bus::dispatch(new ProcessKnowledgeBaseFile($source)));
+        if ($oldPath) {
+            $this->deleteDocument($oldPath);
+        }
+
+        return back()->with('flash', ['type' => $queued ? 'success' : 'error', 'message' => $queued ? 'Replacement uploaded. Previous readable passages remain available while the new file is read.' : 'Your replacement is saved, but reading could not start. Previous readable passages remain available; retry from source details.']);
+    }
+
     public function destroy(KnowledgeBase $knowledgeBase)
     {
-        $user = Auth::user();
-
-        // Ensure the user can only delete their own knowledge base entries
-        if ($knowledgeBase->user_id !== $user->id) {
-            abort(403, 'Unauthorized action.');
+        $this->authorize('delete', $knowledgeBase);
+        if ($knowledgeBase->file_path) {
+            StorageHelper::delete($knowledgeBase->file_path);
+        }
+        $customer = $knowledgeBase->customer;
+        $knowledgeBase->delete();
+        if ($customer) {
+            ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true);
         }
 
-        try {
-            // Delete file from S3 if it exists
-            if ($knowledgeBase->file_path) {
-                StorageHelper::delete($knowledgeBase->file_path);
+        return redirect()->route('knowledge-base.index')->with('success', 'Source deleted. Review any resulting business-profile changes. Existing ads are unchanged.');
+    }
 
-                \Log::info('File deleted from storage', [
-                    'user_id' => $user->id,
-                    'kb_id' => $knowledgeBase->id,
-                    'path' => $knowledgeBase->file_path,
+    public function search(Request $request, KnowledgeBaseSearchService $search)
+    {
+        $data = $request->validate(['query' => 'required|string|max:1000']);
+        $customer = $this->getActiveCustomer($request);
+        abort_unless($customer !== null, 404);
+
+        return response()->json(['results' => $search->passages($customer->id, $data['query']), 'customer_id' => $customer->id]);
+    }
+
+    public function status(Request $request, KnowledgeHealth $health)
+    {
+        $customer = $this->getActiveCustomer($request);
+        abort_unless($customer !== null, 404);
+
+        return response()->json(['health' => $health->forCustomer($customer->id), 'imports' => $this->imports($customer->id)]);
+    }
+
+    public function startImport(Request $request, KnowledgeImport $knowledgeImport)
+    {
+        $this->authorize('update', $knowledgeImport);
+        $data = $request->validate(['urls' => 'required|array|min:1|max:100', 'urls.*' => 'required|string']);
+        $urls = array_values(array_unique($data['urls']));
+        $jobs = DB::transaction(function () use ($knowledgeImport, $request, $urls) {
+            $import = KnowledgeImport::whereKey($knowledgeImport->id)->lockForUpdate()->firstOrFail();
+            if ($import->status !== 'review') {
+                throw ValidationException::withMessages(['urls' => 'This import has already started. Refresh to see its source statuses.']);
+            }
+            $allowed = array_column($import->candidates ?? [], 'url');
+            if (array_diff($urls, $allowed)) {
+                throw ValidationException::withMessages(['urls' => 'Choose pages from this import preview.']);
+            }
+            $customer = \App\Models\Customer::whereKey($import->customer_id)->lockForUpdate()->firstOrFail();
+            $newCount = count($urls) - KnowledgeBase::where('customer_id', $customer->id)->whereNull('excluded_at')->whereIn('url', $urls)->count();
+            $this->checkLimit($customer, $newCount);
+            $jobs = [];
+            foreach ($urls as $url) {
+                $source = KnowledgeBase::firstOrCreate(['customer_id' => $customer->id, 'url' => $url], ['user_id' => $request->user()->id, 'source_type' => 'url', 'content' => '']);
+                $source->update(['excluded_at' => null, 'processing_status' => 'queued', 'processing_error' => null]);
+                $jobs[] = new CrawlPage($request->user(), $url, $customer->id);
+            }
+            $import->update(['status' => 'processing', 'selected_urls' => $urls]);
+
+            return $jobs;
+        });
+        $customer = \App\Models\Customer::findOrFail($knowledgeImport->customer_id);
+        try {
+            \Illuminate\Support\Facades\Bus::batch($jobs)->name('Knowledge import '.$knowledgeImport->id)
+                ->allowFailures()->finally(function () use ($customer) {
+                    ExtractBrandGuidelines::dispatch($customer, force: true, sourceRefresh: true);
+                })->dispatch();
+        } catch (\Throwable $e) {
+            report($e);
+            $knowledgeImport->update(['status' => 'failed', 'error' => 'Selected pages were saved, but reading could not start. Retry the affected sources below.']);
+            KnowledgeBase::where('customer_id', $customer->id)->whereIn('url', $urls)->where('processing_status', 'queued')
+                ->update(['processing_status' => 'failed', 'processing_error' => 'Reading could not start. Retry from source details.']);
+
+            return back()->withErrors(['urls' => 'Reading could not start. Selected pages are retained; retry from source details.']);
+        }
+        Cache::forget('crawl:budget:'.$customer->id);
+
+        return back()->with('success', 'Reading selected pages. Excluded pages will not be used for AI retrieval.');
+    }
+
+    private function imports(int $customerId)
+    {
+        $imports = KnowledgeImport::where('customer_id', $customerId)->latest()->limit(5)->get();
+        foreach ($imports as $import) {
+            if ($import->status === 'processing') {
+                $sources = KnowledgeBase::where('customer_id', $customerId)->whereIn('url', $import->selected_urls ?? [])->get(['processing_status', 'excluded_at']);
+                if ($sources->isEmpty() || $sources->every(fn ($source) => $source->excluded_at || in_array($source->processing_status, ['ready', 'failed', 'needs_attention'], true))) {
+                    $import->update(['status' => $sources->every(fn ($source) => $source->processing_status === 'failed') ? 'failed' : 'completed']);
+                }
+            }
+        }
+
+        return $imports;
+    }
+
+    private function addSource(\App\Models\Customer $customer, array $key, array $values): KnowledgeBase
+    {
+        return DB::transaction(function () use ($customer, $key, $values) {
+            \App\Models\Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
+            $source = KnowledgeBase::where('customer_id', $customer->id)->where($key)->first();
+            if (! $source || $source->excluded_at) {
+                $this->checkLimit($customer, 1);
+            }
+            $source ??= KnowledgeBase::create(['customer_id' => $customer->id, ...$key, ...$values]);
+            if ($source->excluded_at) {
+                $source->update(['excluded_at' => null]);
+            }
+
+            return $source->refresh();
+        });
+    }
+
+    private function sourceLimit(\App\Models\Customer $customer): ?int
+    {
+        return $customer->isOnPaidPlan() ? null : 3;
+    }
+
+    private function storeDocument(\Illuminate\Http\UploadedFile $file, int $customerId): array
+    {
+        // MIME validation permits plain text under any client filename. Never
+        // copy an executable client extension into the public storage path.
+        $extension = $file->getMimeType() === 'application/pdf' ? 'pdf' : 'txt';
+        $path = 'knowledge-base/'.$customerId.'/'.\Illuminate\Support\Str::uuid().'.'.$extension;
+        try {
+            $contents = file_get_contents($file->getRealPath());
+            if ($contents === false) {
+                throw new \RuntimeException('Uploaded document could not be read.');
+            }
+            $stored = StorageHelper::put($path, $contents, $file->getMimeType());
+            if (! StorageHelper::exists($path)) {
+                throw new \RuntimeException('Uploaded document was not saved to storage.');
+            }
+
+            return $stored;
+        } catch (\Throwable $e) {
+            report($e);
+            $this->deleteDocument($path);
+            throw ValidationException::withMessages(['document' => 'The file could not be saved. Your existing sources are unchanged. Try uploading again.']);
+        }
+    }
+
+    private function deleteDocument(string $path): void
+    {
+        try {
+            StorageHelper::delete($path, true);
+            if (StorageHelper::exists($path)) {
+                throw new \RuntimeException('Document cleanup did not finish.');
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function queueSource(KnowledgeBase $source, \Closure $dispatch): bool
+    {
+        try {
+            $dispatch();
+
+            return true;
+        } catch (\Throwable $e) {
+            report($e);
+            KnowledgeBase::whereKey($source->id)->where('source_version', $source->source_version)
+                ->where('file_path', $source->file_path)->whereNull('excluded_at')->update([
+                    'processing_status' => 'failed',
+                    'processing_error' => 'Processing could not start. Your source and any readable text are saved. Retry from source details.',
                 ]);
-            }
 
-            // Delete the database record
-            $knowledgeBase->delete();
-
-            \Log::info('Knowledge base entry deleted', [
-                'user_id' => $user->id,
-                'kb_id' => $knowledgeBase->id,
-            ]);
-
-            return redirect()->route('knowledge-base.index')->with('success', 'Knowledge base entry deleted successfully.');
-        } catch (\Throwable $e) {
-            report($e);
-            \Log::error('Failed to delete knowledge base entry: '.$e->getMessage());
-
-            return redirect()->back()->withErrors(['error' => 'Failed to delete knowledge base entry.']);
+            return false;
         }
     }
 
-    /**
-     * Search through the user's knowledge base content.
-     * Uses simple text matching to find relevant chunks.
-     *
-     * @param  Request  $request  The incoming HTTP request with 'query' parameter.
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function search(Request $request)
+    private function checkLimit(\App\Models\Customer $customer, int $additional): void
     {
-        $user = Auth::user();
-        $query = $request->input('query', '');
-
-        if (empty($query)) {
-            return response()->json(['results' => []]);
+        $limit = $this->sourceLimit($customer);
+        if ($limit && KnowledgeBase::where('customer_id', $customer->id)->whereNull('excluded_at')->count() + $additional > $limit) {
+            throw ValidationException::withMessages(['sources' => 'Your plan includes 3 active sources. Exclude a source or upgrade before adding more.']);
         }
-
-        try {
-            // Initialize Gemini Service
-            $geminiService = new GeminiService;
-
-            // Step 1: Generate embedding for the search query
-            $queryEmbedding = $geminiService->embedContent(config('ai.models.embedding'), $query);
-
-            if (is_null($queryEmbedding)) {
-                Log::error('Failed to get embedding for search query: Query embedding was null.');
-
-                return response()->json(['error' => 'Failed to process query'], 500);
-            }
-
-            // Step 2: Retrieve KnowledgeBase entries with content and embeddings
-            $knowledgeBases = $user->knowledgeBases()
-                ->where('content', '!=', '')
-                ->whereNotNull('embedding')
-                ->get();
-
-            $results = [];
-
-            // Step 3: Iterate through chunks and embeddings to find relevant ones
-            foreach ($knowledgeBases as $kb) {
-                $chunks = json_decode($kb->content, true);
-                $embeddings = $kb->embedding->toArray();
-
-                if (! is_array($chunks) || ! is_array($embeddings) || count($chunks) !== count($embeddings)) {
-                    Log::warning("KnowledgeBase ID {$kb->id} has malformed chunks or embeddings.");
-
-                    continue;
-                }
-
-                foreach ($chunks as $index => $chunk) {
-                    $chunkEmbedding = $embeddings[$index];
-
-                    // Calculate cosine similarity
-                    $similarity = $this->cosineSimilarity($queryEmbedding, $chunkEmbedding);
-
-                    if ($similarity > 0.7) { // Threshold for relevance (adjust as needed)
-                        $results[] = [
-                            'chunk' => trim($chunk),
-                            'source_name' => $kb->original_filename ?: ($kb->url ?? 'Unknown Source'),
-                            'similarity' => min($similarity, 1.0),
-                            'kb_id' => $kb->id,
-                        ];
-                    }
-                }
-            }
-
-            // Sort by similarity score (highest first)
-            usort($results, function ($a, $b) {
-                return $b['similarity'] <=> $a['similarity'];
-            });
-
-            // Return top 10 results
-            $results = array_slice($results, 0, 10);
-
-            Log::info('Knowledge base semantic search executed', [
-                'user_id' => $user->id,
-                'query' => $query,
-                'results_count' => count($results),
-            ]);
-
-            return response()->json(['results' => $results]);
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('Knowledge base semantic search error: '.$e->getMessage(), [
-                'exception' => $e,
-            ]);
-
-            return response()->json(['error' => 'Search failed'], 500);
-        }
-    }
-
-    /**
-     * Calculate cosine similarity between two vectors.
-     */
-    private function cosineSimilarity(array $vectorA, array $vectorB): float
-    {
-        $dotProduct = 0.0;
-        $magnitudeA = 0.0;
-        $magnitudeB = 0.0;
-
-        $size = count($vectorA);
-        for ($i = 0; $i < $size; $i++) {
-            $dotProduct += $vectorA[$i] * $vectorB[$i];
-            $magnitudeA += $vectorA[$i] * $vectorA[$i];
-            $magnitudeB += $vectorB[$i] * $vectorB[$i];
-        }
-
-        $magnitudeA = sqrt($magnitudeA);
-        $magnitudeB = sqrt($magnitudeB);
-
-        if ($magnitudeA == 0 || $magnitudeB == 0) {
-            return 0.0; // Avoid division by zero
-        }
-
-        return $dotProduct / ($magnitudeA * $magnitudeB);
     }
 }

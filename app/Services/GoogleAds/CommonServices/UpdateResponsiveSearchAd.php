@@ -69,8 +69,10 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
     ): bool {
         $this->ensureClient();
 
-        $headlines = array_values(array_unique($headlines));
-        $descriptions = array_values(array_unique($descriptions));
+        $copy = \App\Services\GoogleAds\GoogleAdStrengthRepair::copy($headlines, $descriptions);
+        if ($copy['headlines'] !== $headlines || $copy['descriptions'] !== $descriptions) {
+            throw new \InvalidArgumentException('RSA replacement must already contain the exact normalized, reviewed assets.');
+        }
 
         return $this->sendUpdate($customerId, $adGroupAdResourceName, $headlines, $descriptions);
     }
@@ -81,6 +83,10 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
         array $headlines,
         array $descriptions
     ): bool {
+        \App\Services\GoogleAds\GoogleAdStrengthRepair::copy($headlines, $descriptions);
+        if (! preg_match('#^customers/'.preg_quote($customerId, '#').'/adGroupAds/\d+~\d+$#', $adGroupAdResourceName)) {
+            throw new \InvalidArgumentException('Invalid RSA resource or account scope.');
+        }
         // Extract Ad ID from adGroupAd resource name: "customers/X/adGroupAds/AGID~ADID"
         preg_match('/~(\d+)$/', $adGroupAdResourceName, $m);
         $adId = $m[1] ?? null;
@@ -95,11 +101,11 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
             'resource_name' => $adResourceName,
             'responsive_search_ad' => new ResponsiveSearchAdInfo([
                 'headlines' => array_map(
-                    fn ($t) => new AdTextAsset(['text' => substr($t, 0, 30)]),
+                    fn ($t) => new AdTextAsset(['text' => $t]),
                     $headlines
                 ),
                 'descriptions' => array_map(
-                    fn ($t) => new AdTextAsset(['text' => substr($t, 0, 90)]),
+                    fn ($t) => new AdTextAsset(['text' => $t]),
                     $descriptions
                 ),
             ]),

@@ -2,93 +2,56 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Agents\AgentIssue;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
-use Google\Protobuf\FieldMask;
 
 /**
- * Conversion-goal hygiene check for the self-healing loop.
- *
- * Google auto-creates catch-all conversion actions ("Default Purchase Conversion",
- * etc.) and marks them primary. On a lead-gen account those never fire, so PMax
- * optimizes toward a goal that gets no data — which surfaces as "Conversions:
- * detected issues" in the UI. This demotes those stray defaults from primary,
- * with a guard so a real primary goal always remains.
+ * Read-only account conversion inventory. A name or an account-wide primary flag
+ * cannot establish a campaign's intent. Repairs belong to ReconcileCampaignConversionGoals.
  */
 class VerifyConversionGoals extends BaseGoogleAdsService
 {
     /**
-     * @return array{actions: string[], warnings: string[]}
+     * @deprecated Use audit() for inventory, or campaign-specific reconciliation for repairs.
+     *
+     * @return array{status:string,scope:string,actions:array,warnings:list<AgentIssue>,primary_actions:array}
      */
     public function verifyAndHeal(): array
     {
-        $actions = [];
-        $warnings = [];
-        $customerId = $this->customer->google_ads_customer_id;
-        if (! $customerId) {
-            return ['actions' => $actions, 'warnings' => $warnings];
-        }
-
-        try {
-            $this->ensureClient();
-
-            $defaults = [];       // stray Google default primaries
-            $realPrimaries = [];  // legitimate primaries
-
-            $q = 'SELECT conversion_action.resource_name, conversion_action.name, conversion_action.primary_for_goal '
-                ."FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
-            foreach ($this->searchQuery($customerId, $q)->iterateAllElements() as $row) {
-                $ca = $row->getConversionAction();
-                if (! $ca->getPrimaryForGoal()) {
-                    continue;
-                }
-                if (preg_match('/^Default\b/i', (string) $ca->getName())) {
-                    $defaults[] = ['res' => $ca->getResourceName(), 'name' => $ca->getName()];
-                } else {
-                    $realPrimaries[] = $ca->getName();
-                }
-            }
-
-            // Only demote stray defaults if a real primary goal remains — never
-            // leave the account with zero primary conversion goals.
-            if (! empty($defaults) && ! empty($realPrimaries)) {
-                foreach ($defaults as $d) {
-                    if ($this->demote($customerId, $d['res'])) {
-                        $actions[] = "Demoted stray default conversion goal '{$d['name']}' from primary (it never fires on a lead-gen account)";
-                    }
-                }
-            }
-
-            if (empty($realPrimaries)) {
-                $warnings[] = 'No non-default primary conversion action is set — bidding has no real goal to optimize toward.';
-            } elseif (count($realPrimaries) > 5) {
-                $warnings[] = count($realPrimaries).' primary conversion goals are set — consider consolidating to the few that matter for cleaner optimization.';
-            }
-        } catch (\Throwable $e) {
-            $this->logError('VerifyConversionGoals: failed: '.$e->getMessage());
-        }
-
-        return ['actions' => $actions, 'warnings' => $warnings];
+        return $this->audit();
     }
 
-    private function demote(string $customerId, string $resourceName): bool
+    /** @return array{status:string,scope:string,actions:array,warnings:list<AgentIssue>,primary_actions:array} */
+    public function audit(): array
     {
-        try {
-            $ca = new ConversionAction(['resource_name' => $resourceName, 'primary_for_goal' => false]);
-            $op = new ConversionActionOperation;
-            $op->setUpdate($ca);
-            $op->setUpdateMask(new FieldMask(['paths' => ['primary_for_goal']]));
-            $this->client->getConversionActionServiceClient()->mutateConversionActions(
-                new MutateConversionActionsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$op]])
-            );
-
-            return true;
-        } catch (\Throwable $e) {
-            $this->logError('VerifyConversionGoals: failed to demote '.$resourceName.': '.$e->getMessage());
-
-            return false;
+        $customerId = $this->customer?->cleanGoogleCustomerId();
+        if (! $customerId) {
+            return ['status' => 'unknown', 'scope' => 'account', 'actions' => [], 'primary_actions' => [],
+                'warnings' => [new AgentIssue('conversion_account_missing', 'A Google Ads account is required to inspect account conversion actions.')]];
         }
+        try {
+            $primaries = array_values(array_filter($this->readActions($customerId),
+                fn ($action) => ($action['status'] ?? '') === 'ENABLED' && ($action['primaryForGoal'] ?? false)));
+
+            return ['status' => 'observed', 'scope' => 'account', 'actions' => [], 'primary_actions' => $primaries,
+                'warnings' => $primaries === [] ? [new AgentIssue('conversion_account_primary_missing', 'No enabled account primary action was observed. Campaign custom goals can select secondary actions; verify each campaign against its reviewed intent.')] : []];
+        } catch (\Throwable $e) {
+            $this->logError('VerifyConversionGoals: account conversion inventory is unavailable.', $e);
+            throw $e;
+        }
+    }
+
+    protected function readActions(string $customerId): array
+    {
+        $this->ensureClient();
+        $actions = [];
+        $query = 'SELECT conversion_action.resource_name, conversion_action.name, conversion_action.status, '
+            .'conversion_action.category, conversion_action.origin, conversion_action.primary_for_goal '
+            ."FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
+        foreach ($this->searchQuery($customerId, $query)->iterateAllElements() as $row) {
+            $actions[] = json_decode($row->getConversionAction()->serializeToJsonString(), true, 512, JSON_THROW_ON_ERROR);
+        }
+
+        return $actions;
     }
 }

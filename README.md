@@ -262,6 +262,11 @@ sequenceDiagram
 | Agent | Trigger | Purpose |
 |-------|---------|---------|
 | **HealthCheckAgent** | Every 6 hours `RunHealthChecks` job | Comprehensive health monitoring: API connectivity, token validity, campaign delivery, performance anomalies, budget pacing, creative fatigue, billing status. |
+| **CheckGoogleCampaignReadiness** | Five minutes after deployment, then hourly queued fan-out | Checks each strategy's Google campaign, repairs eligible Search ad strength and campaign conversion goals, and publishes verified evidence to customer and admin campaign pages. |
+
+Google Search deployment checks conversion-action delivery before creating ads or enabling conversion bidding. Ongoing goal repairs use the strategy's declared intent and change only that campaign's goals. A selected secondary action uses a campaign-specific custom goal; account-wide primary flags and account defaults remain unchanged. Own-site signup and paid-subscription imports must pass Data Manager validation using the platform MCC credential, which needs both `adwords` and `datamanager` scopes.
+
+Ad strength repairs use Google's action items and reviewed copy, then reread policy and strength after Google's review. A successful update remains pending until Google confirms approved assets and GOOD or EXCELLENT strength. Repairs have durable retry limits and respect approval, billing, automation, campaign dates and pauses before writes. Policy and readiness failures are visible without automatically pausing the campaign.
 
 ---
 
@@ -276,6 +281,7 @@ gantt
     section Hourly
     MonitorCampaignStatus           :active, 00:00, 1h
     FetchPerformanceData            :active, 00:00, 1h
+    CheckGoogleCampaignReadiness    :active, 00:00, 1h
 
     section Every 6 Hours
     RunHealthChecks                 :crit, 00:00, 30min

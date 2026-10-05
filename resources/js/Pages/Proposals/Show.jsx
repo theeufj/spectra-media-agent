@@ -1,13 +1,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Head, Link } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { useJobWatch } from '@/hooks/useJobWatch';
 import { brandTint } from '@/Components/Marketing/Hero';
 
-function GeneratingState() {
+function GeneratingState({ step }) {
     return (
-        <div className="bg-white rounded-lg shadow-md p-16 text-center">
+        <div className="bg-white rounded-lg shadow-md p-6 sm:p-12 text-center">
             <div className="relative w-20 h-20 mx-auto mb-6">
                 <div className="absolute inset-0 rounded-full border-4 animate-ping opacity-25" style={{ borderColor: brandTint(30) }} />
                 <div className="relative w-20 h-20 rounded-full border-4 border-brand-primary border-t-transparent animate-spin" />
@@ -16,45 +17,35 @@ function GeneratingState() {
             <p className="text-gray-500 max-w-md mx-auto">
                 Our AI is analyzing the client's website, researching the industry, and crafting a tailored advertising proposal. This usually takes 1-2 minutes.
             </p>
-            <div className="mt-8 flex justify-center gap-3">
-                {['Analyzing website', 'Researching industry', 'Building strategies', 'Generating PDF'].map((step, i) => (
-                    <span
-                        key={step}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-brand-dark animate-pulse"
-                        style={{ animationDelay: `${i * 0.5}s`, backgroundColor: brandTint(10) }}
-                    >
-                        {step}
-                    </span>
-                ))}
-            </div>
+            <p role="status" className="mt-6 text-sm font-medium text-brand-dark">{({ queued: 'Queued for generation', reading: 'Reading the client website', writing: 'Writing the proposal', illustrating: 'Preparing the cover image', pdf: 'Preparing the PDF' })[step] || 'Generating the proposal'}</p>
         </div>
     );
 }
 
-function FailedState({ error }) {
+function FailedState({ error, onRetry, interrupted = false }) {
     return (
         <div className="bg-white rounded-lg shadow-md p-6 sm:p-12 text-center">
             <svg className="mx-auto h-16 w-16 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            <h2 className="mt-4 text-xl font-bold text-gray-900">Proposal Generation Failed</h2>
+            <h2 className="mt-4 text-xl font-bold text-gray-900">{interrupted ? 'Live updates stopped' : 'Proposal Generation Failed'}</h2>
             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">{error || 'An unexpected error occurred. Please try again.'}</p>
-            <Link
-                href={route('proposals.create')}
+            <button type="button" onClick={onRetry}
                 className="mt-6 inline-flex items-center px-5 py-2.5 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition font-medium"
             >
-                Try Again
-            </Link>
+                {interrupted ? 'Refresh status' : 'Retry with saved inputs'}
+            </button>
         </div>
     );
 }
 
 function ProposalPreview({ proposal, data }) {
-    const currency = useCurrency();
+    const activeCurrency = useCurrency();
+    const currency = proposal.currency_code || activeCurrency;
     return (
         <div className="space-y-8">
             {/* Header actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">{proposal.client_name}</h1>
                     <p className="text-gray-500">{proposal.industry || 'Digital Advertising'} &middot; {money(proposal.budget, currency, { maximumFractionDigits: 0 })}/mo</p>
@@ -69,6 +60,7 @@ function ProposalPreview({ proposal, data }) {
                     Download PDF
                 </a>
             </div>
+            {!proposal.pdf_path && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Your proposal is ready. The PDF could not be prepared; Download PDF will try again.</p>}
 
             {/* Executive Summary */}
             {data.executive_summary && (
@@ -262,32 +254,23 @@ function ProposalPreview({ proposal, data }) {
 }
 
 export default function Show({ proposal }) {
-    const currency = useCurrency();
     const [currentData, setCurrentData] = useState(proposal.proposal_data);
     const [currentStatus, setCurrentStatus] = useState(proposal.status);
 
-    // Poll for status updates while generating
-    useEffect(() => {
-        if (currentStatus !== 'generating') return;
-
-        const interval = setInterval(async () => {
-            try {
-                const response = await fetch(route('proposals.status', proposal.id));
-                const result = await response.json();
-                setCurrentStatus(result.status);
-                if (result.proposal_data) {
-                    setCurrentData(result.proposal_data);
-                }
-                if (result.status !== 'generating') {
-                    clearInterval(interval);
-                }
-            } catch {
-                // Silently retry
-            }
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [currentStatus, proposal.id]);
+    const [currentError, setCurrentError] = useState(proposal.error);
+    const [currentStep, setCurrentStep] = useState(proposal.generation_step);
+    const watch = useJobWatch(route('proposals.status', proposal.id), {
+        enabled: currentStatus === 'generating',
+        timeoutMs: 15 * 60 * 1000,
+        isDone: result => result?.status === 'ready',
+        isFailed: result => result?.status === 'failed',
+        onDone: result => { setCurrentData(result.proposal_data); setCurrentStatus(result.status); },
+        onFailed: result => { setCurrentError(result.error); setCurrentStatus('failed'); },
+    });
+    const step = watch.data?.generation_step || currentStep;
+    const retry = () => router.post(route('proposals.retry', proposal.id), {}, {
+        onSuccess: () => { setCurrentError(null); setCurrentStep('queued'); setCurrentStatus('generating'); },
+    });
 
     return (
         <AuthenticatedLayout>
@@ -304,8 +287,8 @@ export default function Show({ proposal }) {
                     Back to Proposals
                 </Link>
 
-                {currentStatus === 'generating' && <GeneratingState />}
-                {currentStatus === 'failed' && <FailedState error={proposal.error} />}
+                {currentStatus === 'generating' && (['timeout', 'disconnected'].includes(watch.phase) ? <FailedState interrupted error="Refresh to check the saved proposal status before retrying." onRetry={() => router.reload()} /> : <GeneratingState step={step} />)}
+                {currentStatus === 'failed' && <FailedState error={currentError} onRetry={retry} />}
                 {currentStatus === 'ready' && currentData && <ProposalPreview proposal={proposal} data={currentData} />}
             </div>
         </AuthenticatedLayout>

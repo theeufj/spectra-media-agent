@@ -65,6 +65,7 @@ class ExtractBrandGuidelines implements ShouldQueue
     public function __construct(
         protected Customer $customer,
         protected bool $force = false,
+        protected bool $sourceRefresh = false,
     ) {}
 
     /**
@@ -93,8 +94,14 @@ class ExtractBrandGuidelines implements ShouldQueue
         // A fresh guideline means another copy of this job already completed
         // the whole chain — emails, asset harvest, first campaign. Re-running
         // would duplicate all of it.
-        $existing = $this->customer->brandGuideline;
-        if (! $this->force && $existing && $existing->created_at->gt(now()->subHour())) {
+        $existing = $this->customer->brandGuideline()->first();
+        $fingerprint = BrandGuidelineExtractorService::sourceFingerprint($this->customer);
+        $lastExtraction = $existing?->getAttribute('extracted_at');
+        $savedFingerprint = $existing?->getAttribute('source_fingerprint');
+        $sameEvidence = is_string($savedFingerprint) && hash_equals($savedFingerprint, $fingerprint);
+        $latestSource = \App\Models\KnowledgeBase::where('customer_id', $this->customer->id)->max('updated_at');
+        $sourcesUnchanged = ! $latestSource || ($existing?->extracted_at && \Illuminate\Support\Carbon::parse($latestSource)->lte($existing->extracted_at));
+        if ($existing && ($sameEvidence && (! $this->force || $this->sourceRefresh) || (! $this->force && ! $savedFingerprint && $lastExtraction instanceof \Carbon\CarbonInterface && $lastExtraction->gt(now()->subHour()) && $sourcesUnchanged))) {
             Log::info('ExtractBrandGuidelines: fresh guideline already exists, skipping duplicate run', [
                 'customer_id' => $this->customer->id,
                 'guideline_id' => $existing->id,

@@ -14,7 +14,7 @@ use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAssets;
-use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
+use App\Services\GoogleAds\GoogleAdStrengthRepair;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -59,7 +59,6 @@ class RunSelfHealingChecks implements ShouldQueue
         $healed = 0;
         $errors = 0;
         $warnings = 0;
-        $conversionCheckedCustomers = []; // conversion-goal hygiene runs once per customer per pass
 
         foreach ($campaigns as $campaign) {
             $lock = Cache::lock("self_heal:campaign:{$campaign->id}", 3600);
@@ -98,76 +97,72 @@ class RunSelfHealingChecks implements ShouldQueue
                     $linkedInAgent->analyze($campaign);
                 }
 
-                // Pass 3 (Google): heal POOR/AVERAGE PMax ad strength + conversion-goal hygiene.
+                // Pass 3 (Google): heal POOR/AVERAGE PMax ad strength and extensions.
+                // Conversion goals are diagnosed per strategy in pass 2, with guarded campaign-only repairs.
                 if ($campaign->google_ads_campaign_id) {
                     try {
-                        foreach ((new HealAssetGroupStrength($campaign->customer))->heal($campaign) as $r) {
-                            $addedCount = array_sum($r['added'] ?? []);
-                            if ($addedCount > 0) {
-                                $healed += $addedCount;
-                                $imgCount = $r['added']['IMAGE'] ?? 0;
-                                $textCount = $addedCount - $imgCount;
-                                $parts = [];
-                                if ($textCount > 0) {
-                                    $parts[] = "{$textCount} text asset(s)";
-                                }
-                                if ($imgCount > 0) {
-                                    $parts[] = "{$imgCount} image(s)";
-                                }
-                                $what = implode(' + ', $parts);
+                        $guard = app(GoogleAdStrengthRepair::class);
+                        $strategy = $guard->strategyForCampaign($campaign);
+                        if (! $strategy || ($blocked = $guard->campaignMutationBlocked($campaign, $strategy))) {
+                            Log::info('RunSelfHealingChecks: Google strength pass held', ['campaign_id' => $campaign->id, 'reason' => $blocked ?? 'strategy_not_approved']);
+                            $warnings++;
+                        } else {
+                            foreach (app(HealAssetGroupStrength::class, ['customer' => $campaign->customer])->heal($campaign) as $r) {
+                                $addedCount = array_sum($r['added'] ?? []);
+                                if ($addedCount > 0) {
+                                    $healed += $addedCount;
+                                    $imgCount = $r['added']['IMAGE'] ?? 0;
+                                    $textCount = $addedCount - $imgCount;
+                                    $parts = [];
+                                    if ($textCount > 0) {
+                                        $parts[] = "{$textCount} text asset(s)";
+                                    }
+                                    if ($imgCount > 0) {
+                                        $parts[] = "{$imgCount} image(s)";
+                                    }
+                                    $what = implode(' + ', $parts);
 
+                                    Recommendation::create([
+                                        'campaign_id' => $campaign->id,
+                                        'type' => 'AD_STRENGTH',
+                                        'rationale' => "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                        'status' => 'applied',
+                                        'requires_approval' => false,
+                                    ]);
+                                    AgentActivity::record(
+                                        'maintenance', 'ad_strength_healed',
+                                        "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                        $campaign->customer_id, $campaign->id, $r
+                                    );
+                                }
+
+                                // Missing video is a major ad-strength gap PMax weights heavily.
+                                if (in_array('video', $r['missing_media'] ?? [], true)) {
+                                    $this->ensurePMaxVideo($campaign, $strategy);
+                                }
+                            }
+
+                            // Ensure the campaign has sitelinks (improves ad strength + real estate).
+                            $sitelinksAdded = app(CreateSitelinkAssets::class, ['customer' => $campaign->customer])->heal($campaign);
+                            if ($sitelinksAdded > 0) {
+                                $healed += $sitelinksAdded;
                                 Recommendation::create([
                                     'campaign_id' => $campaign->id,
-                                    'type' => 'AD_STRENGTH',
-                                    'rationale' => "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                    'type' => 'SITELINKS',
+                                    'rationale' => "Added {$sitelinksAdded} sitelink(s) to improve ad strength",
                                     'status' => 'applied',
                                     'requires_approval' => false,
                                 ]);
                                 AgentActivity::record(
-                                    'maintenance', 'ad_strength_healed',
-                                    "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
-                                    $campaign->customer_id, $campaign->id, $r
+                                    'maintenance', 'sitelinks_added',
+                                    "Added {$sitelinksAdded} sitelink(s) to '{$campaign->name}'",
+                                    $campaign->customer_id, $campaign->id, []
                                 );
-                            }
-
-                            // Missing video is a major ad-strength gap PMax weights heavily.
-                            if (in_array('video', $r['missing_media'] ?? [], true)) {
-                                $this->ensurePMaxVideo($campaign);
-                            }
-                        }
-
-                        // Ensure the campaign has sitelinks (improves ad strength + real estate).
-                        $sitelinksAdded = (new CreateSitelinkAssets($campaign->customer))->heal($campaign);
-                        if ($sitelinksAdded > 0) {
-                            $healed += $sitelinksAdded;
-                            Recommendation::create([
-                                'campaign_id' => $campaign->id,
-                                'type' => 'SITELINKS',
-                                'rationale' => "Added {$sitelinksAdded} sitelink(s) to improve ad strength",
-                                'status' => 'applied',
-                                'requires_approval' => false,
-                            ]);
-                            AgentActivity::record(
-                                'maintenance', 'sitelinks_added',
-                                "Added {$sitelinksAdded} sitelink(s) to '{$campaign->name}'",
-                                $campaign->customer_id, $campaign->id, []
-                            );
-                        }
-
-                        // Conversion-goal hygiene — once per customer per pass.
-                        if (! in_array($campaign->customer_id, $conversionCheckedCustomers, true)) {
-                            $conversionCheckedCustomers[] = $campaign->customer_id;
-                            $conv = (new VerifyConversionGoals($campaign->customer))->verifyAndHeal();
-                            foreach (($conv['actions'] ?? []) as $action) {
-                                $healed++;
-                                AgentActivity::record('maintenance', 'conversion_goal_fixed', $action, $campaign->customer_id, $campaign->id, []);
-                            }
-                            foreach (($conv['warnings'] ?? []) as $warning) {
-                                Log::warning("RunSelfHealingChecks: conversion goal warning (customer {$campaign->customer_id}): {$warning}");
                             }
                         }
                     } catch (\Throwable $e) {
-                        Log::error('RunSelfHealingChecks: Google strength/conversion pass failed for campaign '.$campaign->id.': '.$e->getMessage());
+                        report($e);
+                        Log::error('RunSelfHealingChecks: Google strength/extension pass failed for campaign '.$campaign->id.': '.$e->getMessage());
                         $errors++;
                     }
                 }
@@ -206,15 +201,14 @@ class RunSelfHealingChecks implements ShouldQueue
      * generates one (completion auto-links it). Guarded to one action per campaign/day
      * since video generation is slow and costly.
      */
-    private function ensurePMaxVideo(Campaign $campaign): void
+    private function ensurePMaxVideo(Campaign $campaign, \App\Models\Strategy $strategy): void
     {
         $key = "pmax_video_heal:{$campaign->id}";
         if (Cache::has($key)) {
             return;
         }
 
-        $strategy = $campaign->strategies()->latest()->first();
-        if (! $strategy || ! $campaign->customer) {
+        if (! $campaign->customer || app(GoogleAdStrengthRepair::class)->campaignMutationBlocked($campaign, $strategy)) {
             return;
         }
 

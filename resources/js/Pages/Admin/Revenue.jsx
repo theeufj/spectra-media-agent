@@ -75,7 +75,7 @@ const TransactionRow = ({ transaction, onRefund }) => (
             )}
             {transaction.status === 'succeeded' && (
                 <button
-                    onClick={() => onRefund(transaction.id)}
+                    onClick={() => onRefund(transaction)}
                     className="text-red-600 hover:text-red-900"
                 >
                     Refund
@@ -88,12 +88,13 @@ const TransactionRow = ({ transaction, onRefund }) => (
 export default function Revenue({ metrics, recentTransactions, subscriptionBreakdown, monthlyRevenue }) {
     const [confirmModal, setConfirmModal] = React.useState({ show: false, onConfirm: null });
 
-    const handleRefund = (chargeId) => {
+    const handleRefund = (transaction) => {
         setConfirmModal({
             show: true,
+            transaction,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.post(route('admin.revenue.refund', chargeId), { confirmed: true }, { preserveScroll: true });
+                router.post(route('admin.revenue.refund', transaction.id), { confirmed: true }, { preserveScroll: true });
             },
         });
     };
@@ -259,7 +260,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
                 onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
                 onConfirm={confirmModal.onConfirm}
                 title="Issue Refund"
-                message="Are you sure you want to issue a full refund for this charge?"
+                message={confirmModal.transaction ? `Issue a full refund of ${money(confirmModal.transaction.amount, confirmModal.transaction.currency)} to ${confirmModal.transaction.customer} (${confirmModal.transaction.email})? Charge: ${confirmModal.transaction.id}.` : ''}
                 isDestructive={true}
                 confirmText="Refund"
             />

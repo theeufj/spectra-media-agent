@@ -28,10 +28,11 @@ function UserInitials({ name, className = '' }) {
 
 // Focus treatment matches NavLink: these four dropdown triggers sit in the same
 // tab run as it and used to strip the outline with nothing put back.
-function NavDropdownButton({ active, children }) {
+function NavDropdownButton({ active, children, ...props }) {
     return (
         <button
             type="button"
+            {...props}
             className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition duration-150 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 ${
                 active
                     ? 'bg-gray-100 text-gray-900'
@@ -141,7 +142,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
     // permanently unscrollable when they disagree about who restores it.)
     useEffect(() => {
         if (!mobileOpen) return;
-        const desktop = window.matchMedia('(min-width: 768px)');
+        const desktop = window.matchMedia('(min-width: 1280px)');
         const closeIfDesktop = () => { if (desktop.matches) setMobileOpen(false); };
         closeIfDesktop();
         desktop.addEventListener('change', closeIfDesktop);
@@ -182,8 +183,9 @@ export default function AuthenticatedLayout({ header, children, contained = true
                             <Link href={route('dashboard')} className="flex-shrink-0 mr-4">
                                 <ApplicationLogo className="!text-xl" />
                             </Link>
+                            {activeCustomer && <span className="max-w-[10rem] truncate text-xs font-medium text-gray-600 xl:hidden" title={activeCustomer.name}>{activeCustomer.name}</span>}
 
-                            <div className="hidden md:flex items-center gap-1">
+                            <div className="hidden xl:flex items-center gap-1">
                                 <NavLink href={route('dashboard')} active={route().current('dashboard')} data-tour="dashboard">
                                     Dashboard
                                 </NavLink>
@@ -210,7 +212,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     <Dropdown.Trigger>
                                         <span data-tour="content">
                                         <NavDropdownButton active={route().current('knowledge-base.*') || route().current('brand-guidelines.*') || route().current('products.*')}>
-                                            Content
+                                            Business knowledge
                                         </NavDropdownButton>
                                         </span>
                                     </Dropdown.Trigger>
@@ -226,7 +228,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     <Dropdown.Trigger>
                                         <span data-tour="insights">
                                         <NavDropdownButton active={route().current('keywords.*') || route().current('seo.*') || route().current('budget.*') || route().current('reports.*') || route().current('analytics.*')}>
-                                            Insights
+                                            Performance
                                         </NavDropdownButton>
                                         </span>
                                     </Dropdown.Trigger>
@@ -272,7 +274,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     <Dropdown.Trigger>
                                         <span data-tour="strategy">
                                         <NavDropdownButton active={route().current('strategy.*') || route().current('proposals.*')}>
-                                            Strategy
+                                            Activity
                                         </NavDropdownButton>
                                         </span>
                                     </Dropdown.Trigger>
@@ -285,7 +287,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                         </div>
 
                         {/* Right: Actions */}
-                        <div className="hidden md:flex items-center gap-2">
+                        <div className="hidden xl:flex items-center gap-2">
                             {/* New Campaign CTA */}
                             {/* bg-brand-dark, not bg-brand-primary: white on
                                 #ff4d00 is 3.33:1 and this label is 14px. Same
@@ -326,7 +328,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                             rather than aria-label so the visible
                                             name stays part of the accessible
                                             name at lg. */}
-                                        <span className="sr-only">Account menu</span>
+                                        <span className="text-sm font-medium text-gray-700">Account</span>
                                         <UserInitials name={user.name} className="h-8 w-8" />
                                         <div className="hidden lg:block text-left">
                                             <p className="text-sm font-medium text-gray-700 leading-tight">{user.name}</p>
@@ -376,12 +378,12 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
                                     {activeCustomer && (
                                         <Dropdown.Link href={route('customers.edit', activeCustomer.uuid)}>
-                                            Customer Settings
+                                            Business settings
                                         </Dropdown.Link>
                                     )}
                                     {activeCustomer && (
                                         <Dropdown.Link href={route('customers.gtm.setup', activeCustomer.uuid)}>
-                                            GTM Integration
+                                            Website tracking
                                         </Dropdown.Link>
                                     )}
 
@@ -429,7 +431,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                         </div>
 
                         {/* Mobile hamburger */}
-                        <div className="flex items-center gap-2 md:hidden">
+                        <div className="flex items-center gap-2 xl:hidden">
                             <NotificationBell />
                             {/* Icon-only, so it announced as "button" with no
                                 name and no state. aria-controls points at the
@@ -471,7 +473,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
             <Transition show={mobileOpen}>
                 <Dialog
                     as="div"
-                    className="relative z-50 md:hidden"
+                    className="relative z-50 xl:hidden"
                     aria-label="Site menu"
                     onClose={() => setMobileOpen(false)}
                 >
@@ -566,7 +568,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </MobileNavLink>
                                 </MobileNavSection>
 
-                                <MobileNavSection title="Content">
+                                <MobileNavSection title="Business knowledge">
                                     <MobileNavLink
                                         href={route('knowledge-base.index')}
                                         active={route().current('knowledge-base.*')}
@@ -590,7 +592,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </MobileNavLink>
                                 </MobileNavSection>
 
-                                <MobileNavSection title="Insights">
+                                <MobileNavSection title="Performance">
                                     <MobileNavLink
                                         href={route('keywords.index')}
                                         active={route().current('keywords.index')}
@@ -670,7 +672,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                 </MobileNavSection>
                                 )}
 
-                                <MobileNavSection title="Strategy">
+                                <MobileNavSection title="Activity">
                                     <MobileNavLink
                                         href={route('strategy.war-room')}
                                         active={route().current('strategy.war-room')}
@@ -687,7 +689,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     </MobileNavLink>}
                                 </MobileNavSection>
 
-                                <MobileNavSection title="Support & Setup">
+                                <MobileNavSection title="Account & support">
                                     <MobileNavLink
                                         href={route('integrations.index')}
                                         active={route().current('integrations.*')}

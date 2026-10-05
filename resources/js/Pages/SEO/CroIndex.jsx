@@ -1,5 +1,7 @@
+import WorkStatusBanner from '@/Components/WorkStatusBanner';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, Link, usePage } from '@inertiajs/react';
+import { Head, useForm, router, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
@@ -20,26 +22,23 @@ function UpgradePrompt() {
         >
             <h3 className="text-lg font-semibold text-gray-900">Audit Limit Reached</h3>
             <p className="text-sm text-gray-600 mt-1">You've used all 3 free CRO audits. Upgrade to unlock unlimited audits.</p>
-            <p className="text-xs text-gray-500 mt-3">Available on Growth (US$249/mo) and Agency plans</p>
-            <a href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
+            <p className="text-xs text-gray-500 mt-3">Available on Growth and Agency plans</p>
+            <Link href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
                 View Plans
-            </a>
+            </Link>
         </div>
     );
 }
 
-export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudit, domain }) {
+export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudit, domain, auditRun = null }) {
     const { flash } = usePage().props;
-    const [url, setUrl] = useState(domain ? `https://${domain}` : '');
-    const [submitting, setSubmitting] = useState(false);
+    const form = useForm({ url: auditRun?.context?.url || (domain ? `https://${domain}` : '') });
+    const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(auditRun?.status));
+    const submitting = form.processing || workBusy;
 
     const handleRun = (e) => {
         e.preventDefault();
-        setSubmitting(true);
-        router.post(route('seo.cro.run'), { url }, {
-            preserveScroll: true,
-            onFinish: () => setSubmitting(false),
-        });
+        form.post(route('seo.cro.run'), { preserveScroll: true });
     };
 
     return (
@@ -48,7 +47,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
             <div className="py-8">
                 <div className="mx-auto max-w-6xl">
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">Landing Page CRO Audits</h1>
                             <p className="mt-1 text-sm text-gray-500">Analyze your landing pages for conversion rate optimization issues.</p>
@@ -65,11 +64,12 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-3">Audit a Landing Page</h2>
                             <p className="text-sm text-gray-500 mb-4">Enter a URL to analyze its performance, CTAs, and messaging for conversion optimization.</p>
-                            <form onSubmit={handleRun} className="flex gap-3">
-                                <input
+                            <FormErrorSummary errors={form.errors} labels={{ url: 'Landing page URL' }} className="mb-3" />
+                            <form onSubmit={handleRun} className="flex flex-col gap-3 sm:flex-row">
+                                <input id="url" aria-label="Landing page URL"
                                     type="url"
-                                    value={url}
-                                    onChange={(e) => setUrl(e.target.value)}
+                                    value={form.data.url}
+                                    onChange={(e) => form.setData('url', e.target.value)}
                                     placeholder="https://example.com/landing-page"
                                     className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-brand-primary focus:border-brand-primary"
                                     required
@@ -94,6 +94,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                         </div>
                     )}
 
+                    <WorkStatusBanner initialRun={auditRun} url={route('seo.work-status')} task="cro-audit" label="CRO audit" reloadOnly={['audits', 'auditsUsed', 'canRunAudit', 'auditRun']} onBusyChange={setWorkBusy} />
                     {/* Audits Table */}
                     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100">
@@ -113,9 +114,9 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {audits.data.map((audit) => (
-                                            <tr key={audit.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.visit(route('seo.cro.show', audit.id))}>
+                                            <tr key={audit.id} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4">
-                                                    <p className="text-sm font-medium text-gray-900 truncate max-w-xs">{audit.url}</p>
+                                                    <Link href={route('seo.cro.show', audit.id)} className="text-sm font-medium text-brand-dark underline break-all">{audit.url}</Link>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
                                                     <ScoreBadge score={audit.overall_score} />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { router } from '@inertiajs/react';
 import DeploymentStatus from '@/Pages/Campaigns/DeploymentStatus';
 
 const toast = vi.hoisted(() => ({ success: vi.fn() }));
@@ -21,6 +22,7 @@ const response = data => ({ ok: true, status: 200, text: async () => JSON.string
 beforeEach(() => {
     vi.useFakeTimers();
     toast.success.mockClear();
+    router.reload.mockImplementation(options => options?.onSuccess?.());
     vi.stubGlobal('fetch', vi.fn());
 });
 afterEach(() => {
@@ -59,17 +61,22 @@ describe('deployment completion feedback', () => {
         expect(screen.getByText('50%')).toBeInTheDocument();
 
         fetch.mockResolvedValue(response(result('verified', 4)));
-        await act(() => vi.advanceTimersByTimeAsync(3000));
+        fireEvent.click(screen.getByRole('button', { name: 'Check status again' }));
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(router.reload).toHaveBeenCalled();
         expect(screen.queryByRole('alert')).toBeNull();
         expect(screen.getByText('100%')).toBeInTheDocument();
     });
 
-    it('times out even if a status request never returns', async () => {
+    it('bounds retries and preserves progress when status requests never return', async () => {
         fetch.mockReturnValue(new Promise(() => {}));
         render(<DeploymentStatus campaign={campaign} deployments={[deployment]} />);
         await act(() => vi.advanceTimersByTimeAsync(15 * 60 * 1000));
         expect(screen.getByRole('alert')).toHaveTextContent('last update received');
-        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(4);
+        expect(screen.getByText('50%')).toBeInTheDocument();
+        await act(() => vi.advanceTimersByTimeAsync(15 * 60 * 1000));
+        expect(fetch).toHaveBeenCalledTimes(4);
     });
 
     it('uses fresh Inertia props and preserves the paused promise for setup-only campaigns', () => {
@@ -89,5 +96,17 @@ describe('deployment completion feedback', () => {
         expect(screen.getByRole('heading', { name: /Needs a closer look/ })).toBeVisible();
         expect(screen.queryByRole('heading', { name: 'Your campaign has been deployed' })).toBeNull();
         expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('treats legacy active as terminal deployed with pending readiness, never structural verification', async () => {
+        render(<DeploymentStatus campaign={campaign} deployments={[{ ...deployment, status: 'active', progress: 3 }]} />);
+        expect(screen.getByText('75%')).toBeInTheDocument();
+        expect(screen.getByText(/Deployed · verifying/)).toBeVisible();
+        expect(screen.getByText(/Readiness checks pending/)).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Refresh readiness status' })).toBeVisible();
+        expect(screen.queryByText('The campaign and ads have also been verified on the platform.')).toBeNull();
+        expect(screen.queryByText(/Deployment Complete!/)).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(fetch).not.toHaveBeenCalled();
     });
 });

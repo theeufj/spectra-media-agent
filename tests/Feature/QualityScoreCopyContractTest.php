@@ -24,13 +24,16 @@ class QualityScoreCopyContractTest extends TestCase
     {
         $copy = ['headlines' => ['Google Ads Management', 'Your AI Marketing Team', 'Explore Our Plans'],
             'descriptions' => ['Manage your campaigns with AI.', 'See your results in one place.']];
-        $customer = Customer::factory()->create(['google_ads_customer_id' => '123']);
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '123', 'service_type' => 'managed']);
+        \Laravel\Pennant\Feature::for($customer)->activate(\App\Features\AutoHealing::class);
         foreach ([$copy, [$copy]] as $response) {
-            $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'google_ads_campaign_id' => 'customers/123/campaigns/9']);
-            Strategy::factory()->create(['campaign_id' => $campaign->id, 'google_ads_ad_group_id' => 'customers/123/adGroups/456']);
+            $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'status' => 'active', 'google_ads_campaign_id' => 'customers/123/campaigns/9']);
+            \App\Models\AdSpendCredit::firstOrCreate(['customer_id' => $customer->id], ['current_balance' => 350, 'initial_credit_amount' => 350, 'status' => 'active', 'payment_status' => 'current', 'currency' => 'USD']);
+            Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'signed_off_at' => now(), 'google_ads_ad_group_id' => 'customers/123/adGroups/456']);
             $resource = 'customers/123/adGroupAds/456~789';
             $reader = Mockery::mock(ReadCampaignConfiguration::class);
-            $reader->shouldReceive('ads')->andReturn([['adGroupAd' => ['resourceName' => $resource, 'adStrength' => 'POOR',
+            $reader->shouldReceive('ads')->andReturn([['campaign' => ['status' => 'ENABLED'], 'adGroup' => ['status' => 'ENABLED'], 'adGroupAd' => ['resourceName' => $resource, 'status' => 'ENABLED', 'adStrength' => 'POOR',
+                'policySummary' => ['approvalStatus' => 'APPROVED', 'reviewStatus' => 'REVIEWED'],
                 'ad' => ['id' => '789', 'responsiveSearchAd' => ['headlines' => [['text' => 'Old headline']], 'descriptions' => [['text' => 'Old description']]]]]]]);
             $this->app->bind(ReadCampaignConfiguration::class, fn () => $reader);
             $ai = Mockery::mock(GeminiService::class);

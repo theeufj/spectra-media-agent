@@ -28,10 +28,9 @@ class ProductController extends Controller
                 SUM(conversions) as total_conversions
             ")->first();
 
-        return Inertia::render('Products/Index', [
-            'feeds' => $feeds,
-            'stats' => $stats,
-        ]);
+        $payload = ['feeds' => $feeds, 'stats' => $stats, 'working' => $feeds->contains(fn ($feed) => in_array($feed->status, ['pending', 'processing'], true))];
+
+        return $request->expectsJson() ? response()->json($payload) : Inertia::render('Products/Index', $payload);
     }
 
     public function createFeed(Request $request)
@@ -40,6 +39,7 @@ class ProductController extends Controller
         if (! $customer) {
             return redirect()->route('dashboard');
         }
+        $this->authorize('create', ProductFeed::class);
         $validated = $request->validate([
             'feed_name' => 'required|string|max:255',
             'merchant_id' => 'required|string',
@@ -59,6 +59,16 @@ class ProductController extends Controller
         return back()->with('success', 'Product feed created. Syncing products...');
     }
 
+    public function updateFeed(Request $request, ProductFeed $feed)
+    {
+        $this->authorize('update', $feed);
+        $data = $request->validate(['feed_name' => 'required|string|max:255', 'merchant_id' => 'required|string|max:100', 'sync_frequency' => 'required|in:hourly,daily,weekly']);
+        $feed->update($data + ['source_type' => 'api', 'status' => 'pending', 'last_error' => null]);
+        SyncProductFeed::dispatch($feed->id);
+
+        return back()->with('success', 'Feed updated. Checking access and syncing products.');
+    }
+
     public function syncFeed(Request $request, ProductFeed $feed)
     {
         $customer = $this->getActiveCustomer($request);
@@ -66,9 +76,14 @@ class ProductController extends Controller
             abort(403);
         }
 
+        $this->authorize('update', $feed);
+        if (in_array($feed->status, ['pending', 'processing'], true)) {
+            return back()->with('success', 'This feed is already queued or syncing.');
+        }
+        $feed->update(['status' => 'pending', 'last_error' => null]);
         SyncProductFeed::dispatch($feed->id);
 
-        return back()->with('success', 'Feed sync started.');
+        return back()->with('success', 'Feed sync queued. This page will update when it finishes.');
     }
 
     public function deleteFeed(Request $request, ProductFeed $feed)
@@ -78,6 +93,7 @@ class ProductController extends Controller
             abort(403);
         }
 
+        $this->authorize('delete', $feed);
         $feed->delete();
 
         return back()->with('success', 'Feed deleted.');
@@ -91,15 +107,27 @@ class ProductController extends Controller
         }
         $query = Product::where('customer_id', $customer->id);
 
+        if ($request->filled('feed')) {
+            $feed = ProductFeed::where('customer_id', $customer->id)->findOrFail($request->integer('feed'));
+            $query->where('product_feed_id', $feed->id);
+        }
+
         if ($request->status) {
             $query->where('status', $request->status);
         }
 
-        $products = $query->orderBy('impressions', 'desc')->limit(200)->get();
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $query->where(fn ($query) => $query->where('title', 'ilike', '%'.$search.'%')->orWhere('offer_id', 'ilike', '%'.$search.'%')->orWhere('brand', 'ilike', '%'.$search.'%'));
+        }
+        $products = $query->orderBy('impressions', 'desc')->orderBy('id')->paginate(50)->withQueryString();
 
         return Inertia::render('Products/List', [
-            'products' => $products,
+            'products' => $products->items(),
             'filter' => $request->status,
+            'search' => $search,
+            'feed' => $request->integer('feed') ?: null,
+            'pagination' => ['total' => $products->total(), 'from' => $products->firstItem(), 'to' => $products->lastItem(), 'previous' => $products->previousPageUrl(), 'next' => $products->nextPageUrl()],
         ]);
     }
 }
