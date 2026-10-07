@@ -5,9 +5,11 @@ namespace App\Services\Agents\Google;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Services\Agents\AgentIssue;
 use App\Services\Agents\ExecutionResult;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
+use App\Services\GoogleAds\ReconcileSearchAudienceObservation;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -24,9 +26,6 @@ class AudienceTargeter
             return;
         }
 
-        $searchAudienceService = new SearchAudience($this->customer);
-        $addCriterionService = new AddAdGroupCriterion($this->customer);
-
         $audiences = [];
         // Merge interests and behaviors
         if (! empty($targetingConfig->interests)) {
@@ -35,6 +34,38 @@ class AudienceTargeter
         if (! empty($targetingConfig->behaviors)) {
             $audiences = array_merge($audiences, $targetingConfig->behaviors);
         }
+
+        if ($audiences === []) {
+            return;
+        }
+        $campaignResource = $strategy->reusableGoogleCampaignId();
+        if ($customerId !== $this->customer->cleanGoogleCustomerId() || $strategy->campaign->customer_id !== $this->customer->id
+            || ! $campaignResource || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/adGroups/\d+$#D', $adGroupResourceName)) {
+            $result->addWarning('search_audience_scope_invalid', 'Audience signals were skipped because the ad group account could not be verified.');
+
+            return;
+        }
+        try {
+            $observation = app(ReconcileSearchAudienceObservation::class, ['customer' => $this->customer])->ensureForAdGroup($adGroupResourceName, $campaignResource);
+            $result->addMetadata('search_audience_observation', array_merge($observation, ['issues' => array_map(fn (AgentIssue $issue) => $issue->toArray(), AgentIssue::list($observation['issues'] ?? []))]));
+            $intentionalTargeting = ($observation['status'] ?? null) === 'not_applicable'
+                && ($observation['reason'] ?? null) === 'explicit_audience_targeting_intent';
+            if (! ($observation['ready'] ?? false) || (($observation['status'] ?? null) !== 'ready' && ! $intentionalTargeting)) {
+                $issues = AgentIssue::list($observation['issues'] ?? []);
+                foreach ($issues ?: [new AgentIssue('search_audience_observation_unready', 'Audience signals were skipped because Google has not confirmed Observation mode.')] as $issue) {
+                    $result->addWarning($issue->code, $issue->message);
+                }
+
+                return;
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $result->addWarning('search_audience_observation_unavailable', 'Audience signals were skipped because Observation could not be verified.');
+
+            return;
+        }
+        $searchAudienceService = app(SearchAudience::class, ['customer' => $this->customer]);
+        $addCriterionService = app(AddAdGroupCriterion::class, ['customer' => $this->customer]);
 
         foreach ($audiences as $audienceKeyword) {
             try {
@@ -77,7 +108,7 @@ class AudienceTargeter
 
             } catch (\Throwable $e) {
                 report($e);
-                $result->addWarning("Failed to add audience targeting for '{$audienceKeyword}': ".$e->getMessage());
+                $result->addWarning('search_audience_signal_failed', 'A Search audience signal could not be added. Review the admin exception dashboard.');
             }
         }
     }

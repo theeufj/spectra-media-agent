@@ -20,7 +20,8 @@ vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null, error: n
 
 const healthy = { status: 'ready', ready: true, checked_at: '2026-10-05T00:00:00Z', issues: [], errors: [],
     conversion_goals: { status: 'ready', ready: true, intent: { category: 'SIGNUP' }, issues: [] },
-    ad_strength: { checked: true, verified: true, unresolved: [], errors: [] } };
+    ad_strength: { checked: true, verified: true, unresolved: [], errors: [] },
+    audience_observation: { status: 'ready', ready: true, applicable: true, issues: [] } };
 const pending = { ...healthy, status: 'needs_review', ready: false, issues: [{ code: 'ad_strength_google_review_or_strength_pending', message: 'Google has not confirmed the ad strength yet.' }],
     ad_strength: { checked: true, verified: false, unresolved: [{ reason: 'google_review_or_strength_pending' }] } };
 
@@ -36,15 +37,32 @@ describe('Google readiness visibility', () => {
         const card = screen.getByRole('region', { name: 'Google campaign readiness' });
         expect(within(card).getAllByText('Awaiting Google review')).toHaveLength(2);
         expect(within(card).getByText('Conversion goal · Sign-up')).toBeVisible();
-        expect(within(card).getByText('Verified')).toBeVisible();
+        expect(within(card).getAllByText('Verified')).toHaveLength(2);
         expect(within(card).queryByText(/last check confirmed the applicable/)).toBeNull();
     });
 
-    it('confirms readiness only after both applicable checks pass', () => {
+    it('confirms readiness only after every applicable check passes', () => {
         render(<GoogleReadinessCard readiness={healthy} />);
-        expect(screen.getAllByText('Verified')).toHaveLength(3);
+        expect(screen.getAllByText('Verified')).toHaveLength(4);
         expect(screen.getByText(/Delivery still depends on approval, billing and pause settings/)).toBeVisible();
         expect(screen.getByText(/Last readiness check:/)).toBeVisible();
+    });
+
+    it('keeps audience restrictions visible even if an aggregate says ready', () => {
+        const issue = { code: 'search_audience_observation_required', message: 'Audience signals are restricting Search reach.' };
+        render(<GoogleReadinessCard readiness={{ ...healthy, audience_observation: { status: 'needs_review', ready: false, issues: [issue] }, issues: [issue] }} />);
+        expect(screen.getByText('Needs attention')).toBeVisible();
+        expect(screen.getByText('Audience signals are restricting Search reach.')).toBeVisible();
+        expect(screen.getByText('Audience settings')).toBeVisible();
+        expect(screen.queryByText(/last check confirmed the applicable/)).toBeNull();
+    });
+
+    it('requires audience evidence before an older readiness snapshot can be verified', () => {
+        const { audience_observation, ...legacy } = healthy;
+        render(<GoogleReadinessCard readiness={legacy} />);
+        expect(screen.getByText('Checks pending')).toBeVisible();
+        expect(screen.getByText('Not checked')).toBeVisible();
+        expect(screen.queryByText(/last check confirmed the applicable/)).toBeNull();
     });
 
     it('retains last-known issues and timestamps while paused without a green readiness claim', () => {

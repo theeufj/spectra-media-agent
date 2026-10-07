@@ -262,11 +262,13 @@ sequenceDiagram
 | Agent | Trigger | Purpose |
 |-------|---------|---------|
 | **HealthCheckAgent** | Every 6 hours `RunHealthChecks` job | Comprehensive health monitoring: API connectivity, token validity, campaign delivery, performance anomalies, budget pacing, creative fatigue, billing status. |
-| **CheckGoogleCampaignReadiness** | Five minutes after deployment, then hourly queued fan-out | Checks each strategy's Google campaign, repairs eligible Search ad strength and campaign conversion goals, and publishes verified evidence to customer and admin campaign pages. |
+| **CheckGoogleCampaignReadiness** | Five minutes after deployment, then hourly queued fan-out | Checks each strategy's Google campaign, repairs eligible Search ad strength, campaign conversion goals and audience Observation settings, and publishes verified evidence to customer and admin campaign pages. |
 
 Google Search deployment checks conversion-action delivery before creating ads or enabling conversion bidding. Ongoing goal repairs use the strategy's declared intent and change only that campaign's goals. A selected secondary action uses a campaign-specific custom goal; account-wide primary flags and account defaults remain unchanged. Own-site signup and paid-subscription imports must pass Data Manager validation using the platform MCC credential, which needs both `adwords` and `datamanager` scopes.
 
 Ad strength repairs use Google's action items and reviewed copy, then reread policy and strength after Google's review. A successful update remains pending until Google confirms approved assets and GOOD or EXCELLENT strength. Repairs have durable retry limits and respect approval, billing, automation, campaign dates and pauses before writes. Policy and readiness failures are visible without automatically pausing the campaign.
+
+Search audiences added as signals explicitly use audience Observation so they do not restrict search reach. Groups without attached audiences do not constrain reach by themselves. The hourly readiness check reads actual audience criteria and ad-group restrictions and repairs only eligible campaigns, while preserving explicit audience-only intent and every unrelated restriction. Audience, conversion-goal and ad-strength checks run independently, and unavailable checks retain the last known evidence.
 
 ---
 

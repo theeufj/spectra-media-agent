@@ -19,6 +19,7 @@ use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
+use App\Services\GoogleAds\ReconcileSearchAudienceObservation;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
@@ -41,6 +42,12 @@ class GoogleCampaignReadinessTest extends TestCase
         Cache::forget('enabled_platform_slugs');
         EnabledPlatform::updateOrCreate(['slug' => 'google'], ['name' => 'Google Ads', 'is_enabled' => true]);
         Setting::set('managed_billing_enabled', true, 'boolean');
+        $audience = $this->createMock(ReconcileSearchAudienceObservation::class);
+        $observed = ['status' => 'ready', 'ready' => true, 'applicable' => true,
+            'actions' => [], 'issues' => [], 'ad_groups' => []];
+        $audience->method('inspect')->willReturn($observed);
+        $audience->method('reconcile')->willReturn($observed);
+        $this->app->bind(ReconcileSearchAudienceObservation::class, fn () => $audience);
     }
 
     private function workspace(array $campaignAttributes = [], array $customerAttributes = [], array $strategyAttributes = []): array
