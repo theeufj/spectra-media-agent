@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Support\PublicSeo;
+
 /**
  * Server-rendered metadata for a public page.
  *
@@ -47,7 +49,7 @@ trait RendersPageMeta
         return array_filter([
             'title' => $title,
             'description' => $description,
-            'canonical' => str_replace('http://', 'https://', url()->current()),
+            'canonical' => PublicSeo::canonicalUrl(request()),
             'og_title' => $ogTitle,
             'og_description' => $ogDescription,
             'type' => $type,

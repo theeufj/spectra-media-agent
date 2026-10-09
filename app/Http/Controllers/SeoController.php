@@ -7,7 +7,6 @@ use App\Jobs\RunSeoAudit;
 use App\Jobs\TrackKeywordRankings;
 use App\Models\Competitor;
 use App\Models\SeoAudit;
-use App\Models\SeoRanking;
 use App\Services\SEO\BacklinkAnalysisService;
 use App\Services\SEO\RankTrackingService;
 use App\Support\WorkStatus;
@@ -30,6 +29,7 @@ class SeoController extends Controller
         }
 
         $latestAudit = SeoAudit::where('customer_id', $customer->id)
+            ->whereNotNull('score')
             ->orderBy('created_at', 'desc')
             ->first();
 
@@ -41,12 +41,7 @@ class SeoController extends Controller
             ->limit(10)
             ->get();
 
-        $topRankings = SeoRanking::where('customer_id', $customer->id)
-            ->whereDate('date', now()->toDateString())
-            ->whereNotNull('position')
-            ->orderBy('position')
-            ->limit(20)
-            ->get();
+        $topRankings = $rankingService->latestRankings()->filter(fn ($r) => ($r->average_position ?? $r->position) !== null)->take(20);
 
         $competitors = Competitor::where('customer_id', $customer->id)
             ->orderBy('updated_at', 'desc')
@@ -55,7 +50,11 @@ class SeoController extends Controller
 
         return Inertia::render('SEO/Index', [
             'latestAudit' => $latestAudit,
+            'indexingAudit' => SeoAudit::where('customer_id', $customer->id)->where('indexing_analysis->scope', 'sitemap')->latest()->first(),
             'auditRun' => WorkStatus::get($customer->id, 'seo-audit'),
+            'indexingRun' => WorkStatus::get($customer->id, 'indexing'),
+            'verificationRun' => WorkStatus::get($customer->id, 'search-console-verification'),
+            'searchConsoleConnection' => app(\App\Services\SEO\SearchConsoleService::class)->connectionStatus($customer),
             'audits' => $audits,
             'rankingSummary' => $rankingSummary,
             'topRankings' => $topRankings,
@@ -87,6 +86,31 @@ class SeoController extends Controller
         return back()->with('success', 'SEO audit started. Results will appear shortly.');
     }
 
+    public function verifySearchConsole(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer !== null, 404);
+        $this->authorize('update', $customer);
+        $runId = WorkStatus::start($customer->id, 'search-console-verification');
+        if ($runId) {
+            \App\Jobs\VerifySearchConsoleBinding::dispatch($customer->id, $runId);
+        }
+
+        return back()->with('success', 'Website ownership verification queued.');
+    }
+
+    public function checkIndexing(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        abort_unless($customer !== null, 404);
+        $runId = WorkStatus::start($customer->id, 'indexing');
+        if ($runId) {
+            \App\Jobs\CheckSearchIndexing::dispatch($customer->id, $runId);
+        }
+
+        return back()->with('success', 'Google indexing check queued.');
+    }
+
     public function auditDetail(Request $request, SeoAudit $audit)
     {
         $customer = $this->resolveCustomer($request);
@@ -115,10 +139,7 @@ class SeoController extends Controller
         $service = new RankTrackingService($customer);
         $summary = $service->getSummary();
 
-        $rankings = SeoRanking::where('customer_id', $customer->id)
-            ->whereDate('date', now()->toDateString())
-            ->orderBy('position')
-            ->get();
+        $rankings = $service->latestRankings();
 
         // Get trend data for top keywords
         $trends = [];
@@ -269,7 +290,7 @@ class SeoController extends Controller
         $customer = $this->resolveCustomer($request);
         abort_unless($customer !== null, 404);
         $runs = [];
-        foreach (['seo-audit', 'cro-audit', 'rankings', 'competitors'] as $task) {
+        foreach (['seo-audit', 'cro-audit', 'rankings', 'competitors', 'indexing', 'search-console-verification'] as $task) {
             $runs[$task] = WorkStatus::get($customer->id, $task);
         }
 

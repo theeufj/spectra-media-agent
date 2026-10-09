@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React, { useRef, useState } from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -61,7 +62,7 @@ const agents = [
     {
         icon: WrenchScrewdriverIcon,
         title: 'Self-Optimising',
-        body: 'Fixes any rejected ads and resubmits them, usually before you would have noticed.',
+        body: 'Checks policy and delivery problems, attempts supported repairs and reports issues that need your input.',
     },
     {
         icon: BanknotesIcon,
@@ -94,7 +95,7 @@ const stats = [
  * The <title> and <meta description> written here were duplicates of the
  * server's, not replacements for them — Inertia only swaps tags it owns.
  */
-export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999 }) {
+export default function Landing({ auth, publicContent, plans = [], faqs = [], setupFeeUsd = 999 }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
 
@@ -236,20 +237,9 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                         </div>
                     ) : (
                         <Hero
-                            eyebrow="AI-powered ad campaign management"
-                            headline={
-                                /*
-                                    The trailing space is deliberate and must stay inside a JSX
-                                    expression to survive. These are block spans so it is invisible,
-                                    but textContent concatenates them — without it the H1 reads
-                                    "Managementwith the Power of AI" to crawlers and screen readers.
-                                */
-                                <>
-                                    <span className="block">{'Automated Google & Meta ads management '}</span>
-                                    <span className="block text-brand-darker">with the power of AI</span>
-                                </>
-                            }
-                            sub="Stop paying agency retainer fees. Our AI finds your competitors, fixes broken ads and moves budget to what's working — every day, without you lifting a finger."
+                            eyebrow={publicContent.eyebrow}
+                            headline={publicContent.headline}
+                        sub={publicContent.intro}
                             secondaryCta={{ href: '/how-it-works', label: 'See how it works' }}
                             note="No credit card required · Free to explore · Cancel anytime"
                         >
@@ -258,25 +248,6 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                     )}
 
                     <StatsStrip items={stats} />
-
-                    {/* Social Proof */}
-                    <div className="border-b border-gray-200 bg-white py-10 sm:py-12">
-                        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-                            <p className="text-center text-sm font-semibold uppercase tracking-wider text-gray-500">Trusted by leading brands</p>
-                            {/*
-                                gray-400 is 2.54:1 on white. These are the only names on the
-                                page a visitor is meant to recognise, so they are gray-600
-                                (7.56:1) rather than a decorative grey.
-                            */}
-                            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-1 sm:mt-6">
-                                <a href="https://proveably.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">Proveably</a>
-                                <a href="https://papsnap.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">PapSnap</a>
-                                <a href="https://yourfirststore.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">YourFirstStore</a>
-                                <a href="https://zonely.co" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">Zonely</a>
-                                <a href="https://firstdigital.co.nz" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-[44px] items-center font-semibold text-gray-600 transition-colors hover:text-gray-900">First Digital</a>
-                            </div>
-                        </div>
-                    </div>
 
                     <FeatureGrid
                         title="Up and running in 3 steps"
@@ -306,7 +277,7 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                     {/* Pricing teaser */}
                     <PricingTable
                         title="Simple, honest pricing"
-                        sub={`Agency-quality results. Starting at just US$${lowestPrice}/month.`}
+                        sub={`Management plans from US$${lowestPrice}/month. Advertising spend is separate.`}
                         plans={plans.map((plan) => ({
                             id: plan.id,
                             name: plan.name,
@@ -334,7 +305,7 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                     <div className="bg-white py-12 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-                                Automated Ad Management That Drives ROI
+                                Ad Management with a Clear Goal and Activity History
                             </h2>
                             <div className="mt-5 space-y-4 text-base leading-relaxed text-gray-600 sm:mt-6 sm:text-lg">
                                 <p>
@@ -343,12 +314,10 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                                     working in June. Budget sits in an ad group that has not produced a lead in weeks.
                                 </p>
                                 <p>
-                                    Gaps are what a retainer is meant to cover and what it is worst at covering: someone
-                                    reviewing your account weekly is always six days behind the auction. Our agents read every
-                                    campaign, keyword and creative daily and change what needs changing, so disapprovals are
-                                    fixed within hours and budget moves while the intent is still there. That is most of what
-                                    good ad management is — attention, which software gives more reliably than a calendar
-                                    reminder.
+                                    Our agents monitor campaigns, keywords and creative, record the reasons for supported
+                                    changes, and check delivery after a repair. Some issues need your input, such as billing,
+                                    advertiser verification or website access. Results depend on your offer, landing page,
+                                    measurement and the auctions your campaign can enter.
                                 </p>
                             </div>
                         </div>
@@ -385,6 +354,7 @@ export default function Landing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                         secondaryCta={{ href: '/login', label: 'Sign in' }}
                         note="Free to explore · No credit card required · Live in minutes"
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

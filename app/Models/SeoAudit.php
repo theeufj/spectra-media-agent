@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property array|null $indexing_analysis
+ * @property array|null $issues
+ * @property array|null $recommendations
+ */
 class SeoAudit extends Model
 {
     use BelongsToCustomer;
@@ -26,6 +31,7 @@ class SeoAudit extends Model
         'security_analysis',
         'performance_analysis',
         'content_analysis',
+        'indexing_analysis',
     ];
 
     protected function casts(): array
@@ -42,6 +48,7 @@ class SeoAudit extends Model
             'security_analysis' => 'array',
             'performance_analysis' => 'array',
             'content_analysis' => 'array',
+            'indexing_analysis' => 'array',
         ];
     }
 

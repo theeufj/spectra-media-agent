@@ -92,12 +92,34 @@ class GoogleCreativeApiContractTest extends TestCase
         $source->method('searchQuery')->willReturnCallback(function ($id, $query) use ($response) {
             $this->assertStringNotContainsString('campaign_asset.performance_label', $query);
             $this->assertStringContainsString('campaign_asset.status', $query);
+            // Google requires a referenced campaign field in SELECT when a
+            // campaign_asset query filters on campaign.resource_name.
+            [$selectedFields] = explode(' FROM ', $query, 2);
+            $this->assertStringContainsString('campaign.resource_name', $selectedFields);
 
             return $response;
         });
         $result = $source->getImageAssetPerformance('123', 'customers/123/campaigns/9');
         $this->assertSame('UNKNOWN', $result[0]['performance_label']);
         $this->assertSame(20.0, $result[0]['ctr']);
+    }
+
+    public function test_responsive_asset_query_selects_the_campaign_identity_used_by_its_filter(): void
+    {
+        $response = $this->createMock(PagedListResponse::class);
+        $response->method('getIterator')->willReturn(new \ArrayIterator);
+        $source = $this->createPartialMock(GetAdPerformanceByAsset::class, ['ensureClient', 'searchQuery']);
+        $source->method('ensureClient')->willReturnCallback(fn () => null);
+        $source->expects($this->once())->method('searchQuery')->willReturnCallback(function ($id, $query) use ($response) {
+            $this->assertSame('123', $id);
+            [$selectedFields] = explode(' FROM ', $query, 2);
+            $this->assertStringContainsString('campaign.resource_name', $selectedFields);
+            $this->assertStringContainsString("WHERE campaign.resource_name = 'customers/123/campaigns/9'", $query);
+
+            return $response;
+        });
+
+        $this->assertSame(['headlines' => [], 'descriptions' => []], $source->getResponsiveSearchAdAssets('123', 'customers/123/campaigns/9'));
     }
 
     public function test_failed_asset_read_remains_an_error_instead_of_empty_learning_data(): void

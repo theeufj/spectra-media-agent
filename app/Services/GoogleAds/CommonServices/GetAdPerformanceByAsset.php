@@ -120,6 +120,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerfo
         $this->ensureClient();
 
         $query = 'SELECT '.
+                 'campaign.resource_name, '.
                  'asset.image_asset.full_size.url, '.
                  'asset.name, '.
                  'asset.type, '.

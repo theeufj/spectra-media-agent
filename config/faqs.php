@@ -1,130 +1,103 @@
 <?php
 
-/*
- * Marketing FAQ copy.
- *
- * This lives in PHP rather than in the JSX because the JSON-LD built from it has
- * to be in the server's HTML. The app has no Inertia SSR, so a page component
- * renders nothing until React runs: `curl /` returns a <body> containing one
- * empty div. Google's renderer executes the JavaScript and eventually sees the
- * page, but GPTBot, ClaudeBot, PerplexityBot and the social unfurlers do not run
- * it — and robots.txt goes out of its way to invite exactly those crawlers in.
- * Structured data emitted from a React <Head> is therefore invisible to every
- * reader it was written for.
- *
- * LandingController and the pricing controller pass these both ways: as a `faqs`
- * prop the accordion renders, and as the `meta.schema` graph app.blade.php
- * prints server-side. One array, so the questions on the page and the questions
- * in the markup cannot drift apart.
- *
- * Answers are written answer-first and kept near 40 words. A generative engine
- * quoting this page takes the opening sentence, and the visitor scanning it on a
- * phone reads one screen rather than four.
- *
- * `:setup_fee` is substituted by LandingController from
- * config('services.stripe.setup_fee_usd_cents'), which is the same key
- * SetupFeeService charges. A price typed in here instead would keep answering
- * "US$999" for as long as nobody remembered this file existed.
- */
+// This copy feeds visible FAQs and JSON-LD. :setup_fee comes from the same
+// Stripe configuration as checkout; management fees and media spend are separate.
 
 return [
-
     'landing' => [
-        [
+        0 => [
             'question' => 'How does sitetospend work?',
-            'answer' => 'You enter your website address and nothing else. Our vision AI reads the site for your colours, tone of voice and what you actually sell, researches who else is bidding on your keywords, then builds the campaign, writes the ad copy and pushes it live in your own ad accounts. Six agents keep working on it from there.',
+            'answer' => 'Start with your website address. We prepare a business profile, research your market and generate a campaign plan. You confirm the business facts, review the ads and choose a budget before launch. Managed plans include ongoing agent monitoring; one-time setup ends with a paused handover.',
         ],
-        [
+        1 => [
             'question' => 'Which ad platforms does sitetospend support?',
-            'answer' => 'Google Ads, Meta across Facebook and Instagram, Microsoft Ads on Bing, and LinkedIn Ads — all from one dashboard. You connect accounts you already own rather than handing budget to a reseller, so your spend history, conversion data and audience lists stay with you if you ever leave.',
+            'answer' => 'Google Ads, Meta across Facebook and Instagram, Microsoft Ads and LinkedIn Ads are supported. Available platforms depend on your plan. We manage campaigns through customer ad accounts under our platform management account.',
         ],
-        [
+        2 => [
             'question' => 'Do I need a credit card to start?',
-            'answer' => 'No. You can connect your site and see the brand extraction, the competitor research and the full campaign we would build for you before paying anything. A card is only required at the point you decide to push those campaigns live.',
+            'answer' => 'No card is required to create an account and explore the free experience. A paid service and an advertising budget are required to deploy real campaigns. The one-time package is commissioned when its setup payment is confirmed.',
         ],
-        [
+        3 => [
             'question' => 'Can I pay once instead of subscribing?',
-            'answer' => 'Yes. One-time Google Ads setup is US$:setup_fee: we build the account, the campaigns, the ad copy and the conversion tracking, hand it over paused under your own Google billing, and that is the end of it. One payment, nothing recurring, no management. The monthly plans are for people who want the agents to keep running afterwards.',
+            'answer' => 'Yes. One-time Google Ads setup is US$:setup_fee for an account and campaign build, ad copy and conversion-tracking configuration. It is handed over paused so you can complete your own Google billing and run it. Website access or tag installation may be required. Ongoing management and ad spend are separate.',
         ],
-        [
+        4 => [
             'question' => 'Will I still own my ad accounts and data?',
-            'answer' => 'Yes. Everything is built inside your own Google Ads and Meta accounts, under your billing, with your name on it. There is no lock-in contract and no notice period to serve — cancel and the campaigns, keyword research and conversion tracking stay exactly where they are.',
+            'answer' => 'Customer campaigns run in customer advertising accounts under our management account. The one-time package includes a Google Ads administrator invitation and paused handover. Access and billing arrangements depend on the service you choose; review them before launch. Your business information and generated assets remain available in your workspace.',
         ],
-        [
+        5 => [
             'question' => 'How is this different from hiring an agency?',
-            'answer' => 'An agency charges a monthly retainer plus a percentage of your spend, and in practice a junior account manager reviews the campaigns about once a week. Our agents check performance every day, act on what they find within hours, and charge a flat fee that does not climb as your budget grows.',
+            'answer' => 'Site to Spend charges a published plan fee for supported campaign preparation and management. Agency scopes and fees vary, so compare what each service includes. The agents record changes and their reasons, but campaign results still depend on your offer, destination, budget, measurement and platform eligibility.',
         ],
-        [
+        6 => [
             'question' => 'What happens when an ad gets disapproved?',
-            'answer' => 'The self-optimising agent spots the disapproval, works out which advertising policy was triggered, rewrites the offending headline or description and resubmits it for review. Most are cleared before you would have noticed — and a disapproved ad quietly costs you every impression it should have won.',
+            'answer' => 'Agents check policy and delivery issues, attempt supported repairs and verify the outcome. Google still controls review and approval. Account verification, billing or website changes may require your input rather than an automatic copy rewrite.',
         ],
-        [
+        7 => [
             'question' => 'How quickly will I see results?',
-            'answer' => 'Campaigns are usually live within minutes of connecting your website. Optimisation needs data, so expect the first week to be about learning which searches and audiences respond, and the second to be where budget starts shifting decisively toward what converts.',
+            'answer' => 'Campaign preparation and ad review happen before delivery. Google review, billing, account verification and auction eligibility can delay serving. Performance needs reliable conversion data and enough observations; there is no guaranteed launch time or result in the first week.',
         ],
-        [
+        8 => [
             'question' => 'Do I need to know anything about Google Ads?',
-            'answer' => 'Not a thing. The dashboard is written in plain language rather than platform jargon, and every change an agent makes is logged alongside the reason it made it. Read the detail if you want it; the campaigns carry on if you never open it.',
+            'answer' => 'The flow explains the business profile, goal, budget and ad review in plain language. You still need to confirm accurate business facts and complete any required account, billing or website steps. The dashboard records activity so you can inspect what changed and why.',
         ],
     ],
-
     'pricing' => [
-        [
-            'question' => "What's included in the free tier?",
-            'answer' => 'The free tier lets you properly kick the tyres before you commit: 3 website or file sources for brand matching, 4 AI-generated images per campaign (watermarked), 3 landing page audits, and unlimited ad copy. Going live on Google or Facebook requires a paid plan.',
+        0 => [
+            'question' => 'What\'s included in the free tier?',
+            'answer' => 'The free experience lets you explore business profiling, campaign generation and a sandbox without spending on real ads. Creative and feature limits vary by plan; see the plan cards for current inclusions. A paid plan is required for managed live campaign deployment.',
         ],
-        [
+        1 => [
             'question' => 'Does the subscription price include my ad budget?',
-            'answer' => "No, and that's intentional. Your subscription pays for the platform and the AI doing the work. Your actual ad spend goes straight to Google, Facebook and the other networks — we never touch it or mark it up.",
+            'answer' => 'No. The subscription pays for campaign management and platform features. Advertising spend is additional. Managed campaigns use prepaid ad-spend credits reconciled against actual platform spend. One-time customers take over a paused Google campaign and add their own Google billing.',
         ],
-        [
+        2 => [
             'question' => 'Is there a one-off option instead of a monthly plan?',
-            'answer' => 'Yes — one-time Google Ads setup at US$:setup_fee. We build your account, campaigns, ad copy and conversion tracking, then hand it all over paused so you can add your own Google billing and run it yourself. A single payment with nothing recurring and no ongoing management, chosen when you first set up your account.',
+            'answer' => 'Yes. One-time Google Ads setup is US$:setup_fee for an account and campaign build, ad copy and conversion-tracking configuration, followed by a paused handover. A single payment, with no recurring management. Website access or tag installation may be needed to complete tracking; ad spend is separate.',
         ],
-        [
+        3 => [
             'question' => 'How does ad spend billing work?',
-            'answer' => "When you launch your first campaign we load 7 days' worth of estimated spend as a credit balance. Each morning at 6am we deduct the previous day's actual spend, and top the balance up automatically when it runs low so campaigns never go dark unexpectedly.",
+            'answer' => 'Managed campaigns begin with prepaid credit based on seven days of estimated advertising spend. Actual platform spend is reconciled against that balance, with replenishment when the balance runs low. Review the credit balance, transactions and chosen campaign budget in Billing.',
         ],
-        [
+        4 => [
             'question' => 'What happens if a payment fails?',
-            'answer' => "You get 24 hours to sort it out. If it's still unresolved we trim budgets by 50% to slow spend, and pause everything a day after that so nobody is out of pocket. The moment the payment goes through, everything picks back up at full speed.",
+            'answer' => 'We notify you and retry failed ad-spend replenishment. Unresolved payment issues can reduce budgets and then pause campaigns to limit further spend. After payment is resolved, resuming delivery still depends on the platform accepting the campaign changes and the account being eligible.',
         ],
-        [
+        5 => [
             'question' => 'How do I update my payment method?',
-            'answer' => "Billing → Ad Spend in your dashboard. If a payment has failed you'll also see a Retry Payment button — update the card, tap it, and we charge immediately and restart your campaigns.",
+            'answer' => 'Open Billing → Ad Spend to update your payment method. If a replenishment failed, use the available retry action after updating the card. Check both the credit status and campaign delivery status after recovery.',
         ],
-        [
+        6 => [
             'question' => 'What do the AI specialists actually do?',
-            'answer' => 'Six of them, running around the clock. One finds your competitors, one digs into their sites for angles you can use, one fixes rejected ads, one moves budget to the hours your customers are active, one tests ad variations and keeps the winners, one finds people who look like your existing customers.',
+            'answer' => 'Agents research competitors, monitor campaign delivery, attempt supported repairs, review budgets, test creative and work with available audience data. Actions depend on the platform, plan and evidence available. Activity records explain why changes were made.',
         ],
-        [
+        7 => [
             'question' => 'How does competitor analysis work?',
-            'answer' => "Every week we read your website to understand your business, then look at who else is advertising in your space — their messaging, their offers, their positioning — and work out how you stand out against it. You don't have to ask; it just happens.",
+            'answer' => 'We read your business sources and competitor websites to compare offers, messaging and positioning. The resulting intelligence informs strategy and supported campaign changes. It is context for a decision, not proof that a competitor is bidding on every keyword or that copying them will improve results.',
         ],
-        [
+        8 => [
             'question' => 'What happens if my ad gets disapproved?',
-            'answer' => "We catch it automatically, rewrite it so it passes Google's checks, and resubmit — without you needing to do anything. Ads that simply stop performing get paused before they waste more budget.",
+            'answer' => 'Agents check the policy reason and attempt supported repairs where appropriate, then verify review and delivery status. Google decides approval. Issues such as verification, billing or destination problems may need your input and cannot always be fixed by rewriting an ad.',
         ],
-        [
+        9 => [
             'question' => 'How does it know what my brand looks like?',
-            'answer' => 'We take a screenshot of your website and our vision AI reads it: your colours, your fonts, your tone. Every ad we create matches your look without you filling in a form or uploading a brand guide.',
+            'answer' => 'We read your website and source material to prepare brand colours, tone and business facts for campaign generation. Review the extracted profile and proposed assets before launch; source material can be incomplete or inaccurate.',
         ],
-        [
+        10 => [
             'question' => 'I already have a Google Ads account — can you use it?',
-            'answer' => 'Yes, and it is the fastest way to start. Give us your 10-digit customer ID and we send a manager request; you approve it inside Google Ads under Admin → Access and security → Managers. Billing stays with Google on your own payment method, and you can revoke access from the same screen.',
+            'answer' => 'Where supported, an existing Google Ads account can be linked under our management account with a manager request. Acceptance, account access and billing must be confirmed before delivery. Ask support to confirm whether an existing-account arrangement fits the service you want.',
         ],
-        [
-            'question' => "What if I don't have a Google Ads account yet?",
-            'answer' => "We'll walk you through creating one. Linking an account you already own is quicker, so if you have ever run ads — even years ago — it is worth digging out that login first.",
+        11 => [
+            'question' => 'What if I don\'t have a Google Ads account yet?',
+            'answer' => 'We can provision a customer account under our Google Ads management account. Managed and one-time services have different billing and handover arrangements. For the one-time package, account provisioning triggers an administrator invitation to your signup email after payment is confirmed.',
         ],
-        [
+        12 => [
             'question' => 'What access do you actually get to my ad account?',
-            'answer' => 'Manager access, which lets us create and optimise campaigns. We never touch your billing: ad spend goes directly from you to Google and we take no percentage of it. Remove our access whenever you like and the account and its history stay entirely yours.',
+            'answer' => 'The management integration can create and adjust supported campaign resources in the customer account. Billing and access depend on your service: managed campaigns use ad-spend credits; one-time builds are handed over paused for your own Google billing. Review the arrangements and Terms before choosing.',
         ],
-        [
+        13 => [
             'question' => 'Can I switch plans later?',
-            'answer' => "Upgrade or downgrade any time from your dashboard. If you ever hit the limits of your plan we'll tell you before anything stops working.",
+            'answer' => 'You can manage your subscription from your dashboard. Check the current plan inclusions and Terms before changing or cancelling, including any setup fee conditions that apply to an existing account build.',
         ],
     ],
-
 ];

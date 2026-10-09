@@ -181,16 +181,16 @@ class MarketingStructuredDataTest extends TestCase
         $this->assertNotEmpty($props['meta']['canonical']);
     }
 
-    public function test_a_blog_article_canonicalises_to_the_host_that_served_it(): void
+    public function test_a_shared_blog_article_canonicalises_to_its_original_host(): void
     {
         $html = $this->get('/blog/how-ai-agents-work')->assertOk()->getContent();
 
         preg_match('#<link rel="canonical" href="([^"]+)"#', $html, $m);
 
-        // The JSX built this from a literal 'https://sitetospend.com', so a
-        // realpropertyads.com article pointed its canonical at another brand.
+        // Publishing the same generic guide with an independent canonical on
+        // every skin made Google select the RPA copy over the SiteToSpend one.
         $this->assertSame(
-            str_replace('http://', 'https://', url('/blog/how-ai-agents-work')),
+            'https://sitetospend.com/blog/how-ai-agents-work',
             $m[1],
         );
     }

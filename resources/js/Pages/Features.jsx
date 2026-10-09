@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -167,7 +168,7 @@ function Platform({ name, live }) {
     );
 }
 
-export default function Features({ auth }) {
+export default function Features({ auth, publicContent }) {
     return (
         <>
             <PageTitle />
@@ -176,9 +177,9 @@ export default function Features({ auth }) {
 
                 <main>
                     <Hero
-                        eyebrow="Platform features"
-                        headline="Everything you need to win at paid ads"
-                        sub="Six AI specialists, full Google Ads support, automatic brand matching and conversion tracking — all running around the clock."
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
+                        sub={publicContent.intro}
                     />
 
                     {/* Platforms */}
@@ -240,6 +241,7 @@ export default function Features({ auth }) {
                         primaryCta={{ href: '/register', label: 'Get started free' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -12,26 +11,15 @@ const CATEGORY_COLORS = {
     'Google Ads':      'bg-blue-100 text-blue-700',
 };
 
-const PER_PAGE = 9;
 
 /*
  * No <Head> here. HelpController owns this page's metadata; see the note in
  * Blog/Article.jsx. The title written here was "Blog — sitetospend.com", 22
  * characters against the controller's 47, and it was the one Google saw.
  */
-export default function HelpIndex({ auth, articles = [] }) {
-    const categories = ['All', ...new Set(articles.map(a => a.category))];
-    const [activeCategory, setActiveCategory] = useState('All');
-    const [page, setPage] = useState(1);
-
-    const filtered = activeCategory === 'All' ? articles : articles.filter(a => a.category === activeCategory);
-    const totalPages = Math.ceil(filtered.length / PER_PAGE);
-    const visible = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-    function handleCategory(cat) {
-        setActiveCategory(cat);
-        setPage(1);
-    }
+export default function HelpIndex({ auth, articles = [], categories = [], articleCount = 0, activeCategory = null, pagination }) {
+    const filters = [{ name: 'All', count: articleCount }, ...categories];
+    const categoryUrl = name => name === 'All' ? '/blog' : `/blog?category=${encodeURIComponent(name)}`;
 
     return (
         <>
@@ -50,27 +38,28 @@ export default function HelpIndex({ auth, articles = [] }) {
 
                         {/* Category filter tabs */}
                         <div className="flex flex-wrap gap-2 mb-8 sm:mb-10">
-                            {categories.map(cat => (
-                                <button
+                            {filters.map(({ name: cat, count }) => (
+                                <Link
                                     key={cat}
-                                    onClick={() => handleCategory(cat)}
+                                    href={categoryUrl(cat)}
+                                    aria-current={(activeCategory ?? 'All') === cat ? 'page' : undefined}
                                     className={`min-h-[44px] rounded-full px-4 py-2.5 text-sm font-semibold transition-colors ${
-                                        activeCategory === cat
+                                        (activeCategory ?? 'All') === cat
                                             ? 'bg-brand-dark text-white'
                                             : 'bg-white text-gray-600 border border-gray-200 hover:border-brand-dark hover:text-brand-darker'
                                     }`}
                                 >
                                     {cat}
-                                    <span className={`ml-1.5 text-xs ${activeCategory === cat ? 'text-white/80' : 'text-gray-500'}`}>
-                                        {cat === 'All' ? articles.length : articles.filter(a => a.category === cat).length}
+                                    <span className={`ml-1.5 text-xs ${(activeCategory ?? 'All') === cat ? 'text-white/80' : 'text-gray-500'}`}>
+                                        {count}
                                     </span>
-                                </button>
+                                </Link>
                             ))}
                         </div>
 
                         {/* Article grid */}
                         <div className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                            {visible.map(article => (
+                            {articles.map(article => (
                                 <Link
                                     key={article.slug}
                                     href={`/blog/${article.slug}`}
@@ -98,37 +87,16 @@ export default function HelpIndex({ auth, articles = [] }) {
                             ))}
                         </div>
 
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-center gap-2 mt-12">
-                                <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    className="min-h-[44px] px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:border-brand-dark hover:text-brand-darker disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    ← Previous
-                                </button>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p)}
-                                        className={`h-11 w-11 rounded-lg text-sm font-semibold transition-colors ${
-                                            p === page
-                                                ? 'bg-brand-dark text-white'
-                                                : 'border border-gray-200 text-gray-600 hover:border-brand-dark hover:text-brand-darker'
-                                        }`}
-                                    >
-                                        {p}
-                                    </button>
+                        {pagination?.last_page > 1 && (
+                            <nav aria-label="Article pages" className="flex flex-wrap items-center justify-center gap-2 mt-12">
+                                {pagination.previous && <Link href={pagination.previous} rel="prev" className="min-h-[44px] px-4 py-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:border-brand-dark">← Previous</Link>}
+                                {pagination.pages.map(({ number, url }) => (
+                                    <Link key={number} href={url} aria-current={number === pagination.current_page ? 'page' : undefined} className={`flex h-11 w-11 items-center justify-center rounded-lg text-sm font-semibold ${number === pagination.current_page ? 'bg-brand-dark text-white' : 'border border-gray-200 text-gray-600 hover:border-brand-dark'}`}>
+                                        {number}
+                                    </Link>
                                 ))}
-                                <button
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                    className="min-h-[44px] px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:border-brand-dark hover:text-brand-darker disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Next →
-                                </button>
-                            </div>
+                                {pagination.next && <Link href={pagination.next} rel="next" className="min-h-[44px] px-4 py-3 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:border-brand-dark">Next →</Link>}
+                            </nav>
                         )}
                     </div>
 
@@ -142,7 +110,7 @@ export default function HelpIndex({ auth, articles = [] }) {
                     */}
                     <CtaBand
                         title="Ready to put this into practice?"
-                        body="Launch your first AI-managed campaign. No long-term contract, live in minutes."
+                        body="Launch your first AI-managed campaign. Review your business profile, goal and budget before launch."
                         primaryCta={{ href: '/register', label: 'Start free' }}
                         secondaryCta={{ href: '/pricing', label: 'See pricing' }}
                     />

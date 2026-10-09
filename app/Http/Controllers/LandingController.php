@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\RendersPageMeta;
 use App\Models\Plan;
+use App\Support\PublicMarketingContent;
 use Illuminate\Http\Request;
 
 class LandingController extends Controller
@@ -26,7 +27,7 @@ class LandingController extends Controller
         // meant realpropertyads.com served "…| sitetospend" in its <title> and
         // Open Graph tags to every crawler that does not run JavaScript.
         if ($isRealEstate) {
-            return \Inertia\Inertia::render($page, [
+            return $this->renderPublic($page, [
                 'plans' => $plans,
                 'meta' => $this->meta(
                     'Real Property Ads — Google Ads Built for Real Estate Agents',
@@ -38,15 +39,15 @@ class LandingController extends Controller
         }
         $paidPrices = $plans->pluck('price_cents')->filter()->map(fn ($cents) => (int) round($cents / 100));
 
-        return \Inertia\Inertia::render($page, [
+        return $this->renderPublic($page, [
             'plans' => $plans,
             'faqs' => $faqs,
             'setupFeeUsd' => $setupFeeUsd,
             'meta' => $this->meta(
-                'AI Google & Meta Ads Automation Software | sitetospend',
-                'Automate your Google and Meta PPC campaigns with AI. Let intelligent agents handle keyword research, bidding, budgets, and tracking to maximize your ROI.',
+                'AI Google & Meta Ads Management Software | sitetospend',
+                'Prepare, review and manage Google and Meta campaigns with AI. Confirm your business profile, keyword plan, creative and budget before launch.',
                 'sitetospend — Your AI Marketing Team',
-                'Ads that run themselves. Agency-level results without the agency retainer. No credit card required.',
+                'Build a campaign from your website and review the ads before launch. Compare ongoing management and a one-time Google Ads setup.',
                 // The offer range is read off the plans actually on sale rather
                 // than the "149" and "249" that used to be written into the JSX,
                 // where a price change in the database left the rich result
@@ -94,7 +95,7 @@ class LandingController extends Controller
 
     public function features()
     {
-        return \Inertia\Inertia::render('Features', [
+        return $this->renderPublic('Features', [
             'meta' => $this->meta(
                 'Features — Automated Campaign Management | sitetospend',
                 'Keyword research, bid management, budget pacing, conversion tracking and creative testing, run automatically across Google and Meta Ads.',
@@ -106,11 +107,11 @@ class LandingController extends Controller
                     'description' => 'Six autonomous AI agents and a full campaign management suite for Google, Meta, Microsoft and LinkedIn Ads.',
                     'numberOfItems' => 6,
                     'itemListElement' => $this->listItems([
-                        ['Competitor Discovery Agent', 'Uses Google Search AI to find real competitors based on your website content.'],
+                        ['Competitor Discovery Agent', 'Researches relevant competitors based on your website and confirmed business information.'],
                         ['Competitor Analysis Agent', 'Reads competitor websites, extracts messaging and pricing, generates counter-strategies.'],
-                        ['Self-Optimising Agent', 'Detects and fixes disapproved ads automatically while keeping your brand voice.'],
+                        ['Ad Health Agent', 'Monitors policy status and attempts supported repairs, then checks the result.'],
                         ['Budget Intelligence Agent', 'Adjusts budgets by time-of-day and day-of-week performance.'],
-                        ['Creative Intelligence Agent', 'Tracks A/B results, keeps winners, and writes new variations to replace losers.'],
+                        ['Creative Intelligence Agent', 'Reviews creative performance and prepares variations when sufficient evidence is available.'],
                         ['Audience Intelligence Agent', 'Manages Customer Match lists, segments audiences, recommends lookalike expansion.'],
                     ]),
                 ]],
@@ -123,7 +124,7 @@ class LandingController extends Controller
         $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         if (($tenant['key'] ?? '') === 'realpropertyads') {
-            return \Inertia\Inertia::render('RealEstateHowItWorks', [
+            return $this->renderPublic('RealEstateHowItWorks', [
                 'meta' => $this->meta(
                     'How It Works — Real Property Ads',
                     'From listing URL to a reviewed Google Ads campaign. See how Real Property Ads works for real estate agents.',
@@ -131,16 +132,16 @@ class LandingController extends Controller
             ]);
         }
 
-        return \Inertia\Inertia::render('HowItWorks', [
+        return $this->renderPublic('HowItWorks', [
             'meta' => $this->meta(
-                'How It Works — Ads Live in Minutes | sitetospend',
-                'Connect your site, and campaigns are built, launched and optimised for you. See how automated Google Ads management works, step by step.',
-                'How It Works — From URL to ROI in 3 Steps | sitetospend',
-                'Enter your URL, let AI read your brand, find your competitors, and deploy optimised campaigns in minutes.',
+                'How It Works — Review Your Campaign | sitetospend',
+                'Start with your website, confirm the business profile, then review the budget and ads. See what happens before deployment and ongoing monitoring.',
+                'How It Works — From Website to Campaign Review | sitetospend',
+                'Enter your URL, confirm your brand and business facts, and review the campaign before deployment.',
                 [[
                     '@type' => 'HowTo',
                     'name' => 'How to launch AI-managed ad campaigns with sitetospend',
-                    'description' => 'From URL to live campaign in three steps: brand extraction, competitive intelligence, then autonomous optimisation.',
+                    'description' => 'From website to campaign: review business facts, research the market, then confirm the plan and ads before deployment.',
                     'step' => array_map(fn (array $step) => [
                         '@type' => 'HowToStep',
                         'position' => $step['position'],
@@ -151,17 +152,17 @@ class LandingController extends Controller
                         [
                             'position' => 1,
                             'name' => 'Vision AI brand extraction',
-                            'text' => 'Enter your website URL. We take a high-resolution screenshot and Gemini Vision reads your hex codes, fonts and brand voice off it.',
+                            'text' => 'Enter your website URL. Review the extracted brand colours, business facts and offer.',
                         ],
                         [
                             'position' => 2,
                             'name' => 'Competitive intelligence',
-                            'text' => 'The Competitor Discovery agent finds who else is bidding in your space. The Analysis agent reads their sites, extracts their messaging and generates counter-strategies.',
+                            'text' => 'Review the market research, proposed keywords and message. Competitor website research is context rather than proof of auction participation.',
                         ],
                         [
                             'position' => 3,
                             'name' => 'Autonomous optimisation',
-                            'text' => 'Deploy in one click. Self-optimising agents fix disapproved ads, Budget Intelligence shifts spend to peak hours, and Creative Testing replaces the variations that are losing.',
+                            'text' => 'Confirm the budget and ads before deployment. Managed campaigns are monitored for delivery, policy and performance; Google review and billing still affect serving.',
                         ],
                     ]),
                 ]],
@@ -174,7 +175,7 @@ class LandingController extends Controller
         $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         if (($tenant['key'] ?? '') === 'realpropertyads') {
-            return \Inertia\Inertia::render('RealEstatePricing', [
+            return $this->renderPublic('RealEstatePricing', [
                 'plans' => Plan::active()->ordered()->where('is_free', false)->get(),
                 'faqs' => $this->faqs('pricing', $this->setupFeeUsd()),
                 'setupFeeUsd' => $this->setupFeeUsd(),
@@ -187,16 +188,15 @@ class LandingController extends Controller
 
         $plans = Plan::active()->ordered()->where('is_free', false)->get();
         $faqs = $this->faqs('pricing', $this->setupFeeUsd());
+        $lowestPrice = $plans->where('billing_interval', 'month')->where('price_cents', '>', 0)->min('price_cents');
 
-        return \Inertia\Inertia::render('Pricing', [
+        return $this->renderPublic('Pricing', [
             'plans' => $plans,
             'faqs' => $faqs,
             'setupFeeUsd' => $this->setupFeeUsd(),
             'meta' => $this->meta(
-                // Was "from A$250/mo" while the cards on the page charge US$149
-                // and US$249 — the title advertised a price the page contradicts.
-                'Pricing — Google Ads Management from US$149/mo | sitetospend',
-                'Flat monthly pricing for automated Google and Meta ads management. No percentage of ad spend, no lock-in contract. See plans and start free.',
+                'Pricing — Google Ads Management'.($lowestPrice ? ' from US$'.number_format($lowestPrice / 100, 0).'/mo' : '').' | sitetospend',
+                'Compare managed Google and Meta ads with a one-time Google Ads setup. Service fees and ad spend are separate. Review your campaign before launch.',
                 null,
                 null,
                 [$this->faqSchema($faqs)],
@@ -206,12 +206,12 @@ class LandingController extends Controller
 
     public function about()
     {
-        return \Inertia\Inertia::render('About', [
+        return $this->renderPublic('About', [
             'meta' => $this->meta(
                 'About sitetospend — Ads Management Without an Agency',
-                'We built the ad agency we wanted to hire: AI agents that run Google and Meta campaigns properly, at a fraction of agency cost.',
-                'About sitetospend — Democratising Digital Advertising with AI',
-                'Our mission: agency-level marketing results at a fraction of the cost, run by autonomous AI agents.',
+                'Site to Spend brings campaign preparation, ad platform monitoring and performance reporting together for businesses without a large marketing team.',
+                'About sitetospend — AI Campaign Preparation & Management',
+                'Our mission is to make campaign preparation, management and reporting easier to understand for business owners.',
                 [[
                     '@type' => 'AboutPage',
                     'name' => 'About sitetospend',
@@ -228,6 +228,15 @@ class LandingController extends Controller
                     ],
                 ]],
             ),
+        ]);
+    }
+
+    /** @param array<string, mixed> $props */
+    private function renderPublic(string $component, array $props): \Inertia\Response
+    {
+        return \Inertia\Inertia::render($component, [
+            ...$props,
+            'publicContent' => PublicMarketingContent::forComponent($component),
         ]);
     }
 

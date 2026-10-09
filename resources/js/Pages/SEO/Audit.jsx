@@ -1,3 +1,4 @@
+import IndexingHealthReport from '@/Components/IndexingHealthReport';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
@@ -84,7 +85,7 @@ export default function Audit({ audit }) {
         );
     }
 
-    const scoreColor = audit.score >= 80 ? 'text-green-600' : audit.score >= 60 ? 'text-yellow-600' : 'text-red-600';
+    const scoreColor = audit.score == null ? 'text-gray-400' : audit.score >= 80 ? 'text-green-600' : audit.score >= 60 ? 'text-yellow-600' : 'text-red-600';
 
     return (
         <AuthenticatedLayout>
@@ -99,8 +100,8 @@ export default function Audit({ audit }) {
                             <p className="mt-1 text-sm text-gray-500">Audited on {new Date(audit.created_at).toLocaleString()}</p>
                         </div>
                         <div className="text-center">
-                            <span className={`text-5xl font-bold ${scoreColor}`}>{audit.score}</span>
-                            <p className="text-xs text-gray-500 mt-1">Overall Score</p>
+                            <span className={`text-5xl font-bold ${scoreColor}`}>{audit.score ?? '—'}</span>
+                            <p className="text-xs text-gray-500 mt-1">{audit.score == null ? 'Indexing check' : 'Technical checklist score'}</p>
                         </div>
                     </div>
 
@@ -200,6 +201,8 @@ export default function Audit({ audit }) {
                         </Section>
                     )}
 
+                    <IndexingHealthReport report={audit.indexing_analysis} />
+
                     {/* Meta Analysis */}
                     {audit.meta_analysis && (
                         <Section title="Meta Tags">
@@ -253,9 +256,9 @@ export default function Audit({ audit }) {
                     {audit.image_analysis && (
                         <Section title="Images">
                             <div className="grid grid-cols-3 gap-4 text-sm">
-                                <div><span className="text-gray-500">Total:</span> <span className="font-medium">{audit.image_analysis.total ?? 0}</span></div>
-                                <div><span className="text-gray-500">Missing Alt:</span> <span className="font-medium text-red-600">{audit.image_analysis.missing_alt ?? 0}</span></div>
-                                <div><span className="text-gray-500">Oversized:</span> <span className="font-medium text-yellow-600">{audit.image_analysis.oversized ?? 0}</span></div>
+                                <div><span className="text-gray-500">Total:</span> <span className="font-medium">{audit.image_analysis.total_images ?? audit.image_analysis.total ?? 0}</span></div>
+                                <div><span className="text-gray-500">Missing Alt:</span> <span className="font-medium text-red-600">{audit.image_analysis.missing_alt_count ?? audit.image_analysis.missing_alt ?? 0}</span></div>
+                                <div><span className="text-gray-500">Tracking pixels:</span> <span className="font-medium">{audit.image_analysis.tracking_pixel_count ?? 'Not measured'}</span></div>
                             </div>
                         </Section>
                     )}

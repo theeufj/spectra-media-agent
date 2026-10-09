@@ -24,6 +24,11 @@ export default function Footer() {
                             <li><Link href="/features" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Features</Link></li>
                             <li><Link href="/how-it-works" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">How It Works</Link></li>
                             <li><Link href="/pricing" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Pricing</Link></li>
+                            {tenant.key === 'sitetospend' && <>
+                                <li><Link href="/google-ads-management" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Google Ads Management</Link></li>
+                                <li><Link href="/ai-ads-management" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">AI Ads Management</Link></li>
+                                <li><Link href="/google-ads-setup" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">One-Time Google Ads Setup</Link></li>
+                            </>}
                         </ul>
                     </div>
 

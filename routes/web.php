@@ -20,6 +20,9 @@ Route::get('/features', [LandingController::class, 'features'])->name('features'
 Route::get('/how-it-works', [LandingController::class, 'howItWorks'])->name('how-it-works');
 Route::get('/pricing', [LandingController::class, 'pricing'])->name('pricing');
 Route::get('/about', [LandingController::class, 'about'])->name('about');
+Route::get('/google-ads-management', [\App\Http\Controllers\MarketingPageController::class, 'googleAdsManagement'])->name('google-ads-management');
+Route::get('/ai-ads-management', [\App\Http\Controllers\MarketingPageController::class, 'aiAdsManagement'])->name('ai-ads-management');
+Route::get('/google-ads-setup', [\App\Http\Controllers\MarketingPageController::class, 'googleAdsSetup'])->name('google-ads-setup');
 
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
@@ -27,9 +30,8 @@ Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privac
 Route::get('/blog', [\App\Http\Controllers\HelpController::class, 'index'])->name('blog.index');
 Route::get('/blog/{article}', [\App\Http\Controllers\HelpController::class, 'show'])->name('blog.show');
 
-// Served per-tenant: the templates live in resources/ and the <loc>/Sitemap
-// hosts are rewritten to the requesting domain, so vertical skins stop
-// advertising sitetospend.com URLs to crawlers (ours included).
+// Canonical pages only: shared guides belong to SiteToSpend; distinct vertical
+// landing/pricing/how-it-works pages remain on their own domains.
 Route::get('/sitemap.xml', [\App\Http\Controllers\TenantStaticController::class, 'sitemap'])->name('sitemap');
 Route::get('/robots.txt', [\App\Http\Controllers\TenantStaticController::class, 'robots'])->name('robots');
 
@@ -911,6 +913,8 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/seo', [SeoController::class, 'index'])->name('seo.index');
     Route::get('/seo/work-status', [SeoController::class, 'workStatus'])->name('seo.work-status');
     Route::post('/seo/audit', [SeoController::class, 'runAudit'])->name('seo.audit');
+    Route::post('/seo/search-console/verify', [SeoController::class, 'verifySearchConsole'])->middleware('throttle:4,60')->name('seo.search-console.verify');
+    Route::post('/seo/indexing/check', [SeoController::class, 'checkIndexing'])->middleware('throttle:4,60')->name('seo.indexing.check');
     Route::get('/seo/audit/{audit}', [SeoController::class, 'auditDetail'])->name('seo.audit.detail');
     Route::get('/seo/rankings', [SeoController::class, 'rankings'])->name('seo.rankings');
     Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');

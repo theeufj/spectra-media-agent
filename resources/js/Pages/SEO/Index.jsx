@@ -1,3 +1,4 @@
+import IndexingHealthReport from '@/Components/IndexingHealthReport';
 import WorkStatusBanner from '@/Components/WorkStatusBanner';
 import FormErrorSummary from '@/Components/FormErrorSummary';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -31,8 +32,12 @@ function StatCard({ label, value, color }) {
     );
 }
 
-export default function Index({ latestAudit, audits = [], rankingSummary, topRankings = [], competitors = [], domain, auditRun = null }) {
+export default function Index({ latestAudit, audits = [], rankingSummary, topRankings = [], competitors = [], domain, auditRun = null, indexingAudit = null, indexingRun = null, searchConsoleConnection = null, verificationRun = null }) {
     const form = useForm({ url: auditRun?.context?.url || (domain ? `https://${domain}` : '') });
+    const [verificationBusy, setVerificationBusy] = useState(['queued', 'running'].includes(verificationRun?.status));
+    const [verificationSubmitting, setVerificationSubmitting] = useState(false);
+    const [indexingBusy, setIndexingBusy] = useState(['queued', 'running'].includes(indexingRun?.status));
+    const [indexingSubmitting, setIndexingSubmitting] = useState(false);
     const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(auditRun?.status));
     const running = form.processing || workBusy;
 
@@ -58,6 +63,20 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                         </div>
                     </div>
 
+                    {searchConsoleConnection && !searchConsoleConnection.bound && (
+                        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-5">
+                            <h2 className="font-semibold text-gray-900">Verify website ownership for organic search reports</h2>
+                            <p className="mt-2 text-sm text-gray-700">Install the tracking container assigned to this customer on {searchConsoleConnection.host || 'your website'}, then verify ownership. Changing the website requires verification again.</p>
+                            {!searchConsoleConnection.can_verify && searchConsoleConnection.customer_uuid && <Link href={route('customers.gtm.setup', searchConsoleConnection.customer_uuid)} className="mt-3 inline-block text-sm text-brand-dark underline">Set up your assigned tracking container</Link>}
+                            <button disabled={!searchConsoleConnection.can_verify || verificationBusy || verificationSubmitting} onClick={() => {
+                                setVerificationSubmitting(true);
+                                router.post(route('seo.search-console.verify'), {}, { preserveScroll: true, onFinish: () => setVerificationSubmitting(false) });
+                            }} className="ml-3 mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:opacity-50">Verify website ownership</button>
+                            <p className="mt-3 text-xs text-gray-600">Contact support if website verification cannot finish. We can help confirm your website ownership and Search Console access.</p>
+                        </div>
+                    )}
+                    <WorkStatusBanner initialRun={verificationRun} url={route('seo.work-status')} task="search-console-verification" label="Website ownership verification" reloadOnly={['searchConsoleConnection', 'verificationRun']} onBusyChange={setVerificationBusy} />
+
                     {/* Run Audit */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-3">Run SEO Audit</h2>
@@ -82,14 +101,23 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                     </div>
 
                     <WorkStatusBanner initialRun={auditRun} url={route('seo.work-status')} task="seo-audit" label="SEO audit" reloadOnly={['latestAudit', 'audits', 'auditRun']} onBusyChange={setWorkBusy} />
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
+                        <button disabled={indexingBusy || indexingSubmitting} onClick={() => {
+                            setIndexingSubmitting(true);
+                            router.post(route('seo.indexing.check'), {}, { preserveScroll: true, onFinish: () => setIndexingSubmitting(false) });
+                        }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50">Check Google indexing</button>
+                        <p className="text-sm text-gray-500">Checks sitemap pages for exclusions and canonical conflicts.</p>
+                    </div>
+                    <WorkStatusBanner initialRun={indexingRun} url={route('seo.work-status')} task="indexing" label="Google indexing check" reloadOnly={['indexingAudit', 'indexingRun', 'audits']} onBusyChange={setIndexingBusy} />
+                    <IndexingHealthReport report={indexingAudit?.indexing_analysis} />
                     {/* Overview */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-white rounded-lg border border-gray-200 p-6 flex justify-center">
                             <ScoreRing score={latestAudit?.score} />
                         </div>
-                        <StatCard label="Keywords Tracked" value={rankingSummary?.total_keywords ?? 0} />
-                        <StatCard label="Avg. Position" value={rankingSummary?.avg_position ? rankingSummary.avg_position.toFixed(1) : '—'} />
-                        <StatCard label="Top 10 Rankings" value={rankingSummary?.top_10_count ?? 0} color="text-green-600" />
+                        <StatCard label="Organic queries measured" value={rankingSummary?.total_keywords ?? 0} />
+                        <StatCard label="Mean query position" value={rankingSummary?.avg_position ? rankingSummary.avg_position.toFixed(1) : '—'} />
+                        <StatCard label="Average position ≤ 10" value={rankingSummary?.top_10_count ?? 0} color="text-green-600" />
                     </div>
 
                     {/* Latest Issues */}
@@ -186,11 +214,11 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                         {topRankings.map((r, i) => (
                                             <tr key={i} className="border-b border-gray-100">
                                                 <td className="py-2 font-medium text-gray-900">{r.keyword}</td>
-                                                <td className="py-2">{r.position}</td>
+                                                <td className="py-2">{r.average_position != null ? r.average_position.toFixed(1) : r.position}</td>
                                                 <td className="py-2">
-                                                    {r.change > 0 && <span className="text-green-600">↑{r.change}</span>}
-                                                    {r.change < 0 && <span className="text-red-600">↓{Math.abs(r.change)}</span>}
-                                                    {r.change === 0 && <span className="text-gray-500">—</span>}
+                                                    {(r.average_change ?? r.change) > 0 && <span className="text-green-600">↑{r.average_change != null ? r.average_change.toFixed(1) : r.change}</span>}
+                                                    {(r.average_change ?? r.change) < 0 && <span className="text-red-600">↓{Math.abs(r.average_change ?? r.change).toFixed(1)}</span>}
+                                                    {(r.average_change ?? r.change) === 0 && <span className="text-gray-500">—</span>}
                                                 </td>
                                                 <td className="py-2 text-gray-500 truncate max-w-xs">{r.url}</td>
                                             </tr>
@@ -213,7 +241,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                             <p className="text-xs text-gray-500">{new Date(audit.created_at).toLocaleDateString()}</p>
                                         </div>
                                         <span className={`text-lg font-bold ${audit.score >= 80 ? 'text-green-600' : audit.score >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                            {audit.score}
+                                            {audit.score ?? 'Indexing check'}
                                         </span>
                                     </Link>
                                 ))}

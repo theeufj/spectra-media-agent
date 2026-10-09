@@ -88,4 +88,3 @@ Disallow: /admin
 Disallow: /subscription
 
 Sitemap: https://sitetospend.com/sitemap.xml
-Sitemap: https://sitetospend.com/llms.txt

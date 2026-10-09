@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property \Illuminate\Support\Carbon|null $reporting_start
+ * @property \Illuminate\Support\Carbon|null $reporting_end
+ */
 class SeoRanking extends Model
 {
     use BelongsToCustomer;
@@ -22,6 +26,8 @@ class SeoRanking extends Model
         'previous_position',
         'change',
         'date',
+        'source', 'average_position', 'previous_average_position', 'average_change',
+        'reporting_start', 'reporting_end', 'clicks', 'impressions', 'ctr',
     ];
 
     protected function casts(): array
@@ -31,6 +37,9 @@ class SeoRanking extends Model
             'previous_position' => 'integer',
             'change' => 'integer',
             'date' => 'date',
+            'average_position' => 'float', 'previous_average_position' => 'float', 'average_change' => 'float',
+            'reporting_start' => 'date', 'reporting_end' => 'date',
+            'clicks' => 'integer', 'impressions' => 'integer', 'ctr' => 'float',
         ];
     }
 

@@ -250,11 +250,12 @@ Schedule::command('pmax:check-assets')->weekly()->withoutOverlapping();
 // ============================================================
 
 // Daily keyword rank tracking - tracks SEO positions for all customers with keywords
+Schedule::job(new Scheduled\DispatchSearchIndexingChecks)->name('check-search-indexing')->weeklyOn(1, '05:45')->withoutOverlapping();
+
 Schedule::job(new Scheduled\DispatchKeywordRankingTracking)->name('track-keyword-rankings')->dailyAt('05:00')->withoutOverlapping();
 
-// Sitemap is maintained as a committed template in resources/sitemap.xml and
-// served per-tenant by TenantStaticController, which rewrites the host to the
-// requesting domain. No need to regenerate dynamically.
+// PublicSitemap builds canonical URLs from the public catalog and article data
+// when requested; source commit dates are cached. No scheduled rebuild needed.
 
 // Weekly cleanup - remove expired proposals and temp files
 Schedule::job(new \App\Jobs\CleanupTemporaryFiles)->weeklyOn(0, '03:00')->withoutOverlapping();

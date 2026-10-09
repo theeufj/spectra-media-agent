@@ -21,6 +21,8 @@ class LegalController extends Controller
     public function terms()
     {
         return \Inertia\Inertia::render('Legal/Terms', [
+            'legalContent' => file_get_contents(resource_path('legal/terms.html')),
+            'publicContent' => ['type' => 'legal'],
             'meta' => $this->meta(
                 'Terms of Service | sitetospend',
                 'The terms covering your use of sitetospend: subscriptions, ad spend billing, account access, cancellation and liability.',
@@ -36,6 +38,8 @@ class LegalController extends Controller
     public function privacy()
     {
         return \Inertia\Inertia::render('Legal/Privacy', [
+            'legalContent' => file_get_contents(resource_path('legal/privacy.html')),
+            'publicContent' => ['type' => 'legal'],
             'meta' => $this->meta(
                 'Privacy Policy | sitetospend',
                 'What data sitetospend collects, why we collect it, who we share it with, how long we keep it, and how to have it deleted.',

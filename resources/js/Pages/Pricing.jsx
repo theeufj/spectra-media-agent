@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React, { useEffect } from 'react';
 import { useTenant } from '@/hooks/useTenant';
 import PageTitle from '@/Components/PageTitle';
@@ -21,7 +22,7 @@ const trustSeals = [
  * No <Head> here — see the note in Landing.jsx. LandingController::pricing
  * owns this page's title, description, Open Graph pair and FAQPage schema.
  */
-export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999 }) {
+export default function Pricing({ auth, publicContent, plans = [], faqs = [], setupFeeUsd = 999 }) {
     useEffect(() => { trackConversion('pricing_visit'); }, []);
     const tenant = useTenant();
     const brand = tenant?.name || 'sitetospend';
@@ -35,20 +36,9 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
 
                 <main>
                     <Hero
-                        eyebrow="Pricing"
-                        headline="Simple, transparent pricing"
-                        /*
-                            Twice wrong before this. "Try free with generous limits"
-                            oversold it; my replacement described a free tier's
-                            contents, which is worse, because there is no free tier —
-                            FreeTierTest pins that the `free` row is an internal
-                            limits profile that is never listed and never deploys.
-                            Both sentences promised something the product refuses.
-
-                            What is actually true: you can build the whole thing and
-                            look at it. Putting it live is what you pay for.
-                        */
-                        sub="Explore your business profile free. Choose ongoing management or a one-time campaign build. Ad spend is separate from your service fee."
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
+                        sub={publicContent.intro}
                     />
 
                     {/* Comparison Table */}
@@ -157,6 +147,7 @@ export default function Pricing({ auth, plans = [], faqs = [], setupFeeUsd = 999
                         secondaryCta={{ href: '/features', label: 'Explore features' }}
                         note="Free to explore · Review before launch · Ad spend charged separately"
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

@@ -10,7 +10,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Record organic ranking positions for customers tracking active keywords.
+ * Record organic ranking positions for customer websites, independently of their paid ad keywords.
  *
  * Was a Schedule::call() closure. Those run inside the scheduler tick: the
  * query, the fan-out and any HTTP all happen synchronously in that one process,
@@ -31,7 +31,7 @@ class DispatchKeywordRankingTracking implements ShouldQueue
 
     public function handle(): void
     {
-        Customer::whereHas('keywords', fn ($q) => $q->where('status', 'active'))
+        Customer::whereNotNull('website')->where('website', '!=', '')
             ->each(function ($customer) {
                 \App\Jobs\TrackKeywordRankings::dispatch($customer->id);
             });

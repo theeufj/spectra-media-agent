@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\GeminiService;
 use App\Services\XaiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -29,8 +30,17 @@ class XaiRoutingTest extends TestCase
     {
         parent::setUp();
 
-        config(['services.xai.api_key' => 'test-xai-key']);
-        \Illuminate\Support\Facades\Cache::forget('xai:unavailable');
+        config([
+            'services.xai.api_key' => 'test-xai-key',
+            'services.openrouter.api_key' => null,
+            'services.google.project_id' => 'test-project',
+            'services.google.location' => 'us-central1',
+            'services.google.credentials_path' => '/dev/null',
+        ]);
+        Cache::forget('xai:unavailable');
+        // google/auth uses Guzzle directly, outside Laravel's HTTP fake.
+        // Keep routing tests away from a developer's real refresh credential.
+        Cache::put('gcp_vertex_access_token', 'test-token', 3000);
     }
 
     private function xaiAnswers(string $text = 'Grok answered'): void
@@ -40,6 +50,15 @@ class XaiRoutingTest extends TestCase
                 'choices' => [['message' => ['content' => $text], 'finish_reason' => 'stop']],
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
             ], 200),
+        ]);
+    }
+
+    private function geminiAnswers(): void
+    {
+        Http::fake([
+            'aiplatform.googleapis.com/*' => Http::response([[
+                'candidates' => [['content' => ['parts' => [['text' => 'Gemini answered']]]]],
+            ]], 200),
         ]);
     }
 
@@ -81,18 +100,19 @@ class XaiRoutingTest extends TestCase
     public function test_gemini_still_answers_when_that_is_the_setting(): void
     {
         config(['ai.text_provider' => 'gemini']);
-        Http::fake(['api.x.ai/*' => Http::response([], 500)]);
+        $this->geminiAnswers();
 
         // Nothing should reach xAI at all — the setting is not advisory.
-        app(GeminiService::class)->generateContent(config('ai.models.default'), 'Write copy.');
+        $result = app(GeminiService::class)->generateContent(config('ai.models.default'), 'Write copy.');
 
+        $this->assertSame('Gemini answered', $result['text']);
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'api.x.ai'));
     }
 
     public function test_a_vision_call_never_routes_to_xai(): void
     {
         config(['ai.text_provider' => 'xai']);
-        Http::fake();
+        $this->geminiAnswers();
 
         /*
            An image in the prompt is a vision call and this client sends text
@@ -111,7 +131,7 @@ class XaiRoutingTest extends TestCase
     public function test_a_grounded_call_never_routes_to_xai(): void
     {
         config(['ai.text_provider' => 'xai']);
-        Http::fake();
+        $this->geminiAnswers();
 
         // Google Search grounding is Gemini's own feature: a caller asking for
         // it wants answers checked against the live web, and a model that

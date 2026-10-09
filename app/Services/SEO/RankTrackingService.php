@@ -4,257 +4,116 @@ namespace App\Services\SEO;
 
 use App\Models\Customer;
 use App\Models\SeoRanking;
-use App\Services\FirecrawlService;
-use Illuminate\Support\Facades\Log;
 
-/**
- * Keyword rank tracking service.
- *
- * Tracks daily search engine ranking positions for target keywords
- * using Firecrawl search API.
- */
+/** Organic query measurements from Search Console, separate from paid ad keywords. */
 class RankTrackingService
 {
-    protected Customer $customer;
+    public function __construct(protected Customer $customer) {}
 
-    protected FirecrawlService $firecrawl;
-
-    protected SearchConsoleService $searchConsole;
-
-    /** Cached Search Console rows for this run, keyed by query. */
-    private ?array $searchConsoleRows = null;
-
-    public function __construct(Customer $customer)
+    public function trackOrganicQueries(int $limit = 50): array
     {
-        $this->customer = $customer;
-        $this->firecrawl = app(FirecrawlService::class);
-        $this->searchConsole = app(SearchConsoleService::class);
+        $searchConsole = app(SearchConsoleService::class);
+        if (! $searchConsole->isVerified($this->customer)) {
+            return ['success' => false, 'error' => 'Search Console property access is required to measure organic queries. Existing results are preserved.'];
+        }
+        $report = $searchConsole->performance($this->customer, 'query', 28, $limit);
+        if (! $report['success']) {
+            return $report;
+        }
+        // Associate each observed query with its most visible landing page.
+        // Query metrics remain from the host-filtered query report; do not
+        // rebuild them by summing a potentially truncated query/page report.
+        $pageReport = $searchConsole->performance($this->customer, 'query_page', 28, 25000);
+        $pages = collect($pageReport['rows'] ?? [])->groupBy('key')->map(fn ($rows) => $rows->sortByDesc('impressions')->first()['page'] ?? null);
+        $domain = (string) (parse_url($this->customer->website, PHP_URL_HOST) ?: $this->customer->website);
+        $count = 0;
+        foreach ($report['rows'] ?? [] as $row) {
+            if (! filled($row['key']) || ! is_numeric($row['position']) || ($row['impressions'] ?? 0) < 1) {
+                continue;
+            }
+            $previous = SeoRanking::where('customer_id', $this->customer->id)
+                ->where('keyword', $row['key'])->where('source', 'google_search_console')
+                ->where('reporting_end', '<', $report['reporting_end'])
+                ->orderByDesc('reporting_end')->first();
+            $existing = SeoRanking::where('customer_id', $this->customer->id)
+                ->where('keyword', $row['key'])->where('source', 'google_search_console')
+                ->whereDate('date', now()->toDateString())->first();
+            SeoRanking::updateOrCreate([
+                'customer_id' => $this->customer->id, 'keyword' => $row['key'],
+                'date' => now()->toDateString(), 'source' => 'google_search_console',
+            ], [
+                'domain' => $domain, 'search_engine' => 'google',
+                'position' => null, 'previous_position' => null, 'change' => null,
+                'average_position' => $row['position'],
+                'previous_average_position' => $previous?->average_position,
+                'average_change' => $previous?->average_position !== null ? $previous->average_position - $row['position'] : null,
+                'url' => $pageReport['success'] ? $pages->get($row['key']) : ($existing->url ?? $previous->url ?? null),
+                'reporting_start' => $report['reporting_start'], 'reporting_end' => $report['reporting_end'],
+                'clicks' => $row['clicks'], 'impressions' => $row['impressions'], 'ctr' => $row['ctr'],
+            ]);
+            $count++;
+        }
+
+        return ['success' => true, 'tracked' => $count, 'warning' => $pageReport['success'] ? null : 'Query metrics were saved, but landing page associations were unavailable.'];
     }
 
-    /**
-     * Track rankings for a set of keywords against a domain.
-     */
+    /** Kept for existing callers; the measured terms come from organic search, not ad keywords. */
     public function trackKeywords(array $keywords, string $domain): array
     {
-        $results = [];
-
-        foreach ($keywords as $keyword) {
-            try {
-                $ranking = $this->checkRanking($keyword, $domain);
-
-                SeoRanking::updateOrCreate(
-                    [
-                        'customer_id' => $this->customer->id,
-                        'keyword' => $keyword,
-                        'date' => now()->toDateString(),
-                    ],
-                    [
-                        'domain' => $domain,
-                        'position' => $ranking['position'],
-                        'url' => $ranking['url'],
-                        'search_engine' => 'google',
-                        'previous_position' => $ranking['previous_position'],
-                        'change' => $ranking['change'],
-                    ]
-                );
-                $results[] = $ranking;
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('RankTracking: Keyword could not be measured', ['keyword' => $keyword, 'error' => $e->getMessage()]);
-                // Keep previous measurements rather than replacing them with a
-                // false "not ranked" result when a provider is unavailable.
-                $results[] = ['keyword' => $keyword, 'failed' => true];
-            }
-        }
-
-        Log::info('RankTracking: Completed', [
-            'customer_id' => $this->customer->id,
-            'keywords_tracked' => count($results),
-            'domain' => $domain,
-        ]);
-
-        return $results;
+        return $this->trackOrganicQueries();
     }
 
-    /**
-     * Check current ranking for a keyword.
-     */
-    protected function checkRanking(string $keyword, string $domain): array
+    public function latestRankings()
     {
-        // Get previous ranking for comparison
-        $previous = SeoRanking::where('customer_id', $this->customer->id)
-            ->where('keyword', $keyword)
-            ->where('date', '<', now()->toDateString())
-            ->orderBy('date', 'desc')
-            ->first();
-
-        $previousPosition = $previous?->position;
-
-        // Use Firecrawl search to find ranking position
-        $result = $this->searchForPosition($keyword, $domain);
-
-        $change = null;
-        if ($previousPosition !== null && $result['position'] !== null) {
-            $change = $previousPosition - $result['position']; // Positive = improved
+        $query = SeoRanking::where('customer_id', $this->customer->id);
+        $date = (clone $query)->max('date');
+        $latest = $query->whereDate('date', $date ?? now()->toDateString())->get();
+        // A first-party measurement and an old scraped snapshot are different
+        // instruments. Never combine them in a summary or trend.
+        if ($latest->contains('source', 'google_search_console')) {
+            $latest = $latest->where('source', 'google_search_console');
         }
 
-        return [
-            'keyword' => $keyword,
-            'domain' => $domain,
-            'position' => $result['position'],
-            'url' => $result['url'],
-            'previous_position' => $previousPosition,
-            'change' => $change,
-            'tracked_at' => now()->toIso8601String(),
-        ];
+        return $latest->sortBy(fn ($r) => $r->average_position ?? $r->position ?? PHP_INT_MAX)->values();
     }
 
-    /**
-     * Search via Firecrawl to find the domain's ranking position for a keyword.
-     */
-    protected function searchForPosition(string $keyword, string $domain): array
-    {
-        // Search Console first: it is first-party, free, and reports the average
-        // position across every real impression rather than one scraped
-        // snapshot. Scraping is kept only as a fallback for domains we are not
-        // verified on — competitors, mainly.
-        $fromSearchConsole = $this->positionFromSearchConsole($keyword);
-
-        if ($fromSearchConsole !== null) {
-            return $fromSearchConsole;
-        }
-
-        try {
-            if (! $this->firecrawl->isConfigured()) {
-                Log::debug('RankTracking: Firecrawl not configured');
-
-                throw new \RuntimeException('No ranking data provider is configured for this keyword.');
-            }
-
-            // Fetch up to 100 results to find position
-            $response = $this->firecrawl->search($keyword, 100);
-
-            if (! $response['success']) {
-                throw new \RuntimeException('The ranking data provider could not complete this search.');
-            }
-
-            foreach ($response['results'] as $index => $item) {
-                $url = $item['url'] ?? '';
-                if (str_contains($url, $domain)) {
-                    return [
-                        'position' => $index + 1,
-                        'url' => $url,
-                    ];
-                }
-            }
-
-            return ['position' => null, 'url' => null]; // Not found in results
-        } catch (\Throwable $e) {
-            Log::debug('RankTracking: Search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
-
-            throw $e;
-        }
-    }
-
-    /**
-     * Average position for a keyword from Search Console, if the site is
-     * verified and the keyword actually drew impressions.
-     *
-     * Returns null — meaning "no answer here" — rather than a null position,
-     * so the caller can fall through to scraping instead of recording a miss.
-     * The whole point of this change is that "we could not measure" and "the
-     * site does not rank" stop looking identical, which is how 4,264 rows of
-     * nulls went unnoticed for three months.
-     *
-     * @return array{position: int|null, url: string|null}|null
-     */
-    private function positionFromSearchConsole(string $keyword): ?array
-    {
-        if ($this->searchConsoleRows === null) {
-            if (! $this->searchConsole->isVerified($this->customer)) {
-                $this->searchConsoleRows = [];
-            } else {
-                $result = $this->searchConsole->performance($this->customer, 'query', 28, 500);
-
-                $this->searchConsoleRows = $result['success']
-                    ? collect($result['rows'] ?? [])
-                        ->filter(fn ($r) => filled($r['key']))
-                        ->keyBy(fn ($r) => mb_strtolower($r['key']))
-                        ->all()
-                    : [];
-            }
-        }
-
-        $row = $this->searchConsoleRows[mb_strtolower($keyword)] ?? null;
-
-        if (! $row) {
-            return null;
-        }
-
-        return [
-            'position' => (int) round($row['position']),
-            'url' => null,
-        ];
-    }
-
-    /**
-     * Get ranking trends for a keyword over time.
-     */
     public function getTrends(string $keyword, int $days = 30): array
     {
+        $latest = SeoRanking::where('customer_id', $this->customer->id)->where('keyword', $keyword)->orderByDesc('date')->first();
+
         return SeoRanking::where('customer_id', $this->customer->id)
-            ->where('keyword', $keyword)
-            ->where('date', '>=', now()->subDays($days)->toDateString())
-            ->orderBy('date')
-            ->get()
+            ->where('keyword', $keyword)->where('source', $latest->source ?? 'legacy_unknown')
+            ->where('date', '>=', now()->subDays($days)->toDateString())->orderBy('date')->get()
             ->map(fn ($r) => [
-                'date' => $r->date,
-                'position' => $r->position,
-                'change' => $r->change,
-            ])
-            ->toArray();
+                'date' => $r->date, 'position' => $r->average_position ?? $r->position,
+                'change' => $r->average_change ?? $r->change, 'source' => $r->source,
+                'reporting_start' => $r->reporting_start, 'reporting_end' => $r->reporting_end,
+            ])->toArray();
     }
 
-    /**
-     * Get current rankings summary for all tracked keywords.
-     */
     public function getSummary(): array
     {
-        $latest = SeoRanking::where('customer_id', $this->customer->id)
-            ->whereDate('date', now()->toDateString())
-            ->get();
-
-        // Only rows that actually have a position may count towards a bucket.
-        //
-        // These previously filtered $latest directly, and in PHP `null <= 10` is
-        // true — so every keyword we failed to measure was counted as a page-one
-        // ranking. With Firecrawl returning 402 and all 50 positions null, the
-        // dashboard reported "Top 10 Rankings: 50" while the true figure, since
-        // confirmed against Search Console, was zero.
-        $ranked = $latest->whereNotNull('position');
-
-        $top3 = $ranked->where('position', '<=', 3)->count();
-        $top10 = $ranked->where('position', '<=', 10)->count();
-        $top30 = $ranked->where('position', '<=', 30)->count();
-        $improved = $latest->where('change', '>', 0)->count();
-        $declined = $latest->where('change', '<', 0)->count();
-        $avgPosition = $ranked->avg('position');
+        $latest = $this->latestRankings();
+        $ranked = $latest->filter(fn ($r) => ($r->average_position ?? $r->position) !== null);
+        $positions = $ranked->map(fn ($r) => $r->average_position ?? $r->position);
+        $top3 = $positions->filter(fn ($p) => $p <= 3)->count();
+        $top10 = $positions->filter(fn ($p) => $p <= 10)->count();
+        $top30 = $positions->filter(fn ($p) => $p <= 30)->count();
+        $changes = $latest->map(fn ($r) => $r->average_change ?? $r->change);
+        $improved = $changes->filter(fn ($c) => $c !== null && $c > 0)->count();
+        $declined = $changes->filter(fn ($c) => $c !== null && $c < 0)->count();
+        $first = $latest->first();
 
         return [
-            'total_keywords' => $latest->count(),
-            'ranked_keywords' => $ranked->count(),
-            'top_3' => $top3,
-            'top_3_count' => $top3,
-            'top_10' => $top10,
-            'top_10_count' => $top10,
-            'top_11_30' => $top30 - $top10,
-            'not_ranking' => $latest->whereNull('position')->count(),
-            'improved' => $improved,
-            'improved_count' => $improved,
-            'declined' => $declined,
+            'total_keywords' => $latest->count(), 'ranked_keywords' => $ranked->count(),
+            'top_3' => $top3, 'top_3_count' => $top3, 'top_10' => $top10, 'top_10_count' => $top10,
+            'top_11_30' => $top30 - $top10, 'not_ranking' => $latest->count() - $ranked->count(),
+            'improved' => $improved, 'improved_count' => $improved, 'declined' => $declined,
             'unchanged' => $latest->count() - $improved - $declined,
-            'average_position' => $avgPosition,
-            'avg_position' => $avgPosition,
+            'average_position' => $positions->avg(), 'avg_position' => $positions->avg(),
+            'source' => $first?->source, 'measured_on' => $first?->date?->toDateString(),
+            'reporting_start' => $first?->reporting_start?->toDateString(),
+            'reporting_end' => $first?->reporting_end?->toDateString(),
         ];
     }
 }

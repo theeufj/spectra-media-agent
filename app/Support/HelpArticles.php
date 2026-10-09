@@ -4,6 +4,7 @@ namespace App\Support;
 
 class HelpArticles
 {
+    /** @return list<array<string, mixed>> */
     public static function all(): array
     {
         return [
@@ -30,6 +31,7 @@ class HelpArticles
         ];
     }
 
+    /** @return array<string, mixed>|null */
     public static function find(string $slug): ?array
     {
         foreach (self::all() as $article) {
@@ -41,9 +43,37 @@ class HelpArticles
         return null;
     }
 
+    /** @return list<array<string, mixed>> */
     public static function index(): array
     {
         return array_map(fn ($a) => array_diff_key($a, ['content' => '']), self::all());
+    }
+
+    /** @return list<array<string, mixed>> */
+    public static function related(string $slug): array
+    {
+        $article = self::find($slug);
+        if ($article === null) {
+            return [];
+        }
+        $clusters = [
+            ['how-conversion-tracking-works', 'what-is-smart-bidding', 'understanding-roas', 'why-your-google-ads-stop-working'],
+            ['how-budget-pacing-works', 'true-cost-of-managing-google-ads-yourself', 'google-ads-campaign-structure-mistakes', 'getting-started'],
+            ['negative-keywords-explained', 'google-ads-campaign-structure-mistakes', 'what-is-ad-rank', 'how-responsive-search-ads-work'],
+        ];
+        $preferred = [];
+        foreach ($clusters as $cluster) {
+            if (in_array($slug, $cluster, true)) {
+                $preferred = [...$preferred, ...$cluster];
+            }
+        }
+        $articles = array_values(array_filter(self::index(), fn (array $item) => $item['slug'] !== $slug));
+        usort($articles, fn (array $a, array $b) => (
+            (in_array($b['slug'], $preferred, true) ? 2 : ($b['category'] === $article['category'] ? 1 : 0))
+            <=> (in_array($a['slug'], $preferred, true) ? 2 : ($a['category'] === $article['category'] ? 1 : 0))
+        ));
+
+        return array_slice($articles, 0, 3);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -52,62 +82,32 @@ class HelpArticles
     {
         return [
             'slug' => 'how-conversion-tracking-works',
-            'title' => 'Google Ads Conversion Tracking Explained',
-            'description' => 'Learn how sitetospend.com tracks conversions after someone clicks your Google Ad — and how we set it all up automatically with no developer needed.',
-            'category' => 'Platform',
-            'read_time' => '8 min read',
+            'title' => 'Google Ads Conversion Tracking: Test Checklist',
+            'description' => 'Test Google Ads conversion tracking from a real form or purchase to the right conversion action. Includes a worked lead example and GTM checks.',
+            'category' => 'Google Ads',
+            'read_time' => '7 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-08',
             'content' => <<<'HTML'
-<h2>What is a conversion?</h2>
-<p>A conversion is any action a visitor takes that you consider valuable — filling out a contact form, making a purchase, booking a call, or signing up. When someone clicks your Google Ad and then completes one of these actions, that's a conversion.</p>
-<p>Google Ads uses conversions to understand which clicks are worth paying for. Without this data, Google shows your ads to everyone equally. With it, Google learns <em>who actually converts</em> and bids more aggressively to reach people who look like your best customers. This is the foundation of Smart Bidding.</p>
-
-<h2>The gclid — how Google links a click to a conversion</h2>
-<p>When someone clicks your Google Ad, Google appends a unique tracking code — called a <strong>gclid</strong> (Google Click Identifier) — to the destination URL:</p>
-<pre><code>https://yoursite.com/contact?gclid=CjwKCAiA85efBhBb...</code></pre>
-<p>This gclid is Google's receipt for that specific click. When a conversion fires later, Google matches it back to the original click using the gclid. That's how it knows which ad, which keyword, and which audience led to the conversion.</p>
-<p>sitetospend.com captures this gclid automatically when a visitor lands on your site and can upload server-side conversions later — even for actions that happen in our system, not on your webpage.</p>
-
-<h2>Google Tag Manager — the remote control for your website</h2>
-<p>Normally, adding tracking to a website means editing its HTML every time. Google Tag Manager (GTM) removes this entirely. The client installs <strong>one small snippet</strong> into their site once, and sitetospend.com can then add, change, or remove tracking tags remotely — no developer involvement needed after the initial install.</p>
-<p>Think of GTM as an app store installed on your website. sitetospend.com pushes tags into it via the GTM API. Your site automatically runs whatever we publish.</p>
-<ul>
-  <li><strong>Client's job:</strong> Paste the GTM snippet into the website <code>&lt;head&gt;</code> and <code>&lt;body&gt;</code> once (5 minutes, any developer or WordPress admin can do it)</li>
-  <li><strong>sitetospend.com's job:</strong> Create conversion actions, add tags, configure triggers, publish the container — all via API, automatically</li>
-</ul>
-
-<h2>How a conversion actually fires</h2>
-<p>Once GTM is on the site, it watches for triggers you define — a form submission, a button click, a thank-you page loading. When the trigger condition is met, the conversion tag fires and sends the gclid + a dollar value to Google Ads. Google records the conversion against the original click.</p>
-<p>Common trigger types:</p>
-<ul>
-  <li><strong>Page load</strong> — fires when a specific URL loads (e.g. <code>/thank-you</code>). Most reliable.</li>
-  <li><strong>Form submit</strong> — fires when a contact or booking form is submitted</li>
-  <li><strong>Button click</strong> — fires when "Book Now" or "Get a Quote" is clicked</li>
-  <li><strong>Phone tap</strong> — fires when a phone number link is tapped on mobile</li>
-</ul>
-
-<h2>Why we track multiple events — not just the sale</h2>
-<p>A sale or signed contract might happen once a week. Google's Smart Bidding needs at least 30 conversions per month to work well. By tracking multiple points in the funnel — each with an estimated dollar value — we give Google far more data to learn from, far faster.</p>
-<ul>
-  <li>Pricing page visit — $5 (shows commercial intent)</li>
-  <li>Contact form submitted — $30 (high intent lead)</li>
-  <li>Phone call tapped — $40 (very high intent)</li>
-  <li>Quote request sent — $60 (purchase intent)</li>
-  <li>Sale / booking confirmed — $500+ (actual revenue)</li>
-</ul>
-<p>These values don't have to be exact — they represent relative importance. Over time, sitetospend.com refines them as real revenue data comes in.</p>
-
-<h2>What sitetospend.com does automatically</h2>
-<p>When a new client connects their Google Ads account, sitetospend.com automatically:</p>
-<ol>
-  <li>Crawls their live website to detect the existing GTM container (if any)</li>
-  <li>Provisions a new GTM container if none is found</li>
-  <li>Creates a Google Ads conversion action via the API</li>
-  <li>Adds the conversion tag and trigger to the GTM container</li>
-  <li>Publishes the container so it's live immediately</li>
-  <li>Provides the GTM installation snippet if the client needs to add it to their site</li>
-</ol>
-<p>The client's only manual step is pasting the GTM snippet into their site — and only if they don't have GTM already.</p>
+<h2>Track the outcome you would pay for</h2>
+<p>Conversion tracking connects an ad interaction with a useful business action: a purchase, completed enquiry or qualified phone call. A loaded page or a clicked button can help diagnose a journey, but neither proves that a customer finished it.</p>
+<p>Start by writing the event in plain language: “a visitor successfully submits the quote form”, rather than “someone clicks Submit”. The event definition should survive a failed form, a page refresh and a visitor returning later.</p>
+<h2>An installed GTM container is only the starting point</h2>
+<p>Google Tag Manager loads the tags published in a container. Its snippet does not prove a Google Ads conversion tag exists, uses the right account or fires at the right time. Check the container ID on the website, the published version and the trigger attached to the conversion tag.</p>
+<p>Site to Spend can prepare conversion actions and publish tracking where the required permissions and integration are available. A website owner may still need to install the container or expose a reliable success event. Access to an existing container is required to change it.</p>
+<h2>Choose primary and secondary conversions deliberately</h2>
+<p>For a standard goal, a primary action is eligible for bidding when the campaign uses that goal. Secondary actions normally appear in “All conversions” for observation; a custom goal can also use secondary actions for bidding. Google explains the distinction in its <a href="https://support.google.com/google-ads/answer/11461796?hl=en">primary and secondary conversion guide</a>.</p>
+<p>A useful starting point is a completed enquiry as the primary outcome, with pricing views and contact-button clicks recorded separately. Do not promote easy page visits into the main bidding goal simply to make the conversion count larger.</p>
+<h2>Worked example: one enquiry, one conversion</h2>
+<p><strong>Hypothetical implementation example, not a customer result.</strong> A business has a quote form. After the server accepts it, the site shows a confirmation and emits a dedicated <code>quote_request_success</code> event.</p>
+<ol><li>A visitor clicks an ad and lands on the service page.</li><li>The form fails validation. No success event should fire.</li><li>The visitor fixes the form and submits it. The accepted submission fires the success event once.</li><li>The confirmation is refreshed. The same lead should not be counted again.</li></ol>
+<p>Use a submission or transaction identifier where your integration supports deduplication. Keep the identifier free of personal details. For a purchase, use the actual order value and currency; a lead value should be a defensible estimate, not a pretend sale.</p>
+<h2>Test the complete path before changing bids</h2>
+<ul><li>Open the site in <a href="https://support.google.com/tagmanager/answer/6107056?hl=en">GTM Preview and Tag Assistant</a> and confirm you are testing the live container.</li><li>Complete the real success action and verify that the intended tag fires once, after success.</li><li>Check the Google Ads conversion ID and label against the intended customer account and action.</li><li>Confirm the campaign uses that conversion goal, with the appropriate primary action.</li><li>Test the consent states relevant to your visitors. Do not bypass consent controls to make a test look successful.</li><li>Check a later real ad-attributed conversion in Google Ads after reporting has processed it.</li></ul>
+<p>Tag Assistant confirms implementation behaviour. A direct test visit without an attributable ad interaction does not prove a paid-ad conversion will appear in reports. “No recent conversions” can also reflect low volume; distinguish it from a tag failing to fire.</p>
+<h2>Keep website analytics and Google Ads reporting separate</h2>
+<p>Your website can count a successful enquiry even when Google Ads has no eligible ad interaction to attribute it to. Different attribution windows and reporting delays can also produce different totals. Reconcile a small sample of actual leads rather than demanding that every dashboard agree instantly.</p>
+<p>Once the signal is trustworthy, use it to assess <a href="/blog/how-budget-pacing-works">budget pacing</a> and <a href="/blog/why-your-google-ads-stop-working">campaign delivery problems</a>. If you want help preparing a campaign, compare <a href="/google-ads-management">ongoing management</a> with a <a href="/google-ads-setup">one-time setup and handover</a>.</p>
 HTML,
         ];
     }
@@ -118,77 +118,29 @@ HTML,
     {
         return [
             'slug' => 'how-ai-agents-work',
-            'title' => 'How Our AI Agents Optimise Your Campaigns 24/7',
-            'description' => 'sitetospend.com runs six autonomous AI agents that continuously monitor, fix, and improve your ad campaigns — without you lifting a finger.',
+            'title' => 'How AI Agents Monitor and Adjust Your Ads',
+            'description' => 'Follow an AI campaign decision from business context to a verified platform outcome. Learn what agents monitor and what still needs your input.',
             'category' => 'Platform',
-            'read_time' => '6 min read',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why autonomous agents instead of dashboards?</h2>
-<p>Most ad platforms give you a dashboard and leave the work to you. The problem: Google Ads has hundreds of levers, changes constantly, and rewards speed. A competitor can launch a new offer at 2am and steal your position before you wake up.</p>
-<p>sitetospend.com runs six AI agents that work continuously — analysing performance, making improvements, and responding to changes in real time. You get agency-level management without hiring an agency.</p>
-
-<h2>The Self-Optimising Agent</h2>
-<p>Google disapproves ads more often than you'd expect — policy changes, new keyword restrictions, editorial issues. Every hour an ad is disapproved is lost traffic. The Self-Optimising Agent:</p>
-<ul>
-  <li>Monitors all active ads for disapproval status</li>
-  <li>Identifies the specific policy violation using Google's error codes</li>
-  <li>Rewrites the ad copy using AI to be policy-compliant while maintaining your brand voice</li>
-  <li>Resubmits the ad automatically</li>
-</ul>
-<p>Most disapprovals are resolved within hours, not days.</p>
-
-<h2>The Budget Intelligence Agent</h2>
-<p>Ad spend is rarely worth the same money at every hour of the day. A plumber's ad at 3am has little value; the same ad at 7am (when people discover a leak) is highly valuable. The Budget Intelligence Agent:</p>
-<ul>
-  <li>Analyses conversion data by hour of day and day of week</li>
-  <li>Identifies your high-value and low-value windows</li>
-  <li>Adjusts bid modifiers to concentrate spend where it performs</li>
-  <li>Reallocates budget away from underperforming time slots</li>
-</ul>
-<p>Over time this produces the same number of conversions for meaningfully less spend.</p>
-
-<h2>The Quality Score Agent</h2>
-<p>Quality Score is Google's rating of your ad relevance (1–10). A higher score means lower cost-per-click for the same position. The Quality Score Agent monitors all your keywords and takes targeted action:</p>
-<ul>
-  <li><strong>Low expected CTR:</strong> generates tighter ad copy variations that feature the exact keyword</li>
-  <li><strong>Poor ad relevance:</strong> flags keywords that belong in their own dedicated ad group</li>
-  <li><strong>Poor landing page experience:</strong> recommends page improvements (keyword in H1, faster load time, matching search intent)</li>
-  <li><strong>Stuck below threshold:</strong> pauses keywords that haven't improved after 21 days to protect your budget</li>
-</ul>
-
-<h2>The Ad Extension Agent</h2>
-<p>Ad extensions (sitelinks, callouts, structured snippets, call extensions) increase your ad's real estate on the search results page — at no extra cost. Google rewards extensions with better Ad Rank. The Ad Extension Agent ensures every campaign has minimum coverage:</p>
-<ul>
-  <li>4 sitelinks — AI-generated, specific to your business and campaign</li>
-  <li>4 callouts — highlights unique selling points</li>
-  <li>1 structured snippet — your key services or products</li>
-  <li>Call extension — if your business has a phone number</li>
-</ul>
-<p>Extensions with low CTR (after 500+ impressions) are automatically replaced with AI-generated alternatives.</p>
-
-<h2>The Competitor Intelligence Agent</h2>
-<p>Every week, the Competitor Intelligence Agent:</p>
-<ul>
-  <li>Reads your website to understand your business and positioning</li>
-  <li>Searches Google to discover who is competing for your keywords</li>
-  <li>Scrapes competitor sites to extract their messaging, pricing, and offers</li>
-  <li>Identifies gaps — where they're weak, what they're not saying</li>
-  <li>Generates a counter-strategy with specific ad copy recommendations</li>
-</ul>
-<p>This intelligence feeds directly into your creative strategy and keeps your ads a step ahead of the competition.</p>
-
-<h2>The Creative Intelligence Agent</h2>
-<p>Ad copy gets stale. What worked in month one may not work in month three. The Creative Intelligence Agent continuously:</p>
-<ul>
-  <li>A/B tests headline and description combinations</li>
-  <li>Pauses underperforming variations</li>
-  <li>Generates new variations using AI, informed by your brand guidelines and competitor analysis</li>
-  <li>Improves Responsive Search Ad strength by adding better headline and description assets</li>
-</ul>
-
-<h2>How they work together</h2>
-<p>The agents share a common data layer — keyword performance, quality scores, competitor intelligence, conversion data, brand guidelines — so their decisions compound. The Creative Agent uses competitor insights. The Budget Agent uses conversion data from the conversion tracking setup. The Quality Score Agent feeds recommendations back into the Creative Agent. This is what makes the system increasingly effective over time rather than just maintaining a steady state.</p>
+<h2>An agent needs a goal, evidence and a supported action</h2>
+<p>Generating a campaign and managing it are different jobs. Generation prepares a proposal from your business sources. Ongoing management reads platform status and performance, decides whether a change is justified and checks the outcome. More automated changes do not necessarily mean better advertising.</p>
+<p>Site to Spend's agents work with your confirmed business profile, campaign goal, available reporting and the permissions of the customer advertising account. Their roles include competitor research, delivery and policy monitoring, budget review, creative testing and audience work. The managed plan keeps this work running after deployment; one-time setup ends with a paused handover.</p>
+<h2>What each part contributes</h2>
+<ul><li><strong>Business context:</strong> the service, offer, audience, locations and claims the campaign may use.</li><li><strong>Platform evidence:</strong> account restrictions, campaign and ad eligibility, spend, search terms and conversion signals.</li><li><strong>A change:</strong> a supported edit such as correcting copy, excluding unsuitable intent or adjusting a campaign setting.</li><li><strong>Verification:</strong> a later platform check showing whether the problem is resolved.</li></ul>
+<p>These are separate checkpoints. A successful API response means Google accepted a request; it does not prove that an ad is approved, has served or produced a useful lead.</p>
+<h2>Worked example: a disapproved destination</h2>
+<p><strong>Hypothetical diagnostic example, not a customer result.</strong> An ad stops serving because its destination returns an error. The campaign is still enabled, and its daily budget has not changed.</p>
+<ol><li>Read the ad's policy status and identify the affected destination.</li><li>Check that the page loads and offers what the ad promises.</li><li>If a valid replacement page exists for the same offer, make a supported destination edit and record the reason.</li><li>Verify Google's resulting review state and actual delivery.</li></ol>
+<p>If the business website is down, an ad rewrite alone cannot repair it. The account owner or website administrator must act. An agent should make that dependency visible rather than repeatedly claiming that the campaign was fixed.</p>
+<h2>Inspect an action record</h2>
+<p>Look for the affected campaign, the observation that prompted a decision, what changed, when it changed and the verification result. If a report says “improved performance”, ask which metric, which period and how much relevant data support the conclusion.</p>
+<p>A few clicks can produce large percentage swings. A lead that becomes a sale several days later also changes the interpretation of recent results. Reliable <a href="/blog/how-conversion-tracking-works">conversion tracking</a> and a sensible review period are prerequisites for performance decisions.</p>
+<h2>What still needs you</h2>
+<p>You must confirm accurate business facts, choose a budget and complete required billing, identity or website steps. Google controls advertising review and auctions. Its <a href="https://support.google.com/google-ads/answer/9208915?hl=en">Search delivery guidance</a> is useful when diagnosing restrictions.</p>
+<p>Use <a href="/blog/why-your-google-ads-stop-working">our repair checklist</a> to judge whether an outcome was verified. Compare <a href="/ai-ads-management">AI management</a> and <a href="/google-ads-setup">one-time setup</a> before deciding who should own the ongoing work.</p>
 HTML,
         ];
     }
@@ -199,47 +151,30 @@ HTML,
     {
         return [
             'slug' => 'what-is-smart-bidding',
-            'title' => 'Smart Bidding and Your Conversion Data',
-            'description' => 'Google\'s machine-learning bidding needs conversion data to work. Here\'s how Smart Bidding decides your bids, and why it fails without that signal.',
+            'title' => 'Smart Bidding and Reliable Conversion Data',
+            'description' => 'Choose a Google bidding goal using genuine enquiries or sales. Includes a target CPA example and checks before judging a learning campaign.',
             'category' => 'Google Ads',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>What is Smart Bidding?</h2>
-<p>Smart Bidding is Google's machine learning system for setting bids at auction time. Instead of you setting a fixed bid for a keyword, Google's algorithm analyses dozens of signals in real time — the user's device, location, time of day, search history, browser — and sets the optimal bid for <em>that specific person, in that specific moment</em>.</p>
-<p>The goal is to show your ad to people who are most likely to convert, and not waste money on people who aren't.</p>
-
-<h2>How it works in practice</h2>
-<p>Every time someone searches on Google, there's an auction. For each auction, Smart Bidding asks: "Based on everything I know about this person, what's the probability they'll convert?" It then bids accordingly:</p>
-<ul>
-  <li>High probability of converting → bids aggressively to win the impression</li>
-  <li>Low probability → bids conservatively or sits out entirely</li>
-</ul>
-<p>This happens in milliseconds, for every auction, across your entire campaign.</p>
-
-<h2>Why it needs conversion data</h2>
-<p>Smart Bidding is only as good as the data it learns from. If you have no conversions recorded, Google has no idea what a "successful" visitor looks like. It defaults to showing your ad to everyone, which wastes budget on low-intent users.</p>
-<p>The more conversions you feed it, the better it gets at identifying the signals that predict conversion. This is why sitetospend.com sets up a <strong>conversion value ladder</strong> — multiple tracked events at different stages of your funnel — rather than just tracking the final sale.</p>
-
-<h2>The learning phase</h2>
-<p>When Smart Bidding first activates, or after a significant change, the campaign enters a "learning phase." During this period Google is collecting data and your performance may fluctuate. The learning phase typically lasts 1–2 weeks and ends once Google has enough conversions to bid confidently.</p>
-<p>You can accelerate this by:</p>
-<ul>
-  <li>Tracking micro-conversions (pricing page visits, form interactions) in addition to final conversions</li>
-  <li>Assigning realistic dollar values to each event</li>
-  <li>Keeping campaigns stable — large budget or targeting changes restart the learning phase</li>
-</ul>
-
-<h2>tROAS and tCPA bidding</h2>
-<p>Once Smart Bidding has enough data, you can switch to value-based bidding strategies:</p>
-<ul>
-  <li><strong>Target ROAS (tROAS)</strong> — tell Google your target return on ad spend. Google adjusts bids to maximise conversion value while hitting your ROAS target. Best once you have conversion values set up.</li>
-  <li><strong>Target CPA (tCPA)</strong> — tell Google your target cost per acquisition. Google tries to get as many conversions as possible at or below that cost.</li>
-</ul>
-<p>Both strategies require a minimum number of conversions in the past 30 days (typically 30–50) before they work reliably. This is another reason why tracking the full funnel matters — it gets you to that threshold faster.</p>
-
-<h2>How sitetospend.com helps</h2>
-<p>sitetospend.com sets up conversion tracking automatically, tracks multiple funnel events with appropriate values, and continuously monitors campaign performance to ensure Smart Bidding always has the richest possible data set. As your conversion history grows, our agents progressively refine bid strategies to extract more value from the same budget.</p>
+<h2>Smart Bidding optimises the signal you supply</h2>
+<p>Google's Smart Bidding sets auction-time bids towards conversions or conversion value. Strategies include Maximize conversions, Target CPA, Maximize conversion value and Target ROAS. The right choice depends on what you measure and the business outcome you want. Google's <a href="https://support.google.com/google-ads/answer/7065882?hl=en">Smart Bidding guide</a> describes these strategies and their data considerations.</p>
+<p>If your main conversion is a pricing-page view, an automated strategy can pursue visits to that page rather than paid customers. Correct measurement matters before a clever target or a larger budget.</p>
+<h2>Distinguish the goal from a limit or guarantee</h2>
+<p>A target CPA is a desired average cost per action, not a guaranteed price for every enquiry. A target ROAS is a desired relationship between measured value and advertising cost, not guaranteed profit. Very restrictive targets can limit delivery; removing every constraint can also expose you to spend you did not intend.</p>
+<p>Check the strategy's current requirements for your campaign type. Avoid treating a fixed conversion count quoted in an old guide as a universal requirement for every strategy and account.</p>
+<h2>Worked example: a lead campaign with a target</h2>
+<p><strong>Hypothetical calculation, not a forecast.</strong> A campaign spent A$400 and recorded eight genuine enquiries, giving an observed A$50 cost per enquiry. The business now proposes an A$10 target CPA.</p>
+<p>The target expresses an ambition five times lower than the observed cost; entering it does not create cheaper customers. First check lead quality, conversion accuracy and the period measured. Then consider whether the offer, query intent or landing page offers a realistic path to a lower cost. A tighter target alone may reduce the auctions the campaign can enter.</p>
+<h2>Before you change the bidding strategy</h2>
+<ol><li>Test the successful form or purchase event and its deduplication.</li><li>Confirm the campaign uses the intended conversion goal.</li><li>For value-based bidding, check value and currency against actual transactions or a documented lead-value estimate.</li><li>Review complete periods that allow for conversion delay.</li><li>Record current spend, volume, qualified outcomes and the proposed change.</li></ol>
+<p>Do not count a contact-button click as a completed lead merely to create more data. Keep exploratory events separate from the outcome the business values. Our <a href="/blog/how-conversion-tracking-works">conversion checklist</a> explains the practical checks.</p>
+<h2>Evaluate a change without creating constant churn</h2>
+<p>Allow a relevant observation period and enough outcomes to interpret the result. Google recommends assessing Smart Bidding over longer periods with meaningful conversion volume; that is evaluation guidance, not a promise that every new campaign must wait for one identical threshold.</p>
+<p>A low-volume campaign can produce a noisy average. Consider the business's conversion cycle and recent setting changes before declaring a winner or repeatedly resetting the plan.</p>
+<h2>How management fits around bidding</h2>
+<p>Site to Spend does not replace Google's auction system. Its managed flow works on campaign preparation, supported settings and monitoring around the chosen goal. Use <a href="/blog/how-budget-pacing-works">budget pacing</a>, <a href="/blog/understanding-roas">ROAS and margin</a> and <a href="/google-ads-management">management scope</a> together when deciding whether a bidding change is warranted.</p>
 HTML,
         ];
     }
@@ -250,47 +185,31 @@ HTML,
     {
         return [
             'slug' => 'how-competitor-analysis-works',
-            'title' => 'How Competitor Analysis Wins You Ad Auctions',
-            'description' => 'Every week, sitetospend.com discovers your real competitors, scrapes their messaging, and generates specific counter-strategies to help your ads win.',
+            'title' => 'Competitor Research for Google Ads',
+            'description' => 'Turn competitor offers into campaign hypotheses without copying claims or guessing spend. Includes a comparison example and Auction Insights checks.',
             'category' => 'Platform',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why most businesses don't do competitor analysis</h2>
-<p>Competitor analysis is genuinely valuable — knowing what your competitors are saying, what they're offering, and where they're weak lets you write ads that win on differentiation rather than just bidding more. But it's also time-consuming and requires constant upkeep. Most businesses do it once and then forget it as the market changes.</p>
-<p>sitetospend.com runs competitor analysis automatically every week so it's always current.</p>
-
-<h2>Step 1 — Competitor discovery</h2>
-<p>The analysis starts by understanding your business. The agent reads your website content to extract your key services, target audience, and geographic focus. It then runs a series of Google searches using the keywords and phrases that describe your offering.</p>
-<p>The businesses that appear consistently in those results — in both paid ads and organic listings — are your real competitors. These are saved to your account as your competitor set.</p>
-
-<h2>Step 2 — Deep scraping</h2>
-<p>For each competitor, the agent visits their website and extracts:</p>
-<ul>
-  <li><strong>Value propositions</strong> — what they claim makes them better</li>
-  <li><strong>Pricing signals</strong> — whether they publish prices, offer packages, or compete on price</li>
-  <li><strong>Key messaging</strong> — the language and angles they lead with</li>
-  <li><strong>Trust signals</strong> — reviews, certifications, guarantees they highlight</li>
-  <li><strong>Offers and CTAs</strong> — what they're asking visitors to do</li>
-</ul>
-<p>This paints a complete picture of what the market is saying, which makes your gaps immediately visible.</p>
-
-<h2>Step 3 — Gap analysis</h2>
-<p>The agent compares competitor messaging against your own positioning to identify:</p>
-<ul>
-  <li>Claims your competitors make that you don't counter</li>
-  <li>Angles nobody in your market is addressing</li>
-  <li>Weaknesses in their offers you can exploit (e.g. they don't offer guarantees, you do)</li>
-  <li>Pricing and value positioning opportunities</li>
-</ul>
-
-<h2>Step 4 — Counter-strategy generation</h2>
-<p>Using the gap analysis, the AI generates a specific counter-strategy: which angles to lead with in your ads, which competitor weaknesses to highlight, and what messaging will differentiate you in search results. This feeds directly into your campaign's ad copy refresh cycle.</p>
-<p>The result isn't generic advice — it's specific recommendations based on what your actual competitors are saying right now.</p>
-
-<h2>Activity &amp; competitors</h2>
-<p>All competitor intelligence is stored on your sitetospend.com Activity &amp; competitors page — a continuously updated view of your competitive landscape. You can see each competitor's messaging, your gap analysis, and the counter-strategy generated. This is also available to your team if you use the multi-user features.</p>
-<p>Because this runs weekly, your competitive intelligence is never more than 7 days old — unlike the one-off analysis most businesses do and then forget.</p>
+<h2>A competitor report should inform a decision</h2>
+<p>A list of nearby businesses is not a campaign adjustment. Useful competitor research identifies a relevant alternative your buyer might consider, verifies what it offers and proposes a change your own business can honestly support.</p>
+<p>Site to Spend reads your business sources and competitor websites for offers, messaging and positioning. Those observations can inform strategy and supported campaign changes. A business appearing in search results is not proof that it bids against you on every keyword.</p>
+<h2>Separate observed facts from hypotheses</h2>
+<p>Record the source URL and observation date. A price published on a page is a fact about that page at that time, subject to its conditions. “Customers care most about price” is a hypothesis. “This advertiser spends A$10,000 each month” is not established by seeing its ad.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/2579754?hl=en">Auction Insights</a> reports advertisers participating in overlapping auctions when activity thresholds are met. It provides relative metrics such as overlap and impression share; it does not expose a competitor's complete budget, conversions or profitability.</p>
+<h2>Worked example: convenience versus price</h2>
+<p><strong>Hypothetical comparison, not competitor evidence.</strong> A local service business sees one rival lead with a discount and another with online booking. Its own verified offer is weekend appointments at the published standard rate.</p>
+<ol><li>Confirm that weekend appointments are genuinely available in the targeted area.</li><li>Use the booking page as the destination, with availability visible.</li><li>Test copy about weekend availability against the current service-focused message.</li><li>Measure completed bookings and accepted enquiries, not just clicks.</li></ol>
+<p>Copying the rival's discount would advertise a price the business does not offer. Claiming “cheapest” would need supporting evidence. The useful idea is a truthful difference that answers the buyer's need.</p>
+<h2>Build a compact comparison record</h2>
+<ul><li>Competitor and source URL.</li><li>Service and area that actually overlap.</li><li>Observed offer, with restrictions and date.</li><li>Your verified difference.</li><li>Proposed ad, keyword or page hypothesis.</li><li>Outcome and review period that will test it.</li></ul>
+<p>For keyword suggestions, apply the offer test from our <a href="/blog/google-ads-campaign-structure-mistakes">campaign structure guide</a>. A competitor with a broad service catalogue may attract searches that are unsuitable for your narrower business.</p>
+<h2>Do not change everything from one report</h2>
+<p>Choose a change that can be evaluated. If copy, landing page, targeting and budget all change together, a later improvement is hard to explain. Also check current delivery before making a creative decision: an account hold is not a messaging problem.</p>
+<p>Keep the original settings, proposed rationale and follow-up observations. A competitor report can be stale, and a platform recommendation can be inappropriate for your budget or goal.</p>
+<h2>Make the report useful after launch</h2>
+<p>Review whether the relevant offer changed, whether your differentiator is still true and whether the campaign outcomes support the experiment. Connect research with <a href="/blog/how-ai-writes-your-ad-copy">copy review</a>, <a href="/blog/how-conversion-tracking-works">measurement</a> and the activity history described in <a href="/blog/how-ai-agents-work">our agent guide</a>. Research is context for a decision, not a guarantee of winning auctions.</p>
 HTML,
         ];
     }
@@ -301,64 +220,32 @@ HTML,
     {
         return [
             'slug' => 'getting-started',
-            'title' => 'Getting Started with sitetospend.com',
-            'description' => 'A step-by-step guide to launching your first AI-managed Google Ads campaign — from signup to live ads in under 30 minutes, no prior experience needed.',
+            'title' => 'Getting Started: Profile to Reviewed Ads',
+            'description' => 'Prepare your website, confirm business facts and choose a goal before deploying. Follow the managed and one-time Google Ads paths without surprises.',
             'category' => 'Getting Started',
-            'read_time' => '4 min read',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>What happens when you sign up</h2>
-<p>sitetospend.com is designed to get you from zero to a live, AI-managed campaign as quickly as possible. Here's exactly what the process looks like.</p>
-
-<h2>Step 1 — Tell us about your business</h2>
-<p>After verifying your email, you'll complete a short business profile. This includes:</p>
-<ul>
-  <li>Your website URL (we'll crawl it to understand your business, services, and brand)</li>
-  <li>Your target industry and location</li>
-  <li>Your advertising goal (leads, sales, calls, etc.)</li>
-  <li>Your approximate monthly ad budget</li>
-</ul>
-<p>Our AI reads your website immediately — extracting your brand voice, value propositions, services, and visual style. This becomes the foundation for everything your campaigns say and look like.</p>
-
-<h2>Step 2 — Connect your Google Ads account</h2>
-<p>sitetospend.com connects to your existing Google Ads account or creates a new one under our managed MCC. We handle the technical setup:</p>
-<ul>
-  <li>Conversion action creation</li>
-  <li>GTM container setup and tag deployment</li>
-  <li>Audience list creation</li>
-  <li>Campaign structure design based on your goals</li>
-</ul>
-<p>You don't need to touch Google Ads at all — we manage it on your behalf.</p>
-
-<h2>Step 3 — Review and approve your first campaign</h2>
-<p>Before anything goes live, we generate your first campaign for you to review:</p>
-<ul>
-  <li>Campaign name and structure</li>
-  <li>Keywords (with match types and negatives)</li>
-  <li>Ad copy (Responsive Search Ads with headlines and descriptions)</li>
-  <li>Ad extensions (sitelinks, callouts, structured snippets)</li>
-  <li>Budget allocation and bidding strategy</li>
-</ul>
-<p>You can approve as-is or request changes. Once approved, we deploy to Google Ads automatically.</p>
-
-<h2>Step 4 — The agents take over</h2>
-<p>Once your campaign is live, all six AI agents activate immediately:</p>
-<ul>
-  <li>The <strong>Self-Optimising Agent</strong> monitors for disapprovals</li>
-  <li>The <strong>Budget Intelligence Agent</strong> starts analysing performance by time of day</li>
-  <li>The <strong>Quality Score Agent</strong> monitors keyword quality scores</li>
-  <li>The <strong>Ad Extension Agent</strong> ensures full extension coverage</li>
-  <li>The <strong>Competitor Intelligence Agent</strong> begins its first analysis run</li>
-  <li>The <strong>Creative Intelligence Agent</strong> starts A/B testing your ad variations</li>
-</ul>
-
-<h2>What to expect in the first 30 days</h2>
-<p>Week 1 is the data collection phase. Google's Smart Bidding is in learning mode — performance may fluctuate while it calibrates. This is normal and expected.</p>
-<p>By the end of week 2, bidding typically stabilises and you'll start seeing the agents make meaningful improvements — new ad variations, extension additions, time-of-day adjustments.</p>
-<p>By month 1, you'll have competitor intelligence on your Activity &amp; competitors page, A/B test results, and a campaign that's meaningfully better than it was on day one — all without any action from you.</p>
-
-<h2>Getting help</h2>
-<p>Every action the agents take is logged in your Activity Feed with a clear explanation of what happened and why. If you have questions about any action, or want to understand a particular optimisation, you can submit a support ticket directly from the activity log.</p>
+<h2>Prepare the facts before the campaign</h2>
+<p>Site to Spend starts from your business website and supplied sources. The campaign can only be as useful as the offer, audience and destination it has to work with. A page that says “we help businesses grow” gives less direction than one describing a specific service, service area and next action.</p>
+<p>Before signing up, have a readable website, an email you can verify and someone able to handle account and website tasks. Creating the platform account is separate from completing Google advertiser verification or installing website tracking.</p>
+<h2>Your onboarding checklist</h2>
+<ol><li><strong>Verify your email:</strong> use an address you can access, with the correct spelling.</li><li><strong>Enter the website:</strong> include useful source pages for the offer you want to advertise.</li><li><strong>Review the business profile:</strong> confirm services, locations, tone and any extracted prices.</li><li><strong>Choose the goal:</strong> describe the useful enquiry, signup or sale.</li><li><strong>Choose the service:</strong> ongoing management or a one-time Google Ads build.</li><li><strong>Review the campaign and budget:</strong> check ads, search intent and destination before deployment.</li></ol>
+<p>A generated draft does not authorise spending. The campaign budget must be confirmed, and deployment remains subject to payment, account readiness and platform eligibility.</p>
+<h2>Worked example: a narrow first offer</h2>
+<p><strong>Hypothetical onboarding example.</strong> An accountant serves small retail businesses and wants enquiries about bookkeeping. Its website also mentions tax returns and payroll.</p>
+<p>For the first campaign, confirm bookkeeping as the offer, choose the actual service area and point ads to a bookkeeping page. Check that keyword suggestions concern buying that service rather than accounting jobs or software tutorials. Define a successful enquiry before choosing a bidding goal.</p>
+<p>This gives the draft a concrete brief. You can add another campaign later when a different service needs its own message or budget.</p>
+<h2>Managed plans and one-time setup have different endings</h2>
+<p>A managed plan includes ongoing monitoring and supported changes after launch. Its subscription fee and advertising budget are separate; managed delivery uses ad-spend credits reconciled against actual spend.</p>
+<p>The <a href="/google-ads-setup">one-time Google Ads package</a> commissions a build after payment is confirmed. Account provisioning triggers an administrator invitation to the signup email. The campaign is handed over paused, without recurring management, so you can inspect it, complete your own Google billing and decide when to enable it.</p>
+<h2>Complete the website measurement step</h2>
+<p>An installed tag-manager snippet is not a finished conversion setup. The intended success event needs to fire once and use the right account and action. Website access or container permissions may be required.</p>
+<p>Test the real enquiry or checkout path using our <a href="/blog/how-conversion-tracking-works">conversion checklist</a>. Google's <a href="https://support.google.com/google-ads/answer/1722022?hl=en">conversion measurement guide</a> explains the available measurement approaches.</p>
+<h2>Check readiness and the outcome after deployment</h2>
+<p>Review account billing, access, dates, location settings and ad status. “Created” and “enabled” do not establish that ads are serving. Look for actual impressions and later qualified outcomes in reporting.</p>
+<p>Compare <a href="/pricing">current prices and inclusions</a>, use the <a href="/blog/how-budget-pacing-works">budget example</a> and keep the <a href="/blog/why-your-google-ads-stop-working">delivery checklist</a> available for the first review.</p>
 HTML,
         ];
     }
@@ -369,52 +256,32 @@ HTML,
     {
         return [
             'slug' => 'why-google-ads-is-so-hard-to-manage',
-            'title' => 'Why Google Ads Is So Hard to Manage',
-            'description' => 'Google Ads looks simple to set up but is notoriously difficult to manage profitably. Here\'s why — and what a properly managed campaign actually requires.',
-            'category' => 'Google Ads',
-            'read_time' => '7 min read',
+            'title' => 'Why Google Ads Needs a Clear Review Process',
+            'description' => 'Separate delivery, search intent and measurement problems instead of changing settings blindly. Includes a five-level review and incident example.',
+            'category' => 'Getting Started',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>The illusion of simplicity</h2>
-<p>Google makes it remarkably easy to spend money on Google Ads. You can have an account set up and ads running in under an hour. The interface is clean, the setup wizard is friendly, and Google's onboarding actively encourages you to get started quickly. This is by design — and it's the first trap.</p>
-<p>Creating a campaign is easy. Creating a <em>profitable</em> campaign is genuinely hard. The gap between the two is where most businesses quietly lose thousands of pounds every year without understanding why.</p>
-
-<h2>The auction never stops changing</h2>
-<p>The Google Ads auction is not a fixed marketplace. It changes every day. New competitors enter your keywords. Existing competitors increase their bids. Seasonal demand shifts. Google updates its algorithm. A competitor launches a new offer that pulls clicks away from yours.</p>
-<p>A campaign that was profitable six months ago can be unprofitable today — not because you did anything wrong, but because the environment changed around you. Static campaigns, set and forgotten, degrade. They require active management to stay competitive.</p>
-
-<h2>The data problem</h2>
-<p>Good Google Ads decisions require data. But new campaigns have no data. This creates a bootstrapping problem: you can't optimise without data, but you can't get data without spending money. The learning phase — the period where Google's Smart Bidding is calibrating — can take 2–4 weeks and costs real money before it reliably works.</p>
-<p>Even once you have data, interpreting it correctly requires experience. Is a high CPC a problem, or is the conversion rate compensating for it? Is a low CTR a creative issue, a keyword match issue, or a landing page mismatch? Is the campaign limited by budget, by Quality Score, or by bidding strategy? These questions aren't answered by looking at a single metric.</p>
-
-<h2>The 47 things that need to be right simultaneously</h2>
-<p>A well-run Google Ads campaign requires:</p>
-<ul>
-  <li>Keyword research — finding the right terms, in the right match types, at the right volume</li>
-  <li>Negative keywords — continuously updated to prevent waste</li>
-  <li>Campaign and ad group structure — close enough groupings to maintain ad relevance</li>
-  <li>Ad copy — relevant, compelling, Google-policy-compliant, continuously A/B tested</li>
-  <li>Ad extensions — sitelinks, callouts, structured snippets, call extensions, all populated</li>
-  <li>Landing pages — fast, relevant, with a clear conversion path</li>
-  <li>Conversion tracking — correctly implemented, tracking the right events with the right values</li>
-  <li>Bidding strategy — right strategy for the right campaign stage with sufficient data</li>
-  <li>Audience targeting — remarketing lists, RLSA, customer match, in-market audiences</li>
-  <li>Budget management — correctly distributed, not running out at the wrong time of day</li>
-  <li>Dayparting — bid adjustments by hour and day based on actual conversion data</li>
-  <li>Device bid adjustments — based on actual device performance</li>
-  <li>Geographic targeting — correct radius, bid adjustments by location</li>
-  <li>Quality Score management — diagnosing and fixing low-scoring keywords</li>
-  <li>Disapproval monitoring — catching and fixing policy violations quickly</li>
-</ul>
-<p>Each of these is its own discipline. Each requires attention. Each degrades if ignored. Most businesses get 4 or 5 of them right. The best campaigns get all of them right, consistently, over months and years.</p>
-
-<h2>Why agencies often don't solve the problem</h2>
-<p>The traditional solution is to hire an agency. But agencies have a structural problem: they're paid a percentage of ad spend (typically 10–20%), which creates an incentive to <em>increase</em> your spend, not optimise it. A £3,000/month campaign generates more agency revenue than a £1,500/month campaign with the same return — even though the £1,500 version is objectively better for your business.</p>
-<p>Agencies are also expensive. Add a 15% management fee to a £3,000 monthly budget and you're paying £450/month for management before a single ad is clicked. For small and medium businesses, this fee represents a significant portion of the potential value Google Ads can deliver.</p>
-
-<h2>How sitetospend.com is different</h2>
-<p>sitetospend.com replaces the agency model with autonomous AI agents that run 24/7. Every optimisation task — negative keyword management, Quality Score monitoring, ad copy testing, budget pacing, competitor analysis, disapproval fixing — is automated and runs continuously. There's no account manager who checks in once a week and charges 15% of spend. The system works every day, on every campaign, applying the same rigour to a £500/month budget that would only be affordable for a £50,000/month budget with a traditional agency.</p>
-<p>The result is a properly managed campaign at a fraction of the cost — and without the six months of learning that managing it yourself would require.</p>
+<h2>One dashboard contains several different systems</h2>
+<p>A Google Ads campaign combines account access, billing, advertising review, targeting, auctions, website experience and conversion measurement. A problem in any layer can affect results, but the remedy is not the same in every layer.</p>
+<p>The difficult part is often deciding which evidence to trust and what to change first. An enabled label, an attractive headline or a high diagnostic score cannot establish a profitable customer journey.</p>
+<h2>Review five levels in order</h2>
+<ol><li><strong>Account readiness:</strong> access, billing, verification and any restrictions.</li><li><strong>Delivery:</strong> campaign dates, schedule, enabled resources and policy status.</li><li><strong>Intent:</strong> queries, location and the offer you actually sell.</li><li><strong>Destination:</strong> the promise in the ad and the action on the page.</li><li><strong>Outcome:</strong> reliable conversion data and qualified customer results.</li></ol>
+<p>Google's <a href="https://support.google.com/google-ads/answer/9208915?hl=en">Search delivery troubleshooting</a> supports the early checks. Our <a href="/blog/why-your-google-ads-stop-working">diagnostic checklist</a> connects them with the website and business outcome.</p>
+<h2>Worked example: when more settings create less clarity</h2>
+<p><strong>Hypothetical incident.</strong> A lead campaign shows fewer reported enquiries after a website update. In response, someone raises the budget, changes the bid strategy and rewrites all the ads on the same day.</p>
+<p>The form update had removed the success event. None of those advertising changes repairs the missing signal. They also make the later trend harder to interpret because several variables changed together.</p>
+<p>A clearer process first tests the form and tracking, records when measurement stopped, repairs the event and annotates the affected reporting period. Then it reviews whether the campaign itself needs a separate change.</p>
+<h2>Use diagnostics for questions they can answer</h2>
+<p>Quality Score highlights components of the ad experience; it is not the auction formula or a business outcome. Ad Strength highlights asset opportunities; it does not certify serving. A keyword estimate is not actual customer demand at a guaranteed click price.</p>
+<p>Read <a href="/blog/what-is-ad-rank">Ad Rank and Quality Score</a> and <a href="/blog/how-responsive-search-ads-work">responsive ad guidance</a> before turning a diagnostic into the sole optimisation target.</p>
+<h2>Write down the decision, not just the new setting</h2>
+<ul><li>What changed in the observed problem, and when?</li><li>Which source and complete period support the observation?</li><li>What alternative explanation did you check?</li><li>Which single intervention is justified?</li><li>What outcome will confirm it helped?</li><li>Does it require the account owner's or website team's input?</li></ul>
+<p>This record is useful for human and automated management. A successful update request is not the final checkpoint; platform review and delivery must be verified where they matter.</p>
+<h2>Choose who owns the ongoing review</h2>
+<p>DIY management means owning the incident process as well as the initial setup. A one-time build gives you a prepared account and paused handover, after which the ongoing work is yours. A managed plan includes monitoring and supported changes, while platform decisions and business facts still require care.</p>
+<p>Use <a href="/blog/how-ai-agents-work">the agent decision example</a> to inspect automation, <a href="/blog/true-cost-of-managing-google-ads-yourself">the cost comparison</a> to value your time and <a href="/google-ads-management">management scope</a> to choose an arrangement that fits.</p>
 HTML,
         ];
     }
@@ -425,39 +292,34 @@ HTML,
     {
         return [
             'slug' => 'why-your-google-ads-stop-working',
-            'title' => 'Why Your Google Ads Stop Working',
-            'description' => 'Google Ads that worked brilliantly at launch often decline over months. Here\'s the real reasons campaign performance drops — and how to reverse it.',
+            'title' => 'Google Ads Not Running? A Diagnostic Checklist',
+            'description' => 'Separate a campaign that cannot serve from one that gets clicks but no leads. Check billing, eligibility, keywords, bids and tracking in the right order.',
             'category' => 'Google Ads',
-            'read_time' => '6 min read',
+            'read_time' => '7 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-08',
             'content' => <<<'HTML'
-<h2>The honeymoon period</h2>
-<p>Many Google Ads campaigns have a honeymoon period. In the first few weeks, before competitors notice you, before Google has fully calibrated your Quality Scores, before ad fatigue sets in, clicks can be cheap and conversions can be plentiful. Then, gradually or suddenly, performance drops. Cost-per-lead climbs. ROAS falls. The campaign that was working stops working.</p>
-<p>This is so common it has a name among PPC professionals: campaign decay. Understanding why it happens is the first step to preventing it.</p>
-
-<h2>Reason 1: Competitors react</h2>
-<p>When a new advertiser appears in an auction and starts winning impressions, competitors notice. If your ads are showing in positions that used to belong to established players, they'll increase their bids to push you out. Your average CPC rises as a result. The keyword that cost £1.20 in month one costs £1.80 in month four — not because you changed anything, but because the auction got more competitive around you.</p>
-<p>The response isn't simply to outbid them — that's an expensive race to the bottom. The correct response is to improve Quality Score (so you achieve the same position at lower cost) and to use competitor intelligence to differentiate your ads so they're clicked more often.</p>
-
-<h2>Reason 2: Ad fatigue</h2>
-<p>The same ads shown to the same audience repeatedly lose their effectiveness. Click-through rates decline. Quality Scores fall as CTR drops. This happens invisibly — your campaign looks structurally the same, but the performance numbers worsen. Most businesses don't notice until the decline is significant.</p>
-<p>The solution is continuous creative refresh: new headline variations, new angle tests, new calls to action. This needs to happen proactively, not reactively after performance has already dropped.</p>
-
-<h2>Reason 3: Keyword match type drift</h2>
-<p>Broad match and phrase match keywords expand over time. A keyword that was generating relevant traffic in month one starts matching to increasingly tangential searches as Google learns and widens its interpretation. Search term reports fill with irrelevant queries consuming budget. Without a systematic weekly review of the Search Terms report and ongoing negative keyword additions, this drift is inevitable.</p>
-
-<h2>Reason 4: The landing page stopped converting</h2>
-<p>Sometimes the ads are performing fine — the clicks are coming — but the landing page conversion rate has declined. A website redesign that changed the CTA. A price increase that's no longer competitive. A slow page after a new plugin was added. Page speed degradation as the site grew. Any of these can cause a conversion rate drop that looks like an ads problem but isn't one.</p>
-<p>Diagnosing this requires separating ad metrics (CTR, impression share, Quality Score) from post-click metrics (conversion rate, bounce rate, time on page). If ad metrics are stable but conversion rate fell, the problem is the landing page.</p>
-
-<h2>Reason 5: Budget erosion</h2>
-<p>As CPCs rise from competition, a fixed daily budget runs out earlier in the day. A campaign that previously ran comfortably all day now exhausts its budget by midday. Afternoon and evening searches — which for many businesses are peak buying hours — receive no impressions at all. Revenue falls, but the daily spend looks the same on a report.</p>
-
-<h2>Reason 6: Smart Bidding has insufficient conversion data</h2>
-<p>If your campaign goes through a quiet period — seasonal lull, campaign pause, tracking issue — Google's Smart Bidding models can lose their calibration. A bidding strategy trained on 90 days of conversion history can perform very differently after 3 weeks of low conversion data. Google's learning phase effectively restarts, and performance fluctuates while it recalibrates.</p>
-
-<h2>How sitetospend.com prevents campaign decay</h2>
-<p>Every cause of campaign decay described above has a corresponding agent that prevents it. The Creative Intelligence Agent continuously refreshes ad copy before fatigue sets in. The Budget Intelligence Agent detects when CPCs are rising and adjusts dayparting to protect performance. The Self-Optimising Agent monitors Search Term drift and maintains negative keyword lists weekly. The Quality Score Agent catches CTR declines before they become Quality Score problems. Together, these agents don't just fix problems — they prevent them from developing in the first place.</p>
+<h2>First establish what stopped</h2>
+<p>“The ads stopped working” can mean no impressions, no clicks, no recorded conversions or no useful customers. Each needs a different investigation. Start with a dated observation from the platform, rather than a dashboard label alone.</p>
+<p>Check the account time zone and reporting delay. Compare complete days, using a period that suits your conversion cycle. An enabled campaign means it is configured to run; it does not prove that an ad entered or won an auction.</p>
+<h2>No impressions: check eligibility before rewriting creative</h2>
+<ol><li><strong>Account:</strong> billing holds, suspension, advertiser verification and security review.</li><li><strong>Campaign:</strong> enabled status, start and end dates, schedule, locations and budget.</li><li><strong>Ad group and ad:</strong> enabled state, policy review and serving eligibility.</li><li><strong>Keywords:</strong> approval, search demand and exclusions that could block the intended searches.</li><li><strong>Bidding:</strong> limits or targets that could make the campaign too restrictive.</li></ol>
+<p>Record the exact status and reason at each level. Google's <a href="https://support.google.com/google-ads/answer/9208915?hl=en">Search delivery troubleshooting</a> is a useful checklist, and its <a href="https://support.google.com/google-ads/answer/148778">Ad Preview and Diagnosis tool</a> helps check a specific search without repeatedly searching for your own ad.</p>
+<h2>Worked example: enabled is not serving</h2>
+<p><strong>Hypothetical diagnostic example.</strong> A campaign has an A$30 average daily budget, is enabled and reports zero impressions across several complete days. Its only responsive search ad is disapproved.</p>
+<p>The confirmed obstacle is the ad's eligibility. Raising the budget or adding more keywords cannot solve that obstacle. Fix the underlying policy or destination issue, resubmit where appropriate, then check Google's resulting review and actual delivery. Do not describe a successful API update as a successful repair until the platform outcome is verified.</p>
+<h2>Impressions but few clicks: inspect the offer and intent</h2>
+<p>Read the actual search terms alongside the ad and destination. Are people seeking your service, or jobs, training and information you do not sell? Does the ad clearly describe the offer? Does the page confirm that promise?</p>
+<p>Compare trends with enough relevant observations. A low-volume campaign can produce large percentage swings from a few clicks. Do not replace all copy solely because one day's click-through rate changed. Also check whether network or device mix changed before judging the headline.</p>
+<h2>Clicks but no recorded conversions: test measurement</h2>
+<p>Complete the intended action on the website. Check that the form or checkout works and that the correct success event fires once. Verify the action and campaign goal in Google Ads. A working container snippet does not establish working conversion tracking.</p>
+<p>Then allow for the time customers take to act. Use the <a href="/blog/how-conversion-tracking-works">conversion tracking checklist</a> to separate implementation failure from genuinely low conversion volume. A test visit without an eligible ad interaction is not proof of a paid-ad conversion.</p>
+<h2>Conversions but poor customers: assess the definition</h2>
+<p>A campaign can look productive while optimising for a weak signal, such as any contact-button click. Compare recorded leads with accepted enquiries, sales and margin. If the objective is wrong, improve measurement before increasing spend.</p>
+<p>Location settings, an ambiguous offer or overly broad keyword intent can also attract unsuitable leads. Review <a href="/blog/google-ads-campaign-structure-mistakes">campaign structure</a> and search terms together rather than assuming every conversion has the same value.</p>
+<h2>Keep a repair record</h2>
+<p>For every intervention, keep the before state, reason, API or platform response and the follow-up check. If a problem needs billing details, identity verification or website access, it requires the account owner's input; automation should surface that clearly.</p>
+<p>Site to Spend's managed plans provide monitoring and supported campaign adjustments. Platform approval and auction demand remain outside our control. See <a href="/ai-ads-management">how AI campaign management works</a> and <a href="/blog/how-budget-pacing-works">how to interpret spend</a> before treating a budget increase as the universal repair.</p>
 HTML,
         ];
     }
@@ -468,45 +330,33 @@ HTML,
     {
         return [
             'slug' => 'true-cost-of-managing-google-ads-yourself',
-            'title' => 'The True Cost of Managing Google Ads Yourself',
-            'description' => 'The agency fee is the visible cost. The real one is wasted spend, missed optimisations and your own hours. Here\'s what DIY Google Ads actually costs.',
-            'category' => 'Platform',
-            'read_time' => '5 min read',
+            'title' => 'Google Ads Management Cost: Fees and Time',
+            'description' => 'Compare Google Ads management costs without confusing fees with media spend. Work through DIY time, flat fees and one-time setup using your own numbers.',
+            'category' => 'Getting Started',
+            'read_time' => '6 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-08',
             'content' => <<<'HTML'
-<h2>The maths most businesses don't do</h2>
-<p>When businesses consider whether to manage Google Ads themselves, they typically think about two numbers: the ad budget and the agency fee. "I'm spending £2,000/month on ads. An agency wants 15%, that's £300. I'll manage it myself and save £300." This calculation is almost always wrong.</p>
-<p>It ignores the three real costs: wasted ad spend, the opportunity cost of your time, and the revenue lost from suboptimal performance.</p>
-
-<h2>Cost 1: Wasted ad spend</h2>
-<p>An unmanaged or poorly managed Google Ads account wastes money in predictable ways:</p>
-<ul>
-  <li><strong>Irrelevant clicks</strong> — without systematic negative keyword management, 15–30% of clicks typically come from non-converting search queries</li>
-  <li><strong>Poor Quality Scores</strong> — keywords with low Quality Scores cost 2–4x more per click for the same position as high-QS keywords</li>
-  <li><strong>Inefficient time-of-day spend</strong> — without dayparting, budget is spread evenly including the hours with the worst conversion rates</li>
-  <li><strong>Disapproved ads</strong> — ads that violate policy and go unnoticed can result in campaigns running with few active ads for days</li>
-  <li><strong>Suboptimal bids</strong> — manual bidding or misconfigured Smart Bidding is typically 20–30% less efficient than well-configured automated bidding</li>
-</ul>
-<p>On a £2,000/month account, conservative estimates put wasted spend at £400–700/month. That's the agency fee paid twice over — and instead of getting management, you're getting nothing back.</p>
-
-<h2>Cost 2: Your time</h2>
-<p>Properly managing a Google Ads account takes time. Not the 20 minutes a week that Google's automated recommendations suggest, but real time:</p>
-<ul>
-  <li>Search Terms report review — 30–60 minutes weekly</li>
-  <li>Ad performance review and creative refresh — 60–90 minutes weekly</li>
-  <li>Keyword and Quality Score analysis — 30 minutes weekly</li>
-  <li>Campaign structure adjustments — periodic, but often 2–3 hours when needed</li>
-  <li>Staying current on Google Ads changes — platform updates, new features, policy changes happen constantly</li>
-</ul>
-<p>A conservative total: 3–5 hours per week. If your time is worth £50/hour, that's £600–1,000/month. If you're a business owner whose time is worth more, the number is higher. Most businesses undercount this because they do it in scattered 15-minute sessions and never add it up.</p>
-
-<h2>Cost 3: The revenue you didn't make</h2>
-<p>The hardest cost to see is the revenue that a better-managed campaign would have generated but didn't. A campaign running at £15 cost-per-lead instead of £8 isn't just wasting £7 — it's generating half the number of leads from the same budget. Over 12 months on a £2,000/month account, the difference between average and excellent management can easily represent 200–400 additional leads.</p>
-<p>At any reasonable lead-to-customer conversion rate and customer value, this revenue gap dwarfs the cost of professional management.</p>
-
-<h2>What you actually need vs what you pay for</h2>
-<p>The ideal scenario is a campaign that gets the attention of a senior PPC specialist every day — reviewing search terms, testing copy, monitoring Quality Scores, adjusting bids. But that level of human attention costs £2,000–4,000/month in agency fees, which is only economical for large-budget accounts.</p>
-<p>sitetospend.com makes daily expert-level attention economically viable for any budget. The AI agents do the work of a senior PPC team — continuous, every day, automatically — at a flat subscription fee rather than a percentage of spend. For a £2,000/month ad budget, that's the difference between paying £300+/month for weekly check-ins or a fraction of that for daily automated optimisation.</p>
+<h2>Compare the total cost, using the same scope</h2>
+<p>Google Ads management cost has three parts: the fee for the service, the money paid for advertising and the time your team contributes. Tracking, landing-page work or creative production may be extra. Ask what is included before comparing two prices.</p>
+<p>An inexpensive quote can still exclude work you need. A higher fee is not evidence of better results. Compare the proposed responsibilities, who owns access, what gets measured and how you will judge the campaign after launch.</p>
+<h2>Four management models</h2>
+<ul><li><strong>Do it yourself:</strong> no external management fee, but you own setup, monitoring, reporting and changes.</li><li><strong>Flat fee:</strong> a stated recurring charge for an agreed scope. Site to Spend's managed plan prices are published on the <a href="/pricing">pricing page</a>.</li><li><strong>Percentage of spend:</strong> the fee changes as media spend changes; confirm any minimum charge and extra services.</li><li><strong>One-time setup:</strong> pay for a build and handover, then take responsibility for ongoing work. See <a href="/google-ads-setup">our one-time package</a>.</li></ul>
+<p>No model guarantees profitable traffic. The useful question is whether the scope and total cost fit your business, rather than which headline fee looks smallest.</p>
+<h2>Worked example: valuing DIY time</h2>
+<p><strong>Hypothetical comparison in USD, not an agency-price benchmark.</strong> A business plans US$1,000 of media spend per month and expects to spend four hours managing the account. It values that time at US$40 per hour.</p>
+<ul><li>DIY media spend: US$1,000.</li><li>Illustrative value of management time: 4 × US$40 = US$160.</li><li>Combined economic cost: US$1,160, before any tracking or page work.</li></ul>
+<p>For a hypothetical flat management fee of US$200, with one hour still required internally, the comparable total would be US$1,240 (1,000 + 200 + 40). These assumptions are deliberately explicit. Delegating could be worth the difference if it frees useful time; it has not automatically saved money or improved conversion performance.</p>
+<p>Replace the sample fee with a real quote or current published plan. Use your team's actual hours. If an agency charges 15% in a quote you receive, calculate that against your planned media spend, then include the minimum fee and any tax instead of assuming 15% is the whole bill.</p>
+<h2>Calculate acquisition cost from qualified outcomes</h2>
+<p>Suppose total media and management cost is US$1,240 and the campaign produces eight qualified leads. The combined cost per qualified lead is US$155. If two become customers, acquisition cost is US$620. Whether that works depends on contribution margin, retention and your cash flow.</p>
+<p>Google Ads' platform CPA commonly uses advertising cost and measured conversions. Your business decision also needs the management fee and real lead quality. Keep both views so the platform's optimisation metric does not obscure your economics.</p>
+<h2>Questions to ask before paying</h2>
+<ol><li>Is this setup only or ongoing management?</li><li>Who holds administrator access to the advertising account?</li><li>Is media spend billed separately, in which currency, and through which process?</li><li>Does tracking cover the actual successful form or purchase event?</li><li>How are account restrictions and ads that stop delivering surfaced?</li><li>What evidence will support keyword, creative or budget changes?</li></ol>
+<p>Use <a href="/blog/how-conversion-tracking-works">conversion testing</a> and the <a href="/blog/why-your-google-ads-stop-working">delivery checklist</a> to make those questions concrete.</p>
+<h2>Know what Site to Spend offers</h2>
+<p>The subscription plans cover ongoing AI campaign management with a separate advertising budget. The one-time Google Ads product covers preparation and a paused handover, without recurring management. Prices and plan coverage should be taken from the <a href="/pricing">current pricing page</a>, not an old article.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/1704424?hl=en">guide to managing spend</a> explains platform budget limits. Our <a href="/google-ads-management">small business management overview</a> explains the practical work around those limits.</p>
 HTML,
         ];
     }
@@ -517,37 +367,32 @@ HTML,
     {
         return [
             'slug' => 'why-small-businesses-lose-on-google-ads',
-            'title' => 'Why Small Businesses Lose on Google Ads',
-            'description' => 'Large advertisers have dedicated teams, proprietary tools, and years of data. Here\'s how small businesses can compete — and where the real advantages lie.',
-            'category' => 'Google Ads',
-            'read_time' => '6 min read',
+            'title' => 'Small Business Google Ads: A First Review',
+            'description' => 'Review offer, location, lead quality and budget before scaling a small-business campaign. Includes a worked example using transparent assumptions.',
+            'category' => 'Getting Started',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>The unfair fight</h2>
-<p>A national insurance company competing on Google Ads has a team of PPC specialists, a data science team, proprietary bidding software, years of conversion data, and a seven-figure monthly budget. A small insurance broker has a business owner who checks their Google Ads account every couple of weeks and a £1,500 monthly budget.</p>
-<p>On paper, this looks like an unwinnable fight. In practice, small businesses can and do compete effectively with large advertisers on Google — but only if they understand where the real advantages lie and how to exploit them.</p>
-
-<h2>Why big budgets don't automatically win</h2>
-<p>Google's auction is intentionally designed so money alone doesn't guarantee victory. Ad Rank — the formula that determines who shows where — rewards quality as well as bid. A small advertiser with a highly relevant, well-written ad targeting a specific long-tail keyword can outrank a national advertiser bidding on broad terms.</p>
-<p>Large advertisers often have sprawling accounts with thousands of keywords, many of which are poorly maintained. Their ads are generic, written to appeal to a national audience. Their landing pages are corporate and don't always match search intent precisely. These are exploitable weaknesses.</p>
-
-<h2>Where small businesses actually win</h2>
-<p><strong>Specificity.</strong> A national plumbing franchise targeting "plumber" loses on volume but wins on brand recognition. A local plumber targeting "emergency boiler repair Camden" with a highly relevant ad and a page specifically about emergency boiler repair in Camden can achieve higher Quality Scores, better CTR, and lower CPCs for that specific search. Local specificity is a genuine moat that large advertisers can't easily replicate.</p>
-<p><strong>Speed.</strong> A small business can change its offer, update its ads, and adjust its landing page in hours. A large advertiser needs approvals, compliance reviews, and brand guidelines sign-off. When a competitor makes a mistake, you can respond immediately. When a seasonal opportunity emerges, you can capitalise on it before larger competitors' internal processes allow them to react.</p>
-<p><strong>Relationship.</strong> Small businesses often convert at higher rates from phone calls and direct enquiries because they can personalise the response. An ad that says "Call Josh directly — we'll have a quote to you today" outperforms a corporate form submission for many service businesses.</p>
-
-<h2>Where small businesses systematically lose</h2>
-<p>The areas where small businesses genuinely struggle are the ones that require sustained, expert attention:</p>
-<ul>
-  <li><strong>Data volume</strong> — large advertisers accumulate conversion data faster, giving their Smart Bidding better signals sooner</li>
-  <li><strong>Continuous optimisation</strong> — big advertisers have people checking accounts daily; small businesses check monthly if they're lucky</li>
-  <li><strong>Competitive intelligence</strong> — large advertisers have tools to monitor competitor activity; small businesses typically fly blind</li>
-  <li><strong>Testing infrastructure</strong> — large advertisers run structured A/B tests; small businesses run the same ads for months</li>
-</ul>
-
-<h2>How sitetospend.com closes the gap</h2>
-<p>The capabilities that large advertisers pay teams to provide — daily optimisation, competitive monitoring, continuous creative testing, conversion tracking infrastructure — are exactly what sitetospend.com's AI agents deliver automatically. A small business using sitetospend.com gets the same quality of account management as a large advertiser's in-house team, at a fraction of the cost.</p>
-<p>Combined with the natural advantages small businesses hold — local specificity, speed, and the ability to convert enquiries personally — this creates a genuinely competitive position in any local or niche market.</p>
+<h2>A small budget needs a specific offer</h2>
+<p>A small business can lose money when its campaign describes a broad industry instead of the service it actually sells. High search volume, low estimated CPC or an impressive-looking ad are not enough. Ask whether the searcher is a plausible customer and whether the destination can turn that interest into a useful action.</p>
+<p>Start with one offer, the area you serve and a measured enquiry or sale. This makes the first review understandable. It also avoids treating every click as equally valuable.</p>
+<h2>Worked example: the cheapest clicks are not the best customers</h2>
+<p><strong>Hypothetical comparison, not a benchmark.</strong> Campaign A spends A$200 for 100 clicks and two accepted enquiries. Campaign B spends A$200 for 40 clicks and four accepted enquiries.</p>
+<p>A has A$2 CPC and A$100 cost per accepted enquiry. B has A$5 CPC and A$50 cost per accepted enquiry. Judging by click price alone favours A; judging by the defined business action favours B.</p>
+<p>This example assumes comparable enquiries and correct measurement. It does not show that any real keyword, industry or platform will produce those rates. Actual customer value and close rate still decide whether either option is affordable.</p>
+<h2>Check the six common gaps</h2>
+<ol><li><strong>Offer:</strong> ads mention a service or price the business cannot fulfil.</li><li><strong>Intent:</strong> queries concern jobs, training, research or another product.</li><li><strong>Location:</strong> targeting reaches people the business cannot serve.</li><li><strong>Destination:</strong> the page does not explain the promised offer or action.</li><li><strong>Measurement:</strong> a page view or failed form is counted as a lead.</li><li><strong>Follow-up:</strong> suitable enquiries arrive but nobody responds promptly.</li></ol>
+<p>The <a href="/blog/google-ads-campaign-structure-mistakes">structure guide</a>, <a href="/blog/negative-keywords-explained">negative keyword checks</a> and <a href="/blog/landing-page-conversion-rate-optimisation">page review</a> help make these checks practical.</p>
+<h2>Do not fragment the first experiment unnecessarily</h2>
+<p>Many tiny campaigns, channels and creative variants can leave little evidence for any decision. Separate campaigns when the budget, service area or goal needs independent control. Use relevant ad groups for related searches and messages.</p>
+<p>There is no universal minimum budget that makes every business viable. Use the expected click costs, your risk allowance and the outcome you can afford. Avoid spending beyond that allowance just to hit an arbitrary conversion count.</p>
+<h2>Account for the full economics</h2>
+<p>Media spend is not the only cost. Management, setup, website work and lead-handling time can affect acquisition cost. Use <a href="/blog/true-cost-of-managing-google-ads-yourself">the cost worksheet example</a> and <a href="/blog/understanding-roas">margin-aware ROAS</a> rather than assuming revenue attributed to ads is profit.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/1722066?hl=en">ROI guide</a> describes considering revenue and costs. Use your business's actual margins and sale outcomes, with a clear reporting period.</p>
+<h2>Scale after the journey is verified</h2>
+<p>Before increasing the budget, confirm ad eligibility, relevant traffic, a working success event and acceptable customer economics. Review complete periods and conversion delay; a quiet afternoon or a handful of clicks is not enough to establish a lasting trend.</p>
+<p>Site to Spend's <a href="/google-ads-management">small business management</a> prepares and monitors supported campaign resources. You still supply accurate facts, a fulfilable offer and the account or website actions that cannot be automated.</p>
 HTML,
         ];
     }
@@ -558,47 +403,35 @@ HTML,
     {
         return [
             'slug' => 'google-ads-campaign-structure-mistakes',
-            'title' => 'Campaign Structure Mistakes to Avoid',
-            'description' => 'Poor campaign structure is the root cause of most Google Ads underperformance. Here are the most common structural mistakes — and how to fix them.',
+            'title' => 'Small Budget Google Ads Campaign Structure',
+            'description' => 'Build a Google Ads structure around intent, service and landing page without fragmenting a small budget. Includes a worked local-service example.',
             'category' => 'Google Ads',
             'read_time' => '6 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-08',
             'content' => <<<'HTML'
-<h2>Why structure matters more than budget</h2>
-<p>Two Google Ads accounts with identical budgets and identical keywords can produce dramatically different results depending purely on how they're structured. Campaign structure determines ad relevance, Quality Score, conversion tracking accuracy, and budget distribution. Get it wrong and every other optimisation you do is working against a structural handicap.</p>
-
-<h2>Mistake 1: One campaign for everything</h2>
-<p>The most common mistake is a single campaign containing all your services, all your locations, and all your products — with one shared budget. This makes it impossible to:</p>
-<ul>
-  <li>Allocate budget differently to different services or products based on their profitability</li>
-  <li>Set different bid strategies for high-intent vs low-intent keywords</li>
-  <li>Understand which services or areas are actually performing</li>
-  <li>Optimise bidding separately for different goals</li>
-</ul>
-<p>The fix: one campaign per product/service line or geographic area, with its own budget and bidding strategy. Yes, this creates more campaigns to manage — which is exactly why automation helps.</p>
-
-<h2>Mistake 2: Ad groups that are too broad</h2>
-<p>Ad relevance — one of the three Quality Score components — measures how closely your ad matches a search query. If a single ad group contains 50 loosely related keywords, no single ad can be highly relevant to all of them. Your Quality Scores suffer across the board, raising CPCs.</p>
-<p>The correct approach is tight ad groups: 5–15 closely related keywords per ad group, each served by ad copy that directly addresses those specific terms. This is called Single Keyword Ad Groups (SKAGs) in its most extreme form, but even moderately tight groupings produce measurably better Quality Scores than large catch-all ad groups.</p>
-
-<h2>Mistake 3: Match type mismanagement</h2>
-<p>Keyword match types — broad, phrase, and exact — control how closely a search query must match your keyword to trigger your ad. Broad match is powerful but dangerous: it allows Google to match your keyword to semantically related queries, which often includes irrelevant ones. Most campaigns need a deliberate match type strategy:</p>
-<ul>
-  <li><strong>Exact match</strong> for your highest-value, best-converting terms — maximum control</li>
-  <li><strong>Phrase match</strong> for moderate-volume terms where some variation is acceptable</li>
-  <li><strong>Broad match</strong> only with Smart Bidding and strong conversion data — allows Google to find new converting queries</li>
-</ul>
-<p>Running broad match keywords without robust negative keyword lists and sufficient conversion data is one of the fastest ways to drain a budget.</p>
-
-<h2>Mistake 4: Mixing campaigns with different goals</h2>
-<p>A campaign that mixes brand terms (your company name), competitor terms, and generic service keywords is difficult to manage and report on. Someone searching your brand name has very different intent from someone searching a generic service term — they should be in different campaigns with different bid strategies, budgets, and goals.</p>
-<p>Brand campaigns typically warrant higher bids (protecting your brand terms is cheap and high-converting), while generic terms require more aggressive optimisation and carry higher costs.</p>
-
-<h2>Mistake 5: No separation between Search and Display</h2>
-<p>Google's default campaign setup often enables both Search and Display network targeting in the same campaign. These are fundamentally different advertising channels — Search reaches people actively searching, Display shows banner ads on websites. Combining them in one campaign mixes their performance data, making it impossible to optimise either properly. Always run them as separate campaigns.</p>
-
-<h2>How sitetospend.com builds campaign structure</h2>
-<p>When sitetospend.com creates your campaigns, it applies a structured framework: separate campaigns by service and intent type, tight ad groups with closely related keywords, appropriate match type distributions, and brand campaigns isolated from generic campaigns. This structure is established at launch and maintained over time — the agents won't collapse well-structured campaigns into inefficient arrangements, and any changes preserve the structural integrity that underpins campaign performance.</p>
+<h2>Structure should support a decision</h2>
+<p>A Google Ads account is organised into campaigns, ad groups, keywords, ads and assets. Campaigns hold controls such as budget and targeting. Ad groups bring a related set of searches and messages together. Separate things when you need a different decision; keep them together when the goal and message are genuinely shared.</p>
+<p>There is no universal correct number of campaigns or keywords. A tiny budget split across many campaigns can make each harder to assess. A catch-all ad group can make it difficult to write a useful, specific ad. Aim for understandable intent and enough data to learn.</p>
+<h2>Worked example: two services in one city</h2>
+<p><strong>Hypothetical structure, not a result.</strong> A Brisbane business repairs residential leaks and installs hot-water systems. Both services use the same enquiry goal, but they have different landing pages and messages.</p>
+<ul><li><strong>Campaign:</strong> Brisbane residential plumbing, with a single initial budget.</li><li><strong>Ad group 1:</strong> leak-repair searches, ads about leak repair, destination on the leak-repair page.</li><li><strong>Ad group 2:</strong> hot-water installation searches, ads about installation, destination on the hot-water page.</li></ul>
+<p>If the business later needs a protected installation budget or different service area, that is a reason to split campaigns. It is not necessary to create a separate campaign for every spelling variation or suburb on day one.</p>
+<h2>Keep a keyword-to-page map</h2>
+<p>For each theme, record the service sold, the searcher's likely intent, destination and success action. For example: “hot-water installation” → installation service → installation page → successful quote request.</p>
+<p>A keyword such as “plumbing apprenticeship” fails the offer test for this business. High volume or a low estimated click price does not make it useful. Review the real search terms after launch because the selected keyword and actual search are not always the same.</p>
+<h2>Use match types as controls, not guarantees</h2>
+<p>Exact match can include searches with the same meaning or intent; it is not restricted to a literal string. Phrase and broad match expand the matching scope differently. Read Google's <a href="https://support.google.com/google-ads/answer/7478529?hl=en">keyword matching guidance</a> before assuming an exact keyword prevents all irrelevant traffic.</p>
+<p>Choose match types alongside your conversion signal, budget and ability to review queries. For a narrow service with limited data, start with a small, relevant set you can inspect. Broad match requires particular care with goals and ongoing review; it is not a substitute for knowing what the business sells.</p>
+<h2>Negatives should exclude unsuitable intent</h2>
+<p>Negative keywords are useful for searches you cannot serve, such as training or employment if you only sell repairs. Check their matching behaviour before applying a broad shared list. A negative that is too general can block a legitimate service enquiry.</p>
+<p>Document why you exclude a term. For a business that repairs a particular brand, excluding that brand just because some searches concern spare parts can remove useful customers as well. See our <a href="/blog/negative-keywords-explained">negative keyword guide</a> for the matching details.</p>
+<h2>Separate reporting when intent changes</h2>
+<p>Someone searching your business name already knows you. Someone comparing providers may not. If you run brand activity, review it separately so it does not hide the cost of acquiring a new customer. Similarly, report different networks and services clearly before drawing conclusions from a blended total.</p>
+<p>Do not force a structure change just to make a chart cleaner. Check whether the separation improves budget control, targeting, the message or interpretation of results.</p>
+<h2>Measure the action, then improve the structure</h2>
+<p>Before assessing an ad group, verify its <a href="/blog/how-conversion-tracking-works">conversion tracking</a>. A strong click-through rate with no qualified enquiries is not enough. Review the ad, query and page as a sequence, then make a change with a clear reason and follow-up period.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/2375470?hl=en">account organisation guide</a> explains the hierarchy. For practical budget checks, use <a href="/blog/how-budget-pacing-works">our pacing example</a>. Site to Spend's <a href="/google-ads-management">Google Ads management</a> prepares a campaign around your confirmed business information and lets you inspect it before deployment.</p>
 HTML,
         ];
     }
@@ -609,52 +442,32 @@ HTML,
     {
         return [
             'slug' => 'landing-page-conversion-rate-optimisation',
-            'title' => 'Landing Page CRO: Clicks That Don\'t Convert',
-            'description' => 'If your landing page doesn\'t convert, every click is wasted spend. How to diagnose and fix the reasons visitors leave without acting.',
+            'title' => 'Landing Page CRO: A Practical Conversion Check',
+            'description' => 'Check the promise, mobile journey, form and measurement before rewriting every ad. Includes a worked mobile example and an interpretable test plan.',
             'category' => 'Platform',
-            'read_time' => '6 min read',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>The click is not the win</h2>
-<p>A common misconception in paid advertising is that the goal is to get as many clicks as possible. Clicks are a cost, not a result. The result is a conversion — an enquiry, a purchase, a booked call. A campaign that generates 200 clicks at 2% conversion rate produces 4 conversions. A campaign that generates 100 clicks at 8% conversion rate produces 8 conversions at half the spend.</p>
-<p>Landing page conversion rate is often the highest-leverage variable in a Google Ads account — higher than any bid adjustment, keyword change, or ad copy test. Yet it's the variable most businesses neglect.</p>
-
-<h2>The message match problem</h2>
-<p>The most common landing page failure is message mismatch. Someone searches "emergency boiler repair London," clicks an ad that promises "Fast Emergency Boiler Repair — Same Day Response," and lands on your homepage. The homepage talks about your company history, your range of services, and has a generic contact form buried below the fold. The searcher, who wanted immediate reassurance that you offer emergency same-day repairs, leaves within seconds.</p>
-<p>Every ad should lead to a page where the headline and primary content directly matches what the ad promised. If your ad targets emergency boiler repair, the landing page should lead with "Emergency Boiler Repair" — in the H1, in the first paragraph, in the CTA. This isn't just good UX — it directly improves your Quality Score's "landing page experience" component, lowering your CPCs.</p>
-
-<h2>The five elements of a high-converting landing page</h2>
-<ol>
-  <li><strong>Headline that matches the ad</strong> — the user should see immediate confirmation they're in the right place</li>
-  <li><strong>Clear, specific value proposition</strong> — what you offer, for whom, and why you're the right choice</li>
-  <li><strong>Social proof above the fold</strong> — reviews, number of customers, years in business, recognisable client logos</li>
-  <li><strong>Single, prominent CTA</strong> — one action to take, not four competing options. "Get a Free Quote" or "Call Now" — not both plus a newsletter signup and a download</li>
-  <li><strong>Fast load time</strong> — every additional second of load time reduces conversion rate by approximately 7%. Google considers page speed in Quality Score. A page that takes 6 seconds to load on mobile is silently killing your campaign</li>
-</ol>
-
-<h2>What good conversion rates actually look like</h2>
-<p>Conversion rates vary widely by industry and goal type, but as rough benchmarks:</p>
-<ul>
-  <li>Local service businesses (plumber, electrician, cleaner) — 8–15% from a well-targeted search ad</li>
-  <li>Professional services (accountant, solicitor, consultant) — 5–10%</li>
-  <li>E-commerce purchase — 2–5%</li>
-  <li>Lead generation form completion — 3–8%</li>
-  <li>Phone call from a mobile ad — 15–30% (phone calls convert better than form fills)</li>
-</ul>
-<p>If your conversion rate is below half these benchmarks, the landing page is almost certainly the problem — not the ads.</p>
-
-<h2>How to diagnose a landing page problem</h2>
-<p>If your Google Ads CTR is healthy (above 3–5% for Search) but conversions are low, isolate the problem to the landing page:</p>
-<ul>
-  <li>Check bounce rate — if over 70%, people are leaving immediately after seeing the page</li>
-  <li>Check page speed — use Google PageSpeed Insights. Under 3 seconds is the target</li>
-  <li>Check mobile experience — over 60% of searches are on mobile. Does your page work on a phone?</li>
-  <li>Check message match — does your landing page headline match your ad copy?</li>
-  <li>Check CTA visibility — can someone see what to do next without scrolling?</li>
-</ul>
-
-<h2>How sitetospend.com monitors landing page performance</h2>
-<p>sitetospend.com tracks conversion data at the landing page level, not just the campaign level. The Quality Score Agent monitors "landing page experience" scores per keyword and flags when pages drop below acceptable thresholds. When a page consistently underperforms relative to ad click quality — high CTR, low conversion — the system raises a recommendation with specific improvement priorities: headline alignment, speed, CTA placement, or mobile optimisation. You'll see these recommendations in your Activity Feed with the data that supports them.</p>
+<h2>The landing page must finish the promise in the ad</h2>
+<p>A click brings a visitor to the destination; it is not yet an enquiry or sale. The page should confirm the service, audience, area and conditions that persuaded the visitor to click, then provide a working next action.</p>
+<p>Conversion rate depends on the offer, intent and action being measured. Avoid treating an industry average or a page-speed statistic as a guaranteed target for your business. Begin by inspecting the real journey on the devices your visitors use.</p>
+<h2>A first review on your phone</h2>
+<ul><li>Does the headline confirm the specific service advertised?</li><li>Are area, price conditions and availability understandable?</li><li>Is the primary action visible and easy to use?</li><li>Can the form be completed with a mobile keyboard?</li><li>Does success appear only after the server accepts the enquiry?</li><li>Do errors, consent controls or overlays block the action?</li></ul>
+<p>Trust information should be real: contact details, verifiable reviews and evidence for claims. An invented testimonial is not a CRO improvement. A visitor should be able to understand who fulfils the offer.</p>
+<h2>Worked example: a mobile form that cannot finish</h2>
+<p><strong>Hypothetical diagnostic example.</strong> A repair ad promises an online quote, but the mobile page has a fixed banner covering the Submit button. A button-click event records some attempts as conversions even though the form never succeeds.</p>
+<ol><li>Repair the layout so the form can be completed.</li><li>Test required fields, error states and accepted submission.</li><li>Move the conversion trigger to the confirmed success event.</li><li>Review accepted enquiries after deployment, allowing for traffic and delay.</li></ol>
+<p>Changing a headline or increasing a bid does not fix this incident. Correcting measurement may reduce the reported conversion count while making the business outcome more trustworthy.</p>
+<h2>Separate message, usability and measurement</h2>
+<p>A message mismatch sends the right person to an unclear offer. A usability problem prevents action even when the offer is understood. A measurement problem records the journey incorrectly. Test each before assuming that all low-conversion traffic comes from weak copy.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/14086?hl=en">landing-page explanation</a> describes relevance and usability. Our <a href="/blog/how-conversion-tracking-works">conversion checklist</a> covers the difference between a click and success.</p>
+<h2>Make a page experiment interpretable</h2>
+<p>Write one question: for example, whether clarifying the service area increases accepted quote requests. Preserve the conversion definition and comparable traffic where practical. Record the change date and allow enough observations before deciding.</p>
+<p>A hypothetical page with three enquiries from 50 visitors has a 6% observed conversion rate; one more enquiry would make it 8%. That sensitivity illustrates why a small sample should not support a sweeping promise of improvement.</p>
+<h2>Inspect loading and destination behaviour</h2>
+<p>Check the actual expanded destination, redirects, error status and mobile rendering. Test under representative connection conditions and remove unnecessary blocking work where you can. Page speed matters to usability, but there is no universal fixed percentage of sales recovered by removing one second.</p>
+<p>Use Google's <a href="https://support.google.com/google-ads/answer/7543502?hl=en">landing-page report guidance</a> alongside <a href="/blog/what-is-ad-rank">ad-quality diagnostics</a>. Review the <a href="/blog/google-ads-campaign-structure-mistakes">keyword-to-page map</a> and <a href="/google-ads-management">campaign management scope</a> so page improvements serve the same business goal as the ads.</p>
 HTML,
         ];
     }
@@ -665,46 +478,32 @@ HTML,
     {
         return [
             'slug' => 'facebook-ads-for-small-business',
-            'title' => 'Facebook Ads for Small Business',
-            'description' => 'Facebook Ads can be transformative for small businesses — but most campaigns fail due to the same avoidable mistakes. Here\'s what actually works.',
-            'category' => 'Platform',
-            'read_time' => '7 min read',
+            'title' => 'Facebook Ads for Small Business: A Test Plan',
+            'description' => 'Plan a Meta ad around a useful outcome, suitable creative and working measurement. Includes a service-business example and lead-quality review.',
+            'category' => 'Getting Started',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why Facebook Ads is different from Google Ads</h2>
-<p>Google Ads captures people who are already looking for something. Facebook Ads reaches people who aren't looking for anything — they're scrolling, watching videos, seeing what friends are up to. This fundamental difference shapes everything about how Facebook advertising must be approached.</p>
-<p>On Google, you match your ad to intent that already exists. On Facebook, you must create intent — interrupt someone's scroll, make them care about something they weren't thinking about, and move them toward a decision. This is harder creatively, requires different targeting logic, and demands a different relationship between your ads and your landing pages.</p>
-
-<h2>Why most Facebook Ads campaigns fail</h2>
-<p>The most common reason Facebook campaigns fail is treating it like a cheaper Google Ads. Businesses take the same messaging, the same offer, the same landing page — and push it to a Facebook audience. The results are predictably poor, because the audience has no active intent, the creative doesn't stop a scroll, and the funnel isn't built for cold traffic.</p>
-<p>The second most common failure is giving up too early. Facebook's algorithm requires a learning phase — typically 50 conversions per ad set — before it can properly optimise delivery. Most small business campaigns are shut down for "poor performance" while still in the learning phase.</p>
-
-<h2>The Facebook Ads funnel</h2>
-<p>Effective Facebook advertising requires thinking in three stages:</p>
-<ol>
-  <li><strong>Awareness (cold audience)</strong> — reaching people who've never heard of you. The creative must stop the scroll and introduce your value proposition. The goal here isn't a sale — it's a click, a video view, or a page visit. Cast wide.</li>
-  <li><strong>Consideration (warm audience)</strong> — reaching people who've engaged with your brand: visited your website, watched your video, interacted with a post. This audience knows you. The creative can be more specific, the offer more direct.</li>
-  <li><strong>Conversion (hot audience)</strong> — reaching people who've shown high intent: visited your pricing page, added to cart, started an enquiry but didn't finish. This is where your most direct conversion messaging belongs. These audiences are small but convert at very high rates.</li>
-</ol>
-<p>Running only conversion campaigns to cold audiences is like asking someone to marry you on a first date. Running only awareness campaigns with no follow-up is like making a good first impression and then never calling. The full funnel compounds all three stages.</p>
-
-<h2>Creative is the targeting on Facebook</h2>
-<p>A common misconception is that Facebook's detailed targeting options — interests, demographics, behaviours — are the primary lever for performance. In practice, creative quality is more important. Facebook's algorithm is sophisticated enough to find your audience if your creative is good. But no amount of targeting precision makes a bad creative perform.</p>
-<p>Effective Facebook creative typically:</p>
-<ul>
-  <li>Stops the scroll in the first 1–2 seconds (strong visual or opening line)</li>
-  <li>Addresses a specific pain point or desire the audience has</li>
-  <li>Makes the value proposition immediately clear</li>
-  <li>Has a single, unambiguous call to action</li>
-  <li>Looks native — too "salesy" and people scroll past; authentic-feeling content performs better</li>
-</ul>
-
-<h2>Facebook Pixel and conversion tracking</h2>
-<p>Facebook's Pixel is a tracking tag on your website that records what visitors do after clicking an ad. Without it, Facebook has no idea which ad combinations lead to conversions — its algorithm can't optimise, and your reporting is meaningless. The Pixel should be the very first thing set up before any Facebook campaign goes live.</p>
-<p>The Conversions API (CAPI) should also be implemented alongside the Pixel to capture conversions that browser-based tracking misses due to iOS privacy restrictions. Since Apple's iOS 14 changes, Pixel-only tracking can miss 20–40% of conversions.</p>
-
-<h2>How sitetospend.com manages Facebook Ads</h2>
-<p>sitetospend.com sets up and manages Facebook campaigns using Spectra's Business Manager — a professional management infrastructure that handles Pixel implementation, Conversions API setup, audience creation, and campaign management from a single platform. The same AI agents that optimise Google Ads — creative testing, audience refinement, budget pacing — apply to Facebook campaigns too. Remarketing audiences are built automatically from your website visitors, and the Creative Intelligence Agent continuously tests new ad variations to prevent audience fatigue and maintain campaign performance over time.</p>
+<h2>Give a browsing audience a clear reason to act</h2>
+<p>A Meta ad can introduce an offer while someone browses Facebook or Instagram. It needs to explain what is offered, who it suits and what happens next. A visually polished image with no clear offer can attract attention without producing a useful customer.</p>
+<p>Start with a business outcome and a destination or enquiry process. Choose the objective and available optimisation settings that fit that outcome. Paying for traffic alone is not proof that the campaign is being optimised for qualified enquiries.</p>
+<h2>Worked example: a useful service enquiry</h2>
+<p><strong>Hypothetical creative brief, not a performance claim.</strong> A business offers garden maintenance in a defined local area and accepts quote requests. Its ad can show the actual type of work, describe the area and invite a quote request.</p>
+<p>The destination should confirm the service and ask enough information to decide whether the enquiry can be served. “Guaranteed Same-Day Service” is unsuitable unless the business can genuinely fulfil and qualify that promise.</p>
+<p>Use real business photography where available, or accurately reviewed generated imagery. Do not imply an AI-generated project is a completed customer job. Avoid invented before-and-after results and unsupported customer quotes.</p>
+<h2>Prepare the placement and the next action together</h2>
+<ul><li>Offer and service area.</li><li>Audience hypothesis permitted by platform rules.</li><li>Creative format and dimensions for the intended placements.</li><li>Visible message, required conditions and call to action.</li><li>Working website form, booking path or supported lead form.</li><li>A person responsible for responding to the enquiry.</li></ul>
+<p>Meta's <a href="https://about.fb.com/ltam/wp-content/uploads/sites/14/2023/11/LeadGenerationGuide.pdf">lead-generation guide</a> discusses supported enquiry approaches. Check current account capabilities and rules rather than assuming one configuration works for every business or category.</p>
+<h2>Measure accepted leads as well as submissions</h2>
+<p>Test the actual success event and the intended account or dataset. If more than one integration sends the same logical action, check for duplicate reporting. Respect consent and data-handling requirements; a server integration does not remove those obligations.</p>
+<p>Keep a record of whether a submitted lead fits the service and can be contacted. A cheap form submission that cannot be served is different from an accepted enquiry. Review the full journey before crediting creative for a low reported cost.</p>
+<h2>Worked calculation: volume can conceal quality</h2>
+<p><strong>Hypothetical calculation.</strong> At A$180 spend and 18 submissions, cost per submission is A$10. If six submissions are accepted enquiries, cost per accepted enquiry is A$30. If two become customers, media acquisition cost is A$90 per customer, before other costs.</p>
+<p>Use your real records and conversion delay. This is a way to compare definitions, not an expected result for garden maintenance or Meta advertising.</p>
+<h2>Review a test before expanding it</h2>
+<p>Check whether the audience, offer and response process fit. Change a specific element with a documented reason, then observe qualified outcomes. A few days of low-volume results do not justify replacing every asset or assuming all audiences are exhausted.</p>
+<p>Read <a href="/blog/how-ai-writes-your-ad-copy">the creative brief checklist</a>, <a href="/blog/landing-page-conversion-rate-optimisation">destination checks</a> and <a href="/blog/multi-platform-advertising">cross-channel measurement</a>. Site to Spend's <a href="/pricing">current managed plans</a> describe platform coverage; the one-time Google Ads product does not include an ongoing Meta campaign service.</p>
 HTML,
         ];
     }
@@ -715,50 +514,31 @@ HTML,
     {
         return [
             'slug' => 'negative-keywords-explained',
-            'title' => 'Google Ads Negative Keywords Explained',
-            'description' => 'Negative keywords are the fastest way to cut wasted Google Ads spend. How they work, why most accounts have far too few, and how to find them.',
+            'title' => 'Google Ads Negative Keywords: Matching',
+            'description' => 'Exclude unsuitable search intent without blocking useful customers. Work through negative match types, a local-service example and conflict checks.',
             'category' => 'Google Ads',
-            'read_time' => '6 min read',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>What is a negative keyword?</h2>
-<p>A negative keyword tells Google: <em>do not show my ad when someone includes this word in their search</em>. Where regular keywords attract clicks, negative keywords repel irrelevant ones. They're a filter that stops your budget being consumed by searches that will never lead to a customer.</p>
-<p>Example: a plumber running Google Ads for "emergency plumber London" without a negative keyword for "job" or "course" will have their ad shown to people searching "plumber London job" or "plumbing course London." These people aren't going to hire a plumber — they're looking for employment or training. Every click from them is pure waste.</p>
-
-<h2>The three negative keyword match types</h2>
-<p>Like regular keywords, negative keywords come in three match types:</p>
-<ul>
-  <li><strong>Broad match negative</strong> — blocks searches containing all the words in any order. Negative broad <em>plumber job</em> would block "job for plumber" and "plumber wanted jobs London."</li>
-  <li><strong>Phrase match negative</strong> — blocks searches that contain the exact phrase in order. Negative phrase <em>"plumber job"</em> blocks "london plumber job" but not "job plumber london."</li>
-  <li><strong>Exact match negative</strong> — blocks only that exact search query. Negative exact <em>[plumber job]</em> blocks only the search "plumber job," nothing else.</li>
-</ul>
-<p>For most use cases, phrase match negatives offer the right balance of coverage and precision.</p>
-
-<h2>Why most Google Ads accounts have too few negatives</h2>
-<p>Setting up negatives requires you to look at your actual search terms report — the real queries that triggered your ads — and identify the bad ones. This is tedious, requires experience, and needs to be done every week as new irrelevant queries accumulate. Most businesses set up a handful of obvious negatives at launch and then never revisit them. After 6 months, a significant percentage of their budget is typically being wasted on irrelevant traffic.</p>
-<p>The Search Terms report consistently reveals surprises: competitor brand names, job-seeker queries, research queries, unrelated service terms. Without a systematic weekly review, waste compounds silently.</p>
-
-<h2>Campaign-level vs account-level negatives</h2>
-<p>Negative keywords can be applied at the ad group level, campaign level, or across the entire account via a <strong>negative keyword list</strong>. Account-level lists are the most powerful — you define them once and they apply everywhere. Common account-level negative lists include:</p>
-<ul>
-  <li>Job seekers — "jobs," "careers," "salary," "vacancy," "apply," "hiring"</li>
-  <li>DIY / free — "DIY," "free," "how to," "yourself," "tutorial"</li>
-  <li>Competitors — competitor brand names if you don't want to bid on them</li>
-  <li>Irrelevant industries — terms from adjacent industries that share keywords with yours</li>
-</ul>
-
-<h2>How sitetospend.com manages negatives automatically</h2>
-<p>Every week, sitetospend.com's agents review your Search Terms report and automatically identify search queries that:</p>
-<ul>
-  <li>Have generated more than 3 clicks with zero conversions</li>
-  <li>Match known irrelevant patterns (job seeker terms, DIY terms, competitor names)</li>
-  <li>Show up repeatedly across multiple weeks</li>
-</ul>
-<p>Identified waste terms are added to your campaign's negative keyword lists automatically. Over time, your campaign becomes increasingly efficient — the same budget reaches a progressively higher proportion of genuinely intent-driven searchers.</p>
-<p>You can review all automatically added negatives in your Activity Feed, and override any addition if you disagree with the categorisation.</p>
-
-<h2>How much can negatives save you?</h2>
-<p>In a typical Google Ads account that hasn't been actively managed, 15–30% of clicks can come from irrelevant queries. For a business spending £2,000/month on Google Ads, that's £300–£600 every month going to people who were never going to buy. Systematic negative keyword management typically produces a 20–40% improvement in cost-per-conversion in the first 60 days — without spending more money, purely by stopping waste.</p>
+<h2>Exclude what the business cannot serve</h2>
+<p>A negative keyword helps prevent a Search ad from matching an unsuitable search. The point is not to create the longest exclusion list; it is to stop paying for intent that does not fit the offer.</p>
+<p>Begin with your actual service, location and customer. A business selling plumbing repairs may exclude employment or training intent. A college advertising plumbing courses would make the opposite decision. A generic negative list copied from another account can remove relevant customers.</p>
+<h2>Negative matching differs from positive keyword matching</h2>
+<p>For Search, a negative broad match generally blocks searches containing all its terms, even in a different order. Negative phrase match requires the phrase in that order; negative exact match blocks the complete matching search without additional words. Negative keywords do not automatically cover close variants. Google's <a href="https://support.google.com/google-ads/answer/2453972?hl=en">negative keyword guidance</a> explains the rules and how other networks differ.</p>
+<p>Review spelling, singular/plural forms and the actual query. Do not assume that excluding one form also excludes every related meaning. Avoid treating these Search rules as universal placement controls for Display or Video.</p>
+<h2>Worked example: one query, three possible exclusions</h2>
+<p><strong>Hypothetical Search example.</strong> A repair-only plumber receives the query “plumbing apprenticeship Brisbane”. It does not employ apprentices or sell courses.</p>
+<ul><li>A negative exact for that complete query excludes a narrow observed search.</li><li>A negative phrase for “plumbing apprenticeship” addresses that phrase across additional words.</li><li>A broad negative for “apprenticeship” excludes a wider training-related intent.</li></ul>
+<p>The broader choice may fit this business, but first confirm that the term cannot describe a paid service it offers. Record the reason. After applying it, check that the intended repair searches remain eligible.</p>
+<h2>Review actual search terms with business context</h2>
+<ol><li>Read the query, not just the selected positive keyword.</li><li>Classify whether the searcher wants the service you sell.</li><li>Check conversion delay and lead quality before declaring a relevant query unproductive.</li><li>Choose the smallest sensible exclusion scope: ad group, campaign or shared list.</li><li>Check matching behaviour and conflicts before saving.</li></ol>
+<p>A term with no conversion from two clicks is not enough evidence to label it permanently wasteful. Conversely, a clearly unrelated request does not need weeks of spending to establish that you do not sell the requested product.</p>
+<h2>Avoid blocking a useful brand or service</h2>
+<p>Suppose a repair business services Brand X equipment. A search about buying spare parts may be unsuitable, while “Brand X repair near me” is useful. Excluding “Brand X” entirely removes both. Separate product-purchase intent from the brand rather than treating every mention as irrelevant.</p>
+<p>Conflicts can also occur between a campaign's positives and a shared negative list. Keep a small audit trail: term, match type, scope, reason and date. Recheck it when the business adds a new service.</p>
+<h2>Use negatives with structure and measurement</h2>
+<p>Negative keywords do not fix inaccurate location targeting, a broken destination or a weak conversion definition. Use the <a href="/blog/google-ads-campaign-structure-mistakes">keyword-to-page map</a>, <a href="/blog/google-ads-audience-targeting">audience controls</a> and <a href="/blog/how-conversion-tracking-works">tracking checks</a> together. <a href="/google-ads-management">Managed campaign review</a> should preserve the intended customer journey while excluding unsuitable traffic.</p>
 HTML,
         ];
     }
@@ -769,52 +549,31 @@ HTML,
     {
         return [
             'slug' => 'what-is-ad-rank',
-            'title' => 'What is Ad Rank? How Google Ranks Your Ads',
-            'description' => 'Ad Rank determines your ad\'s position on Google\'s search results page — and it\'s not just about bid. Here\'s the full picture and how to improve it.',
+            'title' => 'Ad Rank, Quality Score and Search Ad Delivery',
+            'description' => 'Understand auction eligibility without confusing Quality Score or Ad Strength with a ranking formula. Includes a low-delivery diagnostic example.',
             'category' => 'Google Ads',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>The Google Ads auction isn't just about money</h2>
-<p>Many people assume the advertiser who bids the most wins the top spot in Google search results. This is wrong — and understanding why is one of the most important things you can learn about Google Ads.</p>
-<p>Google uses a formula called <strong>Ad Rank</strong> to decide who shows where. A business bidding £0.50 can outrank one bidding £2.00 if their ad quality is high enough. This is intentional: Google earns more from high-quality, relevant ads because people actually click them.</p>
-
-<h2>The Ad Rank formula</h2>
-<p>Ad Rank is calculated from five components at the time of each auction:</p>
-<ol>
-  <li><strong>Your bid</strong> — the maximum amount you're willing to pay per click</li>
-  <li><strong>Expected CTR</strong> — Google's prediction of how often your ad will be clicked when shown</li>
-  <li><strong>Ad relevance</strong> — how closely your ad matches the intent of the user's search query</li>
-  <li><strong>Landing page experience</strong> — how relevant, trustworthy, and fast your landing page is</li>
-  <li><strong>Ad extensions</strong> — whether you have sitelinks, callouts, and other extensions eligible to show</li>
-</ol>
-<p>Components 2, 3, and 4 together make up your <strong>Quality Score</strong> (rated 1–10 per keyword). A higher Quality Score means Google thinks your ad is genuinely useful to searchers — and rewards you with better position at lower cost.</p>
-
-<h2>What this means in practice: the auction</h2>
-<p>Every Google search triggers an instant auction among all advertisers who've bid on relevant keywords. The winner isn't necessarily the highest bidder — it's whoever has the highest Ad Rank. And crucially, the winner doesn't pay their maximum bid: they pay just enough to beat the Ad Rank of the advertiser below them.</p>
-<p>This means a high-Quality-Score advertiser can win auctions and pay less per click than a lower-quality competitor — sometimes dramatically less. A Quality Score of 8 vs 4 on the same keyword can mean paying 50% less for the same position.</p>
-
-<h2>How Ad Rank affects ad position and eligibility</h2>
-<p>There are typically 3–4 paid positions at the top of Google's search results, and 3 at the bottom. Your Ad Rank determines:</p>
-<ul>
-  <li>Whether your ad shows at all (your Ad Rank must exceed a minimum threshold)</li>
-  <li>Which position you appear in</li>
-  <li>Whether your ad extensions are eligible to show</li>
-  <li>How much you pay per click</li>
-</ul>
-<p>Ads that appear in position 1–3 at the top of the page get the most clicks. Position 1 (the very top) gets roughly 2–3x more clicks than position 3, which is why Ad Rank matters so much to your traffic volume.</p>
-
-<h2>Improving Ad Rank without increasing bids</h2>
-<p>The most cost-effective way to improve Ad Rank is to improve Quality Score — because it reduces what you need to pay to achieve the same position. The three Quality Score components each have specific levers:</p>
-<ul>
-  <li><strong>Expected CTR:</strong> Write tighter, more compelling headlines that include the exact keyword. Use emotional triggers and clear value propositions. Test multiple variations.</li>
-  <li><strong>Ad relevance:</strong> Ensure your ad copy directly addresses the intent behind each keyword. Avoid grouping loosely related keywords into the same ad group.</li>
-  <li><strong>Landing page experience:</strong> The keyword should appear in the page's H1. The page should load in under 3 seconds. The content should clearly deliver what the ad promised.</li>
-</ul>
-<p>Adding extensions also directly boosts Ad Rank. Google's own data shows that adding sitelinks increases Ad Rank — not just CTR — because extensions are factored into the formula separately.</p>
-
-<h2>How sitetospend.com optimises Ad Rank</h2>
-<p>The Quality Score Agent monitors every keyword's Ad Rank components weekly. When a keyword's Quality Score drops or stagnates, the agent diagnoses which component is the problem and takes specific action: new ad copy, keyword restructuring, or landing page recommendations. The Ad Extension Agent ensures every campaign always has full extension coverage — one of the easiest Ad Rank improvements available. Together, these agents progressively improve Ad Rank across your account, lowering your effective cost-per-click over time.</p>
+<h2>Ad Rank affects whether and where an ad can appear</h2>
+<p>Google evaluates an ad's eligibility and position in each auction. Ad Rank considers bids, auction-time ad and landing-page quality, thresholds, competition, search context and the expected contribution of assets. It is not a public calculation you can reproduce by multiplying your bid by the displayed Quality Score. See Google's <a href="https://support.google.com/google-ads/answer/1722122?hl=en">Ad Rank explanation</a>.</p>
+<p>Being enabled is only one condition for delivery. An ad can be enabled but fail a policy review, account requirement or auction threshold.</p>
+<h2>Quality Score is a diagnostic, not the auction formula</h2>
+<p>The keyword-level 1–10 Quality Score summarises expected click-through rate, ad relevance and landing-page experience. Google says it is not an input in the auction and should not be treated as a performance KPI. Use its components to investigate the experience, rather than promising a fixed CPC reduction for every point gained. Read the <a href="https://support.google.com/google-ads/answer/6167118?hl=en">Quality Score guidance</a>.</p>
+<p>Ad Strength is a separate diagnostic about responsive-search-ad assets. It does not guarantee serving or a particular position. A high rating cannot repair billing, advertiser verification or a destination outage.</p>
+<h2>Worked example: a low-volume repair campaign</h2>
+<p><strong>Hypothetical diagnostic example.</strong> A business sees limited impressions for repair keywords and an “Below average” landing-page component. The destination is a generic homepage with no repair details.</p>
+<ol><li>Confirm there is no account or ad-policy restriction.</li><li>Check the query intent and whether the business actually offers the repair.</li><li>Use a relevant page showing the service, service area and enquiry action.</li><li>Make the ad's promise consistent with that page.</li><li>Review delivery and qualified leads after the change, using a suitable period.</li></ol>
+<p>The page improvement addresses a concrete mismatch. It does not establish that CPC will fall by a particular percentage or that the ad will become the first result.</p>
+<h2>Inspect the appropriate delivery metrics</h2>
+<p>Top and absolute-top metrics describe where ads appeared or the share of eligible opportunities reached. They are different from organic search position and from the old idea of one universal ad rank number.</p>
+<p>Where available, lost impression share due to rank and budget can help distinguish auction constraints from insufficient budget. Check the metric's campaign scope, freshness and volume. An unavailable value is not a measured zero.</p>
+<h2>Improve the experience before buying more exposure</h2>
+<ul><li>Match the searcher's actual need with a truthful headline.</li><li>Make the destination useful on mobile and easy to navigate.</li><li>Keep the offer, price conditions and service area clear.</li><li>Use relevant assets without inventing claims.</li><li>Verify conversions so increased clicks can be judged against useful outcomes.</li></ul>
+<p>A higher bid can change auction competitiveness, but it can also increase costs. Evaluate the business economics rather than chasing position alone.</p>
+<h2>Use a sequence of checks</h2>
+<p>Read the <a href="/blog/why-your-google-ads-stop-working">delivery checklist</a> first, then inspect <a href="/blog/google-ads-campaign-structure-mistakes">keyword-to-page structure</a> and <a href="/blog/how-responsive-search-ads-work">responsive ad assets</a>. Site to Spend's <a href="/google-ads-management">managed service</a> monitors supported campaign signals; Google's review and auction decisions remain outside our control.</p>
 HTML,
         ];
     }
@@ -825,44 +584,32 @@ HTML,
     {
         return [
             'slug' => 'how-responsive-search-ads-work',
-            'title' => 'How Responsive Search Ads Work',
-            'description' => 'Responsive Search Ads test up to 15 headlines and 4 descriptions against each other. How to write ones that win, and what ad strength really measures.',
+            'title' => 'Responsive Search Ads: Assets and Useful Tests',
+            'description' => 'Write search-ad assets that work in combinations, use pinning carefully and evaluate real outcomes. Includes a clearly labelled headline example.',
             'category' => 'Google Ads',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>What is a Responsive Search Ad?</h2>
-<p>A Responsive Search Ad (RSA) is Google's standard ad format for Search campaigns. Instead of writing one fixed ad, you provide up to <strong>15 headlines</strong> and <strong>4 descriptions</strong>. Google automatically tests different combinations of these assets to discover which perform best for different searches and users.</p>
-<p>When your ad shows, Google picks 3 headlines and 2 descriptions from your pool, assembles them in an order it believes will perform best, and displays them. Over time, Google learns which combinations drive the most clicks and conversions — and shows those combinations more often.</p>
-
-<h2>Why RSAs replaced Expanded Text Ads</h2>
-<p>Google sunset Expanded Text Ads (ETAs) in June 2022. ETAs had fixed headlines and descriptions — you wrote exactly what would show, every time. RSAs are more flexible: they can adapt to the context of a search query, the device, and the user's characteristics. A user searching from a mobile device might see a headline emphasising speed. Someone searching a more specific query might see a headline containing their exact search term.</p>
-<p>The trade-off is control: with RSAs you can't guarantee which combination shows. The solution is to write assets that work well individually and in any combination.</p>
-
-<h2>Ad Strength — and why it matters</h2>
-<p>Google rates every RSA with an <strong>Ad Strength</strong> score: Poor, Average, Good, or Excellent. This score reflects how well your assets are optimised for the RSA format:</p>
-<ul>
-  <li>Are your headlines diverse (not repeating the same words)?</li>
-  <li>Do you include the keyword in at least one headline?</li>
-  <li>Have you filled as many asset slots as possible?</li>
-  <li>Are your descriptions unique and benefit-focused?</li>
-</ul>
-<p>Ad Strength is directly correlated with Ad Rank. An "Excellent" RSA will achieve a higher position at lower cost than a "Poor" one with the same bid. Getting to "Good" or "Excellent" should be the immediate goal for every RSA in your account.</p>
-
-<h2>How to write headlines that work in any combination</h2>
-<p>Because Google combines headlines in different orders, each headline must stand alone as a complete, coherent thought. Common mistakes:</p>
-<ul>
-  <li><strong>Fragmented headlines</strong> — "Get a Free" as one headline and "Quote Today" as another. If Google shows them non-consecutively, neither makes sense.</li>
-  <li><strong>Repetition</strong> — four headlines all saying "London's Best Plumber" in different wording. Google penalises this and your Ad Strength suffers.</li>
-  <li><strong>Missing keyword insertion</strong> — at least one headline should contain the primary keyword so searchers immediately recognise relevance.</li>
-</ul>
-<p>Aim for headlines that cover: the keyword (relevance), a unique benefit (why you), social proof (trust), urgency or offer (action trigger), and a brand name (memorability).</p>
-
-<h2>Pinning — and when to use it</h2>
-<p>Google allows you to "pin" a headline to position 1, 2, or 3 — guaranteeing it always shows. This trades flexibility for control. Use pinning sparingly: pinning too many assets reduces the combination pool and lowers Ad Strength. Reserve pinning for legally required text (e.g. "T&Cs apply"), brand names you always want visible, or a headline so high-performing you never want Google to rotate it out.</p>
-
-<h2>How sitetospend.com optimises RSAs continuously</h2>
-<p>The Creative Intelligence Agent monitors RSA asset performance weekly. Assets labelled "Low" performing by Google (shown less often because they underperform) are replaced with AI-generated alternatives that draw on your brand guidelines, competitor analysis, and conversion data. New combinations are continuously introduced and tested. Over time, your RSAs evolve toward a higher-performance set of assets — with no manual effort required. The agent also ensures every RSA has an "Excellent" or "Good" Ad Strength rating, and alerts when any ad drops below this threshold.</p>
+<h2>Write assets that make sense in different combinations</h2>
+<p>A responsive search ad combines supplied headlines and descriptions into eligible presentations. Google can select different combinations, so every asset should be truthful, complete and compatible with the others. You cannot assume that a sentence split across two headlines will always appear together.</p>
+<p>Google's <a href="https://support.google.com/google-ads/answer/7684791?hl=en">responsive search ad guide</a> documents the format, character limits and pinning behaviour. Check the current requirements when preparing assets rather than relying on a screenshot of one rendered ad.</p>
+<h2>Use distinct messages rather than repeated synonyms</h2>
+<p>A useful asset set covers the service, a verified difference, offer conditions and next action. Five versions of “Best Service” do not give the searcher five useful reasons to act. Avoid unsupported superlatives, invented reviews and a price the destination cannot honour.</p>
+<p>If a required qualification changes the meaning of the offer, make sure eligible combinations still communicate it clearly. Pinning can be appropriate for necessary wording, but it reduces flexibility; check which positions can consistently carry the required text.</p>
+<h2>Worked example: a bookkeeping enquiry</h2>
+<p><strong>Hypothetical copy example, not a performance result.</strong> An accountant offers bookkeeping for small retailers and accepts quote requests online. After verifying those facts, possible headlines are:</p>
+<ul><li>Bookkeeping for Retailers</li><li>Monthly Books, Clear Reports</li><li>Request a Bookkeeping Quote</li></ul>
+<p>The service, practical value and action are different messages. “Guaranteed Tax Savings” would add a claim the example does not support. “Free” should only appear if the stated service or offer is genuinely free with clear conditions.</p>
+<p>Send the ad to a bookkeeping page that confirms the audience and quote process. The headline set cannot compensate for a destination about an unrelated service.</p>
+<h2>Ad Strength is guidance, not proof of success</h2>
+<p>Ad Strength highlights opportunities to improve asset variety and relevance. Google states that its rating does not directly determine serving eligibility. A higher rating is not a guarantee of lower CPA or higher position. Consult <a href="https://support.google.com/google-ads/answer/9921843?hl=en">the Ad Strength explanation</a>, then assess actual delivery and outcomes.</p>
+<p>Keep the diagnostic separate from policy status. An ad with polished assets can still fail a destination or account check.</p>
+<h2>Make a creative test interpretable</h2>
+<ol><li>Write the question: for example, whether a retailer-specific message improves qualified enquiries.</li><li>Keep the offer, location and destination consistent where practical.</li><li>Confirm the successful enquiry event is measured.</li><li>Allow enough observations and conversion delay before deciding.</li><li>Record the change and review qualified outcomes, not just an asset label.</li></ol>
+<p>Responsive assets do not receive identical exposure, and a few clicks are weak evidence. Avoid declaring each individual headline a causal winner from a small descriptive report.</p>
+<h2>Review the whole search journey</h2>
+<p>Use <a href="/blog/how-ai-writes-your-ad-copy">the AI copy checklist</a>, <a href="/blog/how-conversion-tracking-works">conversion verification</a> and <a href="/blog/landing-page-conversion-rate-optimisation">landing-page review</a> together. <a href="/ai-ads-management">AI management</a> can prepare and review supported assets; it cannot promise which combination Google will show or whether a customer will enquire.</p>
 HTML,
         ];
     }
@@ -873,45 +620,31 @@ HTML,
     {
         return [
             'slug' => 'how-ai-writes-your-ad-copy',
-            'title' => 'How AI Writes and Improves Your Google Ad Copy',
-            'description' => 'How AI writes and tests Google ad copy using your brand, your competitors and real conversion data — and where human judgement still matters.',
+            'title' => 'AI Google Ad Copy: Brief and Review Checklist',
+            'description' => 'Give AI a specific offer, verified claims and a destination, then review the generated copy. Includes an example brief and a practical accuracy checklist.',
             'category' => 'Platform',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why ad copy matters more than most advertisers realise</h2>
-<p>Two businesses targeting identical keywords with identical bids can get dramatically different results based purely on their ad copy. Copy that closely matches search intent gets clicked more — and a higher click-through rate improves Quality Score, which in turn lowers your cost-per-click and improves your position. The compounding effect of better ad copy is substantial.</p>
-<p>Despite this, most businesses write their initial ads at launch and rarely revisit them. Stale copy that was written 18 months ago, before the market shifted and before competitors changed their messaging, is quietly underperforming every day.</p>
-
-<h2>How sitetospend.com reads your business before writing a word</h2>
-<p>The AI doesn't generate generic marketing copy. Before writing anything, it builds a complete understanding of your business by crawling your website and extracting:</p>
-<ul>
-  <li><strong>Brand voice</strong> — formal vs. conversational, technical vs. plain-English, premium vs. accessible</li>
-  <li><strong>Value propositions</strong> — what you genuinely offer that others don't</li>
-  <li><strong>Services and products</strong> — the specific things you sell and their key benefits</li>
-  <li><strong>Social proof signals</strong> — years in business, customer count, reviews, guarantees</li>
-  <li><strong>Geographic targeting</strong> — location-specific terms that improve relevance</li>
-</ul>
-<p>This brief is stored in your account and used as the foundation for all copy generation. It's refreshed periodically as your site evolves.</p>
-
-<h2>Incorporating competitor intelligence</h2>
-<p>Copy written in a vacuum misses the most important question: <em>why should a customer choose you over the competitors showing ads right beside yours?</em> sitetospend.com's weekly competitor analysis feeds directly into copy generation. When the system knows that your main competitor emphasises price but not expertise, it generates headlines that lead with your credentials and experience. When a competitor runs a limited-time offer, the system can respond with a counter-offer headline.</p>
-<p>This means your copy is always positioned relative to the competitive landscape, not written as if you're advertising in isolation.</p>
-
-<h2>The continuous testing loop</h2>
-<p>AI-generated copy isn't assumed to be correct — it's tested. Every RSA runs with multiple headline and description variations. The Creative Intelligence Agent monitors performance weekly:</p>
-<ul>
-  <li>Assets with a "Low" performance label (Google's own signal that the asset underperforms) are identified</li>
-  <li>New replacement assets are generated using AI, informed by what's working well</li>
-  <li>The new assets are deployed, and the testing cycle continues</li>
-</ul>
-<p>Over time this produces a progressively better-performing set of assets. The account improves every week, not just at launch.</p>
-
-<h2>Character limits and Google's requirements</h2>
-<p>The AI is constrained to Google's technical requirements: headlines must be 30 characters or fewer, descriptions 90 characters or fewer. It also avoids common policy violations — excessive punctuation, prohibited claims, trademark misuse — that would trigger a disapproval. Headlines and descriptions are generated in batches to maximise diversity across the asset pool, specifically to achieve an "Excellent" Ad Strength rating.</p>
-
-<h2>What you can customise</h2>
-<p>While the AI handles ongoing generation and testing, you retain full control. You can pin specific headlines to guaranteed positions (e.g. your brand name always appears), add specific messaging you want included (a limited offer, a seasonal promotion), or pause any variation you don't want shown. Changes you make are respected by the optimisation system — it won't overwrite pinned or manually-specified assets.</p>
+<h2>The brief matters more than a request for “better copy”</h2>
+<p>AI can draft useful ad variations when the input describes an actual service, buyer and next action. A generic instruction to “write a high-converting ad” encourages generic claims. Begin with facts the business can fulfil, then ask for distinct angles within those facts.</p>
+<p>Site to Spend uses your business sources and reviewed profile when preparing the campaign. The website is a source, not an assurance that every extracted detail is current. Correct old prices, outdated service areas and missing conditions before they reach the copy.</p>
+<h2>A usable copy brief</h2>
+<ul><li>Service or product being advertised.</li><li>Customer and location the offer serves.</li><li>Verified difference, with the evidence behind any claim.</li><li>Price or promotion conditions that must remain clear.</li><li>Destination and the useful action on that page.</li><li>Brand tone and wording to avoid.</li></ul>
+<p>Technical format limits and platform policy are additional constraints. Google's <a href="https://support.google.com/google-ads/answer/7684791?hl=en">responsive search ad guidance</a> explains how assets can combine; each message should work independently.</p>
+<h2>Worked example: specific beats invented</h2>
+<p><strong>Hypothetical brief and copy, not a customer result.</strong> A business provides bookkeeping for independent retailers in Brisbane. It accepts online quote requests and sends monthly reports. It has not measured any claim about faster growth or tax savings.</p>
+<p>A useful brief asks for service, reporting and quote-request angles. “Bookkeeping for Retailers” and “Request a Bookkeeping Quote” reflect the supplied facts. “Double Your Profit in 30 Days” does not. The latter remains false even if an AI generated it confidently.</p>
+<p>Ask for several concepts, then check that each says something different. Changing “Easy Bookkeeping” to “Simple Bookkeeping” alone is not a meaningful strategic variation.</p>
+<h2>Review claims before polish</h2>
+<ol><li>Can the business fulfil every service, location and timing claim?</li><li>Is a price or discount current and qualified where needed?</li><li>Does any review, rating, customer count or testimonial have real evidence?</li><li>Does the destination make the same offer?</li><li>Can different headline combinations create an unintended promise?</li><li>Does the wording meet the platform's current editorial and advertising rules?</li></ol>
+<p>Do not repair a rejected ad by merely disguising the claim that caused the problem. Correct the underlying offer, destination or policy issue and verify the review outcome.</p>
+<h2>Separate search assets from designed image creative</h2>
+<p>Search text, a platform image asset and a designed promotional graphic serve different placements. A creative brief should identify the intended placement, aspect ratio, message and brand assets. An image asset suitable for one format does not necessarily need or allow the same text treatment as a social ad.</p>
+<p>Review the creative for truthful imagery, readable hierarchy and a clear connection to the offer. Do not infer performance from how polished an AI-generated picture looks.</p>
+<h2>Test the idea against a business outcome</h2>
+<p>Define the test question and review the outcome after enough relevant traffic and conversion delay. Use <a href="/blog/how-responsive-search-ads-work">the responsive asset checklist</a> and <a href="/blog/how-conversion-tracking-works">measurement checks</a>. <a href="/blog/how-competitor-analysis-works">Competitor research</a> can suggest a difference, while <a href="/ai-ads-management">AI management</a> helps keep the generation and monitoring work connected.</p>
 HTML,
         ];
     }
@@ -922,49 +655,32 @@ HTML,
     {
         return [
             'slug' => 'google-ads-audience-targeting',
-            'title' => 'Google Ads Audience Targeting Explained',
-            'description' => 'Bid on who is searching, not just what they search for. How remarketing, RLSA and Customer Match work, and when each is worth using.',
+            'title' => 'Google Ads Audiences: Target or Observe',
+            'description' => 'Understand audience restrictions, observation and first-party lists. Includes an example of accidental reach restriction and a review checklist.',
             'category' => 'Google Ads',
-            'read_time' => '6 min read',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why keywords alone aren't enough</h2>
-<p>Keyword targeting tells Google what topic to show your ad for. Audience targeting tells Google <em>who</em> to show your ad to. The combination is far more powerful than either alone. Two people can search the same keyword with very different purchase intent: someone who visited your pricing page yesterday is much more likely to convert than a first-time visitor who found you while comparing options.</p>
-<p>Audience targeting lets you recognise the difference — and bid accordingly.</p>
-
-<h2>Remarketing lists — reaching people who already know you</h2>
-<p>Remarketing lists are built from a tracking tag on your website (placed automatically by sitetospend.com via GTM). As visitors browse your site, they're added to audience lists based on their behaviour:</p>
-<ul>
-  <li><strong>All website visitors</strong> — everyone who landed on any page</li>
-  <li><strong>Pricing page visitors</strong> — high commercial intent</li>
-  <li><strong>Contact page visitors</strong> — very high intent</li>
-  <li><strong>Abandoned enquiry</strong> — started a form but didn't complete it</li>
-  <li><strong>Past customers</strong> — people who converted previously</li>
-</ul>
-<p>By default, Google's Search campaigns target anyone searching your keywords — including people who've never heard of you. Adding remarketing audiences lets you give these high-intent, familiar visitors a bid boost, ensuring you're more competitive for the searchers who already have a relationship with your brand.</p>
-
-<h2>RLSA — Remarketing Lists for Search Ads</h2>
-<p>RLSA (Remarketing Lists for Search Ads) is the specific feature that combines audience lists with search campaigns. When someone on your remarketing list then searches for your keywords, you can bid more aggressively — because you know they already know you.</p>
-<p>This is powerful in competitive markets where you can't afford to bid high for every search. By reserving your highest bids for searchers who've already shown interest, you spend more efficiently on the people most likely to convert.</p>
-
-<h2>Customer Match — uploading your customer list</h2>
-<p>Customer Match lets you upload a list of customer email addresses. Google matches them to signed-in Google accounts. You can then:</p>
-<ul>
-  <li>Bid more aggressively to win back lapsed customers</li>
-  <li>Exclude existing customers from campaigns designed to win new business</li>
-  <li>Create a "similar audiences" list — people who look like your existing customers, for prospecting</li>
-</ul>
-<p>Customer Match requires a minimum of 1,000 matched customers to be statistically usable, and a Google Ads account with a good compliance history.</p>
-
-<h2>In-Market and Affinity audiences</h2>
-<p>Beyond your own first-party data, Google offers:</p>
-<ul>
-  <li><strong>In-Market audiences</strong> — people Google has identified as actively researching purchases in a specific category. For example, "In-Market for Home Improvement Services" or "In-Market for B2B Software." Adding these as bid adjustments ensures you bid more aggressively when a qualified searcher sees your ad.</li>
-  <li><strong>Affinity audiences</strong> — people with longer-term interests aligned with your business. Less immediately intent-driven than In-Market, but useful for brand awareness.</li>
-</ul>
-
-<h2>How sitetospend.com sets up audience targeting</h2>
-<p>When your campaign launches, sitetospend.com automatically creates audience lists using the GTM tag deployed to your site, layers RLSA audiences onto your Search campaigns with appropriate bid adjustments, and adds relevant In-Market audiences based on your industry. As your remarketing lists grow (they start empty and build up over 30–60 days), the audience signals become increasingly powerful — and the agents automatically increase bid adjustments as conversion data confirms which audiences perform best.</p>
+<h2>Audience settings can change who is eligible</h2>
+<p>In a Search campaign, relevant keywords describe the search intent. Audience settings add another control or reporting dimension. Selecting a list without understanding its setting can unintentionally narrow a campaign that was meant to reach new customers.</p>
+<p>Google distinguishes “Observation”, which generally does not restrict reach, from “Targeting”, which restricts eligibility to selected audiences. Its <a href="https://support.google.com/google-ads/answer/7068417?hl=en">Search audience setup guide</a> explains the distinction and notes that Search keywords remain required except for the relevant dynamic format.</p>
+<h2>Worked example: a list that is too small to be the whole market</h2>
+<p><strong>Hypothetical configuration example.</strong> A new service business has a small website-visitor list. It adds that list to a Search campaign expecting better reporting, but selects Targeting.</p>
+<p>The campaign is now limited by the selected audience rather than reaching all otherwise eligible people searching its service keywords. If the list has little eligible activity, delivery can be small. Check the audience mode, list eligibility and intended acquisition goal before increasing the budget.</p>
+<p>Observation may suit a reporting question about returning visitors; Targeting may suit a deliberate restricted campaign. Neither is universally right without knowing the objective.</p>
+<h2>First-party data is not a licence to upload any list</h2>
+<p>Customer Match use depends on account eligibility, feature availability and the applicable data policies. Use information collected in the permitted first-party context, with the required notices and consent. Purchased or scraped email addresses are not a substitute. Read Google's <a href="https://support.google.com/google-ads/answer/6299717?hl=en">Customer Match policy</a> and check the account's available capabilities.</p>
+<p>Audience size, platform matching and policy restrictions can limit what a list supports. An uploaded row count is not the same as an eligible advertising audience. Some sensitive categories and campaign types have additional restrictions.</p>
+<h2>Review all reach controls together</h2>
+<ul><li>Service area and the location option selected.</li><li>Language and campaign schedule.</li><li>Keyword intent and match types.</li><li>Negative keywords and exclusions.</li><li>Audience mode, eligibility and size.</li><li>Ad and account restrictions.</li></ul>
+<p>An audience cannot make an unrelated keyword relevant. A visitor list also does not prove a person is ready to buy. Inspect actual queries and qualified outcomes alongside audience reports.</p>
+<h2>Evaluate segments without assuming causation</h2>
+<p>A returning-visitor segment can convert differently because its members already know the business. That does not prove that adding the segment caused the improvement. Use comparable periods, check the sample size and consider the conversion delay.</p>
+<p>If Smart Bidding is in use, check which manual adjustments the selected strategy supports before applying a percentage modifier. Settings, exclusions and reporting dimensions have different effects.</p>
+<h2>Where Site to Spend fits</h2>
+<p>Audience work uses the available customer data, supported platform actions and campaign goal. It cannot guarantee list matching, override platform restrictions or replace your obligation to provide lawful data.</p>
+<p>Use our <a href="/blog/google-ads-campaign-structure-mistakes">structure guide</a> and <a href="/blog/negative-keywords-explained">negative keyword checks</a> to review intent, then verify <a href="/blog/how-conversion-tracking-works">conversion measurement</a>. See <a href="/ai-ads-management">AI management scope</a> for the ongoing monitoring work.</p>
 HTML,
         ];
     }
@@ -975,44 +691,32 @@ HTML,
     {
         return [
             'slug' => 'how-budget-pacing-works',
-            'title' => 'How Google Ads Budget Pacing Works',
-            'description' => 'Spending your Google Ads budget at the right hours beats spending it fastest. How budget pacing and dayparting work, and what poor pacing costs.',
-            'category' => 'Platform',
-            'read_time' => '5 min read',
+            'title' => 'Google Ads Budget Pacing: A Worked Example',
+            'description' => 'Understand average daily budgets, monthly spending limits and campaign pacing. Includes a worked budget calculation and checks before changing bids.',
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-08',
             'content' => <<<'HTML'
-<h2>The problem with "standard" budget delivery</h2>
-<p>By default, Google tries to spread your daily budget evenly throughout the day. This sounds sensible but ignores a critical reality: not all hours are equal. For most businesses, 8am–6pm on weekdays dramatically outperforms midnight on Sunday. Spreading spend evenly means wasting budget in low-value windows.</p>
-<p>Conversely, if your budget runs out by 2pm because mornings are busy, you're invisible to everyone searching in the afternoon and evening. Pacing matters in both directions.</p>
-
-<h2>How ad scheduling (dayparting) works</h2>
-<p>Google Ads lets you apply bid modifiers by hour of day and day of week. A +30% modifier at 8am means you're willing to bid 30% more during that hour — making you more competitive when conversion rates are highest. A -50% modifier at 2am means you're largely opting out of overnight traffic where your particular business sees few conversions.</p>
-<p>Setting these modifiers correctly requires a meaningful amount of conversion data — typically 60–90 days of account history — to identify genuine performance patterns rather than noise. Done well, dayparting is one of the most reliable levers for improving cost-per-conversion.</p>
-
-<h2>The Budget Intelligence Agent's approach</h2>
-<p>sitetospend.com's Budget Intelligence Agent performs a weekly analysis of your conversion data broken down by hour and day. It builds a performance heat map showing which time windows produce conversions at what cost. It then:</p>
-<ol>
-  <li>Identifies your top-performing windows (highest conversion rate, lowest CPA)</li>
-  <li>Identifies underperforming windows (spend with few or no conversions)</li>
-  <li>Adjusts bid modifiers to concentrate budget on high-value windows</li>
-  <li>Applies negative adjustments to low-value windows to preserve budget for better slots</li>
-</ol>
-<p>The analysis runs weekly so it adapts to seasonal patterns — your business may have very different peak hours in December versus June.</p>
-
-<h2>Device bid adjustments</h2>
-<p>Beyond time of day, conversion rates often vary significantly by device. A B2B service business may see much higher conversion rates on desktop (people at their desk, comparing suppliers) than mobile. A restaurant or consumer service may see the reverse (people checking their phone while on the go). The same bid adjustment logic applies:</p>
-<ul>
-  <li>Identify conversion rate and CPA by device</li>
-  <li>Increase bids on high-converting devices</li>
-  <li>Reduce bids on low-converting devices</li>
-</ul>
-<p>Device modifiers can range from -90% (effectively pausing a device type) to +900%.</p>
-
-<h2>Geographic bid adjustments</h2>
-<p>If you serve multiple locations, performance typically varies by area. A London-based business may find that searches from Zone 1 convert at twice the rate of searches from outer areas — reflecting proximity to the service. Geographic bid adjustments ensure your budget concentrates on the areas that produce the most business, rather than spreading equally across a wide radius.</p>
-
-<h2>Budget vs. bid — understanding the relationship</h2>
-<p>Budget sets the maximum daily spend. Bids determine how aggressively you compete in each auction. The two must work together: a high bid with a small budget means you win auctions but run out of budget early, missing afternoon and evening traffic. A low bid with a large budget means you never run out of budget but you're rarely winning competitive auctions. The Budget Intelligence Agent balances both — setting bids that keep you competitive in priority windows while ensuring the budget lasts across your full active day.</p>
+<h2>Your daily budget is an average, not a fixed daily invoice</h2>
+<p>For most Google Ads campaigns, actual daily spend can reach twice the average daily budget. With an unchanged average daily budget through a full month, the usual monthly charging limit is 30.4 times that budget. Different budget types and changes during the month need separate treatment. See Google's <a href="https://support.google.com/google-ads/answer/1704424?hl=en">spending limits guidance</a>.</p>
+<p>That distinction matters when judging a busy day. A campaign spending more than its average today is not, by itself, proof that an agent lost control. Nor does a quiet day prove the budget is too low.</p>
+<h2>Worked example: an A$912 monthly media allowance</h2>
+<p><strong>Hypothetical planning example, not a spending forecast.</strong> Suppose you choose an A$30 average daily budget, leave it unchanged for the month and use a campaign covered by the usual daily and monthly limits.</p>
+<ul><li>Average daily budget: A$30.</li><li>Usual daily spending limit: A$60 (30 × 2).</li><li>Usual monthly charging limit: A$912 (30 × 30.4).</li></ul>
+<p>If the campaign spent A$270 during the first ten days, a simple straight-line reference at A$30 per day would be A$300. That is A$30 below the reference, but it does not mean the remaining budget should be forced into unsuitable auctions. Demand, eligibility and conversion quality decide whether additional spend is useful.</p>
+<h2>Read pacing alongside results</h2>
+<p>Compare actual spend with the budget and the outcome the campaign exists to produce. A campaign that spends its entire allowance on irrelevant clicks is paced but unsuccessful. A campaign that spends less and brings profitable customers may not need a higher budget.</p>
+<p>For a lead campaign, review qualified leads as well as the recorded conversion count. At A$300 spend and six completed enquiries, recorded cost per enquiry is A$50. If only two enquiries fit the service, qualified cost per lead is A$150. These are illustrative calculations; use your own lead outcomes.</p>
+<h2>Diagnose underspend before raising the budget</h2>
+<ol><li>Check that the campaign, ad groups, ads and keywords are eligible to serve.</li><li>Confirm billing, dates, advertiser verification and location settings.</li><li>Review whether there is relevant search demand for the selected terms.</li><li>Check whether bid limits or conversion targets are restricting auctions.</li><li>Check reporting freshness and the account time zone.</li></ol>
+<p>Increasing a budget cannot repair a disapproved ad or a billing hold. Google's <a href="https://support.google.com/google-ads/answer/9208915?hl=en">Search campaign delivery troubleshooting</a> provides the platform checks.</p>
+<h2>Scheduling should follow the business and bidding strategy</h2>
+<p>If someone must answer a phone call immediately, operating hours are a practical constraint. A business that accepts enquiries online may still value evening traffic. Use the lead-handling process and a meaningful amount of outcome data rather than assuming overnight clicks are wasted.</p>
+<p>Smart Bidding already uses auction signals. Manual bid adjustments are not universally supported across automated strategies. Before adding a time, device or location modifier, check the <a href="https://support.google.com/google-ads/answer/2732132?hl=en">bid adjustment rules for the selected strategy</a>. An ad schedule can restrict eligibility even where a bid modifier is ignored.</p>
+<h2>Management fees and media spend are different budgets</h2>
+<p>Your Site to Spend subscription covers management. Managed campaign delivery uses ad-spend credits reconciled against actual advertising spend. A one-time setup is instead handed over paused for the customer to add Google billing and manage. Do not add the subscription fee to Google Ads' conversion value.</p>
+<p>Review your <a href="/pricing">current plan</a> and keep the management fee, media budget and business margin visible when assessing total acquisition cost. Before using conversion data to adjust budgets, follow the <a href="/blog/how-conversion-tracking-works">tracking checklist</a>.</p>
 HTML,
         ];
     }
@@ -1023,47 +727,32 @@ HTML,
     {
         return [
             'slug' => 'multi-platform-advertising',
-            'title' => 'Why Multi-Platform Advertising Works',
-            'description' => 'Google, Meta, Microsoft and LinkedIn reach buyers at different stages. How the platforms differ, and how to run them together without doubling the work.',
-            'category' => 'Platform',
-            'read_time' => '7 min read',
+            'title' => 'Multi-Platform Ads: Budget and Measurement',
+            'description' => 'Decide when another ad channel is useful without splitting a small budget blindly. Includes a test plan and checks for duplicate attribution.',
+            'category' => 'Getting Started',
+            'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>Why one platform is never enough</h2>
-<p>Google Ads reaches people who are actively searching for what you sell. That's powerful — but it only captures demand that already exists. What about the potential customers who don't yet know they need you, or who know they need a solution but haven't started searching for providers?</p>
-<p>A multi-platform strategy lets you capture existing demand (Google, Microsoft) <em>and</em> create new demand (Facebook, LinkedIn). Together, these platforms cover the full customer journey — from initial awareness to active purchase intent.</p>
-
-<h2>Google Ads — capturing purchase intent</h2>
-<p>Google Search is the gold standard for capturing high-intent demand. When someone searches "emergency plumber London" or "accountant for small business," they have an immediate, specific need. Google's Search network puts your ad directly in front of that intent at the moment it exists.</p>
-<p>Google also offers Display (banner ads across the web), Shopping (product listings), YouTube (video ads), and Performance Max (AI-driven cross-channel campaigns). For most businesses starting out, Search campaigns are the foundation.</p>
-<p>Google Ads' biggest strength: <strong>intent targeting</strong>. Its biggest weakness: it only reaches people actively searching — not the much larger pool of potential customers who aren't looking yet.</p>
-
-<h2>Microsoft Ads (Bing) — the overlooked opportunity</h2>
-<p>Microsoft Advertising runs on Bing, Yahoo, and DuckDuckGo. It's often dismissed because its search volume is lower than Google. But this misunderstands the opportunity:</p>
-<ul>
-  <li>Bing's audience skews older and higher-income — often a better demographic for B2B and premium consumer services</li>
-  <li>Competition is lower — many advertisers ignore Bing entirely, meaning lower cost-per-click for the same keywords</li>
-  <li>Import from Google — campaigns can be imported directly from Google Ads, keeping setup effort minimal</li>
-</ul>
-<p>For most businesses, Microsoft Ads delivers 15–30% more volume on top of Google, at a lower CPC. It's one of the most overlooked easy wins in digital advertising.</p>
-
-<h2>Facebook and Instagram Ads — creating demand</h2>
-<p>Facebook doesn't have a search bar waiting for purchase intent. Instead, it has extraordinary targeting: 2.9 billion people who have told Facebook their age, location, interests, job, and life events. You can show your ad to "homeowners aged 35–55 in London who are interested in home improvement" before they've thought about contacting anyone.</p>
-<p>Facebook Ads are most powerful for:</p>
-<ul>
-  <li><strong>Remarketing</strong> — showing ads to people who visited your website but didn't convert</li>
-  <li><strong>Lookalike audiences</strong> — reaching new people who share characteristics with your existing customers</li>
-  <li><strong>Brand awareness</strong> — reaching a broad qualified audience before they enter a search phase</li>
-  <li><strong>Lead generation</strong> — Facebook's native lead forms keep users on-platform and have high completion rates</li>
-</ul>
-
-<h2>LinkedIn Ads — B2B precision</h2>
-<p>LinkedIn Ads are the most expensive advertising platform on a CPM basis — and often worth every penny for B2B businesses. LinkedIn's unique advantage is professional targeting: you can reach people by job title, seniority, company size, industry, and skills. No other platform lets you show an ad specifically to "Finance Directors at companies with 200–1,000 employees in financial services."</p>
-<p>LinkedIn is particularly effective for high-value B2B products and services where reaching the right decision-maker is more important than reaching volume.</p>
-
-<h2>How sitetospend.com manages all platforms together</h2>
-<p>sitetospend.com manages campaigns on all four platforms from a single account. The AI agents — Self-Healing, Budget Intelligence, Quality Score, Creative Intelligence — work across all connected platforms, applying the same continuous optimisation to each. Your brand assets, messaging, and competitor intelligence are shared across platforms, ensuring a consistent voice and coherent strategy whether a customer encounters you on Google, Facebook, or LinkedIn.</p>
-<p>Attribution is unified: sitetospend.com tracks conversions across all platforms and reports total ad spend, total conversions, and blended ROAS — so you can see where your budget is working hardest across your entire advertising ecosystem.</p>
+<h2>Add a channel to answer a business question</h2>
+<p>More platforms create more possible reach and more measurement work. A small business should choose a channel because its customers and offer fit the placement, not because a dashboard supports four networks.</p>
+<p>Search can reach people expressing a relevant need. Social creative can introduce an offer while people browse. Professional-context placements can be useful for some business audiences. These are starting hypotheses, not guarantees that one network is cheapest or best for every advertiser.</p>
+<h2>Worked example: one channel before two</h2>
+<p><strong>Hypothetical test plan.</strong> A business has A$600 for an initial media experiment. It can split that into four A$150 experiments, but each would have limited opportunity to produce interpretable results.</p>
+<p>Instead it selects one measurable offer and one channel for the first phase. It records accepted enquiries, not merely clicks. A second-channel test is added when the first journey works and there is enough budget to compare a useful outcome.</p>
+<p>This is a planning choice rather than a forecast. If the first channel has no relevant demand, reassess the channel and offer instead of spending the full allowance simply to finish the experiment.</p>
+<h2>Give every channel an appropriate brief</h2>
+<ul><li>The buyer and buying situation.</li><li>The offer and destination.</li><li>The placement, asset dimensions and required wording.</li><li>The conversion action and expected delay.</li><li>A separate media allowance and review period.</li></ul>
+<p>A Search headline set is not a complete social creative brief. A designed social graphic is not automatically a suitable Search image asset. Keep brand facts consistent while adapting the message to the placement.</p>
+<h2>Install and test the measurement for each platform</h2>
+<p>Google Ads measurement, Microsoft's UET and LinkedIn's Insight Tag have different integrations and settings. A tag-manager container can host tags, but installing the container does not prove any individual conversion works. See <a href="https://learn.microsoft.com/en-us/advertising/guides/universal-event-tracking?view=bingads-13">Microsoft's UET guide</a> and <a href="https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversion-tracking">LinkedIn's conversion guide</a> for their technical setup.</p>
+<p>Test the successful action once, verify the intended platform account and follow relevant consent requirements. Keep a real enquiry or transaction record for reconciliation.</p>
+<h2>Do not add platform-attributed conversions blindly</h2>
+<p>Two platforms may both attribute influence to the same purchase under their own windows and rules. Summing those counts can overstate the number of customers acquired. Compare platform reports with unique orders or qualified leads in your business system.</p>
+<p>Keep spend by channel, platform-attributed results and deduplicated business outcomes as separate views. They answer different questions. A universal “ROAS” score can conceal a mix of estimated leads and actual revenue.</p>
+<h2>Choose the service and budget deliberately</h2>
+<p>Site to Spend supports Google, Meta, Microsoft and LinkedIn, with platform coverage determined by the current plan. The <a href="/google-ads-setup">one-time product</a> is specifically a Google Ads build; it is not ongoing management across four channels.</p>
+<p>Compare <a href="/pricing">plan coverage</a>, use the <a href="/blog/how-conversion-tracking-works">conversion checklist</a> and read <a href="/blog/understanding-roas">ROAS versus profit</a>. Add channels when they improve a measurable customer journey, rather than assuming that wider distribution alone improves results.</p>
 HTML,
         ];
     }
@@ -1074,55 +763,32 @@ HTML,
     {
         return [
             'slug' => 'understanding-roas',
-            'title' => 'What is ROAS and How Do You Improve It?',
-            'description' => 'ROAS measures revenue earned per dollar of ad spend. What counts as good, how to set a target from your margins, and the levers that move it.',
+            'title' => 'ROAS Explained: Revenue, Margin and Ad Spend',
+            'description' => 'Calculate return on ad spend without mistaking attributed revenue for profit. Includes a worked margin example and conversion-value checks.',
             'category' => 'Google Ads',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
+            'modified' => '2026-10-09',
             'content' => <<<'HTML'
-<h2>What is ROAS?</h2>
-<p>Return on Ad Spend (ROAS) measures how much revenue you generate for every pound spent on advertising. It's the fundamental metric for determining whether your campaigns are profitable.</p>
-<p>The formula is simple:</p>
-<pre><code>ROAS = Revenue from Ads ÷ Ad Spend × 100
-
-Example: £10,000 revenue from £2,000 ad spend = 500% ROAS (or 5x ROAS)</code></pre>
-<p>A 500% ROAS means every £1 you spend returns £5 in revenue. Whether that's profitable depends on your margins — which is why ROAS is a starting point, not the finish line.</p>
-
-<h2>ROAS vs. ROI — understanding the difference</h2>
-<p>ROAS measures revenue relative to ad spend. ROI (Return on Investment) measures <em>profit</em> relative to total costs. A business with high ROAS can still have poor ROI if its margins are thin.</p>
-<p>Example: a business with 20% gross margins (e.g. a product that costs 80p to make and sells for £1) needs a 500% ROAS just to break even on ad spend. A business with 70% margins (software, services) might be highly profitable at 200% ROAS.</p>
-<p>Your <strong>target ROAS</strong> should be based on your margins, not on benchmarks from other industries. The minimum viable ROAS = 100% ÷ gross margin %.</p>
-
-<h2>How to calculate your target ROAS</h2>
-<p>Work through this calculation:</p>
-<ol>
-  <li><strong>Gross margin %</strong> — what percentage of revenue is gross profit? E.g. if you keep 40p from every £1 of revenue, your gross margin is 40%.</li>
-  <li><strong>Breakeven ROAS</strong> — 100 ÷ 40% = 250%. At 250% ROAS, ad spend exactly equals gross profit. You're covering the cost of the ads but making nothing extra.</li>
-  <li><strong>Target ROAS</strong> — add headroom above breakeven based on your profitability goals. If you want ad spend to represent no more than 20% of revenue, your target ROAS is 500%.</li>
-</ol>
-
-<h2>Why ROAS fluctuates — and what to do about it</h2>
-<p>ROAS changes based on competition (higher CPCs reduce ROAS), seasonality (Christmas boosts ecommerce ROAS dramatically), campaign structure, and ad quality. Common reasons ROAS falls:</p>
-<ul>
-  <li>CPC increases due to increased competition — more advertisers entering your market</li>
-  <li>Conversion rate drops — landing page issues, seasonal drop in demand, offer no longer compelling</li>
-  <li>Budget waste — irrelevant traffic draining spend that could go to converting searches</li>
-  <li>Ad fatigue — the same ads shown too many times to the same audience</li>
-</ul>
-
-<h2>How sitetospend.com reports and optimises ROAS</h2>
-<p>sitetospend.com tracks revenue values for each conversion event — not just counting conversions, but assigning values that reflect their real-world worth. This powers accurate ROAS reporting in your dashboard. More importantly, it enables Google's tROAS (Target ROAS) Smart Bidding strategy, where Google optimises bids specifically to hit your ROAS target.</p>
-<p>Once your account has 30+ conversions with value data in the past 30 days, the agents will recommend transitioning to tROAS bidding — typically producing 15–30% ROAS improvement over manual bidding for the same spend. The Budget Intelligence Agent also monitors ROAS by time of day, device, and geography, making bid adjustments wherever ROAS is consistently above or below target.</p>
-
-<h2>ROAS targets for different business types</h2>
-<p>While every business is different, these are rough starting points by category:</p>
-<ul>
-  <li><strong>Ecommerce (low margin, e.g. electronics)</strong> — 600–1,000% ROAS needed to be profitable</li>
-  <li><strong>Ecommerce (mid margin, e.g. fashion)</strong> — 300–500% ROAS target</li>
-  <li><strong>Lead generation (high-value B2B)</strong> — 200–400% ROAS, though often measured as cost-per-lead instead</li>
-  <li><strong>Local services (plumber, dentist)</strong> — £20–80 cost-per-lead target more useful than ROAS</li>
-  <li><strong>SaaS / software</strong> — ROAS often measured on LTV basis: a £200 acquisition cost for a £2,000/year customer is 1,000% ROAS on a 12-month view</li>
-</ul>
+<h2>ROAS answers a specific question</h2>
+<p>Return on ad spend is measured conversion value divided by advertising cost. If the value is actual revenue, it tells you how much attributed revenue you recorded for each unit of media spend. It does not subtract product costs, service delivery, management fees or refunds automatically.</p>
+<p>If the conversion value is an estimated lead value instead of a sale, say so. A dashboard labelled “4x ROAS” can describe different economics depending on what the numerator contains. Google's <a href="https://support.google.com/google-ads/answer/13064207?hl=en">conversion-value guide</a> explains value measurement and its use in bidding.</p>
+<h2>Worked example: 4x revenue ROAS, modest contribution</h2>
+<p><strong>Hypothetical calculation, not a customer result.</strong> A shop attributes A$2,000 of revenue to A$500 of media spend. Revenue ROAS is 2,000 ÷ 500 = 4x, or 400%.</p>
+<p>Suppose the orders have a 30% contribution margin before advertising. That gives A$600 of contribution. Subtract A$500 media spend and A$100 remains before the management fee and other costs. The campaign's 4x revenue figure has not established a large profit.</p>
+<p>With that simplified margin and no other acquisition costs, media break-even revenue ROAS would be 1 ÷ 0.30, or about 3.33x. Returns, fixed fees and repeat purchases can change the business decision. Use your own accounting assumptions rather than adopting the example's margin.</p>
+<h2>Lead values need an explicit method</h2>
+<p>For a service business, an enquiry is not completed revenue. If a documented estimate is useful, show the close rate, expected contribution and period used. For example, a hypothetical 20% close rate and A$300 contribution per customer imply A$60 expected contribution per comparable lead, before lead acquisition and handling costs.</p>
+<p>That estimate is only as good as the data and definition behind it. Ten spam submissions are not ten equivalent leads. Update the estimate when qualification or sales outcomes change; do not claim booked revenue from a button click.</p>
+<h2>Check the value before optimising towards it</h2>
+<ul><li>Actual sale or estimated lead value?</li><li>Correct amount and currency?</li><li>One count per logical order or enquiry?</li><li>Handling of refunds, cancellations and repeat purchases?</li><li>Conversion action and attribution window used?</li><li>Comparable reporting period, with conversion delay allowed?</li></ul>
+<p>Use the <a href="/blog/how-conversion-tracking-works">tracking checklist</a> to test the event. A value multiplied by the wrong currency or duplicated checkout event can make an unprofitable campaign look strong.</p>
+<h2>A target is not a guarantee</h2>
+<p>Value-based bidding uses the configured measurement to pursue an outcome. It cannot guarantee revenue or know your margin unless the signal and business model express what matters. Setting a very high target can restrict delivery rather than manufacture a better offer.</p>
+<p>Read <a href="/blog/what-is-smart-bidding">the bidding guide</a> before changing targets. Keep platform efficiency and full business acquisition cost as separate views.</p>
+<h2>Make the decision with complete costs</h2>
+<p>Include media spend, management, creative or landing-page costs where appropriate, and the team's lead-handling time. The <a href="/blog/true-cost-of-managing-google-ads-yourself">management-cost example</a> explains that comparison.</p>
+<p>For multiple channels, reconcile unique business outcomes instead of adding every platform's attributed sales. Use our <a href="/blog/multi-platform-advertising">measurement plan</a> and compare <a href="/pricing">current fees</a> before deciding whether the campaign economics support more spend.</p>
 HTML,
         ];
     }

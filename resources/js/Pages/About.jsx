@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -23,7 +24,7 @@ const values = [
     {
         icon: EyeIcon,
         title: 'Transparency',
-        body: 'No hidden fees and no markup on ad spend. You pay the platforms directly and see exactly where the money goes.',
+        body: 'Your subscription and advertising budget are separate. Managed ad-spend credits are reconciled against actual platform spend.',
     },
     {
         icon: BoltIcon,
@@ -37,14 +38,11 @@ const values = [
     },
 ];
 
-// Every figure is stated elsewhere on the site: six agents, "live in minutes",
-// and $99 a month against the $2,500 retainer the pricing page attributes to an
-// agency.
 const stats = [
-    { stat: '24/7', label: 'Campaign monitoring' },
-    { stat: '6', label: 'Autonomous AI agents' },
-    { stat: 'Minutes', label: 'Setup to first campaign' },
-    { stat: '96%', label: 'Cost saving vs an agency retainer' },
+    { stat: '6', label: 'AI agent specialisms' },
+    { stat: 'Review', label: 'Profile, budget and ads before launch' },
+    { stat: 'USD', label: 'Subscription prices; media spend separate' },
+    { stat: 'One-time', label: 'Google Ads setup available' },
 ];
 
 const differences = [
@@ -53,8 +51,8 @@ const differences = [
         body: 'No twenty-page brand questionnaire. We read your website and pick up your colours, fonts and tone straight away.',
     },
     {
-        label: 'Problems get fixed before you notice',
-        body: 'Rejected ad? Fixed. Underperforming creative? Paused and replaced. Nobody waits for a Monday morning call.',
+        label: 'Campaign health stays visible',
+        body: 'Agents check delivery and policy issues, attempt supported repairs and surface problems that need your input.',
     },
     {
         label: 'We watch your competitors for you',
@@ -62,11 +60,11 @@ const differences = [
     },
     {
         label: 'What you see is what you pay',
-        body: 'Your subscription covers the platform. Ad spend goes straight to Google and Meta. We never add a margin to media.',
+        body: 'Your subscription covers management. Advertising spend is additional and shown separately. Review both before launching.',
     },
 ];
 
-export default function About({ auth }) {
+export default function About({ auth, publicContent }) {
     return (
         <>
             <PageTitle />
@@ -75,9 +73,9 @@ export default function About({ auth }) {
 
                 <main>
                     <Hero
-                        eyebrow="About us"
-                        headline={<>Agency-level marketing, accessible&nbsp;to&nbsp;everyone</>}
-                        sub="Every business — from local shops to scaling startups — deserves the calibre of advertising that large companies take for granted."
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
+                        sub={publicContent.intro}
                     />
 
                     {/* Mission */}
@@ -156,6 +154,7 @@ export default function About({ auth }) {
                         primaryCta={{ href: '/register', label: 'Get started free' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

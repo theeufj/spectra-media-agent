@@ -51,6 +51,11 @@ abstract class TestCase extends BaseTestCase
             config([
                 'googleads.mcc_customer_id' => null,
                 'googleads.mcc_refresh_token' => null,
+                // Vertex's OAuth exchange uses google/auth's direct Guzzle
+                // client too. Laravel HTTP fakes cannot stop it from reading
+                // a developer credential and contacting Google. A provider
+                // test must inject its fake token or explicitly fake auth.
+                'services.google.credentials_path' => null,
             ]);
         }
 

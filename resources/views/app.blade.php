@@ -34,6 +34,8 @@
             $metaTitle = $meta['title'] ?? $tenantBrand;
             $metaDescription = $meta['description'] ?? 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.';
             $metaCanonical = $meta['canonical'] ?? str_replace('http://', 'https://', url()->current());
+            $metaBrand = parse_url($metaCanonical, PHP_URL_HOST) === config('public_seo.shared_host')
+                ? 'sitetospend' : ($tenantCfg['logo_text'] ?? 'sitetospend');
             $metaType = $meta['type'] ?? 'website';
             $metaSchema = $meta['schema'] ?? null;
         @endphp
@@ -53,20 +55,20 @@
         <!-- SEO Meta Tags -->
         <meta name="description" content="{{ $metaDescription }}">
         <meta name="keywords" content="AI ad management, AI marketing platform, Google Ads automation, Facebook Ads AI, automated ad campaigns, digital advertising AI, campaign optimization, ad spend management">
-        <meta name="author" content="sitetospend">
+        <meta name="author" content="{{ $metaBrand }}">
 
         <!-- Open Graph Meta Tags (for social sharing) -->
         <meta property="og:title" content="{{ $meta['og_title'] ?? $metaTitle }}">
         <meta property="og:description" content="{{ $meta['og_description'] ?? $metaDescription }}">
         <meta property="og:image" content="{{ url('/og-image.png?v=2') }}">
-        <meta property="og:url" content="{{ url()->current() }}">
+        <meta property="og:url" content="{{ $metaCanonical }}">
         <meta property="og:type" content="{{ $metaType }}">
-        <meta property="og:site_name" content="sitetospend">
+        <meta property="og:site_name" content="{{ $metaBrand }}">
 
         <!-- Twitter Card Meta Tags -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="{{ $meta['og_title'] ?? $metaTitle }}">
-        <meta name="twitter:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn.">
+        <meta name="twitter:description" content="{{ $meta['og_description'] ?? $metaDescription }}">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
 
         {{--
@@ -152,6 +154,13 @@
             <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NF47M2K8"
             height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <!-- End Google Tag Manager (noscript — Spectra) -->
-        @inertia
+        @if(data_get($page ?? [], 'props.publicContent'))
+            {{-- Everyone receives readable public content; React replaces it on mount. --}}
+            <div id="app" data-page="{{ json_encode($page) }}">
+                @include('public-content')
+            </div>
+        @else
+            @inertia
+        @endif
     </body>
 </html>

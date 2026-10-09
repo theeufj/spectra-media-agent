@@ -8,7 +8,7 @@ export default function Header({ auth }) {
     const tenant = useTenant();
 
     const navLinks = [
-        { label: 'Features', href: '/features' },
+        { label: tenant.key === 'sitetospend' ? 'Google Ads' : 'Features', href: tenant.key === 'sitetospend' ? '/google-ads-management' : '/features' },
         { label: 'How It Works', href: '/how-it-works' },
         { label: 'Pricing', href: '/pricing' },
         { label: 'Blog', href: '/blog' },

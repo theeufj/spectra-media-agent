@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -106,7 +107,7 @@ const agents = [
  * advertised "| sitetospend" to every crawler that does not run JavaScript,
  * while the tags written here appended a second, different set on top.
  */
-export default function RealEstateHowItWorks({ auth }) {
+export default function RealEstateHowItWorks({ auth, publicContent }) {
     return (
         <>
             <PageTitle />
@@ -115,14 +116,9 @@ export default function RealEstateHowItWorks({ auth }) {
 
                 <main>
                     <Hero
-                        eyebrow="How it works"
-                        headline={
-                            <>
-                                {'From listing URL to '}
-                                <span className="block">reviewed, ready-to-launch ads</span>
-                            </>
-                        }
-                        sub="Start with your listing, confirm the business profile, and review the budget and creative before launch."
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
+                        sub={publicContent.intro}
                     />
 
                     <FeatureSteps
@@ -143,6 +139,7 @@ export default function RealEstateHowItWorks({ auth }) {
                         primaryCta={{ href: '/register', label: 'Start your first campaign' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

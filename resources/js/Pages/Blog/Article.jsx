@@ -13,11 +13,8 @@ const CATEGORY_COLORS = {
  * No <Head> here — LandingController's sibling, HelpController, builds the
  * metadata and app.blade.php prints it server-side.
  *
- * This page used to emit its own, including a rel=canonical built from a
- * literal 'https://sitetospend.com'. Blade already emits one from url(), so
- * every article shipped two canonicals pointing at different hosts, and Google
- * discards all of them when there is more than one. The literal was also wrong
- * on the realpropertyads.com skin, where it pointed at another brand's site.
+ * Shared guides have one preferred publishing domain, chosen server-side.
+ * React must not append a second canonical that conflicts with that policy.
  */
 export default function HelpArticle({ auth, article, relatedArticles = [] }) {
     return (
@@ -43,6 +40,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                     {article.category}
                                 </span>
                                 <span className="text-sm text-gray-500">{article.read_time}</span>
+                                {article.modified && <span className="text-sm text-gray-500">Updated <time dateTime={article.modified}>{new Date(`${article.modified}T12:00:00Z`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</time></span>}
                             </div>
 
                             <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 leading-tight">

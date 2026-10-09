@@ -82,6 +82,16 @@ class CanonicalRedirectTest extends TestCase
         $this->assertSame(200, $response->getStatusCode(), 'ad click IDs were stripped from the landing page');
     }
 
+    public function test_service_landing_pages_strip_junk_but_preserve_ad_attribution(): void
+    {
+        foreach (['google-ads-management', 'ai-ads-management', 'google-ads-setup'] as $path) {
+            $response = $this->response('https://sitetospend.com/'.$path.'?gclid=abc123&utm_source=google&junk=1');
+
+            $this->assertSame(301, $response->getStatusCode());
+            $this->assertSame('https://sitetospend.com/'.$path.'?gclid=abc123&utm_source=google', $response->headers->get('Location'));
+        }
+    }
+
     public function test_a_blog_article_is_canonicalised(): void
     {
         $response = $this->response('https://sitetospend.com/blog/some-article?junk=1');

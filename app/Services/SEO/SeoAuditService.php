@@ -55,8 +55,12 @@ class SeoAuditService
         $performance = $this->analyzePerformance($url);
         $content = $this->analyzeContent($html, $meta, $headings);
 
-        $issues = [];
-        $recommendations = [];
+        $indexing = app(IndexingHealthService::class)->inspect($this->customer, [$url]);
+        $issues = $indexing['issues'];
+        $recommendations = array_map(fn ($issue) => [
+            'category' => 'indexing', 'priority' => $issue['severity'] === 'critical' ? 'high' : 'medium',
+            'message' => $issue['action'],
+        ], $indexing['issues']);
 
         // Meta tag analysis
         if (empty($meta['title'])) {
@@ -141,7 +145,7 @@ class SeoAuditService
         $recommendations = array_merge($recommendations, $aiRecommendations);
 
         // Calculate score
-        $score = $this->calculateScore($issues);
+        $score = $this->calculateScore(array_filter($issues, fn ($issue) => ($issue['category'] ?? '') !== 'indexing'));
 
         $audit = $this->createAudit($url, $score, $issues, $recommendations, [
             'meta' => $meta,
@@ -152,6 +156,7 @@ class SeoAuditService
             'security' => $security,
             'performance' => $performance,
             'content' => $content,
+            'indexing' => $indexing,
         ]);
 
         Log::info('SEO Audit: Complete', [
@@ -278,24 +283,24 @@ class SeoAuditService
         $lastLevel = 0;
         $properHierarchy = true;
 
-        for ($i = 1; $i <= 6; $i++) {
-            $nodes = $dom->getElementsByTagName("h{$i}");
-            foreach ($nodes as $node) {
-                $level = $i;
-                $text = trim($node->textContent);
-                $headings[] = ['level' => $level, 'text' => $text];
-                if ($level === 1) {
-                    $h1Count++;
-                }
-                if ($level > $lastLevel + 1 && $lastLevel > 0) {
-                    $properHierarchy = false;
-                }
-                $lastLevel = $level;
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query('//h1 | //h2 | //h3 | //h4 | //h5 | //h6') as $node) {
+            $level = (int) substr($node->nodeName, 1);
+            $text = trim($node->textContent);
+            $headings[] = ['level' => $level, 'text' => $text];
+            if ($level === 1) {
+                $h1Count++;
             }
+            if ($level > $lastLevel + 1 && $lastLevel > 0) {
+                $properHierarchy = false;
+            }
+            $lastLevel = $level;
         }
 
         return [
             'h1_count' => $h1Count,
+            'h2_count' => $dom->getElementsByTagName('h2')->length,
+            'h3_count' => $dom->getElementsByTagName('h3')->length,
             'total_headings' => count($headings),
             'proper_hierarchy' => $properHierarchy,
             'headings' => array_slice($headings, 0, 20),
@@ -402,7 +407,7 @@ class SeoAuditService
 
         $internal = [];
         $external = [];
-        $broken = 0;
+        $broken = null; // Destinations are not fetched by this structural link analysis.
 
         foreach ($links as $link) {
             $href = $link->getAttribute('href');
@@ -779,6 +784,7 @@ PROMPT;
             'security_analysis' => $details['security'] ?? null,
             'performance_analysis' => $details['performance'] ?? null,
             'content_analysis' => $details['content'] ?? null,
+            'indexing_analysis' => $details['indexing'] ?? null,
         ]);
     }
 }

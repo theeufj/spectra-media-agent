@@ -1,3 +1,4 @@
+import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -89,7 +90,7 @@ const stats = [
  * advertised "| sitetospend" to every crawler that does not run JavaScript,
  * while the tags written here appended a second, different set on top.
  */
-export default function RealEstateLanding({ auth }) {
+export default function RealEstateLanding({ auth, publicContent }) {
     return (
         <>
             <PageTitle />
@@ -98,14 +99,9 @@ export default function RealEstateLanding({ auth }) {
 
                 <main>
                     <Hero
-                        eyebrow="Built exclusively for real estate agents"
-                        headline={
-                            <>
-                                {'Get more listings. '}
-                                <span className="block text-brand-darker">Sell faster.</span>
-                            </>
-                        }
-                        sub="AI-powered Google Ads that write themselves around your listings — targeting the right buyers and sellers in your market, 24/7."
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
+                        sub={publicContent.intro}
                         primaryCta={{ href: '/register', label: 'Start your first campaign' }}
                         secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                         note="Free to explore your business profile. Ad spend is separate from the service fee."
@@ -132,6 +128,7 @@ export default function RealEstateLanding({ auth }) {
                         secondaryCta={{ href: '/login', label: 'Log in' }}
                         note="No credit card needed to explore."
                     />
+                <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

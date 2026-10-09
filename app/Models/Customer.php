@@ -89,6 +89,9 @@ class Customer extends Model
         'gtm_detected' => 'boolean',
         'gtm_last_verified' => 'datetime',
         'gtm_detected_at' => 'datetime',
+        // Verification bindings are written only by the trusted verification
+        // service or an explicit administrator action, never mass assignment.
+        'search_console_verified_at' => 'datetime',
         'competitive_strategy' => 'array',
         'competitive_strategy_updated_at' => 'datetime',
         'competitor_analysis_at' => 'datetime',

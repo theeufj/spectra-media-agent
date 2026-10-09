@@ -25,17 +25,12 @@ class ForecastDisclosureTest extends TestCase
     use DatabaseTransactions;
 
     /**
-     * The clause text lives in the Inertia page component, not in the server
-     * response — the route only ships the shell and the props — so this reads
-     * the component that is actually shipped to the browser.
+     * The shared legal body is rendered in initial HTML and passed unchanged
+     * to React. Assert on the served clause rather than an obsolete source.
      */
     private function terms(): string
     {
-        $path = resource_path('js/Pages/Legal/Terms.jsx');
-
-        $this->assertFileExists($path);
-
-        return (string) file_get_contents($path);
+        return $this->get(route('terms'))->assertOk()->viewData('page')['props']['legalContent'];
     }
 
     public function test_the_terms_route_still_renders_that_component(): void
