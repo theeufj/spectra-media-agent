@@ -10,21 +10,9 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testing
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # This runner includes PostgreSQL 16. Pin it so ubuntu-latest upgrades do
+    # not silently change the database major version.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +20,24 @@ jobs:
           # check-baseline-growth compares against the merge base, which needs
           # more than a shallow clone.
           fetch-depth: 0
+
+      # Use pgvector's documented runner installation instead of a Docker Hub
+      # service image: unauthenticated pulls can fail before any step runs.
+      # https://github.com/pgvector/setup-pgvector#ubuntu
+      - name: Set up PostgreSQL 16 with pgvector
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install --no-install-recommends -y postgresql-16-pgvector
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql --set=ON_ERROR_STOP=1 --command="ALTER USER postgres WITH PASSWORD 'postgres';"
+          sudo -u postgres createdb --owner=postgres testing
+          export PGPASSWORD=postgres
+          test "$(psql --host=localhost --username=postgres --dbname=testing --tuples-only --no-align --command="SELECT current_setting('server_version_num')::int / 10000")" = 16
+          psql --host=localhost --username=postgres --dbname=testing --set=ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION vector;
+          SELECT extversion FROM pg_extension WHERE extname = 'vector';
+          SELECT '[1,2,3]'::vector <-> '[1,2,3]'::vector AS vector_distance;
+          SQL
 
       - uses: shivammathur/setup-php@v2
         with:
