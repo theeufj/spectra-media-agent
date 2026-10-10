@@ -28,6 +28,7 @@ class OptimizeCampaigns implements ShouldQueue
         $runStart = $this->startRun();
         $totalApplied = 0;
         $errors = 0;
+        $runDay = now()->startOfDay();
 
         // Campaigns the platform reports as actually delivering. Campaign::serving()
         // owns that list: LIMITED counts alongside ELIGIBLE and LEARNING, and these
@@ -37,17 +38,21 @@ class OptimizeCampaigns implements ShouldQueue
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
                     ->orWhereNotNull('facebook_ads_campaign_id')
-                    ->orWhereNotNull('microsoft_ads_campaign_id');
+                    ->orWhereNotNull('microsoft_ads_campaign_id')
+                    ->orWhereNotNull('linkedin_campaign_id');
             })
-            ->where(function ($query) {
+            ->where(function ($query) use ($runDay) {
                 $query->whereNull('last_optimized_at')
-                    ->orWhere('last_optimized_at', '<=', now()->subHours(24));
+                    ->orWhere('last_optimized_at', '<', $runDay);
             })
+            ->with('customer.plan')
             ->get();
 
         // Filter by plan-aware optimization frequency:
-        // Free / Starter → weekly (7 days), Growth / Agency → daily (24h)
-        $campaigns = $campaigns->filter(function (Campaign $campaign) {
+        // Free / Starter → weekly, Growth / Agency → once per calendar day.
+        // A rolling 24-hour cutoff skips a nightly run whenever yesterday's
+        // analysis finished seconds later than today's job starts.
+        $campaigns = $campaigns->filter(function (Campaign $campaign) use ($runDay) {
             if (is_null($campaign->last_optimized_at)) {
                 return true; // never optimized — always run
             }
@@ -56,11 +61,10 @@ class OptimizeCampaigns implements ShouldQueue
             // not of whichever of its people the query happened to return.
             $slug = $campaign->customer?->resolvePlan()->slug ?? 'free';
 
-            $cooldown = in_array($slug, ['growth', 'agency'], true)
-                ? now()->subHours(24)
-                : now()->subDays(7);
+            $days = in_array($slug, ['growth', 'agency'], true) ? 1 : 7;
+            $cutoff = $runDay->copy()->subDays($days);
 
-            return $campaign->last_optimized_at <= $cooldown;
+            return $campaign->last_optimized_at->copy()->startOfDay()->lessThanOrEqualTo($cutoff);
         });
 
         foreach ($campaigns as $campaign) {
@@ -108,6 +112,8 @@ class OptimizeCampaigns implements ShouldQueue
                             'status' => $result['applied'] ? 'applied' : 'failed',
                             'requires_approval' => false,
                             'platform' => $platform,
+                            'payload' => $rec,
+                            'execution' => ['result' => $result, 'google_configuration' => $recommendations['google_configuration'] ?? null],
                         ]);
 
                         if ($result['applied']) {
@@ -151,6 +157,8 @@ class OptimizeCampaigns implements ShouldQueue
                             'status' => 'pending',
                             'requires_approval' => false,
                             'platform' => $platform,
+                            'payload' => $rec,
+                            'execution' => ['google_configuration' => $recommendations['google_configuration'] ?? null],
                         ]);
                         $advisoryCount++;
                     }

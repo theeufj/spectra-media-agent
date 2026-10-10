@@ -89,7 +89,7 @@ class CampaignAlertService
                     'platform' => $platform, 'status' => $status, 'issues' => $next['issues'], 'incident_id' => $event['dedupe_key'],
                 ], $status === 'clear' ? 'completed' : 'needs_review');
                 // The bell is durable even if the mail queue/provider is unavailable.
-                foreach ($locked->customer->users as $user) {
+                foreach ($locked->customer ? $locked->customer->users : [] as $user) {
                     Notification::notify($user, $event['type'], $event['title'], $event['message'], $event['action_url'], 'Review campaign', $locked->customer, $event);
                 }
             }
@@ -113,7 +113,7 @@ class CampaignAlertService
         });
 
         $pending = $state['platforms'][$platform]['pending_alert'] ?? null;
-        if ($pending) {
+        if ($pending && $campaign->customer) {
             try {
                 CriticalAgentAlert::deliver($pending['type'], $pending['title'], $pending['message'], $pending, CriticalAgentAlert::RECIPIENTS_CUSTOMERS, $campaign->customer);
                 DB::transaction(function () use ($campaign, $platform, $pending) {

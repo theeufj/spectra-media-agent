@@ -52,6 +52,21 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
 
+            // A queued check can outlive a soft-deleted customer. There is no
+            // active account owner to authenticate/notify, so retain the last
+            // evidence as unknown instead of retrying a null relationship error.
+            if (! $campaign->customer) {
+                foreach (['google_ads', 'facebook_ads'] as $platform) {
+                    if ($campaign->getAttribute($platform.'_campaign_id')) {
+                        app(CampaignAlertService::class)->recordPolicyCheck($campaign, $platform, [],
+                            'The campaign has no active customer. Its ad approval could not be checked.', false);
+                    }
+                }
+                report(new \RuntimeException("Policy check skipped for campaign {$campaign->id}: no active customer."));
+
+                return;
+            }
+
             // Older deployments used a one-year platform end date regardless
             // of the date the customer approved. Stop those at the local date.
             if ($campaign->hasPassedEndDate()) {
@@ -64,7 +79,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
 
             $hasViolation = false;
             $checkFailed = false;
-            $canHeal = $campaign->status === CampaignStatus::Active && $campaign->customer?->service_type !== 'setup_only';
+            $canHeal = $campaign->status === CampaignStatus::Active && $campaign->customer->service_type !== 'setup_only';
             foreach (['google_ads', 'facebook_ads'] as $platform) {
                 if (! $campaign->getAttribute($platform.'_campaign_id')) {
                     continue;

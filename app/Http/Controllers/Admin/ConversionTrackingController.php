@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
+use App\Jobs\RecordSiteGoogleConversion;
 use App\Models\Setting;
-use Illuminate\Support\Facades\Log;
+use App\Services\GoogleAds\OwnSiteConversionDelivery;
+use App\Support\ConversionTargets;
 use Inertia\Inertia;
 
 /**
@@ -24,18 +25,19 @@ class ConversionTrackingController extends Controller
         $awId = config('conversions.aw_id', 'AW-18115663500');
         $events = config('conversions.events', []);
 
-        $actions = collect($events)->map(function ($def, $key) use ($awId) {
+        $actions = collect($events)->reject(fn ($def, $key) => $key === 'signup_import')->map(function ($def, $key) {
             $label = Setting::get("conversion_label.{$key}", $def['label'] ?? null);
-            $resourceName = Setting::get("conversion_resource_name.{$key}");
             $isServer = ($def['mode'] ?? 'client') === 'server';
-            $eventAwId = $def['aw_id'] ?? $awId; // per-event account override
+            $actionKey = $isServer ? RecordSiteGoogleConversion::actionKey($key) ?? $key : $key;
+            $resourceName = Setting::get("conversion_resource_name.{$actionKey}");
 
             return [
                 'key' => $key,
                 'name' => 'Spectra — '.ucfirst(str_replace('_', ' ', $key)),
                 'label' => $label,
-                'send_to' => $label ? "{$eventAwId}/{$label}" : null,
+                'send_to' => ConversionTargets::sendTo($key, $def),
                 'resource_name' => $resourceName,
+                'event_key' => $key === 'signup_import' ? 'signup' : $key,
                 'mode' => $def['mode'] ?? 'client',
                 'value' => $def['value'] ?? null,
                 'currency' => $def['currency'] ?? 'USD',
@@ -64,7 +66,18 @@ class ConversionTrackingController extends Controller
             ->with('user:id,name,email')
             ->orderByDesc('created_at')
             ->limit(50)
-            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at']);
+            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at', 'ad_identifiers', 'google_conversion_resource', 'google_accepted_at', 'google_processing_status', 'google_processing_checked_at', 'google_processing_details'])
+            ->map(function ($event) {
+                $data = $event->toArray();
+                $data['google_delivery_status'] = $event->googleDeliveryStatus();
+                $data['has_google_click_identifier'] = $event->hasGoogleClickIdentifier();
+                $data['has_facebook_click_identifier'] = (bool) $event->fbclid;
+                // Counts and reason codes suffice for diagnostics; never expose
+                // the visitor's raw click identifier to the admin table.
+                unset($data['ad_identifiers'], $data['gclid'], $data['fbclid']);
+
+                return $data;
+            });
 
         // Platform-level signal counts — how many of our own signups came via each ad platform
         $signupsByPlatform = \App\Models\User::query()
@@ -85,6 +98,7 @@ class ConversionTrackingController extends Controller
             'customer_id' => config('conversions.google_ads_customer_id'),
             'event_totals' => $eventTotals,
             'recent_events' => $recentEvents,
+            'delivery' => app(OwnSiteConversionDelivery::class)->summary(),
             'signups_by_platform' => [
                 'google' => (int) ($signupsByPlatform->via_google ?? 0),
                 'facebook' => (int) ($signupsByPlatform->via_facebook ?? 0),

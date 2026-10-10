@@ -15,7 +15,10 @@ class CampaignBudgetService
 
     public function ceiling(Campaign $campaign): float
     {
-        return min((float) $campaign->daily_budget, (float) ($campaign->approved_daily_budget ?? $campaign->daily_budget))
+        $trial = CampaignSpendGuardrails::activeTrial($campaign);
+
+        return min((float) $campaign->daily_budget, (float) ($campaign->approved_daily_budget ?? $campaign->daily_budget),
+            $trial ? (int) $trial['max_daily_budget_micros'] / 1_000_000 : PHP_FLOAT_MAX)
             * max(0, min(1, (float) ($campaign->billing_budget_multiplier ?? 1)));
     }
 

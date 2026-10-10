@@ -10,6 +10,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
@@ -38,6 +39,8 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
     public $tries = 8;
 
+    public int $timeout = 70;
+
     // New Google actions can take 4–6 hours to accept uploads. Keep the fixed
     // event timestamp/transaction ID while retrying through that window.
     public $backoff = [60, 300, 1800, 3600, 7200, 10800, 21600];
@@ -53,6 +56,11 @@ class RecordSiteGoogleConversion implements ShouldQueue
         'campaign_live' => 'campaign_live',
         'seven_day_return' => 'seven_day_return',
     ];
+
+    public static function actionKey(string $event): ?string
+    {
+        return self::UPLOAD_ACTIONS[$event] ?? null;
+    }
 
     /**
      * $occurredAt is when the conversion happened, not when the job runs.
@@ -70,6 +78,14 @@ class RecordSiteGoogleConversion implements ShouldQueue
         protected ?int $conversionEventId = null,
     ) {}
 
+    public function middleware(): array
+    {
+        $timestamp = ($this->occurredAt ?? $this->user->created_at)?->getTimestamp();
+        $key = $this->conversionEventId ?? "{$this->event}:{$this->user->id}:{$timestamp}";
+
+        return [(new WithoutOverlapping("site-google-conversion:{$key}"))->releaseAfter(60)->expireAfter(90)];
+    }
+
     public function handle(DataManagerService $dataManager): void
     {
         $eventId = $this->conversionEventId ?? null; // Also handles jobs queued before this field existed.
@@ -81,11 +97,16 @@ class RecordSiteGoogleConversion implements ShouldQueue
         }
 
         $adIdentifiers = $record ? $record->ad_identifiers : $this->user->googleAdIdentifiers();
-        if (! $adIdentifiers || $record?->uploaded_to_google) {
+        if ($record?->uploaded_to_google) {
+            CheckGoogleConversionProcessing::scheduleFor($record);
+
+            return;
+        }
+        if (! $adIdentifiers) {
             return;
         }
 
-        $actionKey = self::UPLOAD_ACTIONS[$this->event] ?? null;
+        $actionKey = self::actionKey($this->event);
         if (! $actionKey) {
             return;
         }
@@ -107,6 +128,8 @@ class RecordSiteGoogleConversion implements ShouldQueue
         ]);
 
         if ($record->uploaded_to_google) {
+            CheckGoogleConversionProcessing::scheduleFor($record);
+
             return;
         }
 
@@ -129,18 +152,26 @@ class RecordSiteGoogleConversion implements ShouldQueue
             if (! $result['success']) {
                 throw new \RuntimeException('Google conversion upload failed: '.($result['error'] ?? 'unknown error'));
             }
+            if (! is_string($result['requestId'] ?? null) || trim($result['requestId']) === '') {
+                throw new \RuntimeException('Google conversion upload returned no processing receipt. Delivery is unverified.');
+            }
 
             // Accepted for processing is not proof of ad attribution. Keep the
             // provider request ID so delivery can be investigated separately.
             $record->update([
                 'uploaded_to_google' => true,
-                'google_request_id' => $result['requestId'] ?? null,
+                'google_request_id' => $result['requestId'],
+                'google_conversion_resource' => $resourceName,
+                'google_accepted_at' => now(),
+                'google_processing_status' => null,
+                'google_processing_attempts' => 0,
+                'google_processing_details' => null,
                 'upload_error' => null,
             ]);
             Log::info('Google conversion accepted for processing', [
                 'event_id' => $record->id,
                 'event' => $this->event,
-                'request_id' => $result['requestId'] ?? null,
+                'request_id' => $result['requestId'],
             ]);
         } catch (\Throwable $e) {
             $record->update(['upload_error' => mb_substr($e->getMessage(), 0, 2000)]);
@@ -148,5 +179,8 @@ class RecordSiteGoogleConversion implements ShouldQueue
             // a rejected upload as a successful job.
             throw $e;
         }
+        // A queue outage retries this job; the saved receipt prevents another
+        // ingestion and the early return above retries scheduling diagnostics.
+        CheckGoogleConversionProcessing::scheduleFor($record);
     }
 }

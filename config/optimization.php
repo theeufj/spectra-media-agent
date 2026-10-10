@@ -55,6 +55,15 @@ return [
         'max_per_campaign' => 5,   // cap pauses per campaign per run
     ],
 
+    'campaign_spend_safety' => [
+        // Account-currency micros; this is a conservative review stop, not a
+        // claim that conversion reporting or Google's billing is real time.
+        'zero_conversion_spend_micros' => 50_000_000,
+        'conversion_lag_days' => 2,
+        'window_days' => 30,
+        'overshoot_alert_micros' => 1_000_000,
+    ],
+
     'search_terms' => [
         'min_impressions' => 300,
         'min_clicks' => 5,

@@ -7,6 +7,7 @@ import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import FormErrorSummary from '@/Components/FormErrorSummary';
 import PolicyStatusCard from '@/Components/PolicyStatusCard';
+import CampaignSpendSafetyCard from '@/Components/CampaignSpendSafetyCard';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import ForecastPanel from '@/Components/ForecastPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
@@ -559,6 +560,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             <Head title={`Your campaign — ${campaigns.name}`} />
             {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={1} /></div>}
             {(campaigns.google_ads_campaign_id || campaigns.facebook_ads_campaign_id || policyStatus) && <div className="mx-auto max-w-7xl px-4 py-6"><PolicyStatusCard campaign={campaigns} policyStatus={campaigns.policy_checks ?? policyStatus} /></div>}
+            {(campaigns.spend_guardrails || campaigns.spend_safety_hold) && <div className="mx-auto max-w-7xl px-4 pb-6"><CampaignSpendSafetyCard campaign={campaigns} /></div>}
 
             {/* Leads the page for campaigns we generated: it is the one thing
                 standing between the customer and deploying, and without it they
@@ -648,7 +650,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                     {conversionTracking.installed ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
                             <span aria-hidden="true">✓</span>
-                            Conversion tracking is active — every lead and sale from this campaign will be counted.
+                            Tracking setup is installed. Confirm that a real signup or purchase reaches Google before relying on conversion results.
                         </div>
                     ) : (
                         <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -656,8 +658,8 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                                 <p className="font-semibold text-amber-900">Install your tracking snippet before launch</p>
                                 <p className="text-sm text-amber-800 mt-0.5">
                                     {conversionTracking.container_id
-                                        ? <>Your Google Tag Manager container <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">{conversionTracking.container_id}</code> is ready — add the snippet to your website so every lead and sale your ads bring is counted from day one.</>
-                                        : 'Set up conversion tracking so every lead and sale your ads bring is counted from day one.'}
+                                        ? <>Your Google Tag Manager container <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">{conversionTracking.container_id}</code> is ready. Add the snippet to your website, then verify a real signup or purchase reaches Google.</>
+                                        : 'Set up conversion tracking, then verify a real signup or purchase reaches Google.'}
                                 </p>
                             </div>
                             <Link

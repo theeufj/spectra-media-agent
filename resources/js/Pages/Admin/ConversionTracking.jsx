@@ -36,7 +36,22 @@ const CopyButton = ({ text }) => {
     );
 };
 
-export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform }) {
+const deliveryLabels = {
+    provider_accepted: ['Accepted; awaiting check', 'blue'],
+    processed: ['Processed by Google', 'green'],
+    processed_with_warnings: ['Processed with warnings', 'yellow'],
+    processing: ['Google is processing', 'blue'],
+    processing_failed: ['Google rejected processing', 'yellow'],
+    processing_unknown: ['Processing unverified', 'yellow'],
+    legacy_unverified: ['Legacy delivery unverified', 'yellow'],
+    upload_failed: ['Upload failed', 'yellow'],
+    awaiting_upload: ['Awaiting upload', 'gray'],
+    no_click_identifier: ['No Google click identifier', 'gray'],
+    browser_recorded: ['Browser event logged', 'gray'],
+    other_platform: ['Other platform', 'gray'],
+};
+
+export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform, delivery }) {
     const provisioned = actions.filter(a => a.provisioned).length;
 
     return (
@@ -54,6 +69,22 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <StatCard label="Signups (30d)" value={signups_30d} />
                     </div>
 
+                    {delivery && (
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h3 className="text-base font-medium text-gray-900">Google upload delivery (last {delivery.days} days)</h3>
+                            <p className="mt-2 text-sm text-gray-600">Configured actions and accepted uploads do not prove delivery. Google processing is checked after 30 minutes and retried for up to 24 hours. A processed event still needs to appear in Google Ads reporting before ad attribution is confirmed.</p>
+                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                {Object.entries(delivery.events).map(([event, counts]) => (
+                                    <div key={event} className="rounded border border-gray-200 p-4 text-sm">
+                                        <p className="font-medium text-gray-900">{event === 'signup' ? 'Registrations' : 'First subscription payments'}: {counts.registrations_or_payments}</p>
+                                        <p className="mt-2 text-gray-600">Processed: {counts.processed + counts.processed_with_warnings} · Awaiting processing: {counts.provider_accepted + counts.processing}</p>
+                                        <p className="mt-1 text-gray-600">Failed: {counts.upload_failed + counts.processing_failed} · Unverified: {counts.legacy_unverified + counts.processing_unknown} · No click identifier: {counts.no_click_identifier}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Platform signal breakdown (30d) */}
                     {signups_by_platform && (
                         <div className="bg-white rounded-lg shadow p-6">
@@ -62,12 +93,12 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-blue-600">{signups_by_platform.google}</p>
                                     <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Google Ads</p>
-                                    <p className="text-xs text-gray-500">gclid captured</p>
+                                    <p className="text-xs text-gray-500">gclid / gbraid / wbraid captured</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-indigo-600">{signups_by_platform.facebook}</p>
                                     <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Facebook Ads</p>
-                                    <p className="text-xs text-gray-500">fbclid + CAPI fired</p>
+                                    <p className="text-xs text-gray-500">fbclid captured</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-2xl font-bold text-teal-600">{signups_by_platform.microsoft}</p>
@@ -84,7 +115,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                             <div>
                                 <h3 className="text-lg font-medium text-gray-900">Spectra Conversion Actions</h3>
                                 <p className="text-sm text-gray-500 mt-0.5">
-                                    Tracking sitetospend.com's own ad conversions — not customer accounts.
+                                    Tracking sitetospend.com's own ad conversions. Configuration status does not verify event delivery.
                                 </p>
                             </div>
                             {customer_id && (
@@ -105,7 +136,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Label / Resource</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fires (total)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Local events (total)</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last fired</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 </tr>
@@ -152,16 +183,16 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                                            {event_totals[action.key]?.total ?? 0}
+                                            {event_totals[action.event_key || action.key]?.total ?? 0}
                                         </td>
                                         <td className="px-6 py-4 text-xs text-gray-500">
-                                            {event_totals[action.key]?.last_fired
-                                                ? new Date(event_totals[action.key].last_fired).toLocaleDateString()
+                                            {event_totals[action.event_key || action.key]?.last_fired
+                                                ? new Date(event_totals[action.event_key || action.key].last_fired).toLocaleDateString()
                                                 : '—'}
                                         </td>
                                         <td className="px-6 py-4">
                                             {action.provisioned
-                                                ? <Badge color="green">Provisioned</Badge>
+                                                ? <Badge color="blue">Configured</Badge>
                                                 : <Badge color="yellow">Not provisioned</Badge>
                                             }
                                         </td>
@@ -212,7 +243,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                     <div className="bg-white rounded-lg shadow overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-200">
                             <h3 className="text-lg font-medium text-gray-900">Recent Conversion Events</h3>
-                            <p className="text-sm text-gray-500 mt-0.5">Last 50 fires logged by Spectra — newest first.</p>
+                            <p className="text-sm text-gray-500 mt-0.5">Last 50 local events. Browser logs show that the app recorded an action; they cannot confirm that a Google tag fired or that an ad conversion was reported.</p>
                         </div>
                         {recent_events.length === 0 ? (
                             <div className="px-6 py-8 text-center text-sm text-gray-500">
@@ -247,24 +278,20 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                 {ev.value ? `${ev.currency || 'USD'} ${parseFloat(ev.value).toFixed(2)}` : '—'}
                                             </td>
                                             <td className="px-6 py-3 text-sm">
-                                                {ev.gclid
+                                                {ev.has_google_click_identifier
                                                     ? <Badge color="blue">Google</Badge>
-                                                    : ev.fbclid
+                                                    : ev.has_facebook_click_identifier
                                                         ? <Badge color="indigo">Facebook</Badge>
                                                         : <span className="text-gray-500 text-xs">organic</span>
                                                 }
                                             </td>
-                                            <td className="px-6 py-3 text-xs" title={ev.upload_error || ev.google_request_id || undefined}>
-                                                {ev.mode === 'server_google'
-                                                    ? ev.uploaded_to_google
-                                                        ? <Badge color="green">Accepted by Google</Badge>
-                                                        : ev.upload_error
-                                                            ? <Badge color="yellow">Upload failed</Badge>
-                                                            : ev.gclid
-                                                                ? <Badge color="gray">Pending upload</Badge>
-                                                                : <span className="text-gray-500">No Google click ID</span>
-                                                    : <span className="text-gray-500">{ev.mode === 'client' ? 'Browser tag' : '—'}</span>
-                                                }
+                                            <td className="px-6 py-3 text-xs" title={ev.upload_error || ev.google_processing_details?.message || undefined}>
+                                                <Badge color={deliveryLabels[ev.google_delivery_status]?.[1] || 'gray'}>
+                                                    {deliveryLabels[ev.google_delivery_status]?.[0] || 'Unverified'}
+                                                </Badge>
+                                                {[...(ev.google_processing_details?.errors || []), ...(ev.google_processing_details?.warnings || [])].map((issue, index) => (
+                                                    <p key={index} className="mt-1 text-xs text-gray-600 break-all">{issue.reason} ({issue.record_count ?? 'unknown'} records)</p>
+                                                ))}
                                             </td>
                                             <td className="px-6 py-3 text-xs text-gray-500">
                                                 {new Date(ev.occurred_at || ev.created_at).toLocaleString()}
@@ -281,7 +308,8 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <h3 className="text-base font-medium text-gray-900 mb-3">How It Works</h3>
                         <ul className="space-y-2 text-sm text-gray-600">
                             <li><span className="font-medium text-blue-700">Client (gtag):</span> Fires in the browser via <code className="bg-gray-100 px-1 rounded">trackConversion('event')</code> when the user takes an action.</li>
-                            <li><span className="font-medium text-gray-700">Server (API):</span> Uploaded via the Google Ads Conversions API when a background job runs — requires a stored <code className="bg-gray-100 px-1 rounded">gclid</code> for the user.</li>
+                            <li><span className="font-medium text-gray-700">Server (API):</span> Genuine registrations and signed first subscription payments are saved before queueing. Google Data Manager uploads require a captured gclid, gbraid or wbraid. No identifier means the event is recorded locally without ad attribution.</li>
+                            <li><span className="font-medium text-gray-700">Processing:</span> A receipt confirms acceptance only. We check its destination, final processing status and errors. Processing success does not confirm an attributed conversion or a campaign bidding goal.</li>
                             <li>Labels are stored in the <code className="bg-gray-100 px-1 rounded">settings</code> table and served to the frontend on every request via Inertia shared props.</li>
                             <li>Re-provision anytime: <code className="bg-gray-100 px-1 rounded">php artisan conversions:provision</code></li>
                         </ul>

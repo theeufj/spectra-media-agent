@@ -114,6 +114,8 @@ class Campaign extends Model
         'last_maintenance_at',
         'last_maintenance_results',
         'policy_checks',
+        'spend_guardrails',
+        'spend_safety_hold',
     ];
 
     /**
@@ -145,6 +147,8 @@ class Campaign extends Model
         'last_maintenance_at' => 'datetime',
         'last_maintenance_results' => 'array',
         'policy_checks' => 'array',
+        'spend_guardrails' => 'array',
+        'spend_safety_hold' => 'array',
     ];
 
     /**

@@ -13,6 +13,7 @@ use App\Models\EnabledPlatform;
 use App\Prompts\AdCompliancePrompt;
 use App\Services\Agents\Concerns\ParsesLlmJson;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
@@ -106,7 +107,11 @@ class SelfHealingAgent
 
         // Check feature flag - if disabled, only run diagnostics (no mutations).
         // Every mutating branch below reads $this->autoHealingEnabled.
-        $this->autoHealingEnabled = Feature::for($customer)->active(AutoHealing::class);
+        $controlled = CampaignSpendGuardrails::automaticChangesSuspended($campaign) || $campaign->status === CampaignStatus::Paused;
+        $this->autoHealingEnabled = ! $controlled && Feature::for($customer)->active(AutoHealing::class);
+        if ($controlled) {
+            $results['read_only_reason'] = 'Approved bounded trial or pause hold: diagnostics continue; automatic repairs are held for review.';
+        }
         if (! $this->autoHealingEnabled) {
             $results['feature_flag'] = 'auto_healing disabled - diagnostics only';
             Log::info("SelfHealingAgent: auto_healing feature disabled for customer {$customer->id}, running diagnostics only");

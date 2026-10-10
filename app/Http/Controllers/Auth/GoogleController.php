@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\CaptureClickIds;
 use App\Jobs\RecordSiteFacebookConversion;
-use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Mail\WelcomeEmail;
 use App\Models\User;
@@ -77,9 +76,7 @@ class GoogleController extends Controller
                 $user->refresh();
             }
 
-            if ($user->hasGoogleClickId()) {
-                RecordSiteGoogleConversion::dispatch($user, 'signup');
-            }
+            app(\App\Services\SiteSignupConversionService::class)->record($user);
             if (! empty($user->fbclid)) {
                 RecordSiteFacebookConversion::dispatch($user, 'signup');
             }

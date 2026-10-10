@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\InvitationController;
 use App\Jobs\RecordSiteFacebookConversion;
-use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\Customer;
 use App\Models\User;
@@ -114,9 +113,7 @@ class RegisteredUserController extends Controller
         // integrations). This previously relied on a client-side gtag signup event
         // that no page ever fired, so Google saw none of these registrations.
         $freshUser = $user->fresh();
-        if ($freshUser->hasGoogleClickId()) {
-            RecordSiteGoogleConversion::dispatch($freshUser, 'signup');
-        }
+        app(\App\Services\SiteSignupConversionService::class)->record($freshUser);
         if (! empty($freshUser->fbclid)) {
             RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
         }

@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\DeviceInfo;
@@ -21,6 +22,10 @@ class SetDeviceBidAdjustment extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, int $deviceType, float $bidModifier): ?string
     {
+        $campaign = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+        if ($campaign && ! CampaignSpendGuardrails::permitsBidModifier($campaign, $bidModifier)) {
+            return null;
+        }
         $this->ensureClient();
 
         $deviceInfo = new DeviceInfo([

@@ -8,6 +8,7 @@ use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -58,6 +59,10 @@ class BudgetIntelligenceAgent
             'multiplier_applied' => 1.0,
             'errors' => [],
         ];
+
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return $results + ['read_only_reason' => 'Approved bounded trial or pause hold: preserve the agreed budget during review.'];
+        }
 
         if (! $campaign->customer || ! \Laravel\Pennant\Feature::for($campaign->customer)->active(\App\Features\AutoOptimization::class)
             || $campaign->customer->adSpendCredit()->value('payment_status') === \App\Models\AdSpendCredit::PAYMENT_PAUSED) {

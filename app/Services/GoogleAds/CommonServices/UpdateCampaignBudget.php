@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
@@ -17,6 +18,12 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
     {
+        $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+        if ($local && ! CampaignSpendGuardrails::permitsDailyBudget($local, (int) $newDailyBudgetMicros)) {
+            $this->logError('Budget mutation refused: exceeds the approved bounded-trial daily limit.');
+
+            return false;
+        }
         $this->ensureClient();
 
         // First, we need to get the budget resource name from the campaign

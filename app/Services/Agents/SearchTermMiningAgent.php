@@ -6,6 +6,7 @@ use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Keyword;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
 
@@ -52,6 +53,10 @@ class SearchTermMiningAgent
             'terms_analyzed' => 0,
             'errors' => [],
         ];
+
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return [...$results, 'skipped' => true, 'reason' => 'Automatic keyword changes suspended by trial or spending hold.'];
+        }
 
         if (! $campaign->customer) {
             return $results;

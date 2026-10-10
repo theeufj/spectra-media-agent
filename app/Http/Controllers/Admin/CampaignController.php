@@ -200,6 +200,9 @@ class CampaignController extends Controller
             // Management-account pattern: authenticate as the platform MCC and
             // address the customer's sub-account, rather than per-customer OAuth
             // tokens (which this method previously read off a Connection row).
+            $campaign->update(['spend_safety_hold' => [
+                'reason' => 'manual_pause', 'requested_at' => now()->toIso8601String(),
+            ]]);
             $service = new UpdateCampaignStatus($customer);
 
             $resourceName = $campaign->googleAdsResourceName();
@@ -266,10 +269,14 @@ class CampaignController extends Controller
             }
 
             // Management-account pattern — see pauseCampaign().
+            if (($campaign->spend_safety_hold['reason'] ?? null) === 'manual_pause') {
+                app(\App\Services\Campaigns\GoogleCampaignSpendSafety::class)
+                    ->releaseForApprovedRestart($campaign, 'Administrator requested Start in the campaign screen.');
+            }
             $service = new UpdateCampaignStatus($customer);
 
             $resourceName = $campaign->googleAdsResourceName();
-            $result = $service->enable($customer->cleanGoogleCustomerId(), $resourceName);
+            $result = $service->enable($customer->cleanGoogleCustomerId(), $resourceName, ownerApprovedRestart: true);
 
             if ($result['success']) {
                 $campaign->applyPlatformStatus('ENABLED');

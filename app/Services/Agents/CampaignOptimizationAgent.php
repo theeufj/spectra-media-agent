@@ -4,9 +4,11 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Prompts\OptimizationPrompt;
+use App\Services\Agents\Optimization\BiddingRecommendationGuard;
 use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -58,7 +60,8 @@ class CampaignOptimizationAgent
         $sources = $competitiveContext->forCampaign($campaign);
         $campaignData['approved_daily_budget'] = $campaign->approved_daily_budget ?? $campaign->daily_budget;
         $campaignData['landing_page_url'] = $campaign->landing_page_url;
-        if ($sources !== [] && $campaign->google_ads_campaign_id) {
+        $state = [];
+        if ($campaign->google_ads_campaign_id) {
             try {
                 $state = app(\App\Services\Competition\CompetitivePlatformGateway::class)->state($campaign);
                 $state['ads'] = array_slice($state['ads'], 0, 20);
@@ -90,8 +93,34 @@ class CampaignOptimizationAgent
 
                 if ($recommendations) {
                     $recommendations = $competitiveContext->attribute($recommendations, $sources, $metrics);
+                    if ($campaign->google_ads_campaign_id) {
+                        $accepted = [];
+                        foreach ($recommendations['recommendations'] ?? [] as $recommendation) {
+                            $reason = BiddingRecommendationGuard::rejectionReason($recommendation, $state);
+                            if ($reason !== null) {
+                                $recommendations['blocked_recommendations'][] = ['recommendation' => $recommendation, 'reason' => $reason];
+                            } else {
+                                $accepted[] = $recommendation;
+                            }
+                        }
+                        $recommendations['recommendations'] = $accepted;
+                        $recommendations['google_configuration'] = $state ?: ['source' => 'unavailable'];
+                    }
                     $recommendations = $this->scorer->enhance($recommendations, $metrics, $historical, $dataQuality);
                     $recommendations['categorized'] = $this->scorer->categorize($recommendations);
+                    if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                        foreach ($recommendations['recommendations'] as &$recommendation) {
+                            $recommendation['auto_apply_eligible'] = false;
+                            $recommendation['auto_apply_blocked_by'][] = 'Bounded restart trial or spending hold: monitor without automatic campaign changes.';
+                        }
+                        unset($recommendation);
+                        foreach ($recommendations['categorized']['auto_apply'] as $recommendation) {
+                            $recommendation['auto_apply_eligible'] = false;
+                            $recommendation['auto_apply_blocked_by'][] = 'Bounded restart trial: monitor without automatic campaign changes.';
+                            $recommendations['categorized']['recommended'][] = $recommendation;
+                        }
+                        $recommendations['categorized']['auto_apply'] = [];
+                    }
 
                     Cache::put("optimization:campaign:{$campaign->id}", $recommendations, now()->addHours($this->cacheTtlHours()));
 

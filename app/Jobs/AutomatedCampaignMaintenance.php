@@ -16,6 +16,7 @@ use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\SelfHealingAgent;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -91,6 +92,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             'ad_strength_repairs' => 0,
             'ad_strength_unresolved' => 0,
             'errors' => 0,
+            'read_only_campaigns' => 0,
         ];
 
         foreach ($campaigns as $campaign) {
@@ -111,6 +113,17 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     'has_microsoft' => ! empty($campaign->microsoft_ads_campaign_id),
                     'has_linkedin' => ! empty($campaign->linkedin_campaign_id),
                 ]);
+
+                if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                    $reason = 'Automatic campaign changes are suspended during a bounded restart trial or spending hold; status and spend safety monitoring continue.';
+                    $campaign->update(['last_maintenance_at' => now(),
+                        'last_maintenance_results' => ['mutations_suspended' => true, 'reason' => $reason, 'observed_at' => now()->toIso8601String()]]);
+                    AgentActivity::record('maintenance', 'automatic_changes_suspended', $reason, $campaign->customer_id, $campaign->id);
+                    $summary['campaigns_processed']++;
+                    $summary['read_only_campaigns']++;
+
+                    continue;
+                }
 
                 // Track platform
                 if ($campaign->google_ads_campaign_id) {

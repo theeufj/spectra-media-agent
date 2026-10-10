@@ -2,11 +2,13 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\CampaignStatus;
 use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\KeywordQualityScore;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use App\Services\GoogleAds\CommonServices\UpdateResponsiveSearchAd;
@@ -30,6 +32,10 @@ class QualityScoreImprovementAgent
 
     public function improve(Campaign $campaign): array
     {
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign) || $campaign->status === CampaignStatus::Paused) {
+            return ['skipped' => true, 'reason' => 'Approved bounded trial or pause hold: keep the agreed keyword and creative test unchanged.',
+                'actions' => [], 'flagged' => [], 'paused' => [], 'errors' => []];
+        }
         $customer = $campaign->customer;
 
         if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {

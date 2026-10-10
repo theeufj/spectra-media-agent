@@ -98,6 +98,7 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:spend-safety' => 60,
     ],
 
     /*
@@ -197,6 +198,18 @@ return [
     */
 
     'defaults' => [
+        'spend-safety' => [
+            'connection' => 'redis',
+            'queue' => ['spend-safety'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 150,
+            'nice' => 0,
+        ],
         'supervisor-1' => [
             'connection' => 'redis',
             'queue' => ['default'],

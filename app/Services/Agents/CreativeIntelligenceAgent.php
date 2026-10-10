@@ -6,6 +6,7 @@ use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\CreativeBrief;
 use App\Models\Customer;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
@@ -89,6 +90,10 @@ class CreativeIntelligenceAgent
             'new_variations' => [],
             'auto_actions' => [],
         ];
+
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return [...$results, 'skipped' => true, 'reason' => 'Automatic creative changes suspended by trial or spending hold.'];
+        }
 
         if (! $campaign->customer) {
             return $results;

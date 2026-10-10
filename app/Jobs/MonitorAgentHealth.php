@@ -31,6 +31,7 @@ class MonitorAgentHealth implements ShouldQueue
         'AutomatedCampaignMaintenance' => 30,  // daily
         'MonitorCampaignStatus' => 3,   // hourly
         'DispatchGoogleCampaignReadinessChecks' => 3, // hourly, including an empty scan
+        'DispatchCampaignSpendSafetyChecks' => 1, // every 15 minutes, including an empty scan
         'HourlyBudgetOptimization' => 3,   // hourly
         'AutoStartABTests' => 30,  // daily
         'EvaluateABTests' => 30,  // daily

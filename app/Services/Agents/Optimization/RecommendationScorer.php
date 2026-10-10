@@ -358,7 +358,7 @@ class RecommendationScorer
         return false;
     }
 
-    private function autoApplyThreshold(string $rawType): float
+    public function autoApplyThreshold(string $rawType): float
     {
         return self::TYPE_THRESHOLDS[self::canonicalType($rawType)] ?? $this->globalAutoApplyThreshold;
     }

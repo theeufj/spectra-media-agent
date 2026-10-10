@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
@@ -54,6 +55,11 @@ class ExpandBroadMatchKeywords implements ShouldQueue
 
     public function handle(): void
     {
+        if (CampaignSpendGuardrails::automaticChangesSuspended($this->campaign)) {
+            Log::info('ExpandBroadMatchKeywords: Automatic keyword changes suspended by trial or spending hold', ['campaign_id' => $this->campaign->id]);
+
+            return;
+        }
         $customer = $this->campaign->customer;
 
         if (! $customer?->google_ads_customer_id || ! $this->campaign->google_ads_campaign_id) {

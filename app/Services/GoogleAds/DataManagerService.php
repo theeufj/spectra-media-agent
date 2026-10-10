@@ -25,6 +25,8 @@ class DataManagerService
 {
     private const INGEST_ENDPOINT = 'https://datamanager.googleapis.com/v1/events:ingest';
 
+    private const STATUS_ENDPOINT = 'https://datamanager.googleapis.com/v1/requestStatus:retrieve';
+
     private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
     private ?MccAccount $mcc;
@@ -52,7 +54,7 @@ class DataManagerService
      * @param  \DateTimeInterface  $occurredAt  When the conversion happened
      * @param  string|null  $email  Raw email — SHA-256 hashed here for enhanced matching
      * @param  bool  $validateOnly  Dry run: validate without ingesting
-     * @return array{success:bool, requestId?:string, error?:string}
+     * @return array{success:bool, requestId?:string|null, error?:string}
      */
     public function ingestGclidConversion(
         string $operatingAccountId,
@@ -86,7 +88,7 @@ class DataManagerService
      * for attribution — accepting only gclid discards every iOS conversion.
      *
      * @param  array<string, string>  $adIdentifiers  One of gclid / gbraid / wbraid
-     * @return array{success:bool, requestId?:string, error?:string}
+     * @return array{success:bool, requestId?:string|null, error?:string}
      */
     public function ingestConversion(
         string $operatingAccountId,
@@ -165,7 +167,14 @@ class DataManagerService
                 ->post(self::INGEST_ENDPOINT, $payload);
 
             if ($response->successful()) {
-                return ['success' => true, 'requestId' => $response->json('requestId')];
+                $requestId = $response->json('requestId');
+                // validateOnly returns validation errors, not an ingestion receipt.
+                // A live upload requires the processing ID Google documents.
+                if (! $validateOnly && (! is_string($requestId) || trim($requestId) === '')) {
+                    return ['success' => false, 'error' => 'Google returned no processing receipt. Delivery is unverified.'];
+                }
+
+                return ['success' => true, 'requestId' => is_string($requestId) ? $requestId : null];
             }
 
             Log::warning('DataManagerService: ingest failed', [
@@ -179,6 +188,36 @@ class DataManagerService
             Log::error('DataManagerService: ingest exception: '.$e->getMessage());
 
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Read processing diagnostics for a real ingestion receipt. No conversions
+     * are sent by this method. Raw provider payloads are not logged or saved.
+     *
+     * @return array{success:bool, destinations?:array, error?:string}
+     */
+    public function retrieveRequestStatus(string $requestId): array
+    {
+        $token = $this->accessToken();
+        if (! $token) {
+            return ['success' => false, 'error' => 'Could not obtain Data Manager access token'];
+        }
+        try {
+            $response = Http::withToken($token)->timeout(30)->get(self::STATUS_ENDPOINT, ['requestId' => $requestId]);
+            if (! $response->successful()) {
+                return ['success' => false, 'error' => "Processing diagnostics unavailable (HTTP {$response->status()})."];
+            }
+            $destinations = $response->json('requestStatusPerDestination');
+            if (! is_array($destinations) || $destinations === []) {
+                return ['success' => false, 'error' => 'Google returned no destination processing status.'];
+            }
+
+            return ['success' => true, 'destinations' => $destinations];
+        } catch (\Throwable $e) {
+            Log::warning('Google conversion processing diagnostics unavailable', ['exception' => get_class($e)]);
+
+            return ['success' => false, 'error' => 'Google processing diagnostics could not be reached.'];
         }
     }
 

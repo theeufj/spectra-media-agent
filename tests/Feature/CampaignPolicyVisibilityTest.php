@@ -204,6 +204,43 @@ class CampaignPolicyVisibilityTest extends TestCase
         (new CheckCampaignPolicyViolations(PHP_INT_MAX))->handle($this->createMock(SelfHealingAgent::class));
     }
 
+    public function test_deleted_customer_is_not_queued_and_an_existing_check_retains_unknown_evidence(): void
+    {
+        [$campaign, $user] = $this->campaign();
+        $this->runCheck($campaign, [$this->ad()]);
+        $verifiedAt = CampaignAlertService::policyStatus($campaign)['last_successful_checked_at'];
+        // Bypass the deletion observer: this exercises a check already queued
+        // before the customer disappeared, without invoking remote ad APIs.
+        \Illuminate\Support\Facades\DB::table('customers')->where('id', $campaign->customer_id)->update(['deleted_at' => now()]);
+        $campaign->unsetRelation('customer');
+
+        Queue::fake();
+        (new DispatchCampaignPolicyViolationChecks)->handle();
+        Queue::assertNotPushed(CheckCampaignPolicyViolations::class, fn ($job) => (new \ReflectionProperty($job, 'campaignId'))->getValue($job) === $campaign->id);
+
+        $handler = $this->createMock(\Illuminate\Contracts\Debug\ExceptionHandler::class);
+        $handler->expects($this->once())->method('report')->with($this->callback(fn ($error) => str_contains($error->getMessage(), 'no active customer')));
+        $this->app->instance(\Illuminate\Contracts\Debug\ExceptionHandler::class, $handler);
+        $job = new class($campaign->id) extends CheckCampaignPolicyViolations
+        {
+            protected function googleAds(Campaign $campaign, string $campaignResourceName): array
+            {
+                throw new \LogicException('A deleted customer must never call the ad API.');
+            }
+        };
+        $healer = $this->createMock(SelfHealingAgent::class);
+        $healer->expects($this->never())->method('heal');
+        $job->handle($healer);
+
+        $state = CampaignAlertService::policyStatus($campaign->fresh());
+        $this->assertSame('unknown', $state['status']);
+        $this->assertSame($verifiedAt, $state['last_successful_checked_at']);
+        $this->assertCount(1, $state['issues']);
+        $this->assertSame(1, Notification::where('user_id', $user->id)->count());
+        NotificationFacade::assertSentToTimes($user, CriticalAgentAlert::class, 1);
+        Http::assertNothingSent();
+    }
+
     public function test_all_google_ads_rejected_for_destination_errors_alert_without_pausing_or_copy_healing(): void
     {
         [$campaign, $user] = $this->campaign('active', 'managed');

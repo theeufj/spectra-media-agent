@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
@@ -33,6 +34,12 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
         ?float $targetRoas = null,
         ?int $cpcBidCeilingMicros = null
     ): bool {
+        $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+        if ($local && ! CampaignSpendGuardrails::permitsBiddingStrategy($local, $strategy, $cpcBidCeilingMicros)) {
+            $this->logError('Bidding mutation refused: the bounded trial requires Maximize Clicks within its approved CPC bid ceiling.');
+
+            return false;
+        }
         $this->ensureClient();
 
         $campaign = new Campaign(['resource_name' => $campaignResourceName]);

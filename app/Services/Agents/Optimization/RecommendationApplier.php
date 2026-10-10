@@ -6,6 +6,8 @@ use App\Features\AutoOptimization;
 use App\Models\AgentActivity;
 use App\Models\Audience;
 use App\Models\Campaign;
+use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Competition\CompetitivePlatformGateway;
 use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\CreateCallAsset;
@@ -48,6 +50,10 @@ class RecommendationApplier
     {
         $customer = $campaign->customer;
 
+        if (! $approvedByUser && CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'Automatic campaign changes are suspended during a bounded restart trial or spending hold.', 'recommendation' => $recommendation];
+        }
+
         if (! $approvedByUser && $customer && ! Feature::for($customer)->active(AutoOptimization::class)) {
             return [
                 'applied' => false,
@@ -64,6 +70,25 @@ class RecommendationApplier
 
         if ($type === '') {
             return ['applied' => false, 'message' => 'Recommendation type is missing', 'recommendation' => $recommendation];
+        }
+
+        if ($campaign->google_ads_campaign_id && ($type === 'BIDDING' || BiddingRecommendationGuard::keywordBidChange($recommendation))) {
+            try {
+                // An analysis can be stale by the time it is applied. Always
+                // re-read strategy and criterion ownership before a CPC write.
+                $state = app(CompetitivePlatformGateway::class)->state($campaign);
+                $reason = BiddingRecommendationGuard::rejectionReason($recommendation, $state);
+            } catch (\Throwable $e) {
+                report($e);
+                $reason = 'Current Google bidding configuration could not be verified; no bid was changed.';
+            }
+            if ($reason !== null) {
+                return ['applied' => false, 'requires_review' => true, 'message' => $reason, 'recommendation' => $recommendation];
+            }
+            if (BiddingRecommendationGuard::keywordBidChange($recommendation)
+                && ! CampaignSpendGuardrails::permitsKeywordBid($campaign, (int) $recommendation['suggested_value'])) {
+                return ['applied' => false, 'requires_review' => true, 'message' => 'The keyword bid exceeds the campaign’s approved restart limits.', 'recommendation' => $recommendation];
+            }
         }
 
         // Second line of defence behind the scorer's own gate: a recommendation
@@ -133,6 +158,9 @@ class RecommendationApplier
         $ceiling = (float) ($campaign->approved_daily_budget ?? $oldBudget);
         if ($newBudget > $ceiling) {
             return ['applied' => false, 'requires_review' => true, 'message' => 'The requested budget exceeds the customer-approved daily budget.', 'recommendation' => $rec];
+        }
+        if (! CampaignSpendGuardrails::permitsBudget($campaign, $newBudget)) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'The requested budget exceeds the campaign’s approved restart limits.', 'recommendation' => $rec];
         }
         // Persist the desired budget; hourly reconciliation retries partial API failures.
         $campaign->update(['daily_budget' => $newBudget]);
@@ -289,7 +317,7 @@ class RecommendationApplier
             return $this->applyMicrosoftKeyword($campaign, $rec);
         }
 
-        $action = $rec['direction'] ?? $rec['action'] ?? null;
+        $action = strtolower((string) ($rec['direction'] ?? $rec['action'] ?? ''));
         $resource = $rec['criterion_resource_name'] ?? null;
         $customer = $campaign->customer;
 
@@ -298,6 +326,9 @@ class RecommendationApplier
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
+        if ($action === 'enable' && ! CampaignSpendGuardrails::canEnable($campaign)) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'Campaign spending is on hold; a keyword cannot be enabled.', 'recommendation' => $rec];
+        }
 
         $result = match ($action) {
             'increase', 'decrease' => $this->adjustBid($customer, $customerId, $resource, $rec),
@@ -318,7 +349,7 @@ class RecommendationApplier
         if (! $bid) {
             return ['applied' => false, 'message' => 'No suggested bid value'];
         }
-        $ok = (new UpdateKeywordBid($customer))($customerId, $resource, (int) $bid);
+        $ok = app(UpdateKeywordBid::class, ['customer' => $customer])($customerId, $resource, (int) $bid);
 
         return ['applied' => $ok, 'message' => $ok ? "Bid adjusted to {$bid} micros" : 'Failed to adjust bid'];
     }
@@ -352,12 +383,13 @@ class RecommendationApplier
         // gate could never pass and every bidding auto-apply was recorded failed.
         $confidence = $rec['confidence_score'] ?? $rec['confidence'] ?? 0;
 
-        if ($subType === 'keyword_cpc' && ($approvedByUser || $confidence >= 0.95) && $campaign->google_ads_campaign_id && $customer) {
+        $threshold = app(RecommendationScorer::class)->autoApplyThreshold('BIDDING');
+        if ($subType === 'keyword_cpc' && ($approvedByUser || $confidence >= $threshold) && $campaign->google_ads_campaign_id && $customer) {
             $kwResource = $rec['keyword_resource'] ?? null;
             $newBidMicros = $rec['suggested_value'] ?? null;
 
             if ($kwResource && $newBidMicros) {
-                $ok = (new UpdateKeywordBid($customer))(
+                $ok = app(UpdateKeywordBid::class, ['customer' => $customer])(
                     $customer->cleanGoogleCustomerId(),
                     $kwResource,
                     (int) $newBidMicros
@@ -376,7 +408,7 @@ class RecommendationApplier
             }
         }
 
-        return ['applied' => false, 'message' => 'Bidding strategy changes require manual review', 'recommendation' => $rec];
+        return ['applied' => false, 'requires_review' => true, 'message' => 'Bidding changes require manual review or the configured confidence threshold.', 'recommendation' => $rec];
     }
 
     private function applyTargeting(Campaign $campaign, array $rec): array

@@ -31,7 +31,7 @@ class DispatchCampaignPolicyViolationChecks implements ShouldQueue
 
     public function handle(): void
     {
-        \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) {
+        \App\Models\Campaign::withDeployedPlatforms()->whereHas('customer')->each(function ($campaign) {
             CheckCampaignPolicyViolations::dispatch($campaign->id);
         });
     }

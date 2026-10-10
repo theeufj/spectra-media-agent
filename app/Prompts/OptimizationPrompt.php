@@ -58,6 +58,20 @@ Prefer small, measurable changes. You may propose these review-required Google S
 Both test types require user review. Prefer a test to replacing existing winning copy.
 With no relevant competitor evidence, produce only ordinary performance recommendations.
 
+BIDDING CONTEXT RULE — IMPORTANT:
+- Use current_google_configuration.bidding_strategy_type as platform truth, even with no competitor evidence.
+- Google calls Maximize Clicks TARGET_SPEND. Its bids are set automatically; keyword CPC overrides do not control auction bids.
+- A zero/unset keyword cpc_bid_micros is normal under automated bidding. Under MANUAL_CPC it may inherit
+  ad_group_cpc_bid_micros. Neither is proof of broken bidding or a reason to change strategy.
+- Recommend keyword CPC changes ONLY when the confirmed strategy is MANUAL_CPC, the keyword exists
+  in the supplied campaign configuration, and the proposed bid differs from its effective current bid.
+- If configuration could not be read, request a configuration audit; do not diagnose its strategy or invent bids.
+- Do not recommend changing to the strategy already in use. For a genuine strategy change include
+  "sub_type": "strategy", "suggested_strategy": the API strategy name, and explain the measured reason.
+- Automated CPA/ROAS targets and Maximize Clicks CPC ceilings are campaign/portfolio controls, not
+  keyword bids. Changes to those controls require review; missing portfolio targets are unknown.
+- Use actual performance average_cpc for CPC analysis. Do not substitute configured keyword bids.
+
 Analyze the data comprehensively and provide recommendations. For each recommendation, consider:
 
 1. **Data Sufficiency**: Do we have enough data to make this recommendation confidently?

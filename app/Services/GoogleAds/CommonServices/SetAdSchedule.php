@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\AdScheduleInfo;
@@ -33,6 +34,10 @@ class SetAdSchedule extends BaseGoogleAdsService
         int $endMinute,
         float $bidModifier = 1.0
     ): ?string {
+        $campaign = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+        if ($campaign && ! CampaignSpendGuardrails::permitsBidModifier($campaign, $bidModifier)) {
+            return null;
+        }
         $this->ensureClient();
 
         $adSchedule = new AdScheduleInfo([

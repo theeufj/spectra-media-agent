@@ -382,8 +382,8 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
 
                             {customer.gtm_installed ? (
                                 <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
-                                    Snippet confirmed on your website. Conversion tracking is active and all campaigns
-                                    will report conversions automatically.
+                                    Snippet confirmed on your website. Next, verify that a real signup or purchase
+                                    reaches the intended conversion action in Google Ads.
                                 </div>
                             ) : (
                                 <div className="mt-4 flex gap-3">

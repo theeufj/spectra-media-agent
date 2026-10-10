@@ -1041,6 +1041,7 @@ class AdSpendBillingService
         $campaigns = $customer->campaigns()
             ->where('status', 'paused')
             ->where('platform_status', 'PAUSED')
+            ->whereNull('spend_safety_hold')
             ->where(function ($q) {
                 // A platform id, not withDeployedPlatforms(): that scope also
                 // matches on a deployed strategy, and a campaign with no id
@@ -1054,10 +1055,15 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
+                if (\App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                    Log::info('AdSpendBilling: Leaving the bounded trial or safety hold paused for explicit review', ['campaign_id' => $campaign->id]);
+
+                    continue;
+                }
                 // Resume Google Ads campaign
                 if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
                     $result = (new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer))
-                        ->enable($customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName());
+                        ->enable($customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName(), ownerApprovedRestart: true);
 
                     // enable() reports failure by return value, so a refusal is
                     // silent. Don't mark the campaign active off the back of one.

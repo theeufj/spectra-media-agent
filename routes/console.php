@@ -104,6 +104,10 @@ Schedule::job(new Scheduled\PendingAdminDeploymentOverdue)->name('pending-admin-
 // Hourly budget optimization - applies learned per-account multipliers and snapshots performance
 Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
 
+// A campaign-level stop also protects the last ad group and today's bounded
+// trial spend. Dedicated workers keep it ahead of slow creative generation.
+Schedule::job(new Scheduled\DispatchCampaignSpendSafetyChecks)->everyFifteenMinutes()->withoutOverlapping();
+
 // Proactive health checks - API connectivity, token validity, delivery issues
 // Runs every 6 hours to catch issues early
 Schedule::job(new RunHealthChecks)->everySixHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunHealthChecks'));

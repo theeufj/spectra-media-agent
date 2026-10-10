@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\GoogleAds\CommonServices\GetPerformanceBySegment;
 use App\Services\GoogleAds\CommonServices\SetAdSchedule;
@@ -53,6 +54,10 @@ class BidAdjustmentAgent
         $customer = $campaign->customer;
         $results = ['adjustments' => [], 'errors' => []];
 
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return [...$results, 'skipped' => true, 'reason' => 'Spending hold or bounded restart trial: automatic bid modifiers are suspended.'];
+        }
+
         // Google Ads: device + daypart bid modifiers
         if ($customer?->google_ads_customer_id && $campaign->google_ads_campaign_id) {
             $googleResults = $this->optimizeGoogle($campaign, $customer);
@@ -89,7 +94,10 @@ class BidAdjustmentAgent
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $campaignResource = $campaign->google_ads_campaign_id;
+        $campaignResource = $campaign->googleAdsResourceName();
+        if (! $campaignResource) {
+            return ['adjustments' => [], 'errors' => ['A Google campaign resource could not be resolved.']];
+        }
 
         $adjustments = [];
         $errors = [];

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\NegativeKeywords\AddNegativeKeywordService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
@@ -34,6 +35,11 @@ class FindUnderperformingKeywords implements ShouldQueue
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
+            if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                Log::info('FindUnderperformingKeywords: Automatic keyword changes suspended by trial or spending hold', ['campaign_id' => $campaign->id]);
+
+                return;
+            }
 
             // PMax campaigns don't have keywords — skip entirely.
             //

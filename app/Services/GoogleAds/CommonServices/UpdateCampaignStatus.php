@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
@@ -13,6 +14,8 @@ use Google\Protobuf\FieldMask;
 
 class UpdateCampaignStatus extends BaseGoogleAdsService
 {
+    private bool $ownerApprovedRestart = false;
+
     /**
      * Update the status of a Google Ads campaign.
      *
@@ -23,6 +26,12 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
      */
     public function execute(string $customerId, string $campaignResourceName, string $status): array
     {
+        if (strtoupper($status) === 'ENABLED') {
+            $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+            if ($local && ! CampaignSpendGuardrails::canEnable($local, $this->ownerApprovedRestart)) {
+                return ['success' => false, 'error' => 'Campaign is deliberately paused or held by spend safety. Review its limits and approve the restart first.'];
+            }
+        }
         $this->ensureClient();
 
         try {
@@ -88,8 +97,14 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
     /**
      * Enable/start a campaign.
      */
-    public function enable(string $customerId, string $campaignResourceName): array
+    public function enable(string $customerId, string $campaignResourceName, bool $ownerApprovedRestart = false): array
     {
-        return $this->execute($customerId, $campaignResourceName, 'ENABLED');
+        $previous = $this->ownerApprovedRestart;
+        $this->ownerApprovedRestart = $ownerApprovedRestart;
+        try {
+            return $this->execute($customerId, $campaignResourceName, 'ENABLED');
+        } finally {
+            $this->ownerApprovedRestart = $previous;
+        }
     }
 }
