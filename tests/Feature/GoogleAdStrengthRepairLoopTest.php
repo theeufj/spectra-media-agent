@@ -108,8 +108,15 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->assertCount(1, $result['actions']);
         $this->assertFalse($result['verified']);
         $this->assertSame([], $result['errors']);
+        $this->assertSame('submitted', $result['unresolved'][0]['copy_identity_source']);
+        $this->assertSame(GoogleAdStrengthRepair::copyFingerprint(GoogleAdStrengthRepair::ad($this->row(copy: $this->copy))), $result['unresolved'][0]['copy_fingerprint']);
+        $this->assertNotSame($result['unresolved'][0]['live_copy_fingerprint'], $result['unresolved'][0]['copy_fingerprint']);
         $this->assertDatabaseHas('agent_activities', ['campaign_id' => $campaign->id, 'action' => 'ad_copy_update_submitted', 'status' => 'pending']);
         Queue::assertPushed(VerifyGoogleAdImprovement::class, fn ($job) => $job->attemptId !== null && $job->headlines === $this->copy['headlines']);
+        $this->reader([$this->row('PENDING', copy: $this->copy)]);
+        $observed = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+        $this->assertSame('observed', $observed['unresolved'][0]['copy_identity_source']);
+        $this->assertSame($result['unresolved'][0]['copy_fingerprint'], $observed['unresolved'][0]['copy_fingerprint']);
     }
 
     public function test_failed_google_read_is_not_cached_as_healthy_and_can_retry_immediately(): void
@@ -144,9 +151,96 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $pending = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
         $this->assertSame([], $pending['actions']);
         $this->assertFalse($pending['verified']);
+        $this->assertSame('strength_pending', $pending['unresolved'][0]['reason']);
+        $this->assertSame('PENDING', $pending['unresolved'][0]['evidence']['ad_strength']);
+        $this->assertSame('APPROVED', $pending['unresolved'][0]['evidence']['approval_status']);
+        $this->assertNotEmpty($pending['unresolved'][0]['observed_at']);
+        $this->assertSame(GoogleAdStrengthRepair::observation(GoogleAdStrengthRepair::ad($this->row('GOOD')))['copy_fingerprint'],
+            $pending['unresolved'][0]['copy_fingerprint'], 'Review and strength changes must not reset the copy identity.');
         $this->reader([$this->row()]);
         $this->repairServices();
         $this->assertCount(1, app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign)['actions']);
+    }
+
+    public function test_only_confirmed_provider_waiting_is_classified_as_transient(): void
+    {
+        $campaign = $this->campaign();
+        $ai = $this->createMock(GeminiService::class);
+        $ai->expects($this->never())->method('generateContent');
+        $this->app->instance(GeminiService::class, $ai);
+        $cases = [
+            [$this->row('GOOD', review: 'REVIEW_IN_PROGRESS'), 'review_pending'],
+            [$this->row('GOOD', review: 'UNDER_APPEAL'), 'review_pending'],
+            [$this->row('PENDING', review: 'REVIEW_IN_PROGRESS', approval: 'UNKNOWN'), 'review_pending'],
+            [$this->row('PENDING', review: 'REVIEW_IN_PROGRESS', approval: 'UNSPECIFIED'), 'review_pending'],
+            [$this->row('UNKNOWN'), 'ad_status_unknown'],
+            [$this->row('NO_ADS'), 'ad_status_unknown'],
+            [$this->row('PENDING', review: 'UNKNOWN'), 'ad_status_unknown'],
+            [$this->row('PENDING', approval: 'UNKNOWN'), 'ad_status_unknown'],
+            [$this->row('PENDING', approval: 'DISAPPROVED'), 'policy_disapproved'],
+            [$this->row('PENDING', approval: 'AREA_OF_INTEREST_ONLY'), 'policy_targeting_restricted'],
+        ];
+        $assetRejected = $this->row('PENDING');
+        $assetRejected['adGroupAd']['ad']['responsiveSearchAd']['headlines'][0]['policySummaryInfo'] = ['approvalStatus' => 'DISAPPROVED', 'reviewStatus' => 'REVIEWED'];
+        $cases[] = [$assetRejected, 'policy_disapproved'];
+        $assetUnknown = $this->row('GOOD');
+        $assetUnknown['adGroupAd']['ad']['responsiveSearchAd']['headlines'][0]['policySummaryInfo'] = ['approvalStatus' => 'APPROVED', 'reviewStatus' => 'UNKNOWN'];
+        $cases[] = [$assetUnknown, 'ad_status_unknown'];
+        foreach ($cases as [$row, $reason]) {
+            $this->reader([$row]);
+            $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+            $this->assertSame($reason, $result['unresolved'][0]['reason']);
+            $this->assertFalse($result['verified']);
+            $this->assertSame([], $result['actions']);
+            $this->assertNotEmpty($result['unresolved'][0]['copy_fingerprint']);
+        }
+    }
+
+    public function test_new_rejection_or_unknown_state_is_not_hidden_by_the_initial_verification_delay(): void
+    {
+        Notification::fake();
+        $campaign = $this->campaign();
+        $state = app(GoogleAdStrengthRepair::class);
+        foreach ([['DISAPPROVED', 'PENDING', 'policy_disapproved'], ['APPROVED', 'UNKNOWN', 'ad_status_unknown']] as [$approval, $rating, $reason]) {
+            $attempt = $this->submitted($campaign);
+            $ad = GoogleAdStrengthRepair::ad($this->row($rating, copy: $this->copy, approval: $approval));
+            $result = $state->verify($campaign, $attempt, $ad);
+            $this->assertSame($reason, $result['reason']);
+            $this->assertNotSame('verification_pending', $result['reason']);
+        }
+    }
+
+    public function test_exhausted_verification_carries_its_terminal_state_with_the_current_pending_evidence(): void
+    {
+        Notification::fake();
+        $campaign = $this->campaign();
+        $attempt = $this->submitted($campaign);
+        $attempt->update(['details' => array_merge($attempt->details, ['verification_reads' => 5, 'next_verification_at' => now()->subMinute()->toIso8601String()])]);
+        $this->reader([$this->row('PENDING', copy: $this->copy)]);
+        $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+        $this->assertSame('strength_pending', $result['unresolved'][0]['reason']);
+        $this->assertSame('needs_review', $result['unresolved'][0]['verification_status']);
+        $this->assertSame(6, $result['unresolved'][0]['verification_reads']);
+        $this->assertSame($attempt->details['submitted_at'], $result['unresolved'][0]['submitted_at']);
+        $this->assertFalse($result['verified']);
+        $this->assertSame([], $result['actions']);
+    }
+
+    public function test_a_bounded_trial_observes_weak_copy_without_modifying_the_agreed_creative(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->update(['spend_guardrails' => ['enabled' => true]]);
+        $this->reader([$this->row()]);
+        $ai = $this->createMock(GeminiService::class);
+        $ai->expects($this->never())->method('generateContent');
+        $this->app->instance(GeminiService::class, $ai);
+        $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+        $this->assertTrue($result['checked']);
+        $this->assertSame('approved_bounded_trial', $result['unresolved'][0]['reason']);
+        $this->assertSame([], $result['actions']);
+        $this->assertFalse($result['verified']);
+        Queue::assertNotPushed(VerifyGoogleAdImprovement::class);
+        $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_strength_repair_attempt')->count());
     }
 
     public function test_one_pending_ad_does_not_block_a_different_weak_ad(): void

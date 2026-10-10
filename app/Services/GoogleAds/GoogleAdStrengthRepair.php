@@ -65,6 +65,7 @@ class GoogleAdStrengthRepair
             $fresh->status !== \App\Enums\CampaignStatus::Active => 'campaign_not_active',
             strtoupper((string) $fresh->platform_status) === 'PAUSED' => 'google_campaign_paused',
             $fresh->hasPassedEndDate() => 'campaign_ended',
+            \App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($fresh) => \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh) ? 'approved_bounded_trial' : 'spend_safety_hold',
             $customer->service_type === 'setup_only' => 'setup_only',
             ! $approved?->signed_off_at => 'strategy_not_approved',
             basename((string) $approved->reusableGoogleCampaignId()) !== basename((string) $campaign->googleAdsResourceName()) => 'google_strategy_target_changed',
@@ -153,6 +154,53 @@ class GoogleAdStrengthRepair
         return self::reviewed($ad) && in_array($ad['ad_strength'], ['GOOD', 'EXCELLENT'], true);
     }
 
+    /** Explicit provider signals distinguish waiting from missing or rejected evidence. */
+    public static function statusReason(array $ad): ?string
+    {
+        $policies = array_merge([['approvalStatus' => $ad['approval_status'] ?? 'UNKNOWN',
+            'reviewStatus' => $ad['review_status'] ?? 'UNKNOWN']], $ad['asset_policy_summaries'] ?? []);
+        if (in_array('DISAPPROVED', array_column($policies, 'approvalStatus'), true)) {
+            return 'policy_disapproved';
+        }
+        if (in_array('AREA_OF_INTEREST_ONLY', array_column($policies, 'approvalStatus'), true)) {
+            return 'policy_targeting_restricted';
+        }
+        $reviewPending = false;
+        foreach ($policies as $policy) {
+            $pending = in_array($policy['reviewStatus'] ?? 'UNKNOWN', ['REVIEW_IN_PROGRESS', 'UNDER_APPEAL'], true);
+            // A new ad may not have an approval decision yet. An explicit
+            // review signal proves waiting; unknown review does not.
+            $allowedApprovals = $pending ? ['APPROVED', 'APPROVED_LIMITED', 'UNKNOWN', 'UNSPECIFIED'] : ['APPROVED', 'APPROVED_LIMITED'];
+            if (! in_array($policy['approvalStatus'] ?? 'UNKNOWN', $allowedApprovals, true)
+                || ! in_array($policy['reviewStatus'] ?? 'UNKNOWN', ['REVIEWED', 'ELIGIBLE_MAY_SERVE', 'REVIEW_IN_PROGRESS', 'UNDER_APPEAL'], true)) {
+                return 'ad_status_unknown';
+            }
+            $reviewPending = $reviewPending || $pending;
+        }
+        if (! in_array($ad['ad_strength'] ?? 'UNKNOWN', ['POOR', 'AVERAGE', 'GOOD', 'EXCELLENT', 'PENDING'], true)) {
+            return 'ad_status_unknown';
+        }
+        if ($reviewPending) {
+            return 'review_pending';
+        }
+
+        return $ad['ad_strength'] === 'PENDING' ? 'strength_pending' : null;
+    }
+
+    /** A stable identity for the exact observed copy, independent of review/rating changes. */
+    public static function observation(array $ad): array
+    {
+        return ['ad_resource' => $ad['resource_name'], 'observed_at' => now()->toIso8601String(),
+            'copy_fingerprint' => self::copyFingerprint($ad), 'copy_identity_source' => 'observed',
+            'evidence' => ['ad_strength' => $ad['ad_strength'], 'approval_status' => $ad['approval_status'],
+                'review_status' => $ad['review_status'], 'asset_policy_summaries' => $ad['asset_policy_summaries'] ?? []]];
+    }
+
+    public static function copyFingerprint(array $ad): string
+    {
+        return hash('sha256', json_encode([$ad['resource_name'], $ad['headlines'], $ad['descriptions']], JSON_THROW_ON_ERROR));
+    }
+
     public function latest(Campaign $campaign, string $resource): ?AgentActivity
     {
         return AgentActivity::where('campaign_id', $campaign->id)
@@ -234,22 +282,22 @@ class GoogleAdStrengthRepair
                 // A previously unknown/missing review can recover on a later read.
                 // Keep retryable uncertainty distinct from an external copy edit.
                 if ($matched && self::reviewed($ad) && in_array($ad['ad_strength'], ['POOR', 'AVERAGE'], true)
-                    && in_array($details['reason'] ?? '', ['verification_failed', 'ad_missing', 'review_pending', 'strength_pending', 'policy_disapproved'], true)) {
+                    && in_array($details['reason'] ?? '', ['verification_failed', 'ad_missing', 'review_pending', 'strength_pending', 'policy_disapproved', 'policy_targeting_restricted', 'ad_status_unknown'], true)) {
                     $details = array_merge($details, ['reason' => 'still_weak', 'retry_after' => now()->addHour()->toIso8601String()]);
                     $locked->update(['details' => $details]);
                 }
 
                 return ['status' => $locked->status, 'reason' => $details['reason'] ?? 'unresolved', 'copy_matches' => $matched];
             }
-            if (Carbon::parse($details['next_verification_at'] ?? now())->isFuture()) {
+            $reason = $ad === null ? 'ad_missing' : (! $matched ? 'copy_changed' : (self::statusReason($ad) ?? 'still_weak'));
+            // A scheduled waiting period must not hide a new rejection, lost
+            // ad, changed copy, or unknown provider state observed meanwhile.
+            if (Carbon::parse($details['next_verification_at'] ?? now())->isFuture()
+                && in_array($reason, ['review_pending', 'strength_pending', 'still_weak'], true)) {
                 return ['status' => 'pending', 'reason' => 'verification_pending', 'copy_matches' => $matched];
             }
             $reads = (int) ($details['verification_reads'] ?? 0) + 1;
-            $reason = $ad === null ? 'ad_missing' : (! $matched ? 'copy_changed'
-                : ($ad['approval_status'] === 'DISAPPROVED' ? 'policy_disapproved'
-                    : (! self::reviewed($ad) ? 'review_pending'
-                        : (in_array($ad['ad_strength'], ['PENDING', 'UNKNOWN', 'NO_ADS'], true) ? 'strength_pending' : 'still_weak'))));
-            $terminal = in_array($reason, ['copy_changed', 'policy_disapproved'], true)
+            $terminal = in_array($reason, ['copy_changed', 'policy_disapproved', 'policy_targeting_restricted'], true)
                 || $reads >= self::MAX_VERIFICATION_READS || Carbon::parse($details['submitted_at'])->lt(now()->subDay());
             $details = array_merge($details, ['reason' => $reason, 'verification_reads' => $reads,
                 'last_verified_at' => now()->toIso8601String(), 'next_verification_at' => now()->addHour()->toIso8601String()]);

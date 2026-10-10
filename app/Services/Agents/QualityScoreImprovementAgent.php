@@ -329,10 +329,15 @@ PROMPT;
             if ($ads === []) {
                 $result['unresolved'][] = ['reason' => 'no_enabled_rsa'];
             }
+            $verifications = [];
+            $submittedCopies = [];
             foreach ($ads as $ad) {
                 $attempt = $state->latest($campaign, $ad['resource_name']);
                 if ($attempt && isset($attempt->details['submitted_at'])) {
                     $verification = $state->verify($campaign, $attempt, $ad);
+                    $verifications[$ad['resource_name']] = ['verification_status' => $verification['status'],
+                        'submitted_at' => $attempt->details['submitted_at'],
+                        'verification_reads' => $attempt->details['verification_reads'] ?? 0];
                     if (($verification['status'] ?? '') === 'pending') {
                         $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $verification['reason']];
 
@@ -342,9 +347,7 @@ PROMPT;
                 if (\App\Services\GoogleAds\GoogleAdStrengthRepair::healthy($ad)) {
                     continue;
                 }
-                if (! \App\Services\GoogleAds\GoogleAdStrengthRepair::reviewed($ad)
-                    || ! in_array($ad['ad_strength'], ['POOR', 'AVERAGE'], true)) {
-                    $reason = $ad['approval_status'] === 'DISAPPROVED' ? 'policy_disapproved' : 'google_review_or_strength_pending';
+                if ($reason = \App\Services\GoogleAds\GoogleAdStrengthRepair::statusReason($ad)) {
                     $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $reason];
 
                     continue;
@@ -352,7 +355,7 @@ PROMPT;
                 $details = $attempt->details ?? [];
                 if ($attempt && ($attempt->status === 'running' && $attempt->updated_at->gt(now()->subMinutes(30))
                     || isset($details['retry_after']) && \Illuminate\Support\Carbon::parse($details['retry_after'])->isFuture()
-                    || isset($details['submitted_at']) && in_array($details['reason'] ?? '', ['copy_changed', 'ad_missing', 'review_pending', 'strength_pending', 'policy_disapproved', 'verification_failed'], true))) {
+                    || isset($details['submitted_at']) && in_array($details['reason'] ?? '', ['copy_changed', 'ad_missing', 'review_pending', 'strength_pending', 'policy_disapproved', 'policy_targeting_restricted', 'ad_status_unknown', 'verification_failed'], true))) {
                     $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $details['reason'] ?? 'repair_in_progress'];
 
                     continue;
@@ -432,6 +435,9 @@ PROMPT;
                         throw new \RuntimeException('Google did not accept the RSA update.');
                     }
                     $state->submitted($attempt, $copy);
+                    $verifications[$ad['resource_name']] = ['verification_status' => 'pending',
+                        'submitted_at' => $attempt->details['submitted_at'], 'verification_reads' => 0];
+                    $submittedCopies[$ad['resource_name']] = $copy;
                     $result['actions'][] = ['ad_id' => $ad['ad_id'], 'ad_resource' => $ad['resource_name'],
                         'strength_before' => $ad['ad_strength'], 'verification' => 'pending', 'attempt_id' => $attempt->id] + $copy;
                     $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => 'verification_pending'];
@@ -445,6 +451,26 @@ PROMPT;
                     $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => 'repair_failed'];
                 }
             }
+            // Preserve the exact observation and any exhausted verification
+            // state so readiness can wait only on confirmed, recent signals.
+            $byResource = collect($ads)->keyBy('resource_name');
+            $result['unresolved'] = array_map(function (array $issue) use ($byResource, $verifications, $submittedCopies): array {
+                $ad = $byResource->get($issue['ad_resource'] ?? '');
+                if (! $ad) {
+                    return $issue;
+                }
+                $observation = \App\Services\GoogleAds\GoogleAdStrengthRepair::observation($ad);
+                if (isset($submittedCopies[$ad['resource_name']])) {
+                    // This snapshot read the old copy, then Google accepted a
+                    // replacement. Start its waiting clock on the new identity.
+                    $observation['live_copy_fingerprint'] = $observation['copy_fingerprint'];
+                    $observation['copy_fingerprint'] = \App\Services\GoogleAds\GoogleAdStrengthRepair::copyFingerprint(
+                        array_merge($ad, $submittedCopies[$ad['resource_name']]));
+                    $observation['copy_identity_source'] = 'submitted';
+                }
+
+                return array_merge($observation, $verifications[$ad['resource_name']] ?? [], $issue);
+            }, $result['unresolved']);
             $result['verified'] = $ads !== [] && $result['unresolved'] === [] && $result['errors'] === [];
         } catch (\Throwable $e) {
             report($e);

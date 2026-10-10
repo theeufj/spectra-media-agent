@@ -38,6 +38,7 @@ class GoogleCampaignReadinessTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->freezeTime();
         Notification::fake();
         Cache::forget('enabled_platform_slugs');
         EnabledPlatform::updateOrCreate(['slug' => 'google'], ['name' => 'Google Ads', 'is_enabled' => true]);
@@ -71,6 +72,23 @@ class GoogleCampaignReadinessTest extends TestCase
     private function strength(array $overrides = []): array
     {
         return array_merge(['checked' => true, 'verified' => true, 'actions' => [], 'errors' => [], 'unresolved' => []], $overrides);
+    }
+
+    private function waitingStrength(array $overrides = []): array
+    {
+        return $this->strength(['verified' => false, 'unresolved' => [array_merge([
+            'ad_resource' => 'customers/1234567890/adGroupAds/1~2', 'reason' => 'strength_pending',
+            'copy_fingerprint' => 'current-copy', 'evidence' => ['approval_status' => 'APPROVED', 'review_status' => 'REVIEWED', 'ad_strength' => 'PENDING'],
+        ], $overrides)]]);
+    }
+
+    private function adminRecipient(): User
+    {
+        $role = Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin']));
+        $admin = User::factory()->create();
+        $admin->roles()->attach($role);
+
+        return $admin;
     }
 
     private function services(): array
@@ -314,6 +332,229 @@ class GoogleCampaignReadinessTest extends TestCase
         } finally {
             $lock->release();
         }
+    }
+
+    public function test_confirmed_pending_strength_is_recorded_without_a_critical_alert_or_false_readiness(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(2))->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(2))->method('checkAdStrength')->willReturn($this->waitingStrength());
+        $verifier->expects($this->never())->method('verify');
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $first = $this->snapshot($strategy);
+        $this->travel(1)->hours();
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('pending', $state['status']);
+        $this->assertFalse($state['ready']);
+        $this->assertTrue($state['conversion_goals']['ready']);
+        $this->assertTrue($state['audience_observation']['ready']);
+        $this->assertSame([], $state['issues']);
+        $this->assertSame([], $state['errors']);
+        $this->assertSame('ad_strength_strength_pending', $state['pending'][0]['code']);
+        $this->assertSame($first['checked_at'], $state['ad_strength']['pending_since']);
+        $this->assertSame($first['ad_strength']['expires_at'], $state['ad_strength']['expires_at']);
+        $this->assertDatabaseHas('agent_activities', ['campaign_id' => $campaign->id, 'action' => 'google_readiness_checked', 'status' => 'pending']);
+        $this->assertDatabaseMissing('agent_activities', ['campaign_id' => $campaign->id, 'action' => 'google_readiness_alerted']);
+        Notification::assertNothingSent();
+    }
+
+    public function test_pending_evaluation_escalates_after_72_hours_and_does_not_restart_its_clock_on_status_changes(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(4))->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(4))->method('checkAdStrength')->willReturnOnConsecutiveCalls(
+            $this->waitingStrength(['reason' => 'review_pending']), $this->waitingStrength(), $this->waitingStrength(), $this->waitingStrength());
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $first = $this->snapshot($strategy);
+        $this->travel(71)->hours();
+        $job->handle($strength, $verifier);
+        $this->assertSame($first['checked_at'], $this->snapshot($strategy)['ad_strength']['pending_since']);
+        Notification::assertNothingSent();
+        $this->travel(1)->hours();
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertFalse($state['ready']);
+        $this->assertSame([], $state['pending']);
+        $this->assertSame('ad_strength_google_evaluation_delayed', $state['issues'][0]['code']);
+        $this->assertSame($first['checked_at'], $state['ad_strength']['unresolved'][0]['pending_since']);
+        Notification::assertSentTo($admin, CriticalAgentAlert::class, fn ($alert) => str_starts_with($alert->message, 'Review Ad strength')
+            && ! str_contains($alert->message, 'Conversion goals') && str_contains($alert->details['issues'][0]['message'], '72 hours'));
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+        $this->assertEquals(50, $campaign->fresh()->daily_budget);
+        $this->assertSame('ENABLED', $campaign->fresh()->platform_status);
+    }
+
+    public function test_a_different_ad_copy_gets_its_own_pending_window(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(2))->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(2))->method('checkAdStrength')->willReturnOnConsecutiveCalls($this->waitingStrength(), $this->waitingStrength(['copy_fingerprint' => 'changed-copy']));
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $this->travel(73)->hours();
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('pending', $state['status']);
+        $this->assertSame($state['checked_at'], $state['ad_strength']['pending_since']);
+        Notification::assertNothingSent();
+    }
+
+    public function test_an_error_on_another_ad_does_not_reset_the_observed_pending_copys_clock(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(3))->method('reconcile')->willReturn($this->goals());
+        $withError = $this->waitingStrength();
+        $withError['errors'] = [['code' => 'another_ad_failed', 'message' => 'Repairing a different ad failed.']];
+        $strength->expects($this->exactly(3))->method('checkAdStrength')->willReturnOnConsecutiveCalls($this->waitingStrength(), $withError, $this->waitingStrength());
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $first = $this->snapshot($strategy);
+        $this->travel(71)->hours();
+        $job->handle($strength, $verifier);
+        $mixed = $this->snapshot($strategy);
+        $this->assertSame('unknown', $mixed['status']);
+        $this->assertSame('another_ad_failed', $mixed['issues'][0]['code']);
+        $this->assertSame($first['checked_at'], $mixed['ad_strength']['pending_since']);
+        $this->travel(1)->hours();
+        $job->handle($strength, $verifier);
+        $this->assertSame('ad_strength_google_evaluation_delayed', $this->snapshot($strategy)['issues'][0]['code']);
+    }
+
+    public function test_real_conversion_problem_still_alerts_while_strength_is_pending_and_names_only_that_check(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->once())->method('reconcile')->willReturn($this->goals(['status' => 'needs_review', 'ready' => false,
+            'issues' => [['code' => 'missing_signup_goal', 'message' => 'The approved signup goal is missing.']]]));
+        $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->waitingStrength());
+        (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertSame('missing_signup_goal', $state['issues'][0]['code']);
+        $this->assertCount(1, $state['issues']);
+        $this->assertCount(1, $state['pending']);
+        Notification::assertSentTo($admin, CriticalAgentAlert::class, fn ($alert) => str_starts_with($alert->message, 'Review Conversion goals')
+            && ! str_contains($alert->message, 'Ad strength') && count($alert->details['issues']) === 1);
+    }
+
+    public function test_unknown_disapproved_and_exhausted_verification_are_not_silenced_as_waiting(): void
+    {
+        $admin = $this->adminRecipient();
+        foreach ([['reason' => 'ad_status_unknown'], ['reason' => 'policy_disapproved'], ['reason' => 'verification_pending', 'verification_status' => 'needs_review'],
+            ['reason' => 'strength_pending', 'copy_fingerprint' => null]] as $row) {
+            [$campaign, , $strategy] = $this->workspace();
+            [$goals, $strength, $verifier] = $this->services();
+            $goals->expects($this->once())->method('reconcile')->willReturn($this->goals());
+            $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->waitingStrength($row));
+            (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+            $state = $this->snapshot($strategy);
+            $this->assertSame('needs_review', $state['status']);
+            $this->assertFalse($state['ready']);
+            $this->assertSame([], $state['pending']);
+            $this->assertCount(1, $state['issues']);
+        }
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 4);
+    }
+
+    public function test_bounded_trial_checks_are_read_only_and_still_observe_google_evaluation(): void
+    {
+        [$campaign, , $strategy] = $this->workspace(['spend_guardrails' => ['enabled' => true, 'max_daily_budget_micros' => 50_000_000]]);
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->never())->method('reconcile');
+        $goals->expects($this->once())->method('inspect')->willReturn($this->goals());
+        $audience = $this->createMock(ReconcileSearchAudienceObservation::class);
+        $audience->expects($this->never())->method('reconcile');
+        $audience->expects($this->once())->method('inspect')->willReturn(['status' => 'ready', 'ready' => true, 'actions' => [], 'issues' => []]);
+        $this->app->bind(ReconcileSearchAudienceObservation::class, fn () => $audience);
+        $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->waitingStrength());
+        (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('pending', $state['status']);
+        $this->assertFalse($state['mutation_allowed']);
+        $this->assertSame('approved_bounded_trial', $state['skip_reason']);
+        $this->assertEquals(50, $campaign->fresh()->daily_budget);
+    }
+
+    public function test_pause_retains_pending_evidence_without_claiming_a_fresh_check_and_resume_retains_the_timeout(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(2))->method('reconcile')->willReturn($this->goals());
+        $goals->expects($this->exactly(2))->method('inspect')->willReturn($this->goals());
+        $strength->expects($this->exactly(2))->method('checkAdStrength')->willReturn($this->waitingStrength());
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $first = $this->snapshot($strategy);
+        $campaign->update(['status' => 'paused']);
+        $this->travel(73)->hours();
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertFalse($state['ready']);
+        $this->assertFalse($state['ad_strength']['checked']);
+        $this->assertSame('skipped', $state['status']);
+        $this->assertSame([], $state['issues']);
+        $this->assertSame([], $state['pending']);
+        $this->assertSame($first['ad_strength']['pending_since'], $state['ad_strength']['last_known']['pending_since']);
+        $this->assertArrayNotHasKey('last_known', $state['ad_strength']['last_known']);
+        Notification::assertNothingSent();
+        $campaign->update(['status' => 'active']);
+        $job->handle($strength, $verifier);
+        $this->assertSame('ad_strength_google_evaluation_delayed', $this->snapshot($strategy)['issues'][0]['code']);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+    }
+
+    public function test_read_failure_after_pending_still_alerts_and_preserves_last_observed_copy(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(2))->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(2))->method('checkAdStrength')->willReturnOnConsecutiveCalls($this->waitingStrength(),
+            $this->strength(['checked' => false, 'verified' => false, 'errors' => [['code' => 'google_read_failed', 'message' => 'Google was unavailable.']]]));
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('unknown', $state['status']);
+        $this->assertFalse($state['ready']);
+        $this->assertSame('current-copy', $state['ad_strength']['last_known']['unresolved'][0]['copy_fingerprint']);
+        $this->assertSame([], $state['pending']);
+        $this->assertSame('google_read_failed', $state['issues'][0]['code']);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+    }
+
+    public function test_successful_google_strength_evaluation_clears_pending_without_a_failure_notification(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->exactly(2))->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(2))->method('checkAdStrength')->willReturnOnConsecutiveCalls($this->waitingStrength(), $this->strength());
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertSame('ready', $state['status']);
+        $this->assertTrue($state['ready']);
+        $this->assertSame([], $state['pending']);
+        $this->assertSame([], $state['issues']);
+        Notification::assertNothingSent();
     }
 
     public function test_pausing_preserves_unresolved_strength_evidence_without_repairing_or_claiming_readiness(): void

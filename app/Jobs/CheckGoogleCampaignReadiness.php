@@ -14,6 +14,7 @@ use App\Models\Strategy;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\AgentIssue;
 use App\Services\Agents\QualityScoreImprovementAgent;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\ReconcileSearchAudienceObservation;
@@ -23,6 +24,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -40,6 +42,9 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
     public int $uniqueFor = 1800;
 
     public array $backoff = [60, 300, 900];
+
+    // An application escalation window, not a promise about Google's review SLA.
+    private const GOOGLE_EVALUATION_WAIT_HOURS = 72;
 
     public function __construct(public int $campaignId) {}
 
@@ -102,7 +107,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             'conversion_goals' => ['status' => 'unknown', 'ready' => false, 'actions' => [], 'issues' => []],
             'audience_observation' => ['status' => 'unknown', 'ready' => false, 'applicable' => null, 'actions' => [], 'issues' => [], 'ad_groups' => []],
             'ad_strength' => ['checked' => false, 'verified' => false, 'actions' => [], 'errors' => [], 'unresolved' => []],
-            'issues' => [], 'errors' => []];
+            'issues' => [], 'errors' => [], 'pending' => []];
         if ($readBlocked) {
             return $this->retainUnobservedEvidence($snapshot, $previous);
         }
@@ -184,7 +189,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             $campaign->refresh();
             $strategy->refresh();
             $reason = $this->mutationBlocked($campaign, $strategy);
-            if ($reason === null && $resource) {
+            if (($reason === null || $reason === 'approved_bounded_trial') && $resource) {
                 // Only an explicit stored type can establish that RSA strength
                 // does not apply. Missing/unknown types still need an API check.
                 $type = $this->campaignType($strategy);
@@ -197,13 +202,14 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
                     $target = clone $campaign;
                     $target->setAttribute('google_ads_campaign_id', $resource);
                     $target->setRelation('strategies', collect([$strategy]));
-                    $snapshot['ad_strength'] = $strengthAgent->checkAdStrength($target);
+                    $snapshot['ad_strength'] = $this->classifyStrength($strengthAgent->checkAdStrength($target), $previous['ad_strength'] ?? []);
                 }
                 if (! empty($snapshot['ad_strength']['skipped'])) {
                     $snapshot['mutation_allowed'] = false;
                     $snapshot['skip_reason'] = $snapshot['ad_strength']['skipped'];
                 }
-                $snapshot['issues'] = array_merge($snapshot['issues'], $this->issues($snapshot['ad_strength']['errors'] ?? []), $this->unresolved($snapshot['ad_strength']['unresolved'] ?? []));
+                $snapshot['pending'] = $snapshot['ad_strength']['pending'] ?? [];
+                $snapshot['issues'] = array_merge($snapshot['issues'], $this->issues($snapshot['ad_strength']['errors'] ?? []), $this->strengthIssues($snapshot['ad_strength']));
                 $snapshot['errors'] = array_merge($snapshot['errors'], $this->issues($snapshot['ad_strength']['errors'] ?? []));
             } else {
                 $snapshot['ad_strength']['skipped'] = $reason ?? 'missing_google_campaign';
@@ -222,11 +228,11 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             && ($snapshot['audience_observation']['ready'] ?? false)
             && (($snapshot['ad_strength']['status'] ?? null) === 'not_applicable'
                 || ($snapshot['ad_strength']['checked'] ?? false) && ($snapshot['ad_strength']['verified'] ?? false) && empty($snapshot['ad_strength']['skipped']))
-            && $snapshot['issues'] === [];
+            && $snapshot['issues'] === [] && $snapshot['pending'] === [];
         $snapshot['status'] = $snapshot['errors'] !== [] || ($snapshot['conversion_goals']['status'] ?? 'unknown') === 'unknown'
             || ($snapshot['audience_observation']['status'] ?? 'unknown') === 'unknown' ? 'unknown'
             : ($snapshot['issues'] !== [] || ($snapshot['conversion_goals']['status'] ?? null) === 'needs_review'
-                || ($snapshot['audience_observation']['status'] ?? null) === 'needs_review' ? 'needs_review' : ($snapshot['ready'] ? 'ready' : 'skipped'));
+                || ($snapshot['audience_observation']['status'] ?? null) === 'needs_review' ? 'needs_review' : ($snapshot['pending'] !== [] ? 'pending' : ($snapshot['ready'] ? 'ready' : 'skipped')));
 
         $audienceRepairedWithUnverifiedConfiguration = ! empty($snapshot['audience_observation']['actions'])
             && ($strategy->execution_result['metadata']['configuration_verification']['passed'] ?? null) === false;
@@ -264,7 +270,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             if (($snapshot[$component]['status'] ?? null) === 'not_applicable') {
                 continue;
             }
-            $notObserved = $component === 'ad_strength' ? ! ($snapshot[$component]['checked'] ?? false)
+            $notObserved = $component === 'ad_strength' ? ! ($snapshot[$component]['checked'] ?? false) || ! empty($snapshot[$component]['skipped'])
                 : ($snapshot[$component]['status'] ?? 'unknown') === 'unknown';
             if (! $notObserved || empty($previous[$component])) {
                 continue;
@@ -274,7 +280,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             $snapshot[$component]['last_known'] = $last;
             $snapshot[$component]['last_known_checked_at'] = $previous[$component]['last_known_checked_at'] ?? $previous['checked_at'] ?? null;
             $issues = $component !== 'ad_strength' ? $this->issues($last['issues'] ?? [])
-                : array_merge($this->issues($last['errors'] ?? []), $this->unresolved($last['unresolved'] ?? []));
+                : array_merge($this->issues($last['errors'] ?? []), $this->strengthIssues($last));
             $snapshot['issues'] = array_merge($snapshot['issues'], $issues);
             $previousUnknown = $previousUnknown || (! empty($issues) && (($last['status'] ?? null) === 'unknown' || ! empty($last['errors'])));
         }
@@ -333,6 +339,9 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             && ! $customer->adSpendCredit()->first()?->canRunCampaigns()) {
             return 'ad_spend_unfunded';
         }
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return $campaign->spend_safety_hold ? 'spend_safety_hold' : 'approved_bounded_trial';
+        }
 
         return null;
     }
@@ -362,7 +371,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
                 || ! empty($snapshot['conversion_goals']['actions']) || ! empty($snapshot['audience_observation']['actions']) || ! empty($snapshot['ad_strength']['actions'])) {
                 AgentActivity::record('google_readiness', 'google_readiness_checked',
                     $snapshot['ready'] ? 'Google readiness checks are verified for this campaign type.' : 'Google readiness '.$snapshot['status'].($snapshot['skip_reason'] ? ': '.str_replace('_', ' ', $snapshot['skip_reason']) : '.'),
-                    $locked->campaign->customer_id, $locked->campaign_id, ['strategy_id' => $locked->id, 'readiness' => $snapshot], $snapshot['ready'] ? 'completed' : ($snapshot['status'] === 'skipped' ? 'skipped' : 'needs_review'));
+                    $locked->campaign->customer_id, $locked->campaign_id, ['strategy_id' => $locked->id, 'readiness' => $snapshot], $snapshot['ready'] ? 'completed' : (in_array($snapshot['status'], ['skipped', 'pending'], true) ? $snapshot['status'] : 'needs_review'));
             }
         });
     }
@@ -374,8 +383,23 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             ->where('details->fingerprint', $fingerprint)->where('created_at', '>=', now()->subDay())->exists()) {
             return;
         }
+        $affected = [];
+        foreach (['conversion_goals' => 'Conversion goals', 'audience_observation' => 'Search audience mode', 'ad_strength' => 'Ad strength'] as $component => $label) {
+            $componentIssues = $component === 'ad_strength'
+                ? array_merge($this->issues($snapshot[$component]['errors'] ?? []), $this->strengthIssues($snapshot[$component]))
+                : $snapshot[$component]['issues'] ?? [];
+            if ($componentIssues === [] && isset($snapshot[$component]['last_known'])) {
+                $last = $snapshot[$component]['last_known'];
+                $componentIssues = $component === 'ad_strength'
+                    ? array_merge($this->issues($last['errors'] ?? []), $this->strengthIssues($last)) : $last['issues'] ?? [];
+            }
+            if ($componentIssues !== []) {
+                $affected[] = $label;
+            }
+        }
+        $subject = $affected === [] ? 'Deployment verification' : implode(', ', $affected);
         CriticalAgentAlert::deliver('google_campaign_readiness', 'Google campaign readiness needs attention',
-            'Conversion goals, Search audience mode or ad strength could not be verified for "'.$campaign->name.'". Review the reported issues; campaign pause and budget settings have been preserved.',
+            'Review '.$subject.' for "'.$campaign->name.'". See the reported issues. This readiness check has not changed campaign pause or budget settings.',
             ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id, 'strategy_id' => $strategy->id, 'issues' => $snapshot['issues'], 'action_url' => route('admin.campaigns.show', $campaign), 'dedupe_key' => $fingerprint],
             CriticalAgentAlert::RECIPIENTS_ADMINS, $campaign->customer);
         AgentActivity::record('google_readiness', 'google_readiness_alerted', 'Unresolved Google readiness issues escalated for review.',
@@ -393,11 +417,69 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
     {
         return array_map(function ($issue) {
             if (is_array($issue) && isset($issue['reason'])) {
+                if ($issue['reason'] === 'google_evaluation_delayed') {
+                    return (new AgentIssue('ad_strength_google_evaluation_delayed', 'Google review or ad-strength evaluation is still pending after 72 hours of observation. Check the ad status in Google Ads; no approval or strength result has been assumed.'))->toArray();
+                }
+
                 return (new AgentIssue('ad_strength_'.$issue['reason'], 'Google ad strength needs review: '.str_replace('_', ' ', $issue['reason']).'.'))->toArray();
             }
 
             return AgentIssue::from($issue)->toArray();
         }, $issues);
+    }
+
+    /** Waiting needs fresh provider evidence; unknown statuses and exhausted repairs remain actionable. */
+    private function classifyStrength(array $strength, array $previous): array
+    {
+        $strength['pending'] = [];
+        if (! ($strength['checked'] ?? false) || ! empty($strength['skipped'])) {
+            return $strength;
+        }
+        $previous = $previous['last_known'] ?? $previous;
+        $oldRows = $previous['unresolved'] ?? [];
+        $starts = $ends = [];
+        foreach ($strength['unresolved'] ?? [] as $key => $row) {
+            if (! is_array($row) || ! in_array($row['reason'] ?? '', ['review_pending', 'strength_pending', 'verification_pending'], true)
+                || empty($row['ad_resource']) || empty($row['copy_fingerprint'])
+                || isset($row['verification_status']) && $row['verification_status'] !== 'pending') {
+                continue;
+            }
+            $old = collect($oldRows)->first(fn ($candidate) => is_array($candidate)
+                && ($candidate['ad_resource'] ?? null) === $row['ad_resource']
+                && ($candidate['copy_fingerprint'] ?? null) === $row['copy_fingerprint']);
+            try {
+                $since = isset($old['pending_since']) ? Carbon::parse($old['pending_since']) : now();
+            } catch (\Throwable) {
+                $since = now();
+            }
+            $since = $since->min(now());
+            $expires = $since->copy()->addHours(self::GOOGLE_EVALUATION_WAIT_HOURS);
+            $row['pending_since'] = $since->toIso8601String();
+            $row['expires_at'] = $expires->toIso8601String();
+            $row['waiting'] = $expires->isFuture();
+            if ($row['waiting']) {
+                $message = $row['reason'] === 'strength_pending'
+                    ? 'Google has approved the ad; its ad-strength rating is still being evaluated. A pending strength rating does not itself block serving.'
+                    : 'Google review or post-update verification is pending. The agent will check again; readiness has not been assumed.';
+                $strength['pending'][] = (new AgentIssue('ad_strength_'.$row['reason'], $message))->toArray();
+                $starts[] = $row['pending_since'];
+                $ends[] = $row['expires_at'];
+            } else {
+                $row['reason'] = 'google_evaluation_delayed';
+            }
+            $strength['unresolved'][$key] = $row;
+        }
+        if ($starts !== []) {
+            $strength['pending_since'] = min($starts);
+            $strength['expires_at'] = min($ends);
+        }
+
+        return $strength;
+    }
+
+    private function strengthIssues(array $strength): array
+    {
+        return $this->unresolved(array_values(array_filter($strength['unresolved'] ?? [], fn ($issue) => ! is_array($issue) || empty($issue['waiting']))));
     }
 
     public function failed(\Throwable $exception): void
