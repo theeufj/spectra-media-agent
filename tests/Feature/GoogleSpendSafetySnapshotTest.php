@@ -39,7 +39,9 @@ class GoogleSpendSafetySnapshotTest extends TestCase
         $this->assertSame('2026-09-09', $snapshot['window_start']);
         $this->assertCount(8, $reader->queries);
         $this->assertStringNotContainsString('segments.date', $reader->queries[1]);
-        $this->assertStringContainsString("segments.date <= '2026-10-07'", $reader->queries[2]);
+        $this->assertSame('2026-09-01', $snapshot['campaign_start_date']);
+        $this->assertSame(194_450_123, $snapshot['matured_cost_micros']);
+        $this->assertStringContainsString("segments.date BETWEEN '2026-09-01' AND '2026-10-07'", $reader->queries[2]);
         $this->assertStringContainsString("BETWEEN '2026-09-09' AND '2026-10-09'", $reader->queries[4]);
         $this->assertStringNotContainsString('ad_group', implode(' ', array_slice($reader->queries, 0, 5)));
         $this->assertSame([], $snapshot['amplifying_bid_modifiers']);
@@ -68,6 +70,22 @@ class GoogleSpendSafetySnapshotTest extends TestCase
         $this->assertStringContainsString("campaign.resource_name = 'customers/1234567890/campaigns/999'", $reader->queries[7]);
         $this->assertStringContainsString("ad_group_criterion.status = 'ENABLED'", $reader->queries[7]);
     }
+
+    public function test_a_future_campaign_start_has_no_mature_spend_and_does_not_issue_an_invalid_date_range(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-10 00:30:00', 'UTC'));
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'google_ads_campaign_id' => '999']);
+        $reader = new FakeCampaignSpendSafetyReader($customer);
+        $reader->campaignStartDate = '2026-10-15';
+        $snapshot = $reader->forCampaign($campaign);
+        $this->assertSame(0, $snapshot['matured_cost_micros']);
+        $this->assertSame(0, $snapshot['window_matured_cost_micros']);
+        $this->assertSame(0.0, $snapshot['window_conversions']);
+        $this->assertSame('2026-10-15', $snapshot['campaign_start_date']);
+        $this->assertCount(5, $reader->queries);
+        $this->assertStringNotContainsString('segments.date', implode(' ', $reader->queries));
+    }
 }
 
 class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
@@ -80,6 +98,8 @@ class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
 
     public float $criterionBidBoost = 0.0;
 
+    public string $campaignStartDate = '2026-09-01';
+
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
@@ -89,11 +109,21 @@ class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
 
     protected function searchQuery(string $customerId, string $query): PagedListResponse
     {
+        // Match Google's finite-range rule, rather than blindly accepting an
+        // invalid query and asserting that the implementation reproduced it.
+        if (str_contains($query, 'segments.date')
+            && ! preg_match("/segments\\.date BETWEEN '(\\d{4}-\\d{2}-\\d{2})' AND '(\\d{4}-\\d{2}-\\d{2})'/", $query, $bounds)) {
+            throw new \RuntimeException('Google requires finite date bounds.');
+        }
+        if (isset($bounds) && $bounds[1] > $bounds[2]) {
+            throw new \RuntimeException('Google cannot report an inverted date range.');
+        }
         $this->queries[] = $query;
         if (str_contains($query, 'customer.time_zone')) {
             $rows = [new GoogleAdsRow([
                 'customer' => new GoogleCustomer(['time_zone' => 'America/Los_Angeles', 'currency_code' => 'AUD']),
                 'campaign' => new GoogleCampaign([
+                    'start_date' => $this->campaignStartDate,
                     'status' => CampaignStatus::ENABLED, 'advertising_channel_type' => AdvertisingChannelType::SEARCH,
                     'bidding_strategy_type' => BiddingStrategyType::TARGET_SPEND,
                     'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),

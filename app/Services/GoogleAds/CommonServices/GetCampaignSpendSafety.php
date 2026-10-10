@@ -19,7 +19,7 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($resource !== "customers/{$customerId}/campaigns/{$campaign->googleCampaignNumericId()}") {
             throw new \RuntimeException('Spend safety campaign resource does not match its customer account.');
         }
-        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
+        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.start_date, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
             .'campaign_budget.amount_micros FROM campaign '
             ."WHERE campaign.resource_name = '{$resource}'";
         $snapshot = null;
@@ -29,6 +29,7 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
                 'campaign_type' => $row->getCampaign()->getAdvertisingChannelType(),
                 'account_timezone' => $row->getCustomer()->getTimeZone(),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
+                'campaign_start_date' => $row->getCampaign()->getStartDate(),
                 'bidding_strategy' => $row->getCampaign()->getBiddingStrategyType(),
                 'cpc_bid_ceiling_micros' => (int) ($row->getCampaign()->getTargetSpend()?->getCpcBidCeilingMicros() ?? 0),
                 'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros(),
@@ -37,6 +38,11 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($snapshot === null) {
             throw new \RuntimeException('Google did not return the campaign spend safety snapshot.');
         }
+        if (! preg_match('/^(\d{4})-?(\d{2})-?(\d{2})$/', $snapshot['campaign_start_date'], $date)
+            || ! checkdate((int) $date[2], (int) $date[3], (int) $date[1])) {
+            throw new \RuntimeException('Google did not return a valid campaign start date for spend safety.');
+        }
+        $snapshot['campaign_start_date'] = "{$date[1]}-{$date[2]}-{$date[3]}";
         $lifetime = $this->metrics($customerId, $resource);
         $snapshot['cost_micros'] = $lifetime['cost_micros'];
         $snapshot['conversions'] = $lifetime['conversions'];
@@ -50,9 +56,10 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         // Lifetime matured cost supports a trial baseline taken mid-day. A
         // lifetime baseline including recent cost is conservative until those
         // clicks mature; it cannot accidentally count pre-trial spend twice.
-        $snapshot['matured_cost_micros'] = $this->metrics($customerId, $resource, "segments.date <= '{$end}'")['cost_micros'];
-        $matured = $this->metrics($customerId, $resource, "segments.date BETWEEN '{$start}' AND '{$end}'");
-        $recent = $this->metrics($customerId, $resource, "segments.date BETWEEN '{$start}' AND '{$today->toDateString()}'");
+        $snapshot['matured_cost_micros'] = $this->metricsBetween($customerId, $resource, $snapshot['campaign_start_date'], $end)['cost_micros'];
+        $windowStart = max($start, $snapshot['campaign_start_date']);
+        $matured = $this->metricsBetween($customerId, $resource, $windowStart, $end);
+        $recent = $this->metricsBetween($customerId, $resource, $windowStart, $today->toDateString());
         $snapshot['window_matured_cost_micros'] = $matured['cost_micros'];
         $snapshot['window_conversions'] = $recent['conversions'];
         $snapshot['window_start'] = $start;
@@ -93,5 +100,13 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         }
 
         return $metrics;
+    }
+
+    private function metricsBetween(string $customerId, string $resource, string $start, string $end): array
+    {
+        // Google requires finite date bounds. A not-yet-started campaign has
+        // no mature clicks; do not issue an inverted range to the API.
+        return $start > $end ? ['cost_micros' => 0, 'conversions' => 0.0]
+            : $this->metrics($customerId, $resource, "segments.date BETWEEN '{$start}' AND '{$end}'");
     }
 }
