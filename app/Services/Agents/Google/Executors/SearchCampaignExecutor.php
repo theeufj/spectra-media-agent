@@ -150,6 +150,13 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // 3.5 Add Audience Targeting
         $this->audiences->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
 
+        // Stage the effective bidding settings before forecasting, while there
+        // are no serving RSAs. A suggested market bid is not the approved bid.
+        $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
+        if (! $this->keywords->preflightReach($campaign, $strategy, $customerId, $campaignResourceName, $result)) {
+            return;
+        }
+
         // 4. Save images to the account library. Search image links are read-only
         // through the API; attaching them requires the Google Ads UI.
         // https://developers.google.com/google-ads/api/docs/assets/overview
@@ -241,11 +248,6 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         // 6. Add Ad Extensions (Sitelinks, Callouts)
         $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-
-        // 7. Apply bidding strategy from strategy record, with a safety guard:
-        // Target CPA requires 30+/month, Target ROAS requires 50+/month — fall back to
-        // MaximizeConversions on accounts below those thresholds.
-        $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
 
         $resources = $result->metadata['platform_resources'] ?? [];
         $extensionTypes = ['sitelink_asset', 'callout_asset', 'structured_snippet_asset', 'call_asset', 'price_asset', 'promotion_asset'];

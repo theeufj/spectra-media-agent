@@ -116,6 +116,7 @@ class Campaign extends Model
         'policy_checks',
         'spend_guardrails',
         'spend_safety_hold',
+        'search_delivery_state',
     ];
 
     /**
@@ -149,6 +150,7 @@ class Campaign extends Model
         'policy_checks' => 'array',
         'spend_guardrails' => 'array',
         'spend_safety_hold' => 'array',
+        'search_delivery_state' => 'array',
     ];
 
     /**

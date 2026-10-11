@@ -8,6 +8,7 @@ import SideNav from './SideNav';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import PolicyStatusCard from '@/Components/PolicyStatusCard';
 import GoogleReadinessCard from '@/Components/GoogleReadinessCard';
+import SearchDeliveryCard from '@/Components/SearchDeliveryCard';
 
 // Performance Stats Component
 const PerformanceStats = ({ stats, loading, currency }) => {
@@ -137,6 +138,7 @@ export default function CampaignDetail({ auth }) {
                 <div className="min-w-0 flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
                         <PolicyStatusCard campaign={campaign} policyStatus={policyStatus} admin />
+                        <SearchDeliveryCard campaign={campaign} />
                         {/* Back Button */}
                         <div>
                             <Link

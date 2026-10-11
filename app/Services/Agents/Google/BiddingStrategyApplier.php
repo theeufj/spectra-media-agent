@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionResult;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -23,7 +24,7 @@ class BiddingStrategyApplier
         ExecutionResult $result
     ): void {
         $biddingData = $strategy->bidding_strategy ?? [];
-        $strategyName = strtoupper($biddingData['name'] ?? '');
+        $strategyName = strtoupper(preg_replace('/(?<=[a-z])(?=[A-Z])/', '_', $biddingData['name'] ?? '') ?? '');
 
         if (empty($strategyName) || $strategyName === 'MANUAL_CPC') {
             return;
@@ -74,14 +75,22 @@ class BiddingStrategyApplier
             : null;
         $targetRoas = $biddingData['parameters']['targetRoas'] ?? null;
 
-        $updateService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy($this->customer);
-        $success = $updateService($customerId, $campaignResourceName, $mappedStrategy, $targetCpa, $targetRoas);
+        $ceiling = $biddingData['parameters']['cpcBidCeilingMicros'] ?? $biddingData['cpc_bid_ceiling_micros'] ?? null;
+        $ceiling = is_numeric($ceiling) && (int) $ceiling > 0 ? (int) $ceiling : null;
+
+        $updateService = $this->updater();
+        $success = $updateService($customerId, $campaignResourceName, $mappedStrategy, $targetCpa, $targetRoas, $ceiling);
 
         if ($success) {
             Log::info("GoogleAdsExecutionAgent: Applied bidding strategy {$mappedStrategy} to campaign {$campaignResourceName}");
         } else {
             $result->addWarning('bidding_strategy_not_applied', "Could not apply {$mappedStrategy} bidding strategy — campaign will run on Manual CPC until next optimisation cycle.");
         }
+    }
+
+    protected function updater(): UpdateCampaignBiddingStrategy
+    {
+        return new UpdateCampaignBiddingStrategy($this->customer);
     }
 
     /**

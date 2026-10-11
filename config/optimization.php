@@ -64,6 +64,20 @@ return [
         'overshoot_alert_micros' => 1_000_000,
     ],
 
+    'search_delivery' => [
+        'reporting_lag_hours' => 3,
+        'measurement_window_hours' => 48,
+        'diagnosis_after_hours' => 12,
+        'min_impressions' => 5,
+        'min_forecast_clicks' => 30,
+        'research_cooldown_hours' => 24,
+        'verify_hours' => 24,
+        'max_keywords_per_repair' => 3,
+        'max_candidates_to_forecast' => 6,
+        'max_attempts_per_week' => 1,
+        'stale_after_hours' => 3,
+    ],
+
     'search_terms' => [
         'min_impressions' => 300,
         'min_clicks' => 5,

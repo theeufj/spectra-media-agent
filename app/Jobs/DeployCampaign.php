@@ -482,6 +482,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         if ($successCount > 0) {
             VerifyDeployment::dispatch($this->campaign)->delay(now()->addSeconds(60));
             CheckGoogleCampaignReadiness::dispatch($this->campaign->id)->delay(now()->addMinutes(5));
+            CheckGoogleSearchDelivery::dispatch($this->campaign->id)->delay(now()->addMinutes(10));
         }
     }
 

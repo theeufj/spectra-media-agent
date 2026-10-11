@@ -8,6 +8,7 @@ import ConfirmationModal from '@/Components/ConfirmationModal';
 import FormErrorSummary from '@/Components/FormErrorSummary';
 import PolicyStatusCard from '@/Components/PolicyStatusCard';
 import CampaignSpendSafetyCard from '@/Components/CampaignSpendSafetyCard';
+import SearchDeliveryCard from '@/Components/SearchDeliveryCard';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import ForecastPanel from '@/Components/ForecastPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
@@ -561,6 +562,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={1} /></div>}
             {(campaigns.google_ads_campaign_id || campaigns.facebook_ads_campaign_id || policyStatus) && <div className="mx-auto max-w-7xl px-4 py-6"><PolicyStatusCard campaign={campaigns} policyStatus={campaigns.policy_checks ?? policyStatus} /></div>}
             {(campaigns.spend_guardrails || campaigns.spend_safety_hold) && <div className="mx-auto max-w-7xl px-4 pb-6"><CampaignSpendSafetyCard campaign={campaigns} /></div>}
+            {campaigns.search_delivery_state && <div className="mx-auto max-w-7xl px-4 pb-6"><SearchDeliveryCard campaign={campaigns} /></div>}
 
             {/* Leads the page for campaigns we generated: it is the one thing
                 standing between the customer and deploying, and without it they

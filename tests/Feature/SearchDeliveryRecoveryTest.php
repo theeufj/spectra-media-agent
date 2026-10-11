@@ -200,7 +200,7 @@ class SearchDeliveryRecoveryTest extends TestCase
         {
             public function __construct(private array $snapshot) {}
 
-            public function inspect(Campaign $campaign): array
+            public function inspect(Campaign $campaign, ?\DateTimeInterface $since = null): array
             {
                 return $this->snapshot;
             }

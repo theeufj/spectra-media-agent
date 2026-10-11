@@ -2,11 +2,13 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\CampaignStatus;
 use App\Features\AutoHealing;
 use App\Jobs\VerifySearchDeliveryRecovery;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Cache;
@@ -31,6 +33,11 @@ class GoogleSearchDeliveryRecovery
 
     private function bootstrapLocked(Campaign $campaign, array $snapshot): array
     {
+        $campaign = $campaign->fresh(['customer']) ?? $campaign;
+        if ($campaign->status !== CampaignStatus::Active || $campaign->hasPassedEndDate()
+            || CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return ['started' => false, 'reason' => 'campaign is paused, held, or in an approved bounded trial'];
+        }
         $customer = $campaign->customer;
         if (! $customer || $customer->service_type === 'setup_only'
             || $customer->google_ads_link_status === 'revoked'

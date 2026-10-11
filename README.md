@@ -6,6 +6,16 @@
 
 Spectra is an AI-powered advertising agency platform. Clients create campaigns, and the system autonomously deploys ads across Google and Facebook, monitors performance, optimises spend, heals broken ads, mines keywords, runs A/B tests, and handles billing — all without human intervention after initial setup.
 
+### Google Search delivery checks
+
+Search deployment checks historical demand and a forecast against the staged campaign's actual match types, budget, CPC ceiling and targeting before adding ads. A faithful zero-traffic forecast blocks launch for review; unavailable or incomplete forecasts remain explicitly unknown. Historical top-of-page bids are estimates, not minimum bids.
+
+`DispatchGoogleSearchDeliveryChecks` queues an independent check for each deployed Search campaign every hour. `GoogleSearchReachRecovery` excludes the partial restart hour and three hours of reporting lag, measures at most the latest 48 complete hours, and resets its evidence after a material configuration change. It researches low reach after 12 complete reporting hours, even during a controlled test or spending hold. Research does not require an arbitrary minimum keyword count or prior conversions.
+
+Only managed campaigns with AutoHealing, a confirmed budget, a verified positive live CPC ceiling and faithful improved forecasts can receive an automatic keyword repair. It adds at most three relevant, negative-safe exact/phrase keywords, once per seven days. It never increases bids or budgets, widens locations, changes goals, uses broad match, or restarts paused campaigns. Controlled trials require owner review. Failed or partial writes retain a durable attempt and an unresolved state.
+
+Google must confirm the additions and report subsequent Search impressions before a repair is marked recovered. No traffic after 24 complete reporting hours escalates for review. Campaign pages show the measured period, actual results, separate forecasts and proposals; stale or unavailable checks cannot remain healthy. Defaults live in `optimization.search_delivery`.
+
 ```mermaid
 flowchart TB
     subgraph Client["👤 Client Actions"]

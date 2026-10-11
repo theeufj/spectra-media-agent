@@ -7,6 +7,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
@@ -44,13 +45,20 @@ class VerifySearchDeliveryRecovery implements ShouldQueue
             if ($campaign->status !== CampaignStatus::Active || ! $campaign->customer?->google_ads_customer_id) {
                 return;
             }
+            if (CampaignSpendGuardrails::automaticChangesSuspended($campaign) || $campaign->hasPassedEndDate()) {
+                return; // A delayed legacy job cannot undo a newer approved trial or spending hold.
+            }
 
-            $snapshot = $this->inspector($campaign->customer)->inspect($campaign);
+            $startedAt = AgentActivity::where('campaign_id', $campaign->id)
+                ->where('action', 'search_recovery_started')->latest('id')->value('created_at');
+            $snapshot = $this->inspector($campaign->customer)->inspect($campaign,
+                $startedAt ? \Carbon\CarbonImmutable::parse($startedAt) : null);
             if (! $snapshot || $snapshot['bidding_strategy'] !== BiddingStrategyType::TARGET_SPEND) {
                 return; // An operator changed the strategy; never overwrite that decision.
             }
 
-            if ($this->phase === 'initial' && ($snapshot['impressions']['google_search'] ?? 0) > 0) {
+            $impressions = $snapshot['measurement']['impressions'] ?? ($snapshot['impressions']['google_search'] ?? 0);
+            if ($this->phase === 'initial' && $impressions > 0) {
                 AgentActivity::record('self_healing', 'search_recovery_verified',
                     'Google Search impressions resumed for "'.$campaign->name.'"',
                     $campaign->customer_id, $campaign->id,
