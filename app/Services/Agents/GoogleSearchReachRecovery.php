@@ -83,7 +83,10 @@ class GoogleSearchReachRecovery
             }
             $state = [...$state, 'evaluation_started_at' => $started->toIso8601String(),
                 'measurement_started_at' => $started->toIso8601String(), 'config_fingerprint' => $fingerprint,
-                'measurement' => $measurement, 'currency_code' => $snapshot['currency_code'] ?? null];
+                'measurement' => $measurement, 'currency_code' => $snapshot['currency_code'] ?? null,
+                'verified_limits' => ['checked_at' => $state['checked_at'],
+                    'daily_budget_micros' => $snapshot['daily_budget_micros'] ?? null,
+                    'cpc_bid_ceiling_micros' => $snapshot['actual_cpc_ceiling_micros'] ?? null]];
             if (! empty($state['repair']['started_at']) && ! $campaign->spend_safety_hold) {
                 return $this->verify($campaign, $snapshot, $state);
             }
@@ -146,11 +149,7 @@ class GoogleSearchReachRecovery
             $blocked = $this->mutationBlocked($campaign, $snapshot, $diagnosis, $state);
             if ($blocked !== null) {
                 $state['diagnosis']['proposal']['blocked_reason'] = $blocked;
-                $explanation = match ($blocked) {
-                    'search_inventory_unavailable' => 'Google Search is disabled for this campaign. Keyword additions cannot restore traffic until its network settings are reviewed.',
-                    'approved_search_ad_required' => 'No enabled, approved Search ad is available. Review ad approval before adding keywords.',
-                    default => str_replace('_', ' ', $blocked),
-                };
+                $explanation = GoogleSearchDeliveryAlertContent::holdReason($blocked);
                 $state['diagnosis']['proposal']['blocked_by'] = array_values(array_unique([
                     ...($state['diagnosis']['proposal']['blocked_by'] ?? []), $explanation]));
 
@@ -475,13 +474,13 @@ class GoogleSearchReachRecovery
         $key = hash('sha256', ($state['config_fingerprint'] ?? 'unknown').'|'.($state['evaluation_started_at'] ?? '').'|'.($state['blocked_reason'] ?? $state['status']));
         if (($state['alert_key'] ?? null) !== $key || empty($state['last_alert_at'])
             || CarbonImmutable::parse($state['last_alert_at'])->lte(now()->subHours(24))) {
-            $summary = $state['diagnosis']['proposal']['summary'] ?? 'Review keyword demand, the approved CPC cap and campaign targeting.';
-            $message = 'Search delivery needs review. '.$summary.' Automatic changes are held: '.str_replace('_', ' ', $state['blocked_reason'] ?? 'owner review required').'.';
+            $content = GoogleSearchDeliveryAlertContent::forState($state);
+            $message = $content['message'];
             try {
                 CriticalAgentAlert::deliver('search_reach_watchdog', 'Search delivery needs review: '.$campaign->name,
                     $message, ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id,
                         'campaign_name' => $campaign->name, 'severity' => 'warning', 'dedupe_key' => $key,
-                        'action_required' => $summary, 'action_url' => route('campaigns.show', $campaign)],
+                        ...$content, 'action_url' => route('campaigns.show', $campaign)],
                     CriticalAgentAlert::RECIPIENTS_BOTH, $campaign->customer);
                 AgentActivity::record('search_delivery', 'reach_needs_review', $message,
                     $campaign->customer_id, $campaign->id, ['blocked_reason' => $state['blocked_reason'] ?? null,

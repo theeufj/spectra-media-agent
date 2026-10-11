@@ -97,6 +97,20 @@ describe('SearchDeliveryCard', () => {
         expect(screen.queryByRole('button')).toBeNull();
     });
 
+    it.each(['approved_bounded_trial', 'approved bounded trial'])('translates and deduplicates saved hold reasons (%s) without repeating the footer', blockedReason => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, blocked_reason: blockedReason,
+            diagnosis: { ...state.diagnosis, proposal: { ...state.diagnosis.proposal,
+                blocked_by: ['approved bounded trial', 'approved_bounded_trial',
+                    'No researched addition improves reach.', 'No researched addition improves reach.'] } } } }} />);
+        const card = screen.getByRole('region', { name: 'Google Search delivery diagnosis' });
+        expect(within(card).getAllByText(/Automatic changes are on hold to preserve the approved test/)).toHaveLength(1);
+        expect(within(card).getAllByText('No researched addition improves reach.')).toHaveLength(1);
+        expect(card).not.toHaveTextContent('approved bounded trial');
+        expect(card).not.toHaveTextContent('approved_bounded_trial');
+        expect(within(card).getByText('Changes need your approval')).toBeVisible();
+        expect(within(card).queryByRole('button')).toBeNull();
+    });
+
     it('keeps applied changes unverified without positive post-repair impressions', () => {
         render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'recovered',
             measurement: { ...state.measurement, impressions: 400 }, verification: { complete_hours: 4, impressions: 0 } } }} />);

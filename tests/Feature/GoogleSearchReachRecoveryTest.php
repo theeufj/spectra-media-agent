@@ -11,6 +11,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Models\User;
+use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\GoogleSearchReachPlanner;
 use App\Services\Agents\GoogleSearchReachRecovery;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -110,6 +111,19 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertEquals(10, $campaign->fresh()->daily_budget);
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'reach_needs_review')->count());
         $this->assertSame(0, $state['measurement']['impressions']);
+        $user = $campaign->customer->users()->firstOrFail();
+        $alert = Notification::sent($user, CriticalAgentAlert::class)->sole();
+        $mail = $alert->toMail($user);
+        $body = implode(' ', [...$mail->introLines, ...$mail->outroLines]);
+        $this->assertStringContainsString('0 impressions and 0 clicks across 16 complete reporting hours', $body);
+        $this->assertStringContainsString('AUD 10.00/day', $body);
+        $this->assertStringContainsString('Maximum cost-per-click bid at this check: AUD 3.00', $body);
+        $this->assertStringContainsString('Keyword research and delivery checks continue', $body);
+        $this->assertStringContainsString('Ask your administrator', $body);
+        $this->assertStringNotContainsString('approved bounded trial', $body);
+        $this->assertStringNotContainsString('Add forecasted relevant terms', $body);
+        $this->assertSame('Review delivery report', $mail->actionText);
+        $this->assertSame(route('campaigns.show', $campaign), $mail->actionUrl);
         Http::assertNothingSent();
     }
 

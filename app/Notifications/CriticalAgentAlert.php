@@ -138,6 +138,10 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
             $mail->line("Campaign: {$this->details['campaign_name']}");
         }
 
+        foreach ($this->details['evidence_lines'] ?? [] as $line) {
+            $mail->line($line);
+        }
+
         if (! empty($this->details['issues'])) {
             $mail->line('Reported issues:');
             foreach ($this->details['issues'] as $issue) {
@@ -157,7 +161,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         }
 
         if (! empty($this->details['action_url'])) {
-            $mail->action('View Campaign', $this->details['action_url']);
+            $mail->action($this->details['action_label'] ?? 'View Campaign', $this->details['action_url']);
         } elseif (! empty($this->details['campaign_id'])) {
             $mail->action('View Campaign', route('campaigns.show', $this->details['campaign_id']));
         }

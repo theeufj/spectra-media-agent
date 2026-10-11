@@ -34,6 +34,15 @@ const holdReasons = {
     partial_repair_unresolved: 'Some repair changes could not be confirmed. Review those changes before another repair is attempted.',
 };
 
+function holdReason(reason) {
+    if (typeof reason !== 'string') return null;
+    return holdReasons[reason.trim().toLowerCase().replace(/[ _]+/g, '_')] || null;
+}
+
+function reviewReason(reason) {
+    return holdReason(reason) || reason;
+}
+
 function observedNumber(value) {
     if (value == null || value === '' || typeof value === 'boolean') return null;
     const result = Number(value);
@@ -129,7 +138,10 @@ export default function SearchDeliveryCard({ campaign }) {
     const keywords = proposal.candidate_keywords || diagnosis.candidate_keywords || [];
     const issues = Array.isArray(diagnosis.issues) ? diagnosis.issues.filter(issue => typeof issue?.message === 'string') : [];
     const blocked = state.blocked_reason || (typeof proposal.blocked_reason === 'string' ? proposal.blocked_reason : null);
-    const blockedBy = Array.isArray(proposal.blocked_by) ? proposal.blocked_by.filter(reason => typeof reason === 'string') : [];
+    const holdText = blocked || state.mutation_allowed === false && ['approval_required', 'needs_review', 'low_reach'].includes(status)
+        ? holdReason(blocked) || 'Automatic changes are on hold. Review the diagnosis and proposed next steps before making changes.' : null;
+    const blockedBy = Array.isArray(proposal.blocked_by)
+        ? [...new Set(proposal.blocked_by.filter(reason => typeof reason === 'string').map(reviewReason))].filter(reason => reason !== holdText) : [];
     const actions = Array.isArray(proposal.suggested_actions) ? proposal.suggested_actions.filter(action => typeof action === 'string') : [];
     const isHealthy = ['delivering', 'recovered'].includes(status);
     const needsAttention = ['low_reach', 'approval_required', 'needs_review', 'unavailable'].includes(status);
@@ -182,7 +194,7 @@ export default function SearchDeliveryCard({ campaign }) {
         {blockedBy.length > 0 && <div className="mt-4"><h3 className="text-sm font-semibold text-gray-900">What needs review before changes</h3>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-800">{blockedBy.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
         </div>}
-        {(blocked || state.mutation_allowed === false && ['approval_required', 'needs_review', 'low_reach'].includes(status)) && <p className="mt-4 text-sm text-gray-800">{holdReasons[blocked] || 'Automatic changes are on hold. Review the diagnosis and proposed next steps before making changes.'}</p>}
+        {holdText && <p className="mt-4 text-sm text-gray-800">{holdText}</p>}
         {['verifying', 'recovered'].includes(status) && <div className="mt-4 text-sm text-gray-700">
             <h3 className="font-semibold text-gray-900">After the repair</h3>
             {state.verification && <p className="mt-1">{measuredCount(state.verification.complete_hours)} complete reporting hours · {measuredCount(state.verification.impressions ?? state.verification.measurement?.impressions)} observed impressions.</p>}
