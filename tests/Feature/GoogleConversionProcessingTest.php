@@ -64,6 +64,31 @@ class GoogleConversionProcessingTest extends TestCase
         Queue::assertPushed(CheckGoogleConversionProcessing::class, fn ($job) => $job->eventId === $record->id && $job->delay->timestamp === now()->addMinutes(30)->timestamp);
     }
 
+    public function test_rejected_first_upload_keeps_its_destination_without_claiming_acceptance(): void
+    {
+        Cache::flush();
+        Setting::set('conversion_resource_name.signup_import', 'customers/123/conversionActions/456');
+        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        Http::fake(['datamanager.googleapis.com/*' => function () {
+            $this->assertSame('customers/123/conversionActions/456', SpectraConversionEvent::sole()->google_conversion_resource);
+
+            return Http::response(['error' => ['message' => 'fixture rejected upload']], 400);
+        }]);
+        try {
+            (new RecordSiteGoogleConversion($user, 'signup'))->handle($this->service());
+            $this->fail('A rejected upload must fail the job so that it can retry.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('fixture rejected upload', $exception->getMessage());
+        }
+        $record = SpectraConversionEvent::sole();
+        $this->assertSame('upload_failed', $record->googleDeliveryStatus());
+        $this->assertFalse($record->uploaded_to_google);
+        $this->assertNull($record->google_request_id);
+        $this->assertNull($record->google_accepted_at);
+        Queue::assertNotPushed(CheckGoogleConversionProcessing::class);
+        Http::assertSentCount(1);
+    }
+
     public function test_success_confirms_processing_for_exact_destination_without_new_ingestion(): void
     {
         Cache::flush();

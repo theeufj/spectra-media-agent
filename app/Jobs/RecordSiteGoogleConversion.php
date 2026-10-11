@@ -139,6 +139,11 @@ class RecordSiteGoogleConversion implements ShouldQueue
                 throw new \RuntimeException("Conversion action '{$actionKey}' is not provisioned.");
             }
 
+            // Keep the attempted destination even when the request is rejected.
+            // A destination is not a receipt; uploaded_to_google remains false
+            // until Google accepts the event and returns a processing request ID.
+            $record->update(['google_conversion_resource' => $resourceName]);
+
             $result = $dataManager->ingestConversion(
                 operatingAccountId: $parts[1],
                 conversionActionId: $parts[2],

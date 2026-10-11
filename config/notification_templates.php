@@ -43,10 +43,17 @@ return [
     ],
     'critical_agent_alert.conversion_tracking' => [
         'category' => 'Conversion tracking',
-        'label' => 'Conversion tracking broken / setup failed',
-        'description' => 'Zero conversions in 30 days, or conversion-tracking setup failed. (Shared by the verify + setup jobs.)',
+        'label' => 'Conversion tracking setup failed',
+        'description' => 'Conversion-tracking installation or setup failed.',
         'recipients' => $A,
-        'variables' => ['title' => 'Conversion tracking may be broken: Acme', 'message' => '0 conversions recorded in last 30 days for Acme…', 'customer_id' => '8'],
+        'variables' => ['title' => 'Conversion tracking setup failed: Acme', 'message' => 'Conversion tracking could not be configured for Acme…', 'customer_id' => '8'],
+    ],
+    'critical_agent_alert.conversion_tracking_health' => [
+        'category' => 'Conversion tracking',
+        'label' => 'Campaign conversion configuration or delivery needs review',
+        'description' => 'A deployed campaign’s selected conversion goal has a configuration issue, or real server-side events failed delivery. Zero conversions alone do not trigger this alert.',
+        'recipients' => $A,
+        'variables' => ['title' => 'Campaign conversion tracking needs review', 'message' => 'The selected conversion goal needs review…', 'customer_id' => '8', 'campaign_name' => 'Summer Sale'],
     ],
     'critical_agent_alert.facebook' => [
         'category' => 'Tokens & connections',
