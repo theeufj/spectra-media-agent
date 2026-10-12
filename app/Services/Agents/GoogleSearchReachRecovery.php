@@ -243,7 +243,7 @@ class GoogleSearchReachRecovery
         if (! isset($snapshot['eligible_keywords'])) {
             return 'search_keyword_eligibility_unavailable';
         }
-        if (($diagnosis['auto_repair_safe'] ?? false) !== true || empty($this->safeCandidates($snapshot, $diagnosis))) {
+        if (empty($this->safeCandidates($snapshot, $diagnosis))) {
             return 'forecasted_relevant_keywords_required';
         }
         $attempts = array_filter($state['repair_attempts'] ?? [], fn ($at) => CarbonImmutable::parse($at)->gte(now()->subDays(7)));
@@ -286,7 +286,8 @@ class GoogleSearchReachRecovery
                 || ($candidate['negative_conflict'] ?? true) !== false || ($candidate['forecasted'] ?? false) !== true
                 || ! in_array($candidate['match_type'] ?? null, ['EXACT', 'PHRASE'], true)
                 || ($candidate['forecast']['success'] ?? false) !== true || ($candidate['forecast']['clicks'] ?? 0) <= 0
-                || ! is_string($candidate['text'] ?? null) || trim($candidate['text']) === '') {
+                || ! is_string($candidate['text'] ?? null) || trim($candidate['text']) === ''
+                || ! is_string($candidate['selection_reason'] ?? null) || trim($candidate['selection_reason']) === '') {
                 continue;
             }
             $adGroup = $candidate['ad_group_resource'] ?? null;
@@ -331,6 +332,24 @@ class GoogleSearchReachRecovery
             return $this->alertAndSave($fresh, [...$state, 'status' => 'approval_required', 'blocked_reason' => $blocked, 'mutation_allowed' => false]);
         }
         $candidates = $this->safeCandidates($live, $state['diagnosis']);
+        $proposed = $live;
+        $proposed['keywords'] = [...array_values(array_filter($live['keywords'] ?? [], fn ($keyword) => ($keyword['status'] ?? null) === 'ENABLED'
+            && ($keyword['ad_group_status'] ?? null) === 'ENABLED')),
+            ...array_map(fn ($candidate) => $candidate + ['status' => 'ENABLED', 'ad_group_status' => 'ENABLED']
+                + (($live['bidding_strategy'] ?? null) === BiddingStrategyType::MANUAL_CPC ? ['cpc_bid_micros' => $live['actual_cpc_ceiling_micros']] : []), $candidates)];
+        $proof = $this->mutationReach($fresh, $proposed);
+        $state['repair_reach_gate'] = $proof;
+        if (! ($proof['reach_gate']['ready'] ?? false)) {
+            return $this->alertAndSave($fresh, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'repair_reach_unverified', 'mutation_allowed' => false]);
+        }
+        // Forecasting may take time; new live settings or a newly approved hold invalidate this plan.
+        $live = $this->inspect($fresh, CarbonImmutable::parse($state['evaluation_started_at']));
+        if (! $live || $this->fingerprint($fresh, $live) !== $state['config_fingerprint']) {
+            return $this->alertAndSave($fresh, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'configuration_changed_during_diagnosis']);
+        }
+        if (($blocked = $this->mutationBlocked($fresh, $live, $state['diagnosis'], $state)) !== null) {
+            return $this->alertAndSave($fresh, [...$state, 'status' => 'approval_required', 'blocked_reason' => $blocked, 'mutation_allowed' => false]);
+        }
         $state['repair_attempts'] = array_values(array_filter($state['repair_attempts'] ?? [],
             fn ($at) => CarbonImmutable::parse($at)->gte(now()->subDays(7))));
         $state['repair_attempts'][] = now()->toIso8601String();
@@ -346,8 +365,11 @@ class GoogleSearchReachRecovery
                 if (! $resource) {
                     throw new \RuntimeException('Google did not confirm the keyword creation.');
                 }
+                $metrics = GoogleSearchReachPlanner::historicalMetric($proof['assessment']['historical']['keywords'] ?? [], $candidate['text']);
                 $state['repair']['added_keywords'][] = ['text' => $candidate['text'], 'match_type' => $candidate['match_type'],
-                    'ad_group_resource' => $candidate['ad_group_resource'], 'resource' => $resource];
+                    'ad_group_resource' => $candidate['ad_group_resource'], 'resource' => $resource,
+                    'selection_reason' => $candidate['selection_reason'], 'historical_metrics' => $metrics,
+                    'historical_checked_at' => $proof['assessment']['historical']['checked_at'] ?? null];
                 $this->save($fresh, $state);
             } catch (\Throwable $e) {
                 report($e);
@@ -376,6 +398,11 @@ class GoogleSearchReachRecovery
         if ($this->fingerprint($fresh, $unchanged) !== $state['config_fingerprint']) {
             $state['repair']['errors'][] = ['code' => 'configuration_changed_after_repair',
                 'message' => 'Other live campaign settings changed during keyword creation. Review them before declaring delivery recovered.'];
+        }
+        $state['repair']['readback_reach'] = $this->mutationReach($fresh, $after);
+        if (! ($state['repair']['readback_reach']['reach_gate']['ready'] ?? false)) {
+            $state['repair']['errors'][] = ['code' => 'repair_reach_readback_unverified',
+                'message' => 'The actual repaired keyword portfolio did not pass a fresh demand and affordable reach check. Review it before another automatic repair.'];
         }
         $state['config_fingerprint'] = $this->fingerprint($fresh, $after);
         $state['mutation_allowed'] = false;
@@ -512,6 +539,15 @@ class GoogleSearchReachRecovery
     protected function inspect(Campaign $campaign, \DateTimeInterface $since): ?array
     {
         return app(InspectSearchDelivery::class, ['customer' => $campaign->customer])->inspect($campaign, $since);
+    }
+
+    private function mutationReach(Campaign $campaign, array $snapshot): array
+    {
+        $keywords = array_values(array_filter($snapshot['keywords'] ?? [], fn ($keyword) => ($keyword['status'] ?? null) === 'ENABLED'
+            && ($keyword['ad_group_status'] ?? null) === 'ENABLED'));
+        $assessment = $this->planner->assessMutation($campaign, $snapshot, $keywords);
+
+        return ['assessment' => $assessment, 'reach_gate' => (new GoogleSearchReachGate)->evaluate($campaign, $snapshot, $assessment)];
     }
 
     protected function addKeyword(Customer $customer, array $candidate, int $cap): ?string

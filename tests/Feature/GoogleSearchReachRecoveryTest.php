@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\GoogleSearchReachPlanner;
 use App\Services\Agents\GoogleSearchReachRecovery;
+use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -51,10 +52,11 @@ class GoogleSearchReachRecoveryTest extends TestCase
     private function snapshot(): array
     {
         return ['status' => 2, 'channel' => 2, 'google_search_enabled' => true,
-            'bidding_strategy' => 2, 'daily_budget_micros' => 10_000_000, 'actual_cpc_ceiling_micros' => 3_000_000,
+            'bidding_strategy' => BiddingStrategyType::TARGET_SPEND, 'cpc_bid_ceiling_micros' => 3_000_000, 'daily_budget_micros' => 10_000_000, 'actual_cpc_ceiling_micros' => 3_000_000,
             'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'approved_ads' => 1, 'eligible_keywords' => 1,
             'geo_target_constants' => ['geoTargetConstants/2036'], 'language_constants' => ['languageConstants/1000'],
-            'negative_keywords' => [], 'ad_schedule' => [],
+            'negative_keywords' => [], 'ad_schedule' => [], 'excluded_geo_target_constants' => [],
+            'device_bid_modifiers' => [], 'unsupported_targeting' => [], 'search_partners_enabled' => false,
             'keywords' => [['text' => 'ppc software', 'match_type' => 'EXACT', 'status' => 'ENABLED',
                 'ad_group_status' => 'ENABLED', 'ad_group_resource' => 'customers/1234567890/adGroups/10',
                 'resource_name' => 'customers/1234567890/adGroupCriteria/10~1']],
@@ -71,6 +73,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         for ($i = 0; $i < $candidates; $i++) {
             $keywords[] = ['text' => 'google ads software '.$i, 'match_type' => $i % 2 ? 'PHRASE' : 'EXACT',
                 'ad_group_resource' => 'customers/1234567890/adGroups/10', 'relevant' => true,
+                'selection_reason' => 'A commercial buyer looking for this campaign’s offered service.',
                 'negative_conflict' => false, 'forecasted' => true, 'forecast' => ['success' => true, 'clicks' => 10,
                     'impressions' => 100, 'cost_micros' => 10_000_000, 'period_days' => 30]];
         }
@@ -164,6 +167,77 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertCount(3, $watchdog->added);
         $this->assertEquals(10, $campaign->fresh()->daily_budget);
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'reach_recovery_verified')->count());
+    }
+
+    public function test_old_safe_proposal_cannot_authorize_a_repair_when_fresh_combined_reach_is_zero(): void
+    {
+        $campaign = $this->makeCampaign();
+        $planner = new FakeSearchReachPlanner(fn () => $this->diagnosis());
+        $planner->mutationEvidence = fn ($evidence) => array_replace_recursive($evidence, ['forecast' => ['clicks' => 0, 'impressions' => 0]]);
+        $watchdog = new FakeSearchReachWatchdog($planner, $this->snapshot());
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertSame('repair_reach_unverified', $state['blocked_reason']);
+        $this->assertSame([], $watchdog->added);
+        $this->assertFalse(isset($state['repair_attempts']));
+        $this->assertContains('search_reach_below_useful_threshold', array_column($state['repair_reach_gate']['reach_gate']['issues'], 'code'));
+    }
+
+    public function test_a_fresh_readback_forecast_failure_preserves_the_partial_repair_for_review(): void
+    {
+        $campaign = $this->makeCampaign();
+        $planner = new FakeSearchReachPlanner(fn () => $this->diagnosis());
+        $planner->mutationEvidence = fn ($evidence, $check) => $check > 1
+            ? array_replace_recursive($evidence, ['forecast' => ['success' => false]]) : $evidence;
+        $watchdog = new FakeSearchReachWatchdog($planner, $this->snapshot());
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertCount(1, $watchdog->added);
+        $this->assertCount(1, $state['repair_attempts']);
+        $this->assertContains('repair_reach_readback_unverified', array_column($state['repair']['errors'], 'code'));
+        $watchdog->check($campaign);
+        $this->assertCount(1, $watchdog->added, 'An unverified partial result cannot trigger a second repair.');
+    }
+
+    public function test_repair_retains_close_variant_historical_evidence_and_commercial_selection_reason(): void
+    {
+        $campaign = $this->makeCampaign();
+        $planner = new FakeSearchReachPlanner(fn () => $this->diagnosis());
+        $planner->mutationEvidence = function ($evidence) {
+            $evidence['historical']['keywords'] = ['google ads software 0' => ['text' => 'google ads software', 'avg_monthly_searches' => 10],
+                'ppc software' => ['text' => 'ppc software', 'avg_monthly_searches' => 1]];
+
+            return $evidence;
+        };
+        $watchdog = new FakeSearchReachWatchdog($planner, $this->snapshot());
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('verifying', $state['status']);
+        $added = $state['repair']['added_keywords'][0];
+        $this->assertSame(10, $added['historical_metrics']['avg_monthly_searches']);
+        $this->assertSame('google ads software', $added['historical_metrics']['text']);
+        $this->assertStringContainsString('commercial buyer', $added['selection_reason']);
+        $this->assertNotEmpty($added['historical_checked_at']);
+        $this->assertSame(2, $planner->mutationChecks);
+    }
+
+    public function test_spending_hold_approved_during_fresh_forecast_stops_the_first_remote_write(): void
+    {
+        $campaign = $this->makeCampaign();
+        $planner = new FakeSearchReachPlanner(fn () => $this->diagnosis());
+        $planner->mutationEvidence = function ($evidence) use ($campaign) {
+            $campaign->fresh()->forceFill(['spend_safety_hold' => ['reason' => 'spend_review']])->save();
+
+            return $evidence;
+        };
+        $watchdog = new FakeSearchReachWatchdog($planner, $this->snapshot());
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('approval_required', $state['status']);
+        $this->assertSame('spend_safety_hold', $state['blocked_reason']);
+        $this->assertSame([], $watchdog->added);
     }
 
     public function test_negative_conflicts_and_missing_existing_cpc_cap_require_review(): void
@@ -514,11 +588,34 @@ class GoogleSearchReachRecoveryTest extends TestCase
 
 class FakeSearchReachPlanner extends GoogleSearchReachPlanner
 {
+    public ?\Closure $mutationEvidence = null;
+
+    public int $mutationChecks = 0;
+
     public function __construct(private \Closure $assessment) {}
 
     public function assess(Campaign $campaign, array $snapshot, bool $research = false): array
     {
         return ($this->assessment)($campaign, $snapshot, $research);
+    }
+
+    public function assessMutation(Campaign $campaign, array $snapshot, array $keywords): array
+    {
+        $this->mutationChecks++;
+        $period = 30;
+        $start = now($snapshot['time_zone'])->addDay()->startOfDay();
+        $evidence = ['status' => 'evidence_ready', 'issues' => [], 'historical' => ['success' => true,
+            'checked_at' => now()->toIso8601String(), 'keywords' => array_map(fn ($keyword) => ['text' => $keyword['text'], 'avg_monthly_searches' => 1], $keywords)],
+            'forecast' => ['success' => true, 'auto_repair_safe' => true, 'source' => 'google_keyword_forecast',
+                'checked_at' => now()->toIso8601String(), 'caveats' => [], 'period_days' => $period,
+                'forecast_period' => ['from' => $start->toDateString(), 'through' => $start->copy()->addDays($period - 1)->toDateString()],
+                'clicks' => 60, 'impressions' => 300, 'cost_micros' => 10_000_000,
+                'context' => ['bidding_strategy' => $snapshot['bidding_strategy'], 'cpc_bid_ceiling_micros' => $snapshot['actual_cpc_ceiling_micros'],
+                    'daily_budget_micros' => $snapshot['daily_budget_micros'], 'currency_code' => $snapshot['currency_code'],
+                    'time_zone' => $snapshot['time_zone'], 'keywords' => $keywords, 'geo_target_constants' => $snapshot['geo_target_constants'],
+                    'language_constants' => $snapshot['language_constants'], 'negative_keywords' => $snapshot['negative_keywords']]]];
+
+        return $this->mutationEvidence ? ($this->mutationEvidence)($evidence, $this->mutationChecks) : $evidence;
     }
 }
 

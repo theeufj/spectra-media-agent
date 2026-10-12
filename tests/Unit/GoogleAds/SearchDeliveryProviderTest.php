@@ -18,6 +18,7 @@ use Google\Ads\GoogleAds\V22\Common\TargetingSetting;
 use Google\Ads\GoogleAds\V22\Common\TargetRestriction;
 use Google\Ads\GoogleAds\V22\Common\TargetSpend;
 use Google\Ads\GoogleAds\V22\Enums\AdNetworkTypeEnum\AdNetworkType;
+use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Enums\TargetingDimensionEnum\TargetingDimension;
@@ -74,7 +75,7 @@ class SearchDeliveryProviderTest extends TestCase
                 if (str_contains($query, 'customer.currency_code')) {
                     return [new GoogleAdsRow([
                         'customer' => new GoogleCustomer(['time_zone' => 'Australia/Sydney', 'currency_code' => 'AUD']),
-                        'campaign' => new GoogleCampaign(['status' => 2, 'advertising_channel_type' => 2, 'bidding_strategy_type' => 9,
+                        'campaign' => new GoogleCampaign(['status' => 2, 'advertising_channel_type' => 2, 'bidding_strategy_type' => $this->extra['strategy'] ?? 9,
                             'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
                             'geo_target_type_setting' => new GeoTargetTypeSetting(['positive_geo_target_type' => 7]),
                             'network_settings' => new \Google\Ads\GoogleAds\V22\Resources\Campaign\NetworkSettings(['target_google_search' => true])]),
@@ -109,7 +110,8 @@ class SearchDeliveryProviderTest extends TestCase
                         return [];
                     }
 
-                    return [new GoogleAdsRow(['ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2]),
+                    return [new GoogleAdsRow(['ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2,
+                        'cpc_bid_micros' => $this->extra['group_bid'] ?? 0]),
                         'ad_group_criterion' => new AdGroupCriterion(['resource_name' => 'customers/1234567890/adGroupCriteria/5~9',
                             'type' => CriterionType::USER_INTEREST, 'status' => 2])])];
                 }
@@ -131,11 +133,13 @@ class SearchDeliveryProviderTest extends TestCase
                 }
                 if (str_contains($query, 'FROM ad_group_criterion')) {
                     return [new GoogleAdsRow([
-                        'ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2]),
+                        'ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2,
+                            'cpc_bid_micros' => $this->extra['group_bid'] ?? 0]),
                         'ad_group_criterion' => new AdGroupCriterion(['resource_name' => 'customers/1234567890/adGroupCriteria/5~7',
-                            'status' => 2, 'primary_status' => 2, 'keyword' => new KeywordInfo(['text' => 'google ads management', 'match_type' => KeywordMatchType::EXACT])]),
+                            'status' => 2, 'primary_status' => 2, 'cpc_bid_micros' => $this->extra['keyword_bid'] ?? 0, 'keyword' => new KeywordInfo(['text' => 'google ads management', 'match_type' => KeywordMatchType::EXACT])]),
                     ]), new GoogleAdsRow([
-                        'ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2]),
+                        'ad_group' => new AdGroup(['resource_name' => 'customers/1234567890/adGroups/5', 'status' => 2,
+                            'cpc_bid_micros' => $this->extra['group_bid'] ?? 0]),
                         'ad_group_criterion' => new AdGroupCriterion(['resource_name' => 'customers/1234567890/adGroupCriteria/5~8',
                             'status' => 2, 'negative' => true, 'keyword' => new KeywordInfo(['text' => 'jobs', 'match_type' => KeywordMatchType::PHRASE])]),
                     ])];
@@ -153,6 +157,9 @@ class SearchDeliveryProviderTest extends TestCase
                             'keyword' => new KeywordInfo(['text' => 'free', 'match_type' => KeywordMatchType::BROAD])])]),
                         new GoogleAdsRow(['campaign_criterion' => new CampaignCriterion(['type' => CriterionType::AD_SCHEDULE, 'status' => 2,
                             'ad_schedule' => new AdScheduleInfo(['day_of_week' => 2, 'start_hour' => 9, 'end_hour' => 17, 'start_minute' => 2, 'end_minute' => 2])])])];
+                }
+                if (str_contains($query, 'SELECT metrics.cost_micros FROM campaign')) {
+                    return [new GoogleAdsRow(['metrics' => new Metrics(['cost_micros' => 180_000_000])])];
                 }
                 throw new \LogicException('Unexpected fixture query: '.$query);
             }
@@ -178,6 +185,8 @@ class SearchDeliveryProviderTest extends TestCase
             $this->hour('2026-10-11', 8, 100),
         ])->inspect($this->campaign());
 
+        $this->assertSame(180_000_000, $snapshot['reported_lifetime_cost_micros']);
+        $this->assertNotEmpty($snapshot['reported_spend_checked_at']);
         $this->assertSame(26, $snapshot['impressions']['google_search']);
         $this->assertSame('2026-10-10T16:00:00+11:00', $snapshot['measurement']['from']);
         $this->assertSame('2026-10-11T08:00:00+11:00', $snapshot['measurement']['through']);
@@ -281,6 +290,8 @@ class SearchDeliveryProviderTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertTrue($result['auto_repair_safe']);
+        $this->assertSame($context['negative_keywords'], $result['context']['negative_keywords']);
+        $this->assertNotEmpty($result['checked_at']);
         $this->assertArrayNotHasKey('conversions', $result);
         $this->assertSame(10_000_000, $result['cost_micros']);
         $this->assertSame(7, $result['period_days']);
@@ -295,6 +306,24 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertSame('free', $campaign->getNegativeKeywords()[0]->getText());
         $this->assertSame('jobs', $campaign->getAdGroups()[0]->getNegativeKeywords()[0]->getText());
         $this->assertFalse($campaign->hasConversionRate());
+    }
+
+    public function test_manual_cpc_keyword_overrides_and_inherited_bids_are_preserved_in_inspection_and_forecast(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->spend_guardrails = null;
+        foreach ([['group_bid' => 800_000], ['group_bid' => 800_000, 'keyword_bid' => 400_000]] as $bids) {
+            $snapshot = $this->inspector([], $bids + ['strategy' => BiddingStrategyType::MANUAL_CPC])->inspect($campaign);
+            $expected = $bids['keyword_bid'] ?? $bids['group_bid'];
+            $this->assertSame($expected, $snapshot['keywords'][0]['cpc_bid_micros']);
+            $this->assertSame(800_000, $snapshot['keywords'][0]['ad_group_cpc_bid_micros']);
+            $this->assertSame($expected, $snapshot['actual_cpc_ceiling_micros']);
+            $forecast = $this->forecast();
+            $result = $forecast('1234567890', $snapshot['keywords'], $expected / 1_000_000, null, 7, $snapshot);
+            $this->assertTrue($result['success']);
+            $this->assertSame($expected, $result['context']['keywords'][0]['cpc_bid_micros']);
+            $this->assertSame($expected, $forecast->request->getCampaign()->getAdGroups()[0]->getBiddableKeywords()[0]->getMaxCpcBidMicros());
+        }
     }
 
     public function test_unsupported_daypart_and_excluded_geo_disable_automatic_repair_certainty(): void

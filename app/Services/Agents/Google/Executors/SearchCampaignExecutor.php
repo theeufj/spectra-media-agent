@@ -16,12 +16,16 @@ use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
+use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\CampaignStatusHelper;
+use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\StorageHelper;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -70,6 +74,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
+        $newCampaign = false;
         if ($reusableGoogleCampaign = $strategy->reusableGoogleCampaignId()) {
             $campaignResourceName = $reusableGoogleCampaign;
             Log::info('GoogleAdsExecutionAgent: Reusing existing Search campaign from prior attempt', [
@@ -78,12 +83,13 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             ]);
             $result->addPlatformId('campaign', $campaignResourceName);
         } else {
-            $createCampaignService = new CreateSearchCampaign($this->customer);
+            $createCampaignService = app(CreateSearchCampaign::class, ['customer' => $this->customer]);
             $campaignName = $campaign->name.' - '.$timestamp;
 
             $campaignData = [
                 'businessName' => $campaignName,
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'status' => 'PAUSED',
                 ...GoogleCampaignSchedule::for($campaign),
             ];
 
@@ -94,7 +100,23 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
             $result->addPlatformId('campaign', $campaignResourceName);
             $strategy->recordGoogleCampaignId($campaignResourceName);
+            $newCampaign = true;
         }
+
+        // Retrying an ENABLED campaign could expose keyword/bid changes to live
+        // traffic before their demand forecast is checked. Pause is an explicit
+        // owner decision; a deployment retry never pauses and resumes it itself.
+        if (! $this->confirmPausedStage($customerId, $campaignResourceName, $result)) {
+            return;
+        }
+        $priorIntent = $strategy->fresh()->execution_result['metadata']['google_search_staging'] ?? [];
+        $enableAfterSuccess = $newCampaign
+            ? CampaignStatusHelper::getGoogleAdsStatus(null, $this->customer) === GoogleCampaignStatus::ENABLED
+            : (($priorIntent['campaign_resource'] ?? null) === $campaignResourceName && ($priorIntent['enable_after_success'] ?? false) === true);
+        $result->addMetadata('google_search_staging', ['campaign_resource' => $campaignResourceName,
+            'verified_platform_status' => 'PAUSED', 'checked_at' => now()->toIso8601String(),
+            'enable_after_success' => $enableAfterSuccess && $campaign->status !== \App\Enums\CampaignStatus::Paused
+                && ! $campaign->spend_safety_hold && ! CampaignSpendGuardrails::activeTrial($campaign)]);
 
         // Configure only this campaign, before adding ads or Smart Bidding.
         // Explicit deployment can configure a staged PAUSED campaign, without
@@ -275,6 +297,22 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             report($e);
             Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
         }
+    }
+
+    protected function confirmPausedStage(string $customerId, string $resource, ExecutionResult $result): bool
+    {
+        try {
+            $status = app(GetCampaignStatus::class, ['customer' => $this->customer])($customerId, $resource);
+            if (($status['status'] ?? null) === GoogleCampaignStatus::PAUSED) {
+                return true;
+            }
+            $result->addError('search_staging_pause_required', 'The Google Search campaign must be verified paused before deployment changes can be staged. Review its live status; no keyword, targeting or ad changes were made.');
+        } catch (\Throwable $e) {
+            report($e);
+            $result->addError('search_staging_status_unavailable', 'The Google Search campaign’s paused status could not be verified. Deployment changes are held for a fresh check.');
+        }
+
+        return false;
     }
 
     private function recordGoalReadiness(array $readiness, ExecutionResult $result, Strategy $strategy): bool

@@ -82,7 +82,11 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $groups = [];
             foreach ($keywords as $keyword) {
                 $group = $keyword['ad_group_resource'] ?? 'forecast';
-                $groups[$group][] = new BiddableKeyword(['keyword' => $this->keywordInfo($keyword)]);
+                $value = new BiddableKeyword(['keyword' => $this->keywordInfo($keyword)]);
+                if ($forecastStrategy === 'MANUAL_CPC' && isset($keyword['cpc_bid_micros'])) {
+                    $value->setMaxCpcBidMicros($keyword['cpc_bid_micros']);
+                }
+                $groups[$group][] = $value;
             }
             $campaignNegatives = [];
             $groupNegatives = [];
@@ -146,6 +150,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $result = [
                 'success' => true,
                 'source' => 'google_keyword_forecast',
+                'checked_at' => now()->toIso8601String(),
                 'impressions' => $metrics->getImpressions(),
                 'clicks' => $metrics->getClicks(),
                 'cost_micros' => (int) $metrics->getCostMicros(),
@@ -161,7 +166,8 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                     'daily_budget_micros' => $dailyBudget, 'currency_code' => $context['currency_code'] ?? null,
                     'time_zone' => $timezone, 'keywords' => $keywords,
                     'geo_target_constants' => $this->constants($context['geo_target_constants'] ?? [], 'geoTargetConstants'),
-                    'language_constants' => $this->constants($context['language_constants'] ?? [], 'languageConstants')],
+                    'language_constants' => $this->constants($context['language_constants'] ?? [], 'languageConstants'),
+                    'negative_keywords' => $context['negative_keywords'] ?? []],
             ];
             if ($conversionRate !== null) {
                 $result['conversions'] = $metrics->getConversions();
@@ -183,7 +189,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
         return $this->client->getKeywordPlanIdeaServiceClient()->generateKeywordForecastMetrics($request);
     }
 
-    /** @return list<array{text: string, match_type: string, ad_group_resource?: string}> */
+    /** @return list<array{text: string, match_type: string, ad_group_resource?: string, cpc_bid_micros?: positive-int}> */
     private function normalizeKeywords(array $keywords): array
     {
         $normalized = [];
@@ -200,6 +206,12 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $value = ['text' => $text, 'match_type' => $match];
             if (is_array($keyword) && is_string($keyword['ad_group_resource'] ?? null) && $keyword['ad_group_resource'] !== '') {
                 $value['ad_group_resource'] = $keyword['ad_group_resource'];
+            }
+            if (is_array($keyword) && isset($keyword['cpc_bid_micros']) && $keyword['cpc_bid_micros'] !== 0) {
+                if (! is_int($keyword['cpc_bid_micros']) || $keyword['cpc_bid_micros'] <= 0) {
+                    throw new \InvalidArgumentException('Keyword forecast CPC must be positive integer micros.');
+                }
+                $value['cpc_bid_micros'] = $keyword['cpc_bid_micros'];
             }
             $key = mb_strtolower($text).'|'.$match.'|'.($value['ad_group_resource'] ?? 'forecast');
             $normalized[$key] = $value;

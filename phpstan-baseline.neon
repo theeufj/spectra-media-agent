@@ -585,18 +585,6 @@ parameters:
 			path: app/Jobs/ExpandBroadMatchKeywords.php
 
 		-
-			message: '#^Variable \$added in empty\(\) always exists and is not falsy\.$#'
-			identifier: empty.variable
-			count: 1
-			path: app/Jobs/ExpandBroadMatchKeywords.php
-
-		-
-			message: '#^Variable \$pruned in empty\(\) always exists and is always falsy\.$#'
-			identifier: empty.variable
-			count: 2
-			path: app/Jobs/ExpandBroadMatchKeywords.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

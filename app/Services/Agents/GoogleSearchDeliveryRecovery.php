@@ -79,6 +79,25 @@ class GoogleSearchDeliveryRecovery
             return ['started' => false, 'reason' => 'safe bid ceiling is below one account-currency unit'];
         }
 
+        $reach = $this->reachGuard()->assess($campaign, [['action' => 'bidding', 'strategy' => 'MAXIMIZE_CLICKS',
+            'cpc_bid_ceiling_micros' => $ceiling, 'expected_bidding_strategy' => BiddingStrategyType::MAXIMIZE_CONVERSIONS]]);
+        if (! $reach['ready']) {
+            if (! AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_recovery_deferred')
+                ->where('created_at', '>=', now()->subDay())->exists()) {
+                AgentActivity::record('self_healing', 'search_recovery_deferred', $reach['message'],
+                    $campaign->customer_id, $campaign->id, ['proposed_cpc_ceiling_micros' => $ceiling, 'reach_evidence' => $reach], 'needs_review');
+            }
+
+            return ['started' => false, 'reason' => $reach['message'], 'reach_evidence' => $reach];
+        }
+        // The rank/conversion diagnosis also needs to survive the fresh inspection.
+        $observed = $reach['observed_snapshot'];
+        if (($observed['daily_budget_micros'] ?? null) !== $currentMicros || ($observed['target_cpa_micros'] ?? null) !== 0 || ($observed['eligible_keywords'] ?? 0) < 1
+            || ($observed['auction']['conversions'] ?? 0) > 0 || ($observed['auction']['lost_to_rank'] ?? 0) < 0.9001
+            || ($observed['auction']['lost_to_budget'] ?? 0) > 0) {
+            return ['started' => false, 'reason' => 'Fresh delivery evidence no longer supports the capped bidding experiment.', 'reach_evidence' => $reach];
+        }
+
         $customerId = $customer->cleanGoogleCustomerId();
         $campaignName = $campaign->google_ads_campaign_id;
         $updater = $this->updater($customer);
@@ -106,7 +125,7 @@ class GoogleSearchDeliveryRecovery
             'Started capped Search traffic recovery for "'.$campaign->name.'"',
             $campaign->customer_id, $campaign->id,
             ['previous_strategy' => 'MAXIMIZE_CONVERSIONS', 'new_strategy' => 'MAXIMIZE_CLICKS',
-                'cpc_ceiling_micros' => $ceiling, 'daily_budget_micros' => $currentMicros]);
+                'cpc_ceiling_micros' => $ceiling, 'daily_budget_micros' => $currentMicros, 'reach_evidence' => $reach]);
 
         return ['started' => true, 'cpc_ceiling_micros' => $ceiling, 'daily_budget_micros' => $currentMicros];
     }
@@ -120,6 +139,11 @@ class GoogleSearchDeliveryRecovery
         [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
 
         return ((int) $whole * 100 + (int) str_pad($fraction, 2, '0')) * 10_000;
+    }
+
+    protected function reachGuard(): GoogleSearchMutationGuard
+    {
+        return app(GoogleSearchMutationGuard::class);
     }
 
     protected function updater(Customer $customer): UpdateCampaignBiddingStrategy

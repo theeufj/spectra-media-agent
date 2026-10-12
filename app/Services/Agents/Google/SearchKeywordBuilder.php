@@ -2,18 +2,24 @@
 
 namespace App\Services\Agents\Google;
 
+use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
+use App\Services\Agents\GoogleSearchReachGate;
 use App\Services\Agents\GoogleSearchReachPlanner;
+use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
+use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
 
@@ -140,24 +146,43 @@ class SearchKeywordBuilder
             return false;
         }
         try {
-            $staged = clone $campaign;
-            $staged->google_ads_campaign_id = $campaignResource;
-            $snapshot = app(InspectSearchDelivery::class, ['customer' => $this->customer])->inspect($staged);
-            if (! $snapshot) {
-                throw new \RuntimeException('Google did not return staged Search settings.');
+            $initialStatus = $campaign->status;
+            $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
+            $fingerprint = GoogleSearchReachGate::settingsFingerprint($snapshot);
+            $enabledKeywords = array_values(array_filter($snapshot['keywords'] ?? [], fn ($keyword) => ($keyword['status'] ?? 'ENABLED') === 'ENABLED'
+                && ($keyword['ad_group_status'] ?? 'ENABLED') === 'ENABLED'));
+            $assessment = app(GoogleSearchReachPlanner::class)->assessMutation($campaign, $snapshot, $enabledKeywords);
+            // Provider research can take minutes. Authorize against current
+            // customer approval and a new remote read, never the old settings.
+            $campaign->refresh()->load('customer');
+            $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
+            $campaign->refresh()->load('customer');
+            $gate = app(GoogleSearchReachGate::class)->evaluate($campaign, $snapshot, $assessment);
+            if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId || $campaign->customer_id !== $this->customer->id) {
+                $gate = $this->holdGate($gate, 'search_reach_account_mismatch', 'The customer account changed while researching reach. Review the staged resource.');
             }
-            $assessment = app(GoogleSearchReachPlanner::class)->assess($campaign, $snapshot);
-            $result->addMetadata('search_reach_preflight', $assessment);
-            $forecast = $assessment['forecast'] ?? [];
-            $blocked = ($forecast['success'] ?? false) && ($forecast['auto_repair_safe'] ?? false)
-                && (($forecast['impressions'] ?? 0) <= 0 || ($forecast['clicks'] ?? 0) <= 0);
+            if ($fingerprint !== GoogleSearchReachGate::settingsFingerprint($snapshot)) {
+                $gate = $this->holdGate($gate, 'search_reach_settings_changed_during_forecast', 'Google Search settings changed while researching reach. Repeat the check with the current settings.');
+            }
+            if (($snapshot['status'] ?? null) !== GoogleCampaignStatus::PAUSED) {
+                $gate = $this->holdGate($gate, 'search_reach_staging_pause_unverified', 'The staged Google Search campaign is no longer verified paused.');
+            }
+            if (($campaign->status === CampaignStatus::Paused && $initialStatus !== CampaignStatus::Paused)
+                || $campaign->hasPassedEndDate() || in_array($campaign->status, [CampaignStatus::Completed, CampaignStatus::Ended], true)) {
+                $gate = $this->holdGate($gate, 'search_reach_launch_authorization_changed', 'The owner paused or ended this campaign while researching reach. Review the current launch authorization.');
+            }
+            $result->addMetadata('search_reach_preflight', [...$assessment, 'gate' => $gate,
+                'validated_campaign_resource' => $campaignResource, 'validated_settings_fingerprint' => GoogleSearchReachGate::settingsFingerprint($snapshot)]);
+            $blocked = ! $gate['ready'];
+            $firstGateIssue = $gate['issues'][0] ?? null;
             $state = [
-                'status' => $blocked ? 'needs_review' : (($assessment['status'] ?? null) === 'unavailable' ? 'unavailable' : 'collecting_evidence'),
+                'status' => $blocked ? ($gate['status'] === 'unavailable' ? 'unavailable' : 'needs_review') : 'collecting_evidence',
                 'checked_at' => now()->toIso8601String(), 'evaluation_started_at' => now()->toIso8601String(),
                 'currency_code' => $snapshot['currency_code'] ?? null,
-                'diagnosis' => $assessment, 'phase' => 'prelaunch', 'strategy_id' => $strategy->id,
+                'diagnosis' => [...$assessment, 'issues' => [...($assessment['issues'] ?? []), ...$gate['issues']]],
+                'reach_gate' => $gate, 'phase' => 'prelaunch', 'strategy_id' => $strategy->id,
                 'campaign_resource' => $campaignResource,
-                'blocked_reason' => $blocked ? 'The staged campaign is forecast to receive no traffic at its current bid and targeting.' : null,
+                'blocked_reason' => $firstGateIssue['code'] ?? null,
                 'mutation_allowed' => false,
             ];
             // The campaign card monitors its primary Google campaign. A second
@@ -165,30 +190,99 @@ class SearchKeywordBuilder
             if ($campaign->googleAdsResourceName() === $campaignResource || ! $campaign->google_ads_campaign_id) {
                 $this->savePreflightState($campaign, $state);
             }
-            foreach (\App\Services\Agents\AgentIssue::list($assessment['issues'] ?? []) as $issue) {
-                $result->addWarning($issue->code, $issue->message);
+            foreach (\App\Services\Agents\AgentIssue::list($assessment['issues'] ?? []) as $assessmentIssue) {
+                $result->addWarning($assessmentIssue->code, $assessmentIssue->message);
             }
             AgentActivity::record('deployment', $blocked ? 'search_reach_preflight_blocked' : 'search_reach_preflight_checked',
-                $blocked ? 'Search launch needs review: no traffic is forecast at the staged settings.' : 'Checked Search keyword reach against the staged bid and targeting.',
-                $campaign->customer_id, $campaign->id, ['assessment' => $assessment]);
-            if ($blocked) {
-                $result->addError('search_reach_unviable', 'No traffic is forecast at the current Search settings. Review keywords and the bid ceiling before retrying; no serving ads were added.');
+                $blocked ? 'Search launch held: '.($firstGateIssue['message'] ?? 'Keyword reach could not be verified.') : 'Verified useful Search keyword reach within the staged bid, targeting and approved spending limits.',
+                $campaign->customer_id, $campaign->id, ['assessment' => $assessment, 'gate' => $gate]);
+            foreach (\App\Services\Agents\AgentIssue::list($gate['issues']) as $gateIssue) {
+                $result->addError($gateIssue->code, $gateIssue->message.' No serving ads were added.');
             }
 
             return ! $blocked;
         } catch (\Throwable $e) {
             report($e);
-            $result->addWarning('search_reach_unavailable', 'Pre-launch keyword reach could not be verified. The delivery monitor will retry; this is not evidence that traffic will arrive.');
-            $result->addMetadata('search_reach_preflight', ['status' => 'unavailable', 'checked_at' => now()->toIso8601String()]);
+            $result->addError('search_reach_unavailable', 'Pre-launch keyword reach could not be verified. Deployment is held for a fresh check; no serving ads were added.');
+            $gate = ['ready' => false, 'status' => 'unavailable',
+                'issues' => [['code' => 'search_reach_unavailable', 'message' => 'Pre-launch keyword reach could not be verified.']], 'metadata' => []];
+            $result->addMetadata('search_reach_preflight', ['status' => 'unavailable', 'checked_at' => now()->toIso8601String(), 'gate' => $gate]);
             if ($campaign->googleAdsResourceName() === $campaignResource || ! $campaign->google_ads_campaign_id) {
                 $this->savePreflightState($campaign, ['status' => 'unavailable',
                     'checked_at' => now()->toIso8601String(), 'phase' => 'prelaunch',
                     'evaluation_started_at' => now()->toIso8601String(), 'campaign_resource' => $campaignResource,
-                    'mutation_allowed' => false, 'blocked_reason' => 'reach_evidence_unavailable']);
+                    'mutation_allowed' => false, 'blocked_reason' => 'reach_evidence_unavailable', 'reach_gate' => $gate]);
+            }
+            AgentActivity::record('deployment', 'search_reach_preflight_blocked',
+                'Search launch held because fresh demand and traffic-forecast evidence could not be verified.',
+                $campaign->customer_id, $campaign->id, ['gate' => $gate]);
+
+            return false;
+        }
+    }
+
+    /** Recheck the saved reach proof immediately before an enable, without another slow forecast. */
+    public function confirmActivationProof(Campaign $campaign, string $customerId, string $campaignResource, array $proof, ExecutionResult $result): bool
+    {
+        try {
+            $campaign->refresh()->load('customer');
+            $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
+            // Inspection itself may outlast an owner change to budget or pause.
+            $campaign->refresh()->load('customer');
+            $gate = app(GoogleSearchReachGate::class)->evaluate($campaign, $snapshot, $proof);
+            if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId || $campaign->customer_id !== $this->customer->id) {
+                $gate = $this->holdGate($gate, 'search_reach_account_mismatch', 'The customer account changed while verifying activation. Review the staged resource.');
+            }
+            if (($proof['gate']['ready'] ?? false) !== true || ($proof['validated_campaign_resource'] ?? null) !== $campaignResource
+                || ($proof['validated_settings_fingerprint'] ?? null) !== GoogleSearchReachGate::settingsFingerprint($snapshot)) {
+                $gate = $this->holdGate($gate, 'search_reach_activation_settings_changed', 'The staged Search settings no longer match their validated reach proof. Repeat the check before activation.');
+            }
+            if (($snapshot['status'] ?? null) !== GoogleCampaignStatus::PAUSED || ! CampaignSpendGuardrails::canEnable($campaign)
+                || CampaignSpendGuardrails::activeTrial($campaign) || CampaignStatusHelper::getGoogleAdsStatus(null, $campaign->customer) !== GoogleCampaignStatus::ENABLED) {
+                $gate = $this->holdGate($gate, 'search_reach_activation_authorization_changed', 'Current campaign pause, end date, spending hold or launch settings do not allow activation.');
+            }
+            $result->addMetadata('search_reach_activation_check', $gate);
+            foreach (\App\Services\Agents\AgentIssue::list($gate['issues']) as $issue) {
+                $result->addError($issue->code, $issue->message);
             }
 
-            return true;
+            return $gate['ready'];
+        } catch (\Throwable $e) {
+            report($e);
+            $result->addError('search_reach_activation_unavailable', 'Current Search settings and launch authorization could not be verified. Activation is held.');
+
+            return false;
         }
+    }
+
+    private function inspectStage(Campaign $campaign, string $customerId, string $campaignResource): array
+    {
+        if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId || $campaign->customer_id !== $this->customer->id
+            || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#', $campaignResource)) {
+            throw new \RuntimeException('The current customer does not own this staged Google resource.');
+        }
+        $staged = clone $campaign;
+        $staged->google_ads_campaign_id = $campaignResource;
+        $snapshot = app(InspectSearchDelivery::class, ['customer' => $this->customer])->inspect($staged);
+        if (! $snapshot) {
+            throw new \RuntimeException('Google did not return staged Search settings.');
+        }
+        if (CampaignSpendGuardrails::activeTrial($campaign)) {
+            $spend = app(GetCampaignSpendSafety::class, ['customer' => $this->customer])->forCampaign($staged);
+            $snapshot['reported_lifetime_cost_micros'] = $spend['cost_micros'] ?? null;
+            $snapshot['reported_spend_checked_at'] = now()->toIso8601String();
+        }
+
+        return $snapshot;
+    }
+
+    private function holdGate(array $gate, string $code, string $message): array
+    {
+        $gate['ready'] = false;
+        $gate['status'] = 'blocked';
+        $gate['issues'][] = ['code' => $code, 'message' => $message];
+
+        return $gate;
     }
 
     private function savePreflightState(Campaign $campaign, array $assessment): void

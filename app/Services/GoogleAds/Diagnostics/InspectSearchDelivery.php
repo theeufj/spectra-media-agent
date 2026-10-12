@@ -14,6 +14,7 @@ use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionSt
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdNetworkTypeEnum\AdNetworkType;
 use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V22\Enums\CampaignCriterionStatusEnum\CampaignCriterionStatus;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
@@ -38,7 +39,7 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         }
 
         $settings = null;
-        $query = "SELECT customer.time_zone, customer.currency_code, campaign.status,
+        $query = "SELECT customer.time_zone, customer.currency_code, campaign.status, campaign.start_date, campaign.end_date,
                          campaign.advertising_channel_type, campaign.bidding_strategy_type,
                          campaign.maximize_conversions.target_cpa_micros, campaign.target_spend.cpc_bid_ceiling_micros,
                          campaign.bidding_strategy, campaign.geo_target_type_setting.positive_geo_target_type,
@@ -52,6 +53,8 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                 'time_zone' => $row->getCustomer()->getTimeZone() ?: ($campaign->customer->timezone ?: config('app.timezone', 'UTC')),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
                 'status' => $value->getStatus(),
+                'start_date' => $value->getStartDate(),
+                'end_date' => $value->getEndDate(),
                 'channel' => $value->getAdvertisingChannelType(),
                 'bidding_strategy' => $value->getBiddingStrategyType(),
                 'target_cpa_micros' => (int) ($value->getMaximizeConversions()?->getTargetCpaMicros() ?? 0),
@@ -115,10 +118,10 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         $keywords = [];
         $negativeKeywords = [];
         $eligibleKeywords = 0;
-        $query = "SELECT ad_group.resource_name, ad_group.status, ad_group_criterion.resource_name,
+        $query = "SELECT ad_group.resource_name, ad_group.status, ad_group.cpc_bid_micros, ad_group_criterion.resource_name,
                          ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text,
                          ad_group_criterion.keyword.match_type, ad_group_criterion.primary_status,
-                         ad_group_criterion.primary_status_reasons
+                         ad_group_criterion.primary_status_reasons, ad_group_criterion.cpc_bid_micros
                   FROM ad_group_criterion WHERE campaign.id = {$campaignId}
                   AND ad_group_criterion.type = KEYWORD AND ad_group_criterion.status != REMOVED";
         foreach ($this->rows($customerId, $query) as $row) {
@@ -144,6 +147,8 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                     fn ($reason) => AdGroupCriterionPrimaryStatusReason::name($reason),
                     iterator_to_array($criterion->getPrimaryStatusReasons())
                 ),
+                'cpc_bid_micros' => (int) ($criterion->getCpcBidMicros() ?: $row->getAdGroup()->getCpcBidMicros()),
+                'ad_group_cpc_bid_micros' => (int) $row->getAdGroup()->getCpcBidMicros(),
             ];
             if ($criterion->getStatus() === AdGroupCriterionStatus::ENABLED
                 && $criterion->getPrimaryStatus() === AdGroupCriterionPrimaryStatus::ELIGIBLE
@@ -152,6 +157,11 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             }
         }
         usort($keywords, fn ($a, $b) => strcmp($a['resource_name'], $b['resource_name']));
+        if ($settings['bidding_strategy'] === BiddingStrategyType::MANUAL_CPC) {
+            $bids = array_column(array_filter($keywords, fn ($keyword) => $keyword['status'] === 'ENABLED'
+                && $keyword['ad_group_status'] === 'ENABLED'), 'cpc_bid_micros');
+            $settings['actual_cpc_ceiling_micros'] = $settings['cpc_bid_ceiling_micros'] = $bids === [] ? 0 : max($bids);
+        }
 
         $approvedAds = 0;
         $query = "SELECT ad_group.status, ad_group_ad.status, ad_group_ad.policy_summary.approval_status
@@ -285,6 +295,13 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         foreach ($this->rows($customerId, $query) as $row) {
             $unsupported[] = ['type' => 'shared_negative_keyword_list', 'resource_name' => $row->getCampaignSharedSet()->getSharedSet()];
         }
+        if ($settings['bidding_strategy'] === BiddingStrategyType::MANUAL_CPC) {
+            foreach ($keywords as $keyword) {
+                if ($keyword['status'] === 'ENABLED' && $keyword['ad_group_status'] === 'ENABLED' && $keyword['cpc_bid_micros'] <= 0) {
+                    $unsupported[] = ['type' => 'manual_keyword_bid_unavailable', 'resource_name' => $keyword['resource_name']];
+                }
+            }
+        }
         sort($geos);
         sort($excludedGeos);
         sort($languages);
@@ -294,6 +311,14 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         usort($unsupported, fn ($a, $b) => strcmp(json_encode($a), json_encode($b)));
         usort($audienceCriteria, fn ($a, $b) => strcmp($a['resource_name'], $b['resource_name']));
         $startedAt = $this->evaluationStartedAt($campaign, $since);
+        if (\App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($campaign)) {
+            $query = "SELECT metrics.cost_micros FROM campaign WHERE campaign.id = {$campaignId}";
+            foreach ($this->rows($customerId, $query) as $row) {
+                $settings['reported_lifetime_cost_micros'] = (int) $row->getMetrics()->getCostMicros();
+                $settings['reported_spend_checked_at'] = now()->toIso8601String();
+                break;
+            }
+        }
 
         return $settings + [
             'complete_days' => $completeDays,

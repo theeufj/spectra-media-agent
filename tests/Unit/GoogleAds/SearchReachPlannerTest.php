@@ -5,6 +5,8 @@ namespace Tests\Unit\GoogleAds;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\GoogleSearchReachPlanner;
+use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
+use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -127,6 +129,65 @@ class SearchReachPlannerTest extends TestCase
         $this->assertFalse($result['auto_repair_safe']);
     }
 
+    public function test_mutation_check_refreshes_both_providers_instead_of_reusing_a_good_cached_assessment(): void
+    {
+        Cache::flush();
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->expects($this->exactly(2))->method('__invoke')->willReturnOnConsecutiveCalls(
+            ['success' => true, 'checked_at' => now()->toIso8601String(), 'keywords' => ['managed ppc services' => ['avg_monthly_searches' => 10]]],
+            ['success' => true, 'checked_at' => now()->toIso8601String(), 'keywords' => ['managed ppc services' => ['avg_monthly_searches' => null]]],
+        );
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->expects($this->exactly(2))->method('__invoke')->willReturnOnConsecutiveCalls(
+            ['success' => true, 'clicks' => 60, 'period_days' => 30], ['success' => true, 'clicks' => 0, 'period_days' => 30],
+        );
+        $planner = new ProviderSeamReachPlanner($historical, $forecast);
+        $campaign = $this->campaign();
+        $snapshot = $this->snapshot();
+        $this->assertSame(60, $planner->assess($campaign, $snapshot)['forecast']['clicks']);
+        $this->assertSame(60, $planner->assess($campaign, $snapshot)['forecast']['clicks']);
+        $fresh = $planner->assessMutation($campaign, $snapshot, $snapshot['keywords']);
+        $this->assertSame(0, $fresh['forecast']['clicks']);
+        $this->assertNull($fresh['historical']['keywords']['managed ppc services']['avg_monthly_searches']);
+    }
+
+    public function test_trial_forecast_horizon_fits_campaign_end_and_fresh_remaining_spend_using_new_google_estimates(): void
+    {
+        Cache::flush();
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [['text' => 'managed ppc services', 'avg_monthly_searches' => 10]]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $periods = [];
+        $forecast->expects($this->exactly(2))->method('__invoke')->willReturnCallback(function ($customerId, $keywords, $cap, $rate, $days, $context) use (&$periods) {
+            $this->assertNull($rate, 'No fictional conversion rate is supplied to the repair forecast.');
+            $this->assertSame(3.0, $cap);
+            $this->assertSame(10_000_000, $context['daily_budget_micros']);
+            $this->assertSame(20_000_000, $context['max_forecast_cost_micros']);
+            $periods[] = $days;
+
+            return ['success' => true, 'auto_repair_safe' => true, 'period_days' => $days,
+                'cost_micros' => $days === 14 ? 40_000_000 : 15_000_000, 'clicks' => $days === 14 ? 20 : 15];
+        });
+        $planner = new ProviderSeamReachPlanner($historical, $forecast);
+        $campaign = $this->campaign(['end_date' => now()->addDays(14), 'spend_guardrails' => ['enabled' => true,
+            'baseline_cost_micros' => 1_000_000, 'max_spend_micros' => 30_000_000]]);
+        $snapshot = $this->snapshot();
+        $snapshot['reported_lifetime_cost_micros'] = 11_000_000;
+        $result = $planner->assessMutation($campaign, $snapshot, $snapshot['keywords']);
+
+        $this->assertSame([14, 7], $periods);
+        $this->assertSame(7, $result['forecast']['period_days']);
+        $this->assertSame(15, $result['forecast']['clicks'], 'Final totals come from the second provider forecast, never scaled first estimates.');
+        $this->assertNotContains('insufficient_forecast_reach', array_column($result['issues'], 'code'), 'A shorter approved period uses a disclosed monthly equivalent.');
+    }
+
+    public function test_historical_requested_key_is_preferred_over_google_canonical_close_variant_text(): void
+    {
+        $row = ['text' => 'google ads software', 'avg_monthly_searches' => 10];
+        $this->assertSame($row, GoogleSearchReachPlanner::historicalMetric(['google ad software' => $row], ' GOOGLE AD SOFTWARE '));
+        $this->assertNull(GoogleSearchReachPlanner::historicalMetric(['unknown' => $row], 'unrelated consulting'));
+    }
+
     public function test_negative_matching_respects_scope_and_all_supported_match_types(): void
     {
         $group = 'customers/1234567890/adGroups/42';
@@ -175,5 +236,20 @@ class FakeReachKeywordResearch extends KeywordResearchService
         int $maxKeywords = 20, array $userSeedKeywords = [], array $businessContext = []): array
     {
         return ['keywords' => $this->ideas];
+    }
+}
+
+class ProviderSeamReachPlanner extends GoogleSearchReachPlanner
+{
+    public function __construct(private GenerateKeywordHistoricalMetrics $historicalApi, private GenerateKeywordForecast $forecastApi) {}
+
+    protected function historicalProvider(Customer $customer): GenerateKeywordHistoricalMetrics
+    {
+        return $this->historicalApi;
+    }
+
+    protected function forecastProvider(Customer $customer): GenerateKeywordForecast
+    {
+        return $this->forecastApi;
     }
 }

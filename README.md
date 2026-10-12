@@ -8,7 +8,9 @@ Spectra is an AI-powered advertising agency platform. Clients create campaigns, 
 
 ### Google Search delivery checks
 
-Search deployment checks historical demand and a forecast against the staged campaign's actual match types, budget, CPC ceiling and targeting before adding ads. A faithful zero-traffic forecast blocks launch for review; unavailable or incomplete forecasts remain explicitly unknown. Historical top-of-page bids are estimates, not minimum bids.
+Search deployment and repairs that change keyword reach must verify Google historical demand and a fresh forecast against the actual match types, approved budget, CPC ceiling, markets, languages and negative keywords. Missing demand estimates remain unknown, never zero. Unavailable, stale or incomplete forecasts block the change for review, as do forecasts below the configured useful-traffic threshold. Historical top-of-page bids are estimates, not minimum bids. Bounded trials also require the forecast period to fit the campaign end date and its estimated spend to fit the remaining reported-spend review threshold; that threshold is not a hard billing cap.
+
+New Search campaigns are built paused and enabled only after the completed build passes another reach check and Google confirms activation. An enabled campaign cannot be altered through a deployment retry. Keyword mining, expansion, quality-score pruning and converting DSA-term promotion assess the complete resulting keyword set before changes. Automatic creation of a separate DSA campaign requires its own approved funding and a forecast that represents its URL targeting, so it remains held for review.
 
 `DispatchGoogleSearchDeliveryChecks` queues an independent check for each deployed Search campaign every hour. `GoogleSearchReachRecovery` excludes the partial restart hour and three hours of reporting lag, measures at most the latest 48 complete hours, and resets its evidence after a material configuration change. It researches low reach after 12 complete reporting hours, even during a controlled test or spending hold. Research does not require an arbitrary minimum keyword count or prior conversions.
 

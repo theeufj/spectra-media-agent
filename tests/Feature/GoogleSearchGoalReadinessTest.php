@@ -17,13 +17,36 @@ use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\DeploymentService;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
+use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class GoogleSearchGoalReadinessTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->statusReader(GoogleCampaignStatus::PAUSED);
+    }
+
+    private function statusReader(?int $status): void
+    {
+        $reader = new class($status) extends GetCampaignStatus
+        {
+            public function __construct(private ?int $status) {}
+
+            public function __invoke(string $customerId, string $campaignResourceName): ?array
+            {
+                return $this->status === null ? null : ['status' => $this->status];
+            }
+        };
+        $this->app->bind(GetCampaignStatus::class, fn () => $reader);
+    }
 
     private function executor(Customer $customer): SearchCampaignExecutor
     {
@@ -97,6 +120,69 @@ class GoogleSearchGoalReadinessTest extends TestCase
 
         $this->assertSame($custom, $result->metadata['conversion_goal_readiness']['managed_custom_goal']);
         $this->assertFalse($result->success);
+    }
+
+    public function test_retry_does_not_change_an_enabled_campaign_before_the_reach_gate(): void
+    {
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '123']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'google_ads_campaign_id' => 'customers/123/campaigns/456']);
+        $this->statusReader(GoogleCampaignStatus::ENABLED);
+        $goals = new SearchLaunchGoalsFixture;
+        $this->app->bind(ReconcileCampaignConversionGoals::class, fn () => $goals);
+        $result = ExecutionResult::success();
+        $this->executor($customer)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+        $this->assertFalse($result->success);
+        $this->assertSame('search_staging_pause_required', $result->errors[0]->code);
+        $this->assertSame([], $goals->reconcileCalls, 'No serving goal, geo, keyword, bidding or ad mutations may precede the paused staging proof.');
+        $this->assertArrayNotHasKey('google_search_staging', $result->metadata);
+    }
+
+    public function test_unavailable_remote_status_cannot_authorize_staging_mutations(): void
+    {
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '123']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'google_ads_campaign_id' => 'customers/123/campaigns/456']);
+        $this->statusReader(null);
+        $goals = new SearchLaunchGoalsFixture;
+        $this->app->bind(ReconcileCampaignConversionGoals::class, fn () => $goals);
+        $result = ExecutionResult::success();
+        $this->executor($customer)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+        $this->assertFalse($result->success);
+        $this->assertSame([], $goals->reconcileCalls);
+    }
+
+    public function test_a_new_search_campaign_is_forced_paused_and_records_its_separate_launch_intent(): void
+    {
+        config(['campaigns.testing_mode_default' => false, 'campaigns.default_status' => 'ENABLED']);
+        \App\Models\Setting::where('key', 'campaign_testing_mode')->delete();
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '123', 'service_type' => 'managed']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'status' => 'draft']);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'google_ads_campaign_id' => null]);
+        $creator = new class extends CreateSearchCampaign
+        {
+            public array $received = [];
+
+            public function __construct() {}
+
+            public function __invoke(string $customerId, array $campaignData): string
+            {
+                $this->received = $campaignData;
+
+                return 'customers/123/campaigns/456';
+            }
+        };
+        $this->app->bind(CreateSearchCampaign::class, fn () => $creator);
+        $goals = new SearchLaunchGoalsFixture;
+        $goals->reconciled = ['ready' => false, 'issues' => [new AgentIssue('conversion_goal_unverified', 'Goal confirmation pending.')]];
+        $this->app->bind(ReconcileCampaignConversionGoals::class, fn () => $goals);
+        $result = ExecutionResult::success();
+        $this->executor($customer)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+        $this->assertSame('PAUSED', $creator->received['status']);
+        $this->assertSame('PAUSED', $result->metadata['google_search_staging']['verified_platform_status']);
+        $this->assertTrue($result->metadata['google_search_staging']['enable_after_success']);
+        $this->assertFalse($result->success, 'A recorded launch intent is not successful deployment or permission to enable before all gates pass.');
+        $this->assertSame('customers/123/campaigns/456', $strategy->fresh()->google_ads_campaign_id);
     }
 
     public function test_deployment_persistence_preserves_concurrent_readiness_evidence(): void

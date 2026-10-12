@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\GoogleSearchMutationGuard;
 use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
@@ -93,6 +94,9 @@ class StrategyAwareOptimizationTest extends TestCase
 
     public function test_valid_manual_bid_uses_the_same_confidence_threshold_as_the_scorer(): void
     {
+        $reach = $this->createMock(GoogleSearchMutationGuard::class);
+        $reach->expects($this->once())->method('assess')->willReturn(['ready' => true]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $reach);
         $gateway = $this->createMock(CompetitivePlatformGateway::class);
         $gateway->expects($this->once())->method('state')->willReturn($this->state('MANUAL_CPC'));
         $this->app->instance(CompetitivePlatformGateway::class, $gateway);

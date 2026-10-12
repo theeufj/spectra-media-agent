@@ -6,6 +6,7 @@ use App\Enums\CampaignStatus;
 use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Models\KeywordQualityScore;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Campaigns\CampaignSpendGuardrails;
@@ -56,6 +57,7 @@ class QualityScoreImprovementAgent
         $flagged = [];
         $paused = [];
         $errors = [];
+        $pauseCandidates = [];
 
         foreach ($decliners as $keywordText => $records) {
             $latest = $records->sortByDesc('recorded_at')->first();
@@ -72,7 +74,8 @@ class QualityScoreImprovementAgent
                     $actions,
                     $flagged,
                     $paused,
-                    $errors
+                    $errors,
+                    $pauseCandidates
                 );
             } catch (\Throwable $e) {
                 report($e);
@@ -80,6 +83,8 @@ class QualityScoreImprovementAgent
                 Log::error('QualityScoreImprovementAgent: '.$e->getMessage());
             }
         }
+
+        $this->applyKeywordPauses($campaign, $customer, $pauseCandidates, $paused, $flagged, $errors);
 
         if (! empty($actions) || ! empty($paused)) {
             $total = count($actions) + count($paused);
@@ -117,7 +122,8 @@ class QualityScoreImprovementAgent
         array &$actions,
         array &$flagged,
         array &$paused,
-        array &$errors
+        array &$errors,
+        array &$pauseCandidates
     ): void {
         $keyword = $latest->keyword_text;
         $qs = $latest->quality_score;
@@ -204,13 +210,50 @@ class QualityScoreImprovementAgent
 
         // Auto-pause if stuck at low QS for extended period
         if ($isStuck && $latest->criterion_resource_name) {
-            $service = new UpdateKeywordStatus($customer);
-            $success = $service->pause($customerId, $latest->criterion_resource_name);
+            $pauseCandidates[] = ['keyword' => $keyword, 'qs' => $qs, 'days' => $pauseDays,
+                'resource_name' => $latest->criterion_resource_name];
+        }
+    }
 
-            if ($success) {
-                $paused[] = ['keyword' => $keyword, 'qs' => $qs, 'days' => $pauseDays];
-            } else {
-                $errors[] = "Failed to pause keyword '{$keyword}'";
+    private function applyKeywordPauses(Campaign $campaign, Customer $customer, array $candidates, array &$paused, array &$flagged, array &$errors): void
+    {
+        if ($candidates === []) {
+            return;
+        }
+        $changes = array_map(fn ($candidate) => ['action' => 'pause', 'resource_name' => $candidate['resource_name']], $candidates);
+        try {
+            $assessment = app(GoogleSearchMutationGuard::class)->assess($campaign, $changes);
+        } catch (\Throwable $e) {
+            report($e);
+            $assessment = ['ready' => false, 'message' => 'The remaining keyword demand and affordable traffic could not be verified.'];
+            $errors[] = 'Keyword pause assessment unavailable: '.$e->getMessage();
+        }
+        if (! ($assessment['ready'] ?? false)) {
+            $reason = $assessment['message'] ?? 'The resulting keyword portfolio requires review before pausing low Quality Score terms.';
+            $flagged[] = ['keywords' => array_column($candidates, 'keyword'), 'issue' => 'keyword_pause_reach_unverified', 'recommendation' => $reason];
+            AgentActivity::record('quality_score', 'keyword_pauses_need_review', $reason,
+                $campaign->customer_id, $campaign->id, ['candidates' => $candidates, 'assessment' => $assessment]);
+
+            return;
+        }
+        foreach ($candidates as $candidate) {
+            if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                $flagged[] = ['issue' => 'keyword_pause_hold', 'recommendation' => 'A trial or spending hold started before the keyword change.'];
+                AgentActivity::record('quality_score', 'keyword_pauses_need_review', 'A trial or spending hold started before the keyword change.',
+                    $campaign->customer_id, $campaign->id, ['candidates' => $candidates]);
+
+                break;
+            }
+            try {
+                $success = app(UpdateKeywordStatus::class, ['customer' => $customer])->pause($customer->cleanGoogleCustomerId(), $candidate['resource_name']);
+                if ($success) {
+                    $paused[] = ['keyword' => $candidate['keyword'], 'qs' => $candidate['qs'], 'days' => $candidate['days']];
+                } else {
+                    $errors[] = "Failed to pause keyword '{$candidate['keyword']}'";
+                }
+            } catch (\Throwable $e) {
+                report($e);
+                $errors[] = "Failed to pause keyword '{$candidate['keyword']}': ".$e->getMessage();
             }
         }
     }

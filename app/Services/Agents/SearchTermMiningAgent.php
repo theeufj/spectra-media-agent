@@ -3,6 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Contracts\Ads\AdsServiceFactory;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Keyword;
@@ -19,6 +20,10 @@ class SearchTermMiningAgent
      * bypass the constructor leave it null instead of uninitialised.
      */
     private ?AdsServiceFactory $ads = null;
+
+    private ?array $googleKeywordProposals = null;
+
+    private bool $googleKeywordBatchApproved = false;
 
     public function __construct(?AdsServiceFactory $ads = null)
     {
@@ -79,7 +84,7 @@ class SearchTermMiningAgent
     protected function mineGoogle(Campaign $campaign, array &$results): void
     {
         $customer = $campaign->customer;
-        $customerId = $customer->google_ads_customer_id;
+        $customerId = $customer->cleanGoogleCustomerId();
         $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
@@ -87,10 +92,13 @@ class SearchTermMiningAgent
             $searchTerms = $getSearchTerms($customerId, $campaignResourceName, 'LAST_30_DAYS');
 
             $results['terms_analyzed'] += count($searchTerms);
-
+            $this->googleKeywordProposals = [];
             foreach ($searchTerms as $term) {
                 $this->evaluateSearchTerm($customer, $customerId, $campaignResourceName, $term, $results, 'google');
             }
+            $proposals = $this->googleKeywordProposals;
+            $this->googleKeywordProposals = null;
+            $this->applyGoogleKeywordProposals($campaign, $proposals, $results);
 
         } catch (\Throwable $e) {
             report($e);
@@ -99,7 +107,54 @@ class SearchTermMiningAgent
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
+        } finally {
+            $this->googleKeywordProposals = null;
+            $this->googleKeywordBatchApproved = false;
         }
+    }
+
+    private function applyGoogleKeywordProposals(Campaign $campaign, array $proposals, array &$results): void
+    {
+        if ($proposals === []) {
+            return;
+        }
+        // Sandbox mutators only record synthetic decisions and cannot reach Google.
+        try {
+            $assessment = $campaign->customer->is_sandbox ? ['ready' => true] : app(GoogleSearchMutationGuard::class)->assess($campaign, array_values($proposals));
+        } catch (\Throwable $e) {
+            report($e);
+            $assessment = ['ready' => false, 'message' => 'Keyword demand and affordable traffic could not be verified.'];
+            $results['errors'][] = 'Keyword portfolio assessment unavailable: '.$e->getMessage();
+        }
+        if (! ($assessment['ready'] ?? false)) {
+            $reason = $assessment['message'] ?? 'Keyword demand and affordable traffic could not be verified at the approved settings.';
+            $results['keywords_deferred'] = $proposals;
+            $results['requires_review'] = true;
+            $results['review_reason'] = $reason;
+            AgentActivity::record('search_term_mining', 'keyword_changes_need_review', $reason,
+                $campaign->customer_id, $campaign->id, ['proposals' => $proposals, 'assessment' => $assessment]);
+
+            return;
+        }
+        $this->googleKeywordBatchApproved = true;
+        foreach ($proposals as $proposal) {
+            if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                $results['requires_review'] = true;
+                $results['review_reason'] = 'A trial or spending hold started before the keyword change.';
+                AgentActivity::record('search_term_mining', 'keyword_changes_need_review', $results['review_reason'],
+                    $campaign->customer_id, $campaign->id, ['proposals' => $proposals]);
+
+                break;
+            }
+            if ($proposal['action'] === 'negative') {
+                $this->addAsNegative($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
+                    $campaign->googleAdsResourceName(), $proposal['text'], $proposal['reason'], $results, $proposal['match_type']);
+            } else {
+                $this->addAsKeyword($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
+                    $proposal['ad_group_resource'], $proposal['text'], KeywordMatchType::value($proposal['match_type']), $results);
+            }
+        }
+        $this->googleKeywordBatchApproved = false;
     }
 
     /**
@@ -235,6 +290,20 @@ class SearchTermMiningAgent
      */
     protected function addAsKeyword(Customer $customer, string $customerId, string $adGroupResourceName, string $keyword, int $matchType, array &$results): void
     {
+        if ($this->googleKeywordProposals !== null) {
+            $key = $adGroupResourceName.'|'.mb_strtolower($keyword).'|'.$matchType;
+            $this->googleKeywordProposals[$key] = ['action' => 'add', 'text' => $keyword,
+                'match_type' => KeywordMatchType::name($matchType), 'ad_group_resource' => $adGroupResourceName,
+                'selection_reason' => 'Observed search term with sufficient clicks, strong click-through rate and recorded conversions for this campaign.'];
+
+            return;
+        }
+        if (! $this->googleKeywordBatchApproved) {
+            $results['requires_review'] = true;
+            $results['review_reason'] = 'Google keyword additions require a verified campaign portfolio assessment.';
+
+            return;
+        }
         try {
             $resourceName = $this->ads()->keywords($customer)
                 ->addKeyword($customerId, $adGroupResourceName, $keyword, $matchType);
@@ -357,6 +426,19 @@ class SearchTermMiningAgent
             'BROAD' => KeywordMatchType::BROAD,
             default => KeywordMatchType::PHRASE,
         };
+        if ($this->googleKeywordProposals !== null) {
+            $key = 'negative|'.mb_strtolower($keyword).'|'.$matchType;
+            $this->googleKeywordProposals[$key] = ['action' => 'negative', 'text' => $keyword,
+                'match_type' => KeywordMatchType::name($matchType), 'scope' => 'campaign', 'reason' => $reason];
+
+            return;
+        }
+        if (! $this->googleKeywordBatchApproved) {
+            $results['requires_review'] = true;
+            $results['review_reason'] = 'Google keyword exclusions require a verified campaign portfolio assessment.';
+
+            return;
+        }
 
         try {
             $resourceName = $this->ads()->keywords($customer)

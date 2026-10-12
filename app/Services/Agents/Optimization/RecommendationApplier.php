@@ -6,6 +6,7 @@ use App\Features\AutoOptimization;
 use App\Models\AgentActivity;
 use App\Models\Audience;
 use App\Models\Campaign;
+use App\Services\Agents\GoogleSearchMutationGuard;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Competition\CompetitivePlatformGateway;
 use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
@@ -104,11 +105,26 @@ class RecommendationApplier
             ];
         }
 
+        if ($campaign->google_ads_campaign_id && ($type === 'KEYWORDS' || BiddingRecommendationGuard::keywordBidChange($recommendation))) {
+            $action = BiddingRecommendationGuard::keywordBidChange($recommendation) ? 'bid'
+                : strtolower((string) ($recommendation['direction'] ?? $recommendation['action'] ?? ''));
+            $change = ['action' => $action, 'resource_name' => $recommendation['criterion_resource_name']
+                ?? $recommendation['keyword_resource'] ?? null];
+            if ($action === 'bid') {
+                $change['bid_micros'] = $recommendation['suggested_value'] ?? null;
+            }
+            $reach = app(GoogleSearchMutationGuard::class)->assess($campaign, [$change], $approvedByUser);
+            if (! $reach['ready']) {
+                return ['applied' => false, 'requires_review' => true, 'message' => $reach['message'],
+                    'reach_evidence' => $reach, 'recommendation' => $recommendation];
+            }
+        }
+
         try {
             return match ($type) {
                 'BUDGET' => $this->applyBudget($campaign, $recommendation),
                 'KEYWORDS' => $this->applyKeyword($campaign, $recommendation),
-                'NEGATIVE_KEYWORDS' => $this->applyNegativeKeywords($campaign, $recommendation),
+                'NEGATIVE_KEYWORDS' => $this->applyNegativeKeywords($campaign, $recommendation, $approvedByUser),
                 'BIDDING' => $this->applyBidding($campaign, $recommendation, $approvedByUser),
                 'TARGETING' => $this->applyTargeting($campaign, $recommendation),
                 'AD_EXTENSIONS' => $this->applyExtension($campaign, $recommendation),
@@ -241,7 +257,7 @@ class RecommendationApplier
      * response can't build a runaway block-list. Defaults to EXACT match to avoid
      * over-blocking legitimate traffic.
      */
-    private function applyNegativeKeywords(Campaign $campaign, array $rec): array
+    private function applyNegativeKeywords(Campaign $campaign, array $rec, bool $approvedByUser = false): array
     {
         $customer = $campaign->customer;
 
@@ -281,6 +297,13 @@ class RecommendationApplier
 
         $customerId = $customer->cleanGoogleCustomerId();
         $resource = $campaign->googleAdsResourceName();
+        $changes = array_map(fn ($text) => ['action' => 'negative', 'text' => $text,
+            'match_type' => KeywordMatchType::name($matchType), 'scope' => 'campaign'], $keywords);
+        $reach = app(GoogleSearchMutationGuard::class)->assess($campaign, $changes, $approvedByUser);
+        if (! $reach['ready']) {
+            return ['applied' => false, 'requires_review' => true, 'message' => $reach['message'],
+                'reach_evidence' => $reach, 'recommendation' => $rec];
+        }
         $service = new AddNegativeKeyword($customer);
 
         $added = [];

@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\Strategy;
 use App\Services\Agents\GoogleSearchDeliveryRecovery;
+use App\Services\Agents\GoogleSearchMutationGuard;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
@@ -123,6 +124,13 @@ class SearchDeliveryRecoveryTest extends TestCase
     public function test_capped_recovery_is_validated_then_scheduled_once_without_raising_budget(): void
     {
         $campaign = $this->campaign();
+        $reach = $this->createMock(GoogleSearchMutationGuard::class);
+        $reach->expects($this->once())->method('assess')->with($this->callback(fn (Campaign $current) => $current->is($campaign)), $this->callback(function ($changes) {
+            return $changes[0]['action'] === 'bidding' && $changes[0]['strategy'] === 'MAXIMIZE_CLICKS'
+                && $changes[0]['expected_bidding_strategy'] === BiddingStrategyType::MAXIMIZE_CONVERSIONS
+                && $changes[0]['cpc_bid_ceiling_micros'] > 0 && $changes[0]['cpc_bid_ceiling_micros'] <= 7_500_000;
+        }))->willReturn(['ready' => true, 'observed_snapshot' => $this->snapshot()]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $reach);
         $updater = new class extends UpdateCampaignBiddingStrategy
         {
             public array $calls = [];
@@ -161,6 +169,47 @@ class SearchDeliveryRecoveryTest extends TestCase
         $this->assertSame([$result['cpc_ceiling_micros'], $result['cpc_ceiling_micros']], array_column($updater->calls, 'ceiling'));
         Queue::assertPushed(VerifySearchDeliveryRecovery::class, 1);
         $this->assertFalse($agent->bootstrap($campaign, $this->snapshot())['started']);
+    }
+
+    public function test_unknown_keyword_reach_defers_bidding_bootstrap_before_validate_or_live_mutation(): void
+    {
+        $campaign = $this->campaign();
+        $reach = $this->createMock(GoogleSearchMutationGuard::class);
+        $reach->expects($this->once())->method('assess')->willReturn(['ready' => false,
+            'message' => 'No affordable Search reach is demonstrated at this capped bid.', 'issues' => []]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $reach);
+        $updater = $this->createMock(UpdateCampaignBiddingStrategy::class);
+        $updater->expects($this->never())->method('__invoke');
+        $agent = new class($updater) extends GoogleSearchDeliveryRecovery
+        {
+            public function __construct(private UpdateCampaignBiddingStrategy $fakeUpdater) {}
+
+            protected function updater(Customer $customer): UpdateCampaignBiddingStrategy
+            {
+                return $this->fakeUpdater;
+            }
+        };
+        $result = $agent->bootstrap($campaign, $this->snapshot());
+        $this->assertFalse($result['started']);
+        $this->assertStringContainsString('No affordable Search reach', $result['reason']);
+        $this->assertTrue(AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_recovery_deferred')->exists());
+        Queue::assertNotPushed(VerifySearchDeliveryRecovery::class);
+        Http::assertNothingSent();
+    }
+
+    public function test_fresh_conversion_or_target_cpa_evidence_blocks_a_previously_eligible_bid_experiment(): void
+    {
+        $campaign = $this->campaign();
+        $snapshot = $this->snapshot();
+        $snapshot['auction']['conversions'] = 1;
+        $reach = $this->createMock(GoogleSearchMutationGuard::class);
+        $reach->expects($this->once())->method('assess')->willReturn(['ready' => true, 'observed_snapshot' => $snapshot]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $reach);
+        $result = (new GoogleSearchDeliveryRecovery)->bootstrap($campaign, $this->snapshot());
+        $this->assertFalse($result['started']);
+        $this->assertStringContainsString('Fresh delivery evidence', $result['reason']);
+        Queue::assertNotPushed(VerifySearchDeliveryRecovery::class);
+        Http::assertNothingSent();
     }
 
     public function test_warning_only_run_is_visible_as_needing_attention(): void
