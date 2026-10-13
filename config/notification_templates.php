@@ -64,33 +64,19 @@ return [
     ],
 
     // ─── Spend / budget ──────────────────────────────────────────────────────
-    'critical_agent_alert.spend_anomaly' => [
-        'category' => 'Spend & budget',
-        'label' => 'Unusual spend detected',
-        'description' => 'A campaign is projected to spend well beyond its budget cap (runaway).',
-        'recipients' => $A,
-        'variables' => ['title' => 'Unusual spend detected for "Summer Sale"', 'message' => 'Campaign "Summer Sale" has spent $26.58 so far today and is projected to reach $63.79…', 'campaign_name' => 'Summer Sale', 'today_spend' => '26.58', 'projected_spend' => '63.79', 'daily_budget' => '40.00'],
-    ],
-    'critical_agent_alert.budget_exhaustion' => [
-        'category' => 'Spend & budget',
-        'label' => 'Budget exhausting early',
-        'description' => 'A campaign has spent most of its daily budget before midday.',
-        'recipients' => $C,
-        'variables' => ['title' => 'Budget 85% spent by 11:00', 'message' => 'Campaign "Summer Sale" has spent $34 (85%) of its $40 daily budget by 11:00…', 'campaign_name' => 'Summer Sale'],
-    ],
     'critical_agent_alert.budget_underpacing' => [
         'category' => 'Spend & budget',
         'label' => 'Budget underpacing',
-        'description' => 'A campaign is well below its expected monthly spend.',
+        'description' => 'Verified spend over complete account days is below the current average-budget pace. Earlier budget windows and incomplete days are excluded.',
         'recipients' => $C,
-        'variables' => ['title' => 'Budget Pacing Alert', 'message' => 'Campaign "Summer Sale" is only at 40% of expected monthly spend…', 'campaign_name' => 'Summer Sale', 'pacing_pct' => '40'],
+        'variables' => ['title' => 'Budget Pacing Alert', 'message' => 'Campaign "Summer Sale" is at 40% of its current average-budget pace. Reported AUD 48.00 against AUD 120.00 over 3 complete account days at AUD 40.00/day. Reporting can lag; this is not a billing limit or month-end forecast.', 'campaign_name' => 'Summer Sale', 'pacing_pct' => '40'],
     ],
     'critical_agent_alert.budget_overpacing' => [
         'category' => 'Spend & budget',
         'label' => 'Budget overpacing',
-        'description' => 'A campaign will exhaust its monthly budget early.',
+        'description' => 'Verified spend over complete account days is above the current average-budget pace. This comparison does not predict budget exhaustion or a monthly bill.',
         'recipients' => $C,
-        'variables' => ['title' => 'Budget Pacing Alert', 'message' => 'Campaign "Summer Sale" is at 160% of expected spend…', 'campaign_name' => 'Summer Sale', 'pacing_pct' => '160'],
+        'variables' => ['title' => 'Budget Pacing Alert', 'message' => 'Campaign "Summer Sale" is at 160% of its current average-budget pace. Reported AUD 192.00 against AUD 120.00 over 3 complete account days at AUD 40.00/day. Reporting can lag; this is not a billing limit or month-end forecast.', 'campaign_name' => 'Summer Sale', 'pacing_pct' => '160'],
     ],
 
     // ─── Performance ─────────────────────────────────────────────────────────

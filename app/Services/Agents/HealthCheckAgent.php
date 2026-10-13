@@ -6,14 +6,11 @@ use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
-use App\Models\FacebookAdsPerformanceData;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\KeywordQualityScore;
-use App\Models\LinkedInAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\Health\BillingHealthChecker;
+use App\Services\Health\CampaignBudgetPacing;
 use App\Services\Health\CampaignHealthChecker;
 use App\Services\Health\FacebookAdsHealthChecker;
 use App\Services\Health\GoogleAdsHealthChecker;
@@ -158,7 +155,7 @@ class HealthCheckAgent
     }
 
     /**
-     * Check 30-day rolling budget pacing for all active campaigns and alert if off-track.
+     * Check current-budget pacing for active campaigns with verified spend windows.
      */
     public function checkAllMonthlyPacing(Customer $customer): void
     {
@@ -176,65 +173,21 @@ class HealthCheckAgent
 
     public function checkMonthlyPacing(Campaign $campaign): void
     {
-        if (! $campaign->daily_budget) {
+        $pacing = app(CampaignBudgetPacing::class)->assess($campaign);
+        if ($pacing['status'] !== 'ready') {
+            Log::debug('HealthCheckAgent: Budget pacing comparison held', ['campaign_id' => $campaign->id, 'pacing' => $pacing]);
+
             return;
         }
-
-        // Don't alert on campaigns that are intentionally paused, in draft, or pending admin deployment
-        if (in_array($campaign->status, CampaignStatus::nonDelivering(), true)) {
-            return;
-        }
-
-        // Don't alert on campaigns that aren't actively serving on the platform
-        $inactivePrimary = ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED'];
-        if ($campaign->primary_status && in_array(strtoupper($campaign->primary_status), $inactivePrimary, true)) {
-            return;
-        }
-
-        $monthStart = now()->startOfMonth()->toDateString();
-        $today = now()->toDateString();
-        $daysElapsed = now()->day;
-        $daysInMonth = now()->daysInMonth;
-        $monthlyBudget = $campaign->daily_budget * $daysInMonth;
-        $expectedSpend = $campaign->daily_budget * $daysElapsed;
-
-        if ($expectedSpend <= 0 || $daysElapsed < 3) {
-            return;
-        }
-
-        // Sum actual spend from all platforms for this month
-        $actualSpend = 0;
-
-        if ($campaign->google_ads_campaign_id) {
-            $actualSpend += GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
-                ->whereBetween('date', [$monthStart, $today])
-                ->sum('cost');
-        }
-        if ($campaign->facebook_ads_campaign_id) {
-            $actualSpend += FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
-                ->whereBetween('date', [$monthStart, $today])
-                ->sum('cost');
-        }
-        if ($campaign->microsoft_ads_campaign_id) {
-            $actualSpend += MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
-                ->whereBetween('date', [$monthStart, $today])
-                ->sum('cost');
-        }
-        if ($campaign->linkedin_campaign_id) {
-            $actualSpend += LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
-                ->whereBetween('date', [$monthStart, $today])
-                ->sum('cost');
-        }
-
-        $pacingRatio = $actualSpend / max($expectedSpend, 1);
+        $pacingRatio = $pacing['pacing_ratio'];
 
         if ($pacingRatio >= 0.7 && $pacingRatio <= 1.15) {
             return; // On track
         }
 
         $direction = $pacingRatio < 0.7 ? 'underpacing' : 'overpacing';
-        $projected = $daysInMonth > 0 ? round(($actualSpend / max($daysElapsed, 1)) * $daysInMonth, 2) : 0;
-        $cacheKey = "monthly_pacing_alert:{$campaign->id}:{$direction}";
+        $window = hash('sha256', $pacing['basis'].'|'.$pacing['from'].'|'.$pacing['daily_budget_micros'].'|'.$pacing['account_timezone']);
+        $cacheKey = "budget_pacing_alert:v2:{$campaign->id}:{$window}:{$direction}";
 
         if (Cache::has($cacheKey)) {
             return;
@@ -242,9 +195,8 @@ class HealthCheckAgent
         Cache::put($cacheKey, true, now()->addHours(24));
 
         $pacingPct = round($pacingRatio * 100);
-        $message = $direction === 'underpacing'
-            ? "Campaign \"{$campaign->name}\" is only at {$pacingPct}% of expected monthly spend. Projected month-end: \${$projected} vs \${$monthlyBudget} budget."
-            : "Campaign \"{$campaign->name}\" is at {$pacingPct}% of expected spend — will exhaust budget early. Projected: \${$projected} vs \${$monthlyBudget} budget.";
+        $message = 'Campaign "'.$campaign->name.'" is at '.$pacingPct.'% of its current average-budget pace. '
+            .CampaignBudgetPacing::summary($pacing).' Review delivery and the current spending limits together.';
 
         Log::warning("HealthCheckAgent: Monthly pacing alert — {$direction} for campaign {$campaign->id}");
 
@@ -257,10 +209,12 @@ class HealthCheckAgent
                     'campaign_id' => $campaign->id,
                     'campaign_name' => $campaign->name,
                     'pacing_pct' => $pacingPct,
-                    'actual_spend' => $actualSpend,
-                    'expected_spend' => $expectedSpend,
-                    'projected_spend' => $projected,
-                    'monthly_budget' => $monthlyBudget,
+                    'actual_spend' => CampaignBudgetPacing::amount($pacing['actual_spend_micros'], $pacing['currency_code']),
+                    'expected_spend' => CampaignBudgetPacing::amount($pacing['expected_spend_micros'], $pacing['currency_code']),
+                    'pacing' => $pacing,
+                    'currency_code' => $pacing['currency_code'],
+                    'window_from' => $pacing['from'],
+                    'window_through' => $pacing['through'],
                 ],
                 CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $campaign->customer

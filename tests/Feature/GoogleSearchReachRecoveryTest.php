@@ -40,7 +40,8 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id,
             'status' => CampaignStatus::Active, 'google_ads_campaign_id' => 'customers/1234567890/campaigns/123',
             'daily_budget' => '10.00', 'approved_daily_budget' => '10.00', 'budget_confirmed_at' => now()->subDays(2),
-            'end_date' => now()->addDays(30), 'spend_guardrails' => $trial ? ['enabled' => true,
+            'start_date' => now('Australia/Sydney')->startOfDay()->subDays(3),
+            'end_date' => now('Australia/Sydney')->startOfDay()->addDays(30), 'spend_guardrails' => $trial ? ['enabled' => true,
                 'started_at' => now()->subHours(20)->toIso8601String(), 'max_cpc_bid_micros' => 3_000_000,
                 'max_daily_budget_micros' => 10_000_000] : null]);
         Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
@@ -52,6 +53,8 @@ class GoogleSearchReachRecoveryTest extends TestCase
     private function snapshot(): array
     {
         return ['status' => 2, 'channel' => 2, 'google_search_enabled' => true,
+            'start_date' => now('Australia/Sydney')->startOfDay()->subDays(3)->toDateString(),
+            'end_date' => now('Australia/Sydney')->startOfDay()->addDays(30)->toDateString(),
             'bidding_strategy' => BiddingStrategyType::TARGET_SPEND, 'cpc_bid_ceiling_micros' => 3_000_000, 'daily_budget_micros' => 10_000_000, 'actual_cpc_ceiling_micros' => 3_000_000,
             'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'approved_ads' => 1, 'eligible_keywords' => 1,
             'geo_target_constants' => ['geoTargetConstants/2036'], 'language_constants' => ['languageConstants/1000'],
@@ -603,7 +606,7 @@ class FakeSearchReachPlanner extends GoogleSearchReachPlanner
     {
         $this->mutationChecks++;
         $period = 30;
-        $start = now($snapshot['time_zone'])->addDay()->startOfDay();
+        $start = now($snapshot['time_zone'])->startOfDay()->addDay();
         $evidence = ['status' => 'evidence_ready', 'issues' => [], 'historical' => ['success' => true,
             'checked_at' => now()->toIso8601String(), 'keywords' => array_map(fn ($keyword) => ['text' => $keyword['text'], 'avg_monthly_searches' => 1], $keywords)],
             'forecast' => ['success' => true, 'auto_repair_safe' => true, 'source' => 'google_keyword_forecast',

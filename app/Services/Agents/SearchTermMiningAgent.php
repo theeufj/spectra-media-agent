@@ -8,7 +8,9 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Keyword;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SearchTermMiningAgent
@@ -120,6 +122,27 @@ class SearchTermMiningAgent
         }
         // Sandbox mutators only record synthetic decisions and cannot reach Google.
         try {
+            if (! $campaign->customer->is_sandbox && array_filter($proposals, fn ($proposal) => $proposal['action'] === 'add') !== []) {
+                $keywords = $this->existingGoogleKeywords($campaign);
+                $proposals = array_filter($proposals, function ($proposal) use ($keywords): bool {
+                    if ($proposal['action'] !== 'add') {
+                        return true;
+                    }
+                    foreach ($keywords as $keyword) {
+                        if (($keyword['status'] ?? null) !== 'REMOVED'
+                            && ($keyword['ad_group_resource'] ?? null) === $proposal['ad_group_resource']
+                            && ($keyword['match_type'] ?? null) === $proposal['match_type']
+                            && mb_strtolower(trim($keyword['text'] ?? '')) === mb_strtolower(trim($proposal['text']))) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                });
+            }
+            if ($proposals === []) {
+                return;
+            }
             $assessment = $campaign->customer->is_sandbox ? ['ready' => true] : app(GoogleSearchMutationGuard::class)->assess($campaign, array_values($proposals));
         } catch (\Throwable $e) {
             report($e);
@@ -137,24 +160,113 @@ class SearchTermMiningAgent
             return;
         }
         $this->googleKeywordBatchApproved = true;
-        foreach ($proposals as $proposal) {
-            if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
-                $results['requires_review'] = true;
-                $results['review_reason'] = 'A trial or spending hold started before the keyword change.';
-                AgentActivity::record('search_term_mining', 'keyword_changes_need_review', $results['review_reason'],
-                    $campaign->customer_id, $campaign->id, ['proposals' => $proposals]);
+        // Exclusions depend on the replacement portfolio. Install additions first,
+        // then verify Google's actual portfolio before removing any reach.
+        $proposals = [...array_filter($proposals, fn ($proposal) => $proposal['action'] === 'add'),
+            ...array_filter($proposals, fn ($proposal) => $proposal['action'] === 'negative')];
+        $hasAdditions = false;
+        $negativesVerified = false;
+        try {
+            foreach ($proposals as $proposal) {
+                if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                    if ($results['keywords_added'] !== [] || $results['negatives_added'] !== []) {
+                        $this->recordPartialGoogleBatch($campaign, $proposals, $proposal, $results,
+                            ['ready' => false, 'message' => 'A new trial or spending hold prevents remaining changes and portfolio verification.']);
 
-                break;
+                        break;
+                    }
+                    $results['requires_review'] = true;
+                    $results['review_reason'] = 'A trial or spending hold started before the keyword change.';
+                    AgentActivity::record('search_term_mining', 'keyword_changes_need_review', $results['review_reason'],
+                        $campaign->customer_id, $campaign->id, ['proposals' => $proposals]);
+
+                    break;
+                }
+                if ($proposal['action'] === 'negative') {
+                    if ($hasAdditions && ! $negativesVerified && ! $campaign->customer->is_sandbox) {
+                        try {
+                            $assessment = app(GoogleSearchMutationGuard::class)->assess($campaign,
+                                array_values(array_filter($proposals, fn ($change) => $change['action'] === 'negative')));
+                        } catch (\Throwable $e) {
+                            report($e);
+                            $assessment = ['ready' => false, 'message' => 'The installed keyword portfolio could not be verified before exclusions.'];
+                        }
+                        if (! ($assessment['ready'] ?? false)) {
+                            $this->recordPartialGoogleBatch($campaign, $proposals, $proposal, $results, $assessment);
+
+                            break;
+                        }
+                        $negativesVerified = true;
+                    }
+                    $before = count($results['negatives_added']);
+                    $this->addAsNegative($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
+                        $campaign->googleAdsResourceName(), $proposal['text'], $proposal['reason'], $results, $proposal['match_type']);
+                    $succeeded = count($results['negatives_added']) === $before + 1;
+                } else {
+                    $hasAdditions = true;
+                    $before = count($results['keywords_added']);
+                    $this->addAsKeyword($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
+                        $proposal['ad_group_resource'], $proposal['text'], KeywordMatchType::value($proposal['match_type']), $results);
+                    $succeeded = count($results['keywords_added']) === $before + 1;
+                }
+                if (! $succeeded && ! $campaign->customer->is_sandbox) {
+                    try {
+                        $readback = app(GoogleSearchMutationGuard::class)->assess($campaign, []);
+                    } catch (\Throwable $e) {
+                        report($e);
+                        $readback = ['ready' => false, 'message' => 'The actual keyword portfolio could not be verified after an incomplete change.'];
+                    }
+                    $this->recordPartialGoogleBatch($campaign, $proposals, $proposal, $results, $readback);
+
+                    break;
+                }
             }
-            if ($proposal['action'] === 'negative') {
-                $this->addAsNegative($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
-                    $campaign->googleAdsResourceName(), $proposal['text'], $proposal['reason'], $results, $proposal['match_type']);
-            } else {
-                $this->addAsKeyword($campaign->customer, $campaign->customer->cleanGoogleCustomerId(),
-                    $proposal['ad_group_resource'], $proposal['text'], KeywordMatchType::value($proposal['match_type']), $results);
-            }
+        } finally {
+            $this->googleKeywordBatchApproved = false;
         }
-        $this->googleKeywordBatchApproved = false;
+    }
+
+    protected function existingGoogleKeywords(Campaign $campaign): array
+    {
+        $snapshot = app(InspectSearchDelivery::class, ['customer' => $campaign->customer])->inspect($campaign);
+        if (! is_array($snapshot) || ! is_array($snapshot['keywords'] ?? null)) {
+            throw new \RuntimeException('Existing Google keywords could not be verified before proposing additions.');
+        }
+        $customerId = $campaign->customer->cleanGoogleCustomerId();
+
+        return array_values(array_filter($snapshot['keywords'], function ($keyword) use ($customerId): bool {
+            if (! is_array($keyword) || ! preg_match('~^customers/'.preg_quote($customerId, '~').'/adGroups/(\d+)$~',
+                $keyword['ad_group_resource'] ?? '', $group)) {
+                return false;
+            }
+
+            return (bool) preg_match('~^customers/'.preg_quote($customerId, '~').'/adGroupCriteria/'.$group[1].'\~\d+$~',
+                $keyword['resource_name'] ?? '');
+        }));
+    }
+
+    private function recordPartialGoogleBatch(Campaign $campaign, array $proposals, array $failed, array &$results, array $readback): void
+    {
+        $reason = 'The keyword batch was not fully installed or its resulting reach could not be verified. Remaining changes are held for review.';
+        $results['requires_review'] = true;
+        $results['review_reason'] = $reason;
+        $details = ['planned_changes' => $proposals, 'failed_change' => $failed,
+            'applied_keywords' => $results['keywords_added'], 'applied_negatives' => $results['negatives_added'],
+            'actual_portfolio_assessment' => $readback];
+        DB::transaction(function () use ($campaign, $reason, $details): void {
+            $current = Campaign::whereKey($campaign->id)->where('customer_id', $campaign->customer_id)->lockForUpdate()->first();
+            if (! $current) {
+                return;
+            }
+            $state = $current->search_delivery_state ?? [];
+            $state['status'] = 'needs_review';
+            $state['mutation_allowed'] = false;
+            $state['verification']['errors'][] = ['code' => 'keyword_batch_partial_apply', 'message' => $reason,
+                'agent' => 'search_term_mining', 'checked_at' => now()->toIso8601String(), ...$details];
+            $current->forceFill(['search_delivery_state' => $state])->save();
+        });
+        AgentActivity::record('search_term_mining', 'keyword_changes_need_review', $reason,
+            $campaign->customer_id, $campaign->id, $details, 'needs_review');
     }
 
     /**

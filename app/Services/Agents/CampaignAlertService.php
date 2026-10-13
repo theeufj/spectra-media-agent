@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Notification;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Health\CampaignBudgetPacing;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,17 +19,8 @@ use Illuminate\Support\Str;
  * Detects critical campaign events and sends real-time notifications.
  * Called from HourlyBudgetOptimization, AutomatedCampaignMaintenance, or standalone.
  *
- * Spend data design note:
- * Each campaign_hourly_performance row is ONE HOUR's spend, so a day's total is
- * SUM(spend) across its rows.
- *
- * It used to be a cumulative day-to-date snapshot, and this class read it with
- * MAX. HourlyBudgetOptimization now subtracts the hours already recorded before
- * writing, because averaging a cumulative series and multiplying by 24 overstated
- * daily volume by roughly an order of magnitude — which is what kept
- * under-performing creatives above the rotation threshold. Left on MAX, this
- * class would have read a single hour as the whole day and quietly stopped
- * firing budget-exhaustion and spend-anomaly alerts.
+ * Spend alerts compare verified complete account days at the current budget.
+ * Incomplete hourly snapshots do not establish budget exhaustion or future costs.
  */
 class CampaignAlertService
 {
@@ -174,9 +166,8 @@ class CampaignAlertService
     {
         $alerts = [];
 
-        $alerts = array_merge($alerts, $this->checkBudgetExhaustion($campaign));
+        $alerts = array_merge($alerts, $this->checkBudgetPacing($campaign));
         $alerts = array_merge($alerts, $this->checkConversionDrop($campaign));
-        $alerts = array_merge($alerts, $this->checkSpendAnomaly($campaign));
 
         foreach ($alerts as $alert) {
             $this->sendAlert($campaign, $alert);
@@ -186,49 +177,38 @@ class CampaignAlertService
     }
 
     /**
-     * Check if campaign budget is exhausting too early in the day.
-     * Fires at most once per cooldown window.
+     * A verified average-budget pace is a review signal, not a daily spend cap.
      */
-    protected function checkBudgetExhaustion(Campaign $campaign): array
+    protected function checkBudgetPacing(Campaign $campaign): array
     {
-        $currentHour = (int) now()->format('H');
-
-        // Only meaningful before 2 PM — after that, running low is expected
-        if ($currentHour >= 14) {
+        $pacing = app(CampaignBudgetPacing::class)->assess($campaign);
+        if ($pacing['status'] !== 'ready' || $pacing['pacing_ratio'] <= 1.2) {
             return [];
         }
-
-        $dailyBudget = $campaign->daily_budget ?? 0;
-        if ($dailyBudget <= 0) {
-            return [];
-        }
-
-        // Each hourly row holds the cumulative daily total at snapshot time.
-        // MAX gives the most recent (highest) cumulative total = actual spend so far.
-        $todaySpend = $this->getTodaySpend($campaign);
-
-        $spendRatio = $todaySpend / $dailyBudget;
-        if ($spendRatio < 0.8) {
-            return [];
-        }
-
-        $alertType = 'budget_exhaustion';
+        $alertType = 'budget_overpacing';
         if ($this->isOnCooldown($campaign, $alertType)) {
             return [];
         }
-
-        $percentSpent = round($spendRatio * 100);
+        $pacingPercent = round($pacing['pacing_ratio'] * 100);
 
         return [[
             'type' => $alertType,
-            'severity' => 'critical',
-            'title' => "Budget {$percentSpent}% spent by {$currentHour}:00",
-            'message' => "Campaign \"{$campaign->name}\" has spent \$".round($todaySpend, 2)." ({$percentSpent}%) of its \${$dailyBudget} daily budget by {$currentHour}:00. It may run out before the evening peak.",
-            'action_required' => 'Consider increasing the daily budget or adjusting bid strategy to spread spend more evenly.',
+            'severity' => 'warning',
+            'title' => 'Budget pace needs review for "'.$campaign->name.'"',
+            'message' => 'Campaign "'.$campaign->name.'" is at '.$pacingPercent.'% of its current average-budget pace. '
+                .CampaignBudgetPacing::summary($pacing),
+            'action_required' => 'Review the reported spend, delivery and approved spending limits together. This alert does not change the budget, bids or campaign status.',
+            'action_url' => route('campaigns.show', $campaign),
+            'action_label' => 'Review campaign spending',
             'campaign_id' => $campaign->id,
             'campaign_name' => $campaign->name,
-            'spend' => round($todaySpend, 2),
-            'budget' => $dailyBudget,
+            'pacing_pct' => $pacingPercent,
+            'actual_spend' => CampaignBudgetPacing::amount($pacing['actual_spend_micros'], $pacing['currency_code']),
+            'expected_spend' => CampaignBudgetPacing::amount($pacing['expected_spend_micros'], $pacing['currency_code']),
+            'currency_code' => $pacing['currency_code'],
+            'window_from' => $pacing['from'],
+            'window_through' => $pacing['through'],
+            'pacing' => $pacing,
         ]];
     }
 
@@ -277,95 +257,6 @@ class CampaignAlertService
     }
 
     /**
-     * Check for spend anomalies — sudden spikes that could indicate runaway costs.
-     * Fires at most once per cooldown window.
-     */
-    protected function checkSpendAnomaly(Campaign $campaign): array
-    {
-        // 7-day average: sum each past day's hourly rows for that day's total, then
-        // average across days.
-        $history = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
-            ->where('date', '>=', now()->subDays(7)->toDateString())
-            ->where('date', '<', now()->toDateString())
-            ->selectRaw('date, SUM(spend) as daily_spend')
-            ->groupBy('date')
-            ->get();
-
-        // Require at least 5 days of history — new campaigns have a near-zero baseline
-        // that makes any real spend look like an anomaly.
-        if ($history->count() < 5) {
-            return [];
-        }
-
-        $avgDailySpend = $history->avg('daily_spend') ?? 0;
-
-        if ($avgDailySpend <= 0) {
-            return [];
-        }
-
-        // Today's spend: MAX cumulative snapshot so far (not the sum of all snapshots)
-        $todaySpend = $this->getTodaySpend($campaign);
-
-        // Only project if we have at least 2 hours of data to avoid early-morning noise
-        $currentHour = max(2, (int) now()->format('H'));
-        $projectedSpend = ($todaySpend / $currentHour) * 24;
-
-        // Alert only if both the projection AND actual spend so far are meaningfully elevated
-        if ($projectedSpend <= $avgDailySpend * 2) {
-            return [];
-        }
-        if ($todaySpend <= 20) {
-            return [];
-        }
-
-        // Gate against the daily budget cap. Google allows a campaign to spend up to ~2x its
-        // daily budget on any single day (trued up over the month), so a projection anywhere
-        // up to 2x the cap is normal pacing, NOT an anomaly — even if the recent average was
-        // lower. Only a projection that clears 2x the cap is genuine runaway spend. Without
-        // this, a campaign simply pacing up to its budget (e.g. $63 projected against a $40
-        // cap, well within Google's $80 daily ceiling) triggered false "unusual spend" alerts.
-        $dailyBudget = (float) ($campaign->daily_budget ?? 0);
-        if ($dailyBudget > 0 && $projectedSpend <= $dailyBudget * 2) {
-            return [];
-        }
-
-        $alertType = 'spend_anomaly';
-        if ($this->isOnCooldown($campaign, $alertType)) {
-            return [];
-        }
-
-        $budgetNote = $dailyBudget > 0
-            ? ' and exceeds its $'.round($dailyBudget, 2).' daily budget cap'
-            : '';
-
-        return [[
-            'type' => $alertType,
-            'severity' => 'warning',
-            'title' => "Unusual spend detected for \"{$campaign->name}\"",
-            'message' => "Campaign \"{$campaign->name}\" has spent \$".round($todaySpend, 2).' so far today and is projected to reach $'.round($projectedSpend, 2).' — '.round(($projectedSpend / $avgDailySpend) * 100).'% of its $'.round($avgDailySpend, 2)." daily average{$budgetNote}.",
-            'action_required' => 'Review bid strategy and check for competitive pressure driving up costs.',
-            'campaign_id' => $campaign->id,
-            'campaign_name' => $campaign->name,
-            'projected_spend' => round($projectedSpend, 2),
-            'avg_daily_spend' => round($avgDailySpend, 2),
-            'today_spend' => round($todaySpend, 2),
-            'daily_budget' => round($dailyBudget, 2),
-        ]];
-    }
-
-    /**
-     * Get today's actual spend for a campaign.
-     *
-     * Each hourly row is one hour's spend, so the day so far is their sum.
-     */
-    protected function getTodaySpend(Campaign $campaign): float
-    {
-        return (float) CampaignHourlyPerformance::where('campaign_id', $campaign->id)
-            ->where('date', now()->toDateString())
-            ->sum('spend');
-    }
-
-    /**
      * Returns true if this alert type was already sent for this campaign within the cooldown window.
      * Records the alert in the cache when returning false (i.e., first time in the window).
      */
@@ -404,19 +295,12 @@ class CampaignAlertService
                 $alert
             );
 
-            // Default recipients per type (admins can override each in the template manager):
-            // spend-anomaly is operational triage → admins; budget-exhaustion and
-            // conversion-drop are customer-facing.
-            $defaultRecipients = $alert['type'] === 'spend_anomaly'
-                ? CriticalAgentAlert::RECIPIENTS_ADMINS
-                : CriticalAgentAlert::RECIPIENTS_CUSTOMERS;
-
             CriticalAgentAlert::deliver(
                 $alert['type'],
                 $alert['title'],
                 $alert['message'],
                 $alert,
-                $defaultRecipients,
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $customer
             );
 

@@ -21,6 +21,7 @@ use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
+use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
@@ -39,6 +40,7 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         Cache::flush();
         Notification::fake();
         Http::fake();
+        $this->existingKeywords([]);
     }
 
     private function campaign(array $changes = []): Campaign
@@ -51,15 +53,34 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
             'daily_budget' => '10.00', 'approved_daily_budget' => '10.00', 'budget_confirmed_at' => now()], $changes));
     }
 
-    private function guard(Campaign $campaign, bool $ready, int $changes, string|array $action = 'add'): void
+    private function existingKeywords(array $keywords): void
+    {
+        $inspector = $this->createMock(InspectSearchDelivery::class);
+        $inspector->method('inspect')->willReturn(['keywords' => $keywords]);
+        $this->app->bind(InspectSearchDelivery::class, fn () => $inspector);
+    }
+
+    private function keyword(array $changes = []): array
+    {
+        return array_replace(['text' => ' GOOGLE ADS MANAGEMENT SOFTWARE ', 'match_type' => 'EXACT',
+            'ad_group_resource' => 'customers/1234567890/adGroups/7',
+            'resource_name' => 'customers/1234567890/adGroupCriteria/7~10',
+            'status' => 'ENABLED', 'ad_group_status' => 'ENABLED'], $changes);
+    }
+
+    private function guard(Campaign $campaign, bool $ready, int $changes, string|array $action = 'add', bool $recheckNegatives = false): void
     {
         $guard = $this->createMock(GoogleSearchMutationGuard::class);
-        $guard->expects($this->once())->method('assess')->willReturnCallback(function ($actual, array $proposals) use ($campaign, $ready, $changes, $action): array {
+        $call = 0;
+        $guard->expects($this->exactly($recheckNegatives ? 2 : 1))->method('assess')->willReturnCallback(function ($actual, array $proposals) use ($campaign, $ready, $changes, $action, &$call): array {
             $this->assertSame($campaign->id, $actual->id);
-            $this->assertCount($changes, $proposals, 'The resulting portfolio must be assessed once as a batch.');
-            if (is_array($action)) {
+            if (++$call > 1) {
+                $this->assertSame(['negative'], array_column($proposals, 'action'), 'Exclusions must be checked against the actual installed replacement portfolio.');
+            } elseif (is_array($action)) {
+                $this->assertCount($changes, $proposals, 'The resulting portfolio must be assessed once as a batch.');
                 $this->assertSame($action, array_column($proposals, 'action'));
             } else {
+                $this->assertCount($changes, $proposals, 'The resulting portfolio must be assessed once as a batch.');
                 foreach ($proposals as $proposal) {
                     $this->assertSame($action, $proposal['action']);
                 }
@@ -113,7 +134,7 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
     public function test_mining_safety_negatives_can_proceed_when_remaining_traffic_is_verified(): void
     {
         $campaign = $this->campaign();
-        $this->guard($campaign, true, 3, ['add', 'add', 'negative']);
+        $this->guard($campaign, true, 3, ['add', 'add', 'negative'], true);
         $factory = new SearchKeywordGuardFactory($this->terms());
 
         $result = (new SearchTermMiningAgent($factory))->mine($campaign);
@@ -121,6 +142,128 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         $this->assertCount(2, $result['keywords_added']);
         $this->assertCount(1, $result['negatives_added']);
         $this->assertSame(['add', 'add', 'negative'], array_column($factory->mutator->writes, 'action'));
+    }
+
+    public function test_mining_skips_an_existing_converting_term_and_preserves_new_terms_and_waste_exclusions(): void
+    {
+        $campaign = $this->campaign();
+        $this->existingKeywords([$this->keyword()]);
+        $this->guard($campaign, true, 2, ['add', 'negative'], true);
+        $factory = new SearchKeywordGuardFactory($this->terms());
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame(['affordable google ads management'], array_column($result['keywords_added'], 'keyword'));
+        $this->assertSame(['free enterprise consulting jobs'], array_column($result['negatives_added'], 'keyword'));
+        $this->assertSame(['add', 'negative'], array_column($factory->mutator->writes, 'action'));
+    }
+
+    public function test_mining_preserves_an_intentionally_paused_duplicate_without_enabling_it(): void
+    {
+        $campaign = $this->campaign();
+        $this->existingKeywords([$this->keyword(['status' => 'PAUSED'])]);
+        $this->guard($campaign, true, 2, ['add', 'negative'], true);
+        $factory = new SearchKeywordGuardFactory($this->terms());
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(1, $result['keywords_added']);
+        $this->assertNotContains('google ads management software', array_column($factory->mutator->writes, 'text'));
+    }
+
+    public function test_mining_does_not_conflate_foreign_other_group_removed_or_other_match_keywords(): void
+    {
+        $campaign = $this->campaign();
+        $this->existingKeywords([
+            $this->keyword(['ad_group_resource' => 'customers/9999999999/adGroups/7', 'resource_name' => 'customers/9999999999/adGroupCriteria/7~10']),
+            $this->keyword(['resource_name' => 'customers/9999999999/adGroupCriteria/7~10']),
+            $this->keyword(['ad_group_resource' => 'customers/1234567890/adGroups/8', 'resource_name' => 'customers/1234567890/adGroupCriteria/8~10']),
+            $this->keyword(['status' => 'REMOVED']), $this->keyword(['match_type' => 'PHRASE']),
+        ]);
+        $this->guard($campaign, true, 2);
+        $factory = new SearchKeywordGuardFactory(array_slice($this->terms(), 0, 2));
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(2, $result['keywords_added']);
+    }
+
+    public function test_mining_holds_all_writes_when_existing_keyword_inspection_is_unknown(): void
+    {
+        $campaign = $this->campaign();
+        $inspector = $this->createMock(InspectSearchDelivery::class);
+        $inspector->method('inspect')->willReturn(null);
+        $this->app->bind(InspectSearchDelivery::class, fn () => $inspector);
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->never())->method('assess');
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory($this->terms());
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertTrue($result['requires_review']);
+        $this->assertSame([], $factory->mutator->writes);
+    }
+
+    public function test_a_failed_addition_holds_exclusions_and_records_the_actual_partial_portfolio(): void
+    {
+        $campaign = $this->campaign(['search_delivery_state' => ['other_agent' => ['preserved' => true]]]);
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $call = 0;
+        $guard->expects($this->exactly(2))->method('assess')->willReturnCallback(function ($actual, array $changes) use (&$call): array {
+            if (++$call === 1) {
+                $this->assertSame(['negative', 'add', 'add'], array_column($changes, 'action'));
+
+                return ['ready' => true];
+            }
+            $this->assertSame([], $changes, 'Read back the actual installed portfolio; do not forecast unapplied exclusions.');
+
+            return ['ready' => false, 'message' => 'Only one addition was installed.'];
+        });
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $terms = $this->terms();
+        $factory = new SearchKeywordGuardFactory([$terms[2], $terms[0], $terms[1]]);
+        $factory->mutator->failAt = 2;
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertTrue($result['requires_review']);
+        $this->assertCount(1, $result['keywords_added']);
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame(['add', 'add'], array_column($factory->mutator->writes, 'action'));
+        $state = $campaign->fresh()->search_delivery_state;
+        $this->assertSame(['preserved' => true], $state['other_agent']);
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertFalse($state['mutation_allowed']);
+        $this->assertSame('keyword_batch_partial_apply', $state['verification']['errors'][0]['code']);
+        $this->assertCount(1, $state['verification']['errors'][0]['applied_keywords']);
+        $this->assertFalse($state['verification']['errors'][0]['actual_portfolio_assessment']['ready']);
+        $this->assertDatabaseHas('agent_activities', ['campaign_id' => $campaign->id, 'action' => 'keyword_changes_need_review', 'status' => 'needs_review']);
+    }
+
+    public function test_exclusions_are_held_when_successful_additions_do_not_pass_actual_portfolio_recheck(): void
+    {
+        $campaign = $this->campaign();
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $call = 0;
+        $guard->expects($this->exactly(2))->method('assess')->willReturnCallback(function ($actual, array $changes) use (&$call): array {
+            if (++$call === 1) {
+                return ['ready' => true];
+            }
+            $this->assertSame(['negative'], array_column($changes, 'action'));
+
+            return ['ready' => false, 'message' => 'Live additions are not verified.'];
+        });
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory($this->terms());
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertTrue($result['requires_review']);
+        $this->assertCount(2, $result['keywords_added']);
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertCount(2, $factory->mutator->writes);
+        $this->assertSame('keyword_batch_partial_apply', $campaign->fresh()->search_delivery_state['verification']['errors'][0]['code']);
     }
 
     public function test_keyword_forecast_exception_cannot_authorize_mined_additions(): void
@@ -255,7 +398,7 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         $this->assertSame(2, AgentActivity::where('customer_id', $campaign->customer_id)->where('agent_type', 'dsa')->count());
     }
 
-    private function dsaFixture(Campaign $campaign, int $reads = 1): void
+    private function dsaFixture(Campaign $campaign, int $reads = 1, array $extraTerms = []): void
     {
         $campaign->forceFill(['primary_status' => 'ELIGIBLE'])->save();
         Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
@@ -265,7 +408,7 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         $source = $this->createMock(GetSearchTermsReport::class);
         $source->expects($this->exactly($reads))->method('__invoke')
             ->with('1234567890', 'customers/1234567890/campaigns/74', 'LAST_30_DAYS')
-            ->willReturn([...array_map(fn ($term) => $term + ['campaign_resource_name' => 'customers/1234567890/campaigns/74'], $this->terms()),
+            ->willReturn([...array_map(fn ($term) => $term + ['campaign_resource_name' => 'customers/1234567890/campaigns/74'], $this->terms()), ...$extraTerms,
                 ['search_term' => 'one lucky click', 'clicks' => 1, 'conversions' => 1, 'campaign_resource_name' => 'customers/1234567890/campaigns/74'],
                 ['search_term' => 'unrelated customer term', 'clicks' => 30, 'conversions' => 10, 'campaign_resource_name' => 'customers/9999999999/campaigns/74']]);
         $this->app->bind(GetSearchTermsReport::class, fn () => $source);
@@ -305,6 +448,83 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         $this->assertSame(array_column(array_slice($this->terms(), 0, 2), 'search_term'), array_column($result['terms'], 'keyword'));
         $this->assertCount(2, Cache::get('dsa_promoted:'.$campaign->customer_id));
         $this->assertDatabaseHas('agent_activities', ['customer_id' => $campaign->customer_id, 'action' => 'dsa_terms_promoted']);
+    }
+
+    public function test_dsa_skips_existing_paused_identity_without_blocking_a_new_converting_term(): void
+    {
+        $campaign = $this->campaign();
+        $this->dsaFixture($campaign);
+        $this->existingKeywords([$this->keyword(['match_type' => 'PHRASE', 'status' => 'PAUSED'])]);
+        $this->guard($campaign, true, 1);
+        $add = $this->createMock(AddKeyword::class);
+        $add->expects($this->once())->method('__invoke')->with('1234567890', 'customers/1234567890/adGroups/7',
+            'affordable google ads management', KeywordMatchType::PHRASE)->willReturn('customers/1234567890/adGroupCriteria/7~11');
+        $this->app->bind(AddKeyword::class, fn () => $add);
+
+        $result = (new DSAManagementAgent)->promoteHighPerformingTerms($campaign->customer);
+
+        $this->assertSame(1, $result['promoted']);
+        $this->assertFalse($result['requires_review']);
+        $this->assertSame(['affordable google ads management'], array_column($result['terms'], 'keyword'));
+    }
+
+    public function test_dsa_does_not_dedupe_against_foreign_removed_other_group_or_other_match_identities(): void
+    {
+        $campaign = $this->campaign();
+        $this->dsaFixture($campaign);
+        $this->existingKeywords([
+            $this->keyword(['match_type' => 'PHRASE', 'ad_group_resource' => 'customers/9999999999/adGroups/7',
+                'resource_name' => 'customers/9999999999/adGroupCriteria/7~10']),
+            $this->keyword(['match_type' => 'PHRASE', 'resource_name' => 'customers/9999999999/adGroupCriteria/7~10']),
+            $this->keyword(['match_type' => 'PHRASE', 'ad_group_resource' => 'customers/1234567890/adGroups/8',
+                'resource_name' => 'customers/1234567890/adGroupCriteria/8~10']),
+            $this->keyword(['match_type' => 'PHRASE', 'status' => 'REMOVED']), $this->keyword(),
+        ]);
+        $this->guard($campaign, true, 2);
+        $add = $this->createMock(AddKeyword::class);
+        $add->expects($this->exactly(2))->method('__invoke')->willReturn('customers/1234567890/adGroupCriteria/7~11');
+        $this->app->bind(AddKeyword::class, fn () => $add);
+
+        $result = (new DSAManagementAgent)->promoteHighPerformingTerms($campaign->customer);
+
+        $this->assertSame(2, $result['promoted']);
+        $this->assertFalse($result['requires_review']);
+    }
+
+    public function test_dsa_partial_promotion_stops_later_additions_and_records_a_reviewable_actual_outcome(): void
+    {
+        $campaign = $this->campaign(['search_delivery_state' => ['other_agent' => ['preserved' => true]]]);
+        $this->dsaFixture($campaign, 1, [['search_term' => 'ppc campaign management service', 'clicks' => 10,
+            'conversions' => 2, 'campaign_resource_name' => 'customers/1234567890/campaigns/74']]);
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $call = 0;
+        $guard->expects($this->exactly(2))->method('assess')->willReturnCallback(function ($actual, array $changes) use (&$call): array {
+            if (++$call === 1) {
+                $this->assertCount(3, $changes);
+
+                return ['ready' => true];
+            }
+            $this->assertSame([], $changes);
+
+            return ['ready' => false, 'message' => 'The partial live portfolio is not verified.'];
+        });
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $add = $this->createMock(AddKeyword::class);
+        $add->expects($this->exactly(2))->method('__invoke')->willReturnOnConsecutiveCalls('customers/1234567890/adGroupCriteria/7~11', null);
+        $this->app->bind(AddKeyword::class, fn () => $add);
+
+        $result = (new DSAManagementAgent)->promoteHighPerformingTerms($campaign->customer);
+
+        $this->assertSame(1, $result['promoted']);
+        $this->assertTrue($result['requires_review']);
+        $this->assertCount(1, Cache::get('dsa_promoted:'.$campaign->customer_id));
+        $state = $campaign->fresh()->search_delivery_state;
+        $this->assertSame(['preserved' => true], $state['other_agent']);
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertSame('keyword_batch_partial_apply', $state['verification']['errors'][0]['code']);
+        $this->assertCount(1, $state['verification']['errors'][0]['applied_keywords']);
+        $this->assertDatabaseHas('agent_activities', ['customer_id' => $campaign->customer_id, 'action' => 'dsa_terms_promoted', 'status' => 'needs_review']);
+        $this->assertDatabaseMissing('agent_activities', ['customer_id' => $campaign->customer_id, 'action' => 'dsa_terms_promoted', 'status' => 'completed']);
     }
 
     public function test_existing_dsa_terms_cannot_bypass_trial_or_spend_holds(): void
@@ -393,9 +613,14 @@ class SearchKeywordGuardMutator implements KeywordMutator
 {
     public array $writes = [];
 
+    public ?int $failAt = null;
+
     public function addKeyword(string $customerId, string $adGroupResourceName, string $keyword, int $matchType): ?string
     {
         $this->writes[] = ['action' => 'add', 'text' => $keyword, 'match_type' => $matchType];
+        if (count($this->writes) === $this->failAt) {
+            return null;
+        }
 
         return 'customers/1234567890/adGroupCriteria/7~'.(count($this->writes) + 100);
     }

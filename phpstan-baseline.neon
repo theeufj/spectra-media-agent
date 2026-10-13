@@ -1482,12 +1482,6 @@ parameters:
 			path: app/Services/Health/BillingHealthChecker.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$started_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Health/CampaignHealthChecker.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between ''ENABLED'' and ''ENABLED'' will always evaluate to true\.$#'
 			identifier: identical.alwaysTrue
 			count: 1

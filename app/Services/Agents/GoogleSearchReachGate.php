@@ -140,6 +140,23 @@ class GoogleSearchReachGate
             || ! empty($snapshot['ad_schedule']) || $devices !== [] || ($snapshot['search_partners_enabled'] ?? false)) {
             $add('search_reach_restrictions_unmodeled', 'The forecast does not faithfully represent all live delivery restrictions. Review them before launching.', true);
         }
+        $liveDates = [];
+        foreach (['start_date', 'end_date'] as $field) {
+            $value = $snapshot[$field] ?? null;
+            // Google can have no end-date constraint, but its start date must
+            // be observed. Missing evidence cannot imply a tomorrow start.
+            if ($field === 'end_date' && ($value === null || $value === '')) {
+                continue;
+            }
+            $date = $this->servingDate($value);
+            if ($date === null) {
+                $add('search_reach_live_dates_unverified', 'Google’s campaign '.($field === 'start_date' ? 'start' : 'end').' date could not be verified.', true);
+            } else {
+                $liveDates[$field] = $date;
+            }
+        }
+        $metadata['live_start_date'] = $liveDates['start_date'] ?? null;
+        $metadata['live_end_date'] = $liveDates['end_date'] ?? null;
         $period = $forecast['period_days'] ?? null;
         $clicks = $forecast['clicks'] ?? null;
         $cost = $forecast['cost_micros'] ?? null;
@@ -186,15 +203,16 @@ class GoogleSearchReachGate
             if (is_string($endDate) && $endDate !== '' && $forecast['forecast_period']['through'] > substr($endDate, 0, 10)) {
                 $add('search_reach_forecast_after_campaign_end', 'The forecast extends beyond the campaign’s approved end date. Assess the remaining campaign period.');
             }
+            $startDate = $campaign->getAttributes()['start_date'] ?? null;
+            if (is_string($startDate) && $startDate !== '' && $forecast['forecast_period']['from'] < substr($startDate, 0, 10)) {
+                $add('search_reach_forecast_before_campaign_start', 'The forecast starts before the campaign’s approved start date. Assess its approved serving period.');
+            }
             foreach (['start_date' => 'from', 'end_date' => 'through'] as $field => $boundary) {
-                $liveDate = $snapshot[$field] ?? null;
-                if (! is_string($liveDate) || $liveDate === '') {
+                $liveDate = $liveDates[$field] ?? null;
+                if ($liveDate === null) {
                     continue;
                 }
-                $liveDate = preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $liveDate) ?? '';
-                if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $liveDate)) {
-                    $add('search_reach_live_dates_unverified', 'Google’s campaign serving dates could not be verified.', true);
-                } elseif (($field === 'start_date' && $forecast['forecast_period'][$boundary] < $liveDate)
+                if (($field === 'start_date' && $forecast['forecast_period'][$boundary] < $liveDate)
                     || ($field === 'end_date' && $forecast['forecast_period'][$boundary] > $liveDate)) {
                     $add('search_reach_forecast_outside_live_dates', 'The forecast extends outside Google’s actual campaign serving dates. Review the remaining serving period.');
                 }
@@ -232,6 +250,17 @@ class GoogleSearchReachGate
             'issues' => $issues, 'metadata' => $metadata];
     }
 
+    private function servingDate(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+        $value = preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $value) ?? '';
+
+        return preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $date)
+            && checkdate((int) $date[2], (int) $date[3], (int) $date[1]) ? $value : null;
+    }
+
     private function recent(mixed $time, int $minutes): bool
     {
         if (! is_string($time) || trim($time) === '') {
@@ -253,7 +282,8 @@ class GoogleSearchReachGate
             $through = CarbonImmutable::createFromFormat('!Y-m-d', $period['through'] ?? '', $timezone);
 
             return $from !== null && $through !== null && $from->toDateString() === ($period['from'] ?? null)
-                && $through->toDateString() === ($period['through'] ?? null) && $from->gte(CarbonImmutable::now($timezone)->startOfDay())
+                && $through->toDateString() === ($period['through'] ?? null) && $from->gt(CarbonImmutable::now($timezone)->startOfDay())
+                && $through->lte(CarbonImmutable::now($timezone)->startOfDay()->addYear())
                 && $through->toDateString() === $from->addDays($days - 1)->toDateString();
         } catch (\Throwable) {
             return false;

@@ -80,6 +80,7 @@ class CampaignHealthChecker
             foreach ($checks as $check) {
                 $health['issues'] = array_merge($health['issues'], $check['issues'] ?? []);
                 $health['warnings'] = array_merge($health['warnings'], $check['warnings'] ?? []);
+                $health['metrics'] = array_merge($health['metrics'], $check['metrics'] ?? []);
             }
 
             $anomalyHealth = $this->detectPerformanceAnomalies($campaign);
@@ -260,45 +261,28 @@ class CampaignHealthChecker
     private function checkBudgetPacing(Campaign $campaign): array
     {
         $health = ['issues' => [], 'warnings' => []];
-
-        if (! $campaign->daily_budget) {
+        $pacing = app(CampaignBudgetPacing::class)->assess($campaign);
+        $health['metrics']['budget_pacing'] = $pacing;
+        if ($pacing['status'] !== 'ready') {
             return $health;
         }
-
-        $startedAt = $campaign->started_at ?: $campaign->strategies()
-            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
-            ->whereNotNull('deployed_at')->min('deployed_at');
-        if (! $startedAt) {
-            return $health;
-        }
-
-        $daysRunning = now()->diffInDays(Carbon::parse($startedAt));
-        $expectedSpend = $campaign->daily_budget * $daysRunning;
-        $actualSpend = max(
-            (float) ($campaign->total_spend ?? 0),
-            (float) GoogleAdsPerformanceData::where('campaign_id', $campaign->id)->sum('cost')
-        );
-
-        if ($daysRunning <= 0) {
-            return $health;
-        }
-
-        $pacingRatio = $actualSpend / max($expectedSpend, 1);
-        $pacingPercent = round($pacingRatio * 100);
+        $pacingRatio = $pacing['pacing_ratio'];
 
         if ($pacingRatio < 0.5) {
             $health['warnings'][] = [
                 'type' => 'underspending',
                 'severity' => 'medium',
-                'message' => 'Campaign is significantly underspending',
-                'details' => "Spent \${$actualSpend} of expected \${$expectedSpend} ({$pacingPercent}% of budget)",
+                'message' => 'Campaign spend is below its current average-budget pace',
+                'details' => CampaignBudgetPacing::summary($pacing),
+                'pacing' => $pacing,
             ];
         } elseif ($pacingRatio > 1.2) {
             $health['warnings'][] = [
                 'type' => 'overspending',
                 'severity' => 'high',
-                'message' => 'Campaign is overspending budget',
-                'details' => "Spent \${$actualSpend} vs expected \${$expectedSpend}",
+                'message' => 'Campaign spend is above its current average-budget pace',
+                'details' => CampaignBudgetPacing::summary($pacing),
+                'pacing' => $pacing,
             ];
         }
 

@@ -169,9 +169,14 @@ class VerifyConversionTrackingTest extends TestCase
 
         $this->assertSame(1, $run->errors);
         $this->assertSame(1, $run->warnings);
-        $this->assertSame('unknown', $run->details['checks'][0]['status']);
-        $this->assertSame([$failed->id], $run->details['checks'][0]['strategy_ids']);
-        $this->assertSame('not_verified', $run->details['checks'][1]['status']);
+        $checks = collect($run->details['checks'])->keyBy('customer_id');
+        $this->assertCount(2, $checks);
+        $this->assertSame('unknown', $checks[$failed->campaign->customer_id]['status']);
+        $this->assertSame([$failed->id], $checks[$failed->campaign->customer_id]['strategy_ids']);
+        $this->assertArrayNotHasKey('account_activity', $checks[$failed->campaign->customer_id], 'Unavailable account evidence must not become a zero-activity result.');
+        $this->assertSame('not_verified', $checks[$good->campaign->customer_id]['status']);
+        $this->assertSame($good->id, $checks[$good->campaign->customer_id]['strategy_id']);
+        $this->assertSame(['1234567890', '9876543210'], $this->accountReads, 'The failing account must be checked before the successful account to prove that the batch continues.');
         $this->assertSame([$good->id], $this->strategyChecks);
         Notification::assertNothingSent();
     }
@@ -189,8 +194,10 @@ class VerifyConversionTrackingTest extends TestCase
         $this->assertSame(['1234567890'], $this->accountReads);
         $this->assertSame([$first->id, $second->id], $this->strategyChecks);
         $this->assertSame(1, $run->errors);
-        $this->assertSame('unknown', $run->details['checks'][0]['status']);
-        $this->assertSame('conversions_observed', $run->details['checks'][1]['status']);
+        $checks = collect($run->details['checks'])->keyBy('strategy_id');
+        $this->assertCount(2, $checks);
+        $this->assertSame('unknown', $checks[$first->id]['status']);
+        $this->assertSame('conversions_observed', $checks[$second->id]['status']);
         Notification::assertNothingSent();
     }
 
@@ -241,17 +248,20 @@ class VerifyConversionTrackingTest extends TestCase
 
         $alerts = Notification::sent($admin, CriticalAgentAlert::class);
         $this->assertCount(2, $alerts);
+        $alertsByCampaign = $alerts->keyBy(fn (CriticalAgentAlert $alert) => $alert->details['campaign_id']);
+        $deliveryAlert = $alertsByCampaign[$delivery->campaign_id];
+        $configurationAlert = $alertsByCampaign[$configuration->campaign_id];
         $this->assertSame(2, $run->actions_taken);
         $this->assertSame(2, $run->warnings);
-        $this->assertSame('conversion_tracking_health', $alerts[0]->alertType);
-        $this->assertSame(route('campaigns.direct', $delivery->campaign), $alerts[0]->details['action_url']);
-        $this->assertStringContainsString($delivery->campaign->uuid, $alerts[0]->details['action_url']);
-        $this->assertNotSame($alerts[0]->details['dedupe_key'], $alerts[1]->details['dedupe_key']);
+        $this->assertSame('conversion_tracking_health', $deliveryAlert->alertType);
+        $this->assertSame(route('campaigns.direct', $delivery->campaign), $deliveryAlert->details['action_url']);
+        $this->assertStringContainsString($delivery->campaign->uuid, $deliveryAlert->details['action_url']);
+        $this->assertNotSame($deliveryAlert->details['dedupe_key'], $configurationAlert->details['dedupe_key']);
         Cache::flush();
-        $this->assertSame(['mail'], $alerts[0]->via($admin));
-        $this->assertSame(['mail'], $alerts[1]->via($admin));
-        $this->assertSame([], $alerts[0]->via($admin));
-        $mail = $alerts[0]->toMail($admin);
+        $this->assertSame(['mail'], $deliveryAlert->via($admin));
+        $this->assertSame(['mail'], $configurationAlert->via($admin));
+        $this->assertSame([], $deliveryAlert->via($admin));
+        $mail = $deliveryAlert->toMail($admin);
         $body = implode(' ', $mail->introLines);
         $this->assertStringContainsString('10 clicks', $body);
         $this->assertStringContainsString('6 in the All conversions column across all actions', $body);

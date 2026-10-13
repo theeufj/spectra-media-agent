@@ -75,7 +75,7 @@ class PreLaunchForecastTest extends TestCase
 
     private function runPreflight(array $forecast, string $assessmentStatus = 'evidence_ready', string $primaryId = '456', array $previousState = [],
         array $snapshotOverrides = [], array $assessmentOverrides = [], array $campaignOverrides = [], bool $inspectionFails = false,
-        array $postResearchChanges = [], ?\Closure $duringResearch = null, array $activationChanges = []): array
+        array $postResearchChanges = [], ?\Closure $duringResearch = null, array $activationChanges = [], array $omittedSnapshotFields = []): array
     {
         $customer = Customer::where('google_ads_customer_id', '1234567890')->first()
             ?? Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
@@ -83,12 +83,14 @@ class PreLaunchForecastTest extends TestCase
             'search_delivery_state' => $previousState ?: null, 'approved_daily_budget' => '10.00', 'daily_budget' => '10.00',
             'budget_confirmed_at' => now(), 'end_date' => now()->addDays(40)]);
         $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id]);
-        $snapshot = $snapshotOverrides + ['status' => GoogleCampaignStatus::PAUSED, 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'bidding_strategy' => BiddingStrategyType::TARGET_SPEND,
+        $snapshot = $snapshotOverrides + ['status' => GoogleCampaignStatus::PAUSED, 'start_date' => now('Australia/Sydney')->toDateString(),
+            'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'bidding_strategy' => BiddingStrategyType::TARGET_SPEND,
             'actual_cpc_ceiling_micros' => 3_000_000, 'cpc_bid_ceiling_micros' => 3_000_000, 'daily_budget_micros' => 10_000_000,
             'keywords' => [['text' => 'managed ppc services', 'match_type' => 'EXACT']],
             'geo_target_constants' => ['geoTargetConstants/2036'], 'language_constants' => ['languageConstants/1000'],
             'negative_keywords' => [], 'excluded_geo_target_constants' => [], 'ad_schedule' => [], 'device_bid_modifiers' => [],
             'unsupported_targeting' => [], 'search_partners_enabled' => false];
+        $snapshot = array_diff_key($snapshot, array_flip($omittedSnapshotFields));
         $forecast += ['source' => 'google_keyword_forecast', 'checked_at' => now()->toIso8601String(), 'caveats' => [],
             'period_days' => 30, 'cost_micros' => 30_000_000,
             'forecast_period' => ['from' => now('Australia/Sydney')->addDay()->toDateString(), 'through' => now('Australia/Sydney')->addDays(30)->toDateString()],
@@ -289,6 +291,8 @@ class PreLaunchForecastTest extends TestCase
     {
         foreach ([['checked_at' => null], ['checked_at' => now()->subHours(7)->toIso8601String()],
             ['forecast_period' => ['from' => now('Australia/Sydney')->subDays(29)->toDateString(), 'through' => now('Australia/Sydney')->toDateString()]],
+            ['forecast_period' => ['from' => now('Australia/Sydney')->toDateString(), 'through' => now('Australia/Sydney')->addDays(29)->toDateString()]],
+            ['forecast_period' => ['from' => now('Australia/Sydney')->addYear()->toDateString(), 'through' => now('Australia/Sydney')->addYear()->addDays(29)->toDateString()]],
             ['caveats' => ['An omitted restriction.']]] as $proof) {
             [$allowed, $result] = $this->runPreflight($proof + ['success' => true, 'auto_repair_safe' => true, 'clicks' => 40, 'impressions' => 100]);
             $this->assertFalse($allowed);
@@ -306,6 +310,14 @@ class PreLaunchForecastTest extends TestCase
             $this->assertFalse($allowed);
             $this->assertContains('search_reach_forecast_outside_live_dates', array_column($result->errors, 'code'));
         }
+    }
+
+    public function test_forecast_must_fit_the_approved_start_even_if_google_can_serve_earlier(): void
+    {
+        [$allowed, $result] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 40, 'impressions' => 100],
+            campaignOverrides: ['start_date' => now('Australia/Sydney')->addDays(5)->toDateString()]);
+        $this->assertFalse($allowed);
+        $this->assertContains('search_reach_forecast_before_campaign_start', array_column($result->errors, 'code'));
     }
 
     public function test_forecast_context_must_match_live_bid_budget_currency_match_type_and_negatives(): void
@@ -446,5 +458,58 @@ class PreLaunchForecastTest extends TestCase
             'customers/1234567890/campaigns/456', $result->metadata['search_reach_preflight'], $activation);
         $this->assertFalse($ready);
         $this->assertContains('search_reach_approved_budget_exceeded', array_column($activation->errors, 'code'));
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unverifiedLiveStartDates')]
+    public function test_positive_demand_and_forecast_cannot_authorize_an_unverified_live_start_date(array $overrides, array $omitted): void
+    {
+        [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 40, 'impressions' => 100],
+            snapshotOverrides: $overrides, omittedSnapshotFields: $omitted);
+        $this->assertFalse($allowed);
+        $gate = $result->metadata['search_reach_preflight']['gate'];
+        $this->assertSame('unavailable', $gate['status']);
+        $this->assertContains('search_reach_live_dates_unverified', array_column($result->errors, 'code'));
+        $this->assertSame('unavailable', $campaign->search_delivery_state['status']);
+        $this->assertNull($gate['metadata']['live_start_date']);
+        $this->assertEquals(40, $gate['metadata']['forecast_clicks'], 'The hold comes from missing calendar proof, even when traffic is positive.');
+    }
+
+    public static function unverifiedLiveStartDates(): array
+    {
+        return [
+            'missing' => ['overrides' => [], 'omitted' => ['start_date']],
+            'null' => ['overrides' => ['start_date' => null], 'omitted' => []],
+            'empty' => ['overrides' => ['start_date' => ''], 'omitted' => []],
+            'invalid calendar' => ['overrides' => ['start_date' => '2026-02-30'], 'omitted' => []],
+            'invalid compact calendar' => ['overrides' => ['start_date' => '20260230'], 'omitted' => []],
+            'wrong format' => ['overrides' => ['start_date' => '13/10/2026'], 'omitted' => []],
+            'wrong type' => ['overrides' => ['start_date' => 20261013], 'omitted' => []],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('liveCalendarFormats')]
+    public function test_verified_future_live_start_dates_in_either_sdk_format_allow_a_matching_forecast_with_no_end_constraint(string $format): void
+    {
+        $from = now('Australia/Sydney')->addDays(5);
+        $through = $from->copy()->addDays(9);
+        [$allowed, $result] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 20, 'impressions' => 100,
+            'period_days' => 10, 'forecast_period' => ['from' => $from->toDateString(), 'through' => $through->toDateString()]],
+            snapshotOverrides: ['start_date' => $from->format($format), 'end_date' => null]);
+        $this->assertTrue($allowed, $result->errorMessage());
+        $this->assertSame($from->toDateString(), $result->metadata['search_reach_preflight']['gate']['metadata']['live_start_date']);
+        $this->assertNull($result->metadata['search_reach_preflight']['gate']['metadata']['live_end_date']);
+    }
+
+    public static function liveCalendarFormats(): array
+    {
+        return ['ISO' => ['format' => 'Y-m-d'], 'compact SDK' => ['format' => 'Ymd']];
+    }
+
+    public function test_a_forecast_before_a_verified_future_google_start_does_not_authorize_launch(): void
+    {
+        [$allowed, $result] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 40, 'impressions' => 100],
+            snapshotOverrides: ['start_date' => now('Australia/Sydney')->addDays(5)->toDateString()]);
+        $this->assertFalse($allowed);
+        $this->assertContains('search_reach_forecast_outside_live_dates', array_column($result->errors, 'code'));
     }
 }

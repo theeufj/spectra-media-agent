@@ -42,6 +42,27 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             if (! is_finite($maxCpc) || $days < 1 || $days > 365) {
                 return ['success' => false, 'auto_repair_safe' => false, 'error' => 'Invalid bid or forecast period'];
             }
+            $timezone = $context['time_zone'] ?? $context['timezone'] ?? config('app.timezone', 'UTC');
+            $today = CarbonImmutable::now($timezone)->startOfDay();
+            $start = $today->addDay();
+            if (array_key_exists('forecast_start_date', $context)) {
+                $start = $this->forecastDate($context['forecast_start_date'], $timezone);
+                if ($start === null) {
+                    return ['success' => false, 'auto_repair_safe' => false, 'error' => 'A valid forecast start date is required.'];
+                }
+            }
+            $end = $start->addDays($days - 1);
+            // Google uses the account timezone and permits future dates within one year only.
+            if ($start->lte($today) || $end->gt($today->addYear())) {
+                return ['success' => false, 'auto_repair_safe' => false, 'error' => 'The forecast must start in the future and end within one year in the account timezone.'];
+            }
+            if (array_key_exists('forecast_end_date_limit', $context)) {
+                $limit = $this->forecastDate($context['forecast_end_date_limit'], $timezone);
+                if ($limit === null || $end->gt($limit)) {
+                    return ['success' => false, 'auto_repair_safe' => false, 'error' => 'The forecast extends beyond the verified campaign serving window.'];
+                }
+            }
+
             $suppliedCap = $context['cpc_bid_ceiling_micros'] ?? $context['actual_cpc_ceiling_micros'] ?? null;
             $bidMicros = $suppliedCap !== null ? (int) $suppliedCap
                 : max(self::MIN_BID_MICROS, (int) (round($maxCpc * 100) * 10_000));
@@ -133,9 +154,6 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                 // assumption. Delivery diagnostics supply only observed rates.
                 $campaign->setConversionRate($conversionRate);
             }
-            $timezone = $context['time_zone'] ?? $context['timezone'] ?? config('app.timezone', 'UTC');
-            $start = CarbonImmutable::now($timezone)->addDay()->startOfDay();
-            $end = $start->addDays($days - 1);
             $request = new GenerateKeywordForecastMetricsRequest([
                 'customer_id' => $customerId,
                 'campaign' => $campaign,
@@ -179,6 +197,20 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $this->logError('GenerateKeywordForecast failed for customer '.$customerId.': '.$e->getMessage());
 
             return ['success' => false, 'auto_repair_safe' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function forecastDate(mixed $value, string $timezone): ?CarbonImmutable
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+        try {
+            $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, $timezone);
+
+            return $date !== null && $date->toDateString() === $value ? $date : null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 

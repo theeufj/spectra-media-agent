@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\AccountStructureService;
@@ -34,9 +36,18 @@ class FindUnderperformingKeywords implements ShouldQueue
     public function handle(AddNegativeKeywordService $addNegativeKeywordService): void
     {
         try {
-            $campaign = Campaign::findOrFail($this->campaignId);
+            $campaign = Campaign::with('customer')->findOrFail($this->campaignId);
             if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
                 Log::info('FindUnderperformingKeywords: Automatic keyword changes suspended by trial or spending hold', ['campaign_id' => $campaign->id]);
+
+                return;
+            }
+            if (! $campaign->customer || $campaign->customer->is_sandbox || $campaign->customer->service_type !== 'managed'
+                || $campaign->status !== CampaignStatus::Active || $campaign->hasPassedEndDate()
+                || ! empty($campaign->search_delivery_state['repair']['errors']) || ! empty($campaign->search_delivery_state['verification']['errors'])) {
+                AgentActivity::record('keyword', 'keyword_exclusions_need_review',
+                    'Automatic keyword exclusions are held while the campaign or its previous reach changes need review.',
+                    $campaign->customer_id, $campaign->id, [], 'needs_review');
 
                 return;
             }
@@ -62,27 +73,47 @@ class FindUnderperformingKeywords implements ShouldQueue
                 return;
             }
 
-            $service = new AccountStructureService($campaign->customer);
-            $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
-
             $campaignId = $campaign->googleCampaignNumericId();
-            $query = "SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.conversions FROM keyword_view WHERE campaign.id = {$campaignId} AND metrics.conversions = 0 AND metrics.clicks > 100";
-
-            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
-                'customer_id' => $campaign->customer->google_ads_customer_id,
-                'query' => $query,
-            ]));
-
-            foreach ($response->getIterator() as $googleAdsRow) {
-                $keyword = $googleAdsRow->getAdGroupCriterion()->getKeyword()->getText();
-                ($addNegativeKeywordService)($this->campaignId, $keyword);
+            $customerId = $campaign->customer->cleanGoogleCustomerId();
+            if (! $campaignId || ! preg_match('~^customers/'.preg_quote($customerId, '~').'/campaigns/\d+$~', $campaign->googleAdsResourceName() ?? '')) {
+                throw new \RuntimeException('The campaign resource does not match the Google customer account.');
             }
+            $query = "SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.conversions
+                      FROM keyword_view WHERE campaign.id = {$campaignId}
+                      AND campaign.advertising_channel_type = SEARCH
+                      AND ad_group_criterion.status = ENABLED AND ad_group.status = ENABLED
+                      AND segments.date DURING LAST_30_DAYS";
+            $performance = [];
+            foreach ($this->keywordRows($campaign, $query) as $googleAdsRow) {
+                $text = trim($googleAdsRow->getAdGroupCriterion()->getKeyword()->getText());
+                if ($text === '') {
+                    continue;
+                }
+                $key = mb_strtolower($text);
+                $performance[$key] ??= ['text' => $text, 'clicks' => 0, 'conversions' => 0.0];
+                $performance[$key]['clicks'] += (int) $googleAdsRow->getMetrics()->getClicks();
+                $performance[$key]['conversions'] += $googleAdsRow->getMetrics()->getConversions();
+            }
+            // A campaign-wide exclusion must not erase a converting instance
+            // of the same text in another ad group or match type.
+            $keywords = array_column(array_filter($performance,
+                fn ($row) => $row['clicks'] > 100 && $row['conversions'] <= 0), 'text');
+            $addNegativeKeywordService->applyBatch($this->campaignId, $keywords);
         } catch (\Throwable $e) {
             report($e);
             Log::error("Error finding underperforming keywords for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
+    }
+
+    protected function keywordRows(Campaign $campaign, string $query): iterable
+    {
+        $service = new AccountStructureService($campaign->customer);
+
+        return $service->getClient()->getGoogleAdsServiceClient()->search(new SearchGoogleAdsRequest([
+            'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'query' => $query,
+        ]))->iterateAllElements();
     }
 
     /**

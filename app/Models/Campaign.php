@@ -18,6 +18,23 @@ class Campaign extends Model
     use BelongsToCustomer, HasPublicUuid;
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::creating(function (Campaign $campaign): void {
+            if (! array_key_exists('last_budget_changed_at', $campaign->getAttributes())
+                && \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($campaign->daily_budget) > 0) {
+                $campaign->last_budget_changed_at = now();
+            }
+        });
+        static::updating(function (Campaign $campaign): void {
+            // Record budget edits independently of health/performance updates.
+            // Preserve an explicitly supplied history timestamp.
+            if ($campaign->isDirty('daily_budget') && ! $campaign->isDirty('last_budget_changed_at')) {
+                $campaign->last_budget_changed_at = now();
+            }
+        });
+    }
+
     /**
      * `primary_status` values in which the ad platform reports the campaign as
      * actually delivering.

@@ -24,13 +24,17 @@ class GoogleSearchMutationGuardTest extends TestCase
             ?? Customer::factory()->create(['google_ads_customer_id' => '1234567890', 'service_type' => 'managed']);
 
         return Campaign::factory()->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Active,
-            'google_ads_campaign_id' => 'customers/1234567890/campaigns/61', 'end_date' => now()->addDays(30),
+            'google_ads_campaign_id' => 'customers/1234567890/campaigns/61',
+            'start_date' => now('Australia/Sydney')->startOfDay()->subDays(3),
+            'end_date' => now('Australia/Sydney')->startOfDay()->addDays(30),
             'daily_budget' => '10.00', 'approved_daily_budget' => '10.00', 'budget_confirmed_at' => now()])->load('customer');
     }
 
     private function snapshot(): array
     {
         return ['status' => 2, 'channel' => 2, 'bidding_strategy' => BiddingStrategyType::TARGET_SPEND,
+            'start_date' => now('Australia/Sydney')->startOfDay()->subDays(3)->toDateString(),
+            'end_date' => now('Australia/Sydney')->startOfDay()->addDays(30)->toDateString(),
             'google_search_enabled' => true, 'search_partners_enabled' => false,
             'daily_budget_micros' => 10_000_000, 'actual_cpc_ceiling_micros' => 3_000_000, 'cpc_bid_ceiling_micros' => 3_000_000,
             'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'approved_ads' => 1,
@@ -294,7 +298,7 @@ class ScriptedMutationReachPlanner extends GoogleSearchReachPlanner
     public function assessMutation(Campaign $campaign, array $snapshot, array $keywords): array
     {
         $this->checks++;
-        $start = now($snapshot['time_zone'])->addDay()->startOfDay();
+        $start = now($snapshot['time_zone'])->startOfDay()->addDay();
         $evidence = ['status' => 'evidence_ready', 'historical' => ['success' => true,
             'checked_at' => now()->toIso8601String(), 'keywords' => array_map(fn ($k) => ['text' => $k['text'], 'avg_monthly_searches' => 1], $keywords)],
             'forecast' => ['success' => true, 'auto_repair_safe' => true, 'source' => 'google_keyword_forecast',

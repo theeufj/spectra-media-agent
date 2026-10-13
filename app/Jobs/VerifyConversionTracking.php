@@ -30,6 +30,7 @@ class VerifyConversionTracking implements ShouldQueue
 
         $customers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn ($q) => $q->where('status', 'active'))
+            ->orderBy('id')
             ->get();
 
         $alerts = 0;
@@ -42,7 +43,9 @@ class VerifyConversionTracking implements ShouldQueue
             try {
                 $strategies = $customer->campaigns()->where('status', CampaignStatus::Active->value)
                     ->with(['customer', 'strategies' => fn ($q) => $q->deployed()
-                        ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))])
+                        ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
+                        ->orderBy('id')])
+                    ->orderBy('id')
                     ->get()->reject(fn ($campaign) => $campaign->hasPassedEndDate()
                     || in_array(strtoupper($campaign->platform_status ?? ''), ['PAUSED', 'REMOVED'], true))
                     ->flatMap(fn ($campaign) => $campaign->strategies)

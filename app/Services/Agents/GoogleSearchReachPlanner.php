@@ -8,6 +8,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 /** Research is read-only, including during spending holds and controlled trials. */
@@ -232,14 +233,30 @@ class GoogleSearchReachPlanner
     private function campaignContext(Campaign $campaign, array $snapshot): array
     {
         $context = $this->context($snapshot);
-        $days = 30;
-        $endDate = $campaign->getAttribute('end_date');
-        if ($endDate !== null) {
-            $start = now($context['time_zone'] ?? 'UTC')->addDay()->startOfDay();
-            $end = \Carbon\CarbonImmutable::parse($endDate, $context['time_zone'] ?? 'UTC');
-            $days = max(0, min(30, (int) $start->diffInDays($end, false) + 1));
+        try {
+            $timezone = $context['time_zone'] ?? 'UTC';
+            $today = CarbonImmutable::now($timezone)->startOfDay();
+            $start = $today->addDay();
+            $end = $today->addYear();
+            foreach ([$campaign->getAttribute('start_date'), $snapshot['start_date'] ?? null] as $date) {
+                $date = $this->servingDate($date, $timezone);
+                if ($date !== null && $date->gt($start)) {
+                    $start = $date;
+                }
+            }
+            foreach ([$campaign->getAttribute('end_date'), $snapshot['end_date'] ?? null] as $date) {
+                $date = $this->servingDate($date, $timezone);
+                if ($date !== null && $date->lt($end)) {
+                    $end = $date;
+                }
+            }
+            $context['forecast_start_date'] = $start->toDateString();
+            $context['forecast_end_date_limit'] = $end->toDateString();
+            $context['forecast_period_days'] = max(0, min(30, (int) $start->diffInDays($end, false) + 1));
+        } catch (\Throwable) {
+            $context['forecast_period_days'] = 0;
+            $context['forecast_window_error'] = 'The approved or live campaign serving dates could not be verified.';
         }
-        $context['forecast_period_days'] = $days;
         $trial = CampaignSpendGuardrails::activeTrial($campaign);
         if ($trial && isset($snapshot['reported_lifetime_cost_micros'])) {
             $spent = max(0, (int) $snapshot['reported_lifetime_cost_micros'] - (int) ($trial['baseline_cost_micros'] ?? 0));
@@ -247,6 +264,29 @@ class GoogleSearchReachPlanner
         }
 
         return $context;
+    }
+
+    private function servingDate(mixed $value, string $timezone): ?CarbonImmutable
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            $value = $value->format('Y-m-d');
+        }
+        if (! is_string($value)) {
+            throw new \InvalidArgumentException('A campaign serving date must be a calendar date.');
+        }
+        $value = preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $value) ?? '';
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            throw new \InvalidArgumentException('A campaign serving date must have a verified date format.');
+        }
+        $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, $timezone);
+        if ($date === null || $date->toDateString() !== $value) {
+            throw new \InvalidArgumentException('A campaign serving date is invalid.');
+        }
+
+        return $date;
     }
 
     protected function historical(Customer $customer, array $texts, array $context): array
@@ -267,7 +307,7 @@ class GoogleSearchReachPlanner
             $days = (int) ($context['forecast_period_days'] ?? 30);
             $remaining = $context['max_forecast_cost_micros'] ?? null;
             if ($days < 1 || $remaining === 0) {
-                return ['success' => false, 'auto_repair_safe' => false, 'error' => 'No remaining approved campaign horizon or reported-spend envelope.'];
+                return ['success' => false, 'auto_repair_safe' => false, 'error' => $context['forecast_window_error'] ?? 'No remaining approved campaign horizon or reported-spend envelope.'];
             }
             $provider = $this->forecastProvider($customer);
             for ($attempt = 0; $attempt < 4; $attempt++) {

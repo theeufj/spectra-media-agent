@@ -308,6 +308,50 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertFalse($campaign->hasConversionRate());
     }
 
+    public function test_scheduled_forecast_uses_the_verified_future_launch_window_without_changing_spend_limits(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        $forecast = $this->forecast();
+        $context = $this->context() + ['forecast_start_date' => '2026-10-20', 'forecast_end_date_limit' => '2026-10-26'];
+        $result = $forecast('1234567890', [['text' => 'google ads management', 'match_type' => 'EXACT']], 3, null, 7, $context);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertSame(['from' => '2026-10-20', 'through' => '2026-10-26'], $result['forecast_period']);
+        $this->assertSame(7, $result['period_days']);
+        $this->assertInstanceOf(GenerateKeywordForecastMetricsRequest::class, $forecast->request);
+        $this->assertSame('2026-10-20', $forecast->request->getForecastPeriod()->getStartDate());
+        $this->assertSame('2026-10-26', $forecast->request->getForecastPeriod()->getEndDate());
+        $bidding = $forecast->request->getCampaign()->getBiddingStrategy()->getMaximizeClicksBiddingStrategy();
+        $this->assertSame(3_000_000, $bidding->getMaxCpcBidCeilingMicros());
+        $this->assertSame(10_000_000, $bidding->getDailyTargetSpendMicros());
+    }
+
+    public function test_invalid_or_out_of_range_forecast_windows_are_rejected_before_the_api_request(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        foreach ([
+            ['forecast_start_date' => '2026-10-13'],
+            ['forecast_start_date' => '2026-10-12'],
+            ['forecast_start_date' => '2026-02-30'],
+            ['forecast_start_date' => '20/10/2026'],
+            ['forecast_start_date' => null],
+            ['forecast_start_date' => '2027-10-14'],
+            ['forecast_start_date' => '2027-10-10'],
+            ['forecast_start_date' => '2026-10-20', 'forecast_end_date_limit' => '2026-10-25'],
+            ['forecast_start_date' => '2026-10-20', 'forecast_end_date_limit' => '2026-02-30'],
+        ] as $window) {
+            $forecast = $this->forecast();
+            $result = $forecast('1234567890', [['text' => 'google ads management', 'match_type' => 'EXACT']],
+                3, null, 7, $window + $this->context());
+
+            $this->assertFalse($result['success'], json_encode($window));
+            $this->assertFalse($result['auto_repair_safe']);
+            $this->assertNotEmpty($result['error']);
+            $this->assertNull($forecast->request, 'Invalid dates must not reach Google.');
+        }
+    }
+
     public function test_manual_cpc_keyword_overrides_and_inherited_bids_are_preserved_in_inspection_and_forecast(): void
     {
         $campaign = $this->campaign();

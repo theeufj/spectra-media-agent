@@ -3,9 +3,8 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleBudgetPacingHistory;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Protobuf\FieldMask;
 
 class UpdateCampaignBudget extends BaseGoogleAdsService
@@ -26,49 +25,70 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
         }
         $this->ensureClient();
 
-        // First, we need to get the budget resource name from the campaign
-        $query = "SELECT campaign.campaign_budget FROM campaign WHERE campaign.resource_name = '$campaignResourceName'";
-
         try {
-            $response = $this->searchQuery($customerId, $query);
-
-            $budgetResourceName = null;
-            foreach ($response->getIterator() as $googleAdsRow) {
-                $budgetResourceName = $googleAdsRow->getCampaign()->getCampaignBudget();
-                break;
-            }
-
-            if (! $budgetResourceName) {
+            $before = $this->readBudget($customerId, $campaignResourceName);
+            if (! $before) {
                 $this->logError("Could not find budget for campaign: $campaignResourceName");
 
                 return false;
             }
+            if (! $this->writeBudget($customerId, $before['budget_resource'], (int) $newDailyBudgetMicros)) {
+                return false;
+            }
+            if ($this->dryRun) {
+                return true;
+            }
+            $readback = $this->readBudget($customerId, $campaignResourceName);
+            if (! $readback || $readback['budget_resource'] !== $before['budget_resource']
+                || $readback['daily_budget_micros'] !== (int) $newDailyBudgetMicros) {
+                $this->logError('Google budget mutation was not confirmed by readback.');
 
-            // Now update the budget
-            $budget = new \Google\Ads\GoogleAds\V22\Resources\CampaignBudget([
-                'resource_name' => $budgetResourceName,
-                'amount_micros' => (int) $newDailyBudgetMicros,
-            ]);
+                return false;
+            }
+            if ($local) {
+                app(GoogleBudgetPacingHistory::class)->record($local, $readback);
+            }
 
-            $budgetOperation = new \Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-            $budgetOperation->setUpdate($budget);
-            $budgetOperation->setUpdateMask(new FieldMask(['paths' => ['amount_micros']]));
-
-            $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
-            $response = $campaignBudgetServiceClient->mutateCampaignBudgets(
-                new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
-                    'validate_only' => $this->dryRun,
-                    'customer_id' => $customerId,
-                    'operations' => [$budgetOperation],
-                ])
-            );
-
-            return count($response->getResults()) > 0;
-
-        } catch (GoogleAdsException $e) {
-            $this->logError('Failed to update campaign budget: '.$e->getMessage());
+            return true;
+        } catch (\Throwable $e) {
+            $this->logError('Failed to update or verify campaign budget: '.$e->getMessage(), $e);
 
             return false;
         }
+    }
+
+    protected function readBudget(string $customerId, string $campaignResourceName): ?array
+    {
+        $query = 'SELECT campaign.resource_name, campaign.campaign_budget, campaign_budget.amount_micros, '
+            ."customer.currency_code, customer.time_zone FROM campaign WHERE campaign.resource_name = '$campaignResourceName'";
+        foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+            $snapshot = ['campaign_resource' => $row->getCampaign()->getResourceName(),
+                'budget_resource' => $row->getCampaign()->getCampaignBudget(),
+                'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros(),
+                'currency_code' => $row->getCustomer()->getCurrencyCode(), 'account_timezone' => $row->getCustomer()->getTimeZone()];
+            if ($snapshot['campaign_resource'] === $campaignResourceName
+                && str_starts_with($snapshot['budget_resource'], "customers/{$customerId}/campaignBudgets/")
+                && preg_match('/^[A-Z]{3}$/', $snapshot['currency_code'])
+                && in_array($snapshot['account_timezone'], timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)) {
+                return $snapshot;
+            }
+        }
+
+        return null;
+    }
+
+    protected function writeBudget(string $customerId, string $budgetResourceName, int $micros): bool
+    {
+        $budget = new \Google\Ads\GoogleAds\V22\Resources\CampaignBudget(['resource_name' => $budgetResourceName, 'amount_micros' => $micros]);
+        $operation = new \Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+        $operation->setUpdate($budget);
+        $operation->setUpdateMask(new FieldMask(['paths' => ['amount_micros']]));
+        $response = $this->client->getCampaignBudgetServiceClient()->mutateCampaignBudgets(
+            new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+                'validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$operation],
+            ])
+        );
+
+        return count($response->getResults()) > 0;
     }
 }

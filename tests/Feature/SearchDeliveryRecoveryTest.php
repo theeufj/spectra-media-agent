@@ -61,6 +61,8 @@ class SearchDeliveryRecoveryTest extends TestCase
     {
         return [
             'status' => 2,
+            'time_zone' => 'Australia/Sydney',
+            'start_date' => now('Australia/Sydney')->subDays(30)->toDateString(),
             'google_search_enabled' => true,
             'bidding_strategy' => 10,
             'target_cpa_micros' => 0,

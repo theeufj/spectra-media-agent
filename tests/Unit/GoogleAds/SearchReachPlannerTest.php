@@ -8,11 +8,18 @@ use App\Services\Agents\GoogleSearchReachPlanner;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class SearchReachPlannerTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        CarbonImmutable::setTestNow();
+        parent::tearDown();
+    }
+
     private function campaign(array $attributes = []): Campaign
     {
         $customer = new Customer(['name' => 'SiteToSpend', 'website' => 'https://example.com',
@@ -169,7 +176,7 @@ class SearchReachPlannerTest extends TestCase
                 'cost_micros' => $days === 14 ? 40_000_000 : 15_000_000, 'clicks' => $days === 14 ? 20 : 15];
         });
         $planner = new ProviderSeamReachPlanner($historical, $forecast);
-        $campaign = $this->campaign(['end_date' => now()->addDays(14), 'spend_guardrails' => ['enabled' => true,
+        $campaign = $this->campaign(['end_date' => now('Australia/Sydney')->startOfDay()->addDays(14), 'spend_guardrails' => ['enabled' => true,
             'baseline_cost_micros' => 1_000_000, 'max_spend_micros' => 30_000_000]]);
         $snapshot = $this->snapshot();
         $snapshot['reported_lifetime_cost_micros'] = 11_000_000;
@@ -179,6 +186,110 @@ class SearchReachPlannerTest extends TestCase
         $this->assertSame(7, $result['forecast']['period_days']);
         $this->assertSame(15, $result['forecast']['clicks'], 'Final totals come from the second provider forecast, never scaled first estimates.');
         $this->assertNotContains('insufficient_forecast_reach', array_column($result['issues'], 'code'), 'A shorter approved period uses a disclosed monthly equivalent.');
+    }
+
+    public function test_future_launch_forecasts_the_intersection_of_approved_and_live_serving_dates(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        Cache::flush();
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [['text' => 'managed ppc services', 'avg_monthly_searches' => 100]]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->expects($this->exactly(2))->method('__invoke')->willReturnCallback(function ($customerId, $keywords, $cap, $rate, $days, $context) {
+            $this->assertSame(3.0, $cap);
+            $this->assertNull($rate);
+            $this->assertSame(10_000_000, $context['daily_budget_micros']);
+            $this->assertSame('2026-10-22', $context['forecast_start_date']);
+            $this->assertSame('2026-10-26', $context['forecast_end_date_limit']);
+            $this->assertSame(5, $days);
+
+            return ['success' => true, 'auto_repair_safe' => true, 'period_days' => $days,
+                'forecast_period' => ['from' => $context['forecast_start_date'], 'through' => $context['forecast_end_date_limit']],
+                'cost_micros' => 10_000_000, 'clicks' => 10];
+        });
+        $planner = new ProviderSeamReachPlanner($historical, $forecast);
+        $campaign = $this->campaign(['start_date' => '2026-10-20', 'end_date' => '2026-10-26']);
+        $snapshot = $this->snapshot() + ['start_date' => '20261022', 'end_date' => '20261028'];
+
+        $deployment = $planner->assess($campaign, $snapshot);
+        $repair = $planner->assessMutation($campaign, $snapshot, $snapshot['keywords']);
+
+        $this->assertSame('evidence_ready', $deployment['status']);
+        $this->assertSame(['from' => '2026-10-22', 'through' => '2026-10-26'], $deployment['forecast']['forecast_period']);
+        $this->assertSame($deployment['forecast']['forecast_period'], $repair['forecast']['forecast_period']);
+        $this->assertNotContains('insufficient_forecast_reach', array_column($repair['issues'], 'code'));
+    }
+
+    public function test_future_trial_shortens_the_forecast_cost_horizon_from_its_launch_date(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        Cache::flush();
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [['text' => 'managed ppc services', 'avg_monthly_searches' => 100]]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $periods = [];
+        $forecast->expects($this->exactly(2))->method('__invoke')->willReturnCallback(function ($customerId, $keywords, $cap, $rate, $days, $context) use (&$periods) {
+            $this->assertSame(3.0, $cap);
+            $this->assertSame('2026-10-22', $context['forecast_start_date']);
+            $this->assertSame('2026-11-04', $context['forecast_end_date_limit']);
+            $this->assertSame(20_000_000, $context['max_forecast_cost_micros']);
+            $periods[] = $days;
+
+            return ['success' => true, 'auto_repair_safe' => true, 'period_days' => $days,
+                'cost_micros' => $days === 14 ? 40_000_000 : 15_000_000, 'clicks' => $days === 14 ? 20 : 15];
+        });
+        $campaign = $this->campaign(['start_date' => '2026-10-20', 'end_date' => '2026-11-04',
+            'spend_guardrails' => ['enabled' => true, 'baseline_cost_micros' => 1_000_000, 'max_spend_micros' => 30_000_000]]);
+        $snapshot = $this->snapshot() + ['start_date' => '20261022', 'end_date' => '20261110', 'reported_lifetime_cost_micros' => 11_000_000];
+        $result = (new ProviderSeamReachPlanner($historical, $forecast))->assessMutation($campaign, $snapshot, $snapshot['keywords']);
+
+        $this->assertSame([14, 7], $periods);
+        $this->assertSame(15_000_000, $result['forecast']['cost_micros']);
+        $this->assertSame(7, $result['forecast']['period_days']);
+    }
+
+    public function test_forecast_horizon_is_truncated_at_the_google_one_year_limit(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        Cache::flush();
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [['text' => 'managed ppc services', 'avg_monthly_searches' => 100]]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->expects($this->once())->method('__invoke')->willReturnCallback(function ($customerId, $keywords, $cap, $rate, $days, $context) {
+            $this->assertSame('2027-10-10', $context['forecast_start_date']);
+            $this->assertSame('2027-10-13', $context['forecast_end_date_limit']);
+            $this->assertSame(4, $days);
+
+            return ['success' => true, 'auto_repair_safe' => true, 'period_days' => $days, 'cost_micros' => 10_000_000, 'clicks' => 10];
+        });
+        $campaign = $this->campaign(['start_date' => '2027-10-10', 'end_date' => '2027-11-10']);
+        $snapshot = $this->snapshot() + ['start_date' => '20271008', 'end_date' => '20271108'];
+
+        $this->assertSame('evidence_ready', (new ProviderSeamReachPlanner($historical, $forecast))->assessMutation($campaign, $snapshot, $snapshot['keywords'])['status']);
+    }
+
+    public function test_invalid_or_empty_campaign_serving_windows_never_request_a_repair_forecast(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        foreach ([
+            ['start_date' => '2026-10-22', 'end_date' => '2026-10-21'],
+            ['start_date' => '2026-10-22', 'end_date' => '2026-10-12'],
+            ['start_date' => '2027-10-14', 'end_date' => '2027-11-10'],
+            ['start_date' => '2026-02-30', 'end_date' => '2026-10-26'],
+            ['start_date' => '20261020', 'end_date' => '20261032'],
+        ] as $window) {
+            Cache::flush();
+            $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+            $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [['text' => 'managed ppc services', 'avg_monthly_searches' => 100]]]);
+            $forecast = $this->createMock(GenerateKeywordForecast::class);
+            $forecast->expects($this->never())->method('__invoke');
+            $snapshot = $window + $this->snapshot();
+            $result = (new ProviderSeamReachPlanner($historical, $forecast))->assessMutation($this->campaign(), $snapshot, $snapshot['keywords']);
+
+            $this->assertSame('unavailable', $result['status'], json_encode($window));
+            $this->assertFalse($result['auto_repair_safe']);
+            $this->assertNull($result['forecast']);
+        }
     }
 
     public function test_historical_requested_key_is_preferred_over_google_canonical_close_variant_text(): void
