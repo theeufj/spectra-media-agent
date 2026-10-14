@@ -103,4 +103,18 @@ class SearchDeliveryAlertContentTest extends TestCase
         $content = GoogleSearchDeliveryAlertContent::forState($state);
         $this->assertStringNotContainsString('Google estimates', implode(' ', $content['evidence_lines']));
     }
+
+    public function test_read_quota_cooldown_preserves_old_evidence_without_requesting_approval_or_claiming_fresh_limits(): void
+    {
+        $state = [...$this->state(), 'status' => 'verifying', 'blocked_reason' => 'google_api_quota_cooldown',
+            'ad_rank' => ['repair' => ['status' => 'verifying', 'metadata' => ['reason' => 'google_api_quota_cooldown', 'phase' => 'staging_assets']],
+                'diagnosis' => ['status' => 'rank_limited', 'evidence' => ['status' => 'verified', 'lost_to_rank' => 0.9001]]]];
+        $content = GoogleSearchDeliveryAlertContent::forState($state);
+        $body = implode(' ', $content['evidence_lines']);
+        $this->assertStringContainsString('saved repair will resume', $content['message']);
+        $this->assertStringContainsString('No approval is needed', $content['action_required']);
+        $this->assertStringContainsString('Last available measured results', $body);
+        $this->assertStringNotContainsString('Daily budget at this check', $body);
+        $this->assertStringNotContainsString('Google estimates', $body);
+    }
 }

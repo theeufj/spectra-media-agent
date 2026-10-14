@@ -22,6 +22,10 @@ Ad Rank has a separate repair path from Ad Strength feedback. The watchdog diagn
 
 Creative staging saves the complete reviewed plan before submission and adds two assets per check. Only acknowledged, scoped, paused assets can resume; uncertain writes require review and cannot be blindly recreated or activated. SDK repair mutations have a 30-second deadline without automatic retries. Partial submissions never count as traffic recovery.
 
+Confirmed read-only Google quota rejections preserve the pending plan and resource IDs and defer checks until the API cooldown expires. The cooldown does not certify new delivery or spending evidence. Uncertain writes still require review. Paused preparation uses fresh financial and ownership checks with fewer repeated reads; serving activation retains the full configuration checks.
+
+Approved assets activate in batches of at most two replacement pairs per check. Each completed pair has durable, scoped status and content readbacks; an unfinished write cannot be replayed. The original RSA stays enabled until the full asset plan and final replacement swap pass verification.
+
 Budget health and pacing emails compare complete account days since the current platform budget was confirmed. Desired local edits cannot establish that history: failed changes remain unverified, and a later successful retry begins a new comparison window. A bounded trial reports fresh Google lifetime spend minus its immutable pre-trial baseline, with the remaining review threshold shown separately. Earlier spend is never projected against a reduced budget. Unknown budget history or unavailable spend remains unverified; pacing comparisons are not monthly billing limits. The separate spend-safety job still verifies trial settings and stop conditions every 15 minutes.
 
 ```mermaid

@@ -26,6 +26,7 @@ use Google\Ads\GoogleAds\V22\Services\MutateAssetResult;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsResponse;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetResult;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsResponse;
+use Google\ApiCore\ApiException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -55,7 +56,8 @@ class GoogleAdRankRepairTest extends TestCase
             'approved_daily_budget' => '10.00', 'budget_confirmed_at' => now(),
             'spend_guardrails' => $trial ? ['enabled' => true, 'allow_ad_rank_repairs' => true,
                 'baseline_cost_micros' => 20_000_000, 'max_spend_micros' => 50_000_000,
-                'max_daily_budget_micros' => 10_000_000, 'max_cpc_bid_micros' => 3_000_000] : null]);
+                'max_daily_budget_micros' => 10_000_000, 'max_cpc_bid_micros' => 3_000_000,
+                'currency_code' => 'AUD', 'account_timezone' => 'Australia/Sydney'] : null]);
         $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
             'google_ads_ad_group_id' => 'customers/1234567890/adGroups/7', 'signed_off_at' => now(),
             'execution_result' => ['metadata' => ['google_search_baseline' => ['ads' => [
@@ -327,6 +329,104 @@ class GoogleAdRankRepairTest extends TestCase
         }
     }
 
+    public function test_confirmed_read_quota_preserves_the_paused_prefix_and_resumes_only_after_the_server_cooldown(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->proposal['callouts'] = ['Review Before Launch', 'Ad Spend Additional', 'Keyword Research', 'Campaign Monitoring'];
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $before = $attempt->details;
+        $service->quotaReadSource = 'inspect';
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $result['status']);
+        $this->assertSame('google_api_quota_cooldown', $result['metadata']['reason']);
+        $this->assertSame('staging_assets', $result['metadata']['phase']);
+        $this->assertSame(0, $result['metadata']['actions_taken']);
+        $this->assertSame(now()->addSeconds(900)->toIso8601String(), $result['metadata']['next_check_at']);
+        $this->assertSame($before['assets'], $attempt->fresh()->details['assets']);
+        $this->assertSame($before['planned_assets'], $attempt->fresh()->details['planned_assets']);
+        $this->assertSame($before['replacement_resource'], $attempt->fresh()->details['replacement_resource']);
+        $this->assertSame('pending', $attempt->fresh()->status);
+        $reads = $service->readCalls;
+        $service->quotaReadSource = null;
+        $this->travel(899)->seconds();
+
+        $waiting = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('google_api_quota_cooldown', $waiting['metadata']['reason']);
+        $this->assertSame($reads, $service->readCalls, 'No Google API request is made before the server deadline.');
+        $this->assertSame([], $service->writes);
+        $this->travel(2)->seconds();
+
+        $resumed = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('awaiting_policy_review', $resumed['metadata']['phase']);
+        $this->assertSame($attempt->id, $resumed['metadata']['attempt_id']);
+        $this->assertSame($before['replacement_resource'], $resumed['metadata']['replacement_resource']);
+        $this->assertSame(1, $service->generationCalls);
+        $this->assertNotContains(['create_paused_ad'], $service->writes);
+        $this->assertCount(4, $attempt->fresh()->details['assets']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
+    public function test_read_quota_during_policy_verification_preserves_the_same_attempt_without_activating(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->oldCallout();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $service->approve();
+        $service->quotaReadSource = 'assets';
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $result['status']);
+        $this->assertSame('google_api_quota_cooldown', $result['metadata']['reason']);
+        $this->assertSame('awaiting_policy_review', $result['metadata']['phase']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+        $service->quotaReadSource = null;
+        $this->travel(901)->seconds();
+
+        $resumed = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('observing_delivery', $resumed['metadata']['phase']);
+        $this->assertSame($result['metadata']['attempt_id'], $resumed['metadata']['attempt_id']);
+        $this->assertSame(1, $service->generationCalls);
+    }
+
+    public function test_mutating_quota_is_not_classified_as_a_safe_read_retry_or_replayed(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->proposal['callouts'] = ['Review Before Launch', 'Ad Spend Additional', 'Keyword Research', 'Campaign Monitoring'];
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $service->assetMutationQuota = true;
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertSame('creative_repair_or_readback_failed', $result['metadata']['reason']);
+        $this->assertNull($result['metadata']['next_check_at']);
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $this->assertSame('needs_review', $attempt->status);
+        $this->assertCount(3, $attempt->details['assets']);
+        $this->assertArrayNotHasKey('asset_resource', $attempt->details['assets'][2]);
+        $service->writes = [];
+        $service->assetMutationQuota = false;
+
+        $waiting = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('needs_review', $waiting['status']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame(1, $service->generationCalls);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
     public function test_incomplete_reviewed_asset_list_cannot_enter_activation_even_with_an_approved_rsa(): void
     {
         [$campaign, , $service] = $this->fixture();
@@ -577,6 +677,252 @@ class GoogleAdRankRepairTest extends TestCase
         $this->assertSame($before, $campaign->fresh()->spend_guardrails);
         $this->assertSame(1, $service->generationCalls);
     }
+
+    public function test_paused_staging_keeps_one_full_step_guard_and_batches_prefix_reads_without_skipping_write_readbacks(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->proposal['callouts'] = ['Review Before Launch', 'Ad Spend Additional', 'Keyword Research', 'Campaign Monitoring'];
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $before = $service->readCounts;
+        $compact = $service->compactReads;
+        $service->writes = [];
+        $result = $service->repair($campaign, $service->snapshot, ['status' => 'collecting_evidence']);
+
+        $this->assertSame('awaiting_policy_review', $result['metadata']['phase']);
+        $this->assertSame(1, $service->readCounts['inspect'] - $before['inspect']);
+        $this->assertSame(4, $service->compactReads - $compact, 'Both create and PAUSED link writes keep their own fresh critical guard.');
+        $this->assertSame(3, $service->readCounts['assets'] - $before['assets'], 'One prefix read plus two fresh post-link readbacks.');
+        $this->assertNotContains(['status', RankRepairFixture::NEW, 'ENABLED'], $service->writes);
+        foreach ($service->assetRows as $row) {
+            $this->assertSame('PAUSED', $row['campaignAsset']['status']);
+        }
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidCompactStagingEvidence')]
+    public function test_incomplete_or_unsafe_compact_evidence_stops_the_first_paused_write(array $override): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $before = $campaign->fresh()->spend_guardrails;
+        $service->stagingOverrides = $override;
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('held', $result['status']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame($before, $campaign->fresh()->spend_guardrails);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
+    public static function invalidCompactStagingEvidence(): array
+    {
+        return [[['cost_micros' => null]], [['cost_micros' => 70_000_000]], [['modifier_reads_complete' => false]],
+            [['amplifying_bid_modifiers' => [['resource' => 'customers/1234567890/campaignCriteria/61~1', 'multiplier' => 1.5]]]],
+            [['daily_budget_micros' => 11_000_000]], [['actual_cpc_ceiling_micros' => 4_000_000]],
+            [['search_partners_enabled' => true]], [['currency_code' => 'USD']], [['time_zone' => 'UTC']],
+            [['budget_resource' => 'customers/9999999999/campaignBudgets/90']], [['campaign_resource' => 'customers/1234567890/campaigns/62']]];
+    }
+
+    public function test_owner_pause_during_compact_reads_blocks_the_paused_creation_without_resetting_the_trial(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $before = $campaign->fresh()->spend_guardrails;
+        $service->onStagingSafety = function (Campaign $observed): void {
+            $observed->fresh()->update(['status' => 'paused']);
+        };
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('held', $result['status']);
+        $this->assertSame('campaign_not_active', $result['metadata']['reason']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame($before, $campaign->fresh()->spend_guardrails);
+    }
+
+    public function test_current_original_copy_is_still_checked_after_compact_financial_reads(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->onStagingSafety = function () use ($service): void {
+            $service->rows[RankRepairFixture::OLD]['adGroupAd']['ad']['responsiveSearchAd']['headlines'][0]['text'] = 'Owner changed the ad';
+        };
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('held', $result['status']);
+        $this->assertSame('working_ad_changed_or_paused', $result['metadata']['reason']);
+        $this->assertSame([], $service->writes);
+    }
+
+    public function test_full_activation_guard_still_blocks_a_changed_keyword_configuration_after_compact_staging(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $service->approve();
+        $service->snapshot['keywords'][0]['text'] = 'Different owner targeting';
+        $service->writes = [];
+        $result = $service->repair($campaign, $service->snapshot, ['status' => 'collecting_evidence']);
+
+        $this->assertSame('held', $result['status']);
+        $this->assertSame('serving_settings_changed_during_creative_repair', $result['metadata']['reason']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
+    private function stagedFourPairs(): array
+    {
+        [$campaign, $strategy, $service] = $this->fixture();
+        $service->oldCallouts();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $staged = $service->repair($campaign, $service->snapshot, $this->limited());
+        $this->assertSame('awaiting_policy_review', $staged['metadata']['phase']);
+        $service->approve();
+        $service->writes = [];
+        $service->servingGuards = [];
+        $service->activationWriteDetails = [];
+
+        return [$campaign, $strategy, $service];
+    }
+
+    public function test_activation_completes_only_two_verified_pairs_per_check_and_keeps_the_original_rsa_until_the_full_plan(): void
+    {
+        [$campaign, $strategy, $service] = $this->stagedFourPairs();
+        $before = $strategy->fresh()->execution_result;
+        $fullReads = $service->readCounts['inspect'];
+        $compactReads = $service->compactReads;
+
+        $first = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $first['status']);
+        $this->assertSame('activating', $first['metadata']['phase']);
+        $this->assertSame(2, $first['metadata']['activated_asset_count']);
+        $this->assertSame(4, $first['metadata']['actions_taken']);
+        $this->assertCount(4, $service->writes);
+        $this->assertSame($compactReads, $service->compactReads, 'Serving writes never use compact financial guards.');
+        $this->assertSame(5, $service->readCounts['inspect'] - $fullReads, 'One step guard and one full guard per status mutation.');
+        $this->assertSame(range($fullReads + 2, $fullReads + 5), $service->servingGuards);
+        $intent = $service->activationWriteDetails[0];
+        $this->assertSame(0, $intent['activated_asset_count']);
+        $this->assertSame('asset_pair', $intent['activation_inflight']['kind']);
+        $this->assertSame(0, $intent['activation_inflight']['index']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+        $this->assertSame($before, $strategy->fresh()->execution_result, 'No full replacement baseline is saved for a partial activation.');
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $this->assertNull($attempt->details['activation_inflight']);
+        $firstPairs = array_slice($attempt->details['assets'], 0, 2);
+        $service->writes = [];
+        $service->servingGuards = [];
+        $fullReads = $service->readCounts['inspect'];
+
+        $second = $service->repair($campaign, $service->snapshot, ['status' => 'collecting_evidence']);
+
+        $this->assertSame('observing_delivery', $second['metadata']['phase']);
+        $this->assertSame(4, $second['metadata']['activated_asset_count']);
+        $this->assertSame(6, $second['metadata']['actions_taken']);
+        $this->assertSame(7, $service->readCounts['inspect'] - $fullReads);
+        $this->assertSame(range($fullReads + 2, $fullReads + 7), $service->servingGuards);
+        foreach ($firstPairs as $plan) {
+            $this->assertNotContains(['asset_status', $plan['link_resource'], 'ENABLED'], $service->writes);
+            $this->assertNotContains(['asset_status', $plan['old_link_resource'], 'PAUSED'], $service->writes);
+        }
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+        $this->assertSame(1, $service->generationCalls);
+        $this->assertFalse($second['metadata']['rank_recovery_verified']);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsafeActivationPrefixes')]
+    public function test_changed_completed_prefix_or_untouched_remainder_requires_review_without_replaying_status_writes(string $change): void
+    {
+        [$campaign, , $service] = $this->stagedFourPairs();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $plan = $attempt->details['assets'][str_starts_with($change, 'completed') ? 0 : 2];
+        if ($change === 'completed_content') {
+            $service->assetRows[$plan['asset_resource']]['asset']['calloutAsset']['calloutText'] = 'Owner edited this asset';
+        } elseif ($change === 'completed_old_status') {
+            $service->assetRows[$plan['old_asset_resource']]['campaignAsset']['status'] = 'ENABLED';
+        } elseif ($change === 'remainder_new_status') {
+            $service->assetRows[$plan['asset_resource']]['campaignAsset']['status'] = 'ENABLED';
+        } else {
+            $service->assetRows[$plan['old_asset_resource']]['campaignAsset']['status'] = 'PAUSED';
+        }
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertSame('needs_review', $attempt->fresh()->status);
+        $this->assertSame([], $service->writes);
+        $this->assertSame(2, $result['metadata']['activated_asset_count']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+    }
+
+    public static function unsafeActivationPrefixes(): array
+    {
+        return [['completed_content'], ['completed_old_status'], ['remainder_new_status'], ['remainder_old_status']];
+    }
+
+    public function test_owner_pause_between_activation_batches_holds_the_remaining_writes_without_restarting_anything(): void
+    {
+        [$campaign, , $service] = $this->stagedFourPairs();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $before = $campaign->fresh()->spend_guardrails;
+        $campaign->update(['status' => 'paused']);
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('held', $result['status']);
+        $this->assertSame('campaign_not_active', $result['metadata']['reason']);
+        $this->assertSame(2, $result['metadata']['activated_asset_count']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame($before, $campaign->fresh()->spend_guardrails);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
+    public function test_an_inflight_activation_without_a_durable_readback_receipt_cannot_be_replayed(): void
+    {
+        [$campaign, , $service] = $this->stagedFourPairs();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $attempt->update(['details' => array_replace($attempt->details, ['activation_inflight' => ['kind' => 'asset_pair', 'index' => 2]])]);
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertSame('needs_review', $attempt->fresh()->status);
+        $this->assertSame([], $service->writes);
+        $this->assertSame(2, $result['metadata']['activated_asset_count']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
+
+    public function test_a_read_quota_before_the_first_activation_rpc_does_not_create_an_uncertain_write_intent(): void
+    {
+        [$campaign, , $service] = $this->stagedFourPairs();
+        $firstMutationGuard = $service->readCounts['inspect'] + 2;
+        $service->onInspection = function (Campaign $observed, int $count) use ($firstMutationGuard): void {
+            if ($count === $firstMutationGuard) {
+                throw new ApiException('Too many requests. Retry in 900 seconds.', 8, 'RESOURCE_EXHAUSTED');
+            }
+        };
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('google_api_quota_cooldown', $result['metadata']['reason']);
+        $this->assertSame(0, $result['metadata']['actions_taken']);
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $this->assertNull($attempt->details['activation_inflight'] ?? null);
+        $this->assertSame(0, $attempt->details['activated_asset_count']);
+        $this->assertSame([], $service->writes);
+        $service->onInspection = null;
+        $this->travel(901)->seconds();
+
+        $resumed = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('activating', $resumed['metadata']['phase']);
+        $this->assertSame(2, $resumed['metadata']['activated_asset_count']);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+    }
 }
 
 class RankRepairFixture extends GoogleAdRankRepair
@@ -607,6 +953,26 @@ class RankRepairFixture extends GoogleAdRankRepair
 
     public array $detailsBeforeAssetCreate = [];
 
+    public ?string $quotaReadSource = null;
+
+    public int $readCalls = 0;
+
+    public array $readCounts = [];
+
+    public array $servingGuards = [];
+
+    public array $activationWriteDetails = [];
+
+    public ?\Closure $onInspection = null;
+
+    public int $compactReads = 0;
+
+    public array $stagingOverrides = [];
+
+    public ?\Closure $onStagingSafety = null;
+
+    public bool $assetMutationQuota = false;
+
     private int $createdAssets = 0;
 
     public bool $assetActivationFails = false;
@@ -628,6 +994,10 @@ class RankRepairFixture extends GoogleAdRankRepair
     {
         parent::__construct($gemini, $evidence);
         $this->snapshot = ['status' => 2, 'channel' => 2, 'daily_budget_micros' => 10_000_000,
+            'start_date' => now('Australia/Sydney')->subDays(3)->toDateString(),
+            'end_date' => now('Australia/Sydney')->addMonth()->toDateString(), 'portfolio_bidding_strategy' => '',
+            'google_search_enabled' => true, 'search_partners_enabled' => false, 'display_enabled' => false,
+            'positive_geo_target_type' => 7,
             'actual_cpc_ceiling_micros' => 3_000_000, 'cpc_bid_ceiling_micros' => 3_000_000,
             'bidding_strategy' => BiddingStrategyType::TARGET_SPEND, 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney',
             'keywords' => [['text' => 'google ads management', 'status' => 'ENABLED']],
@@ -667,23 +1037,61 @@ class RankRepairFixture extends GoogleAdRankRepair
         $this->proposal['existing_campaign_assets'] = [['field_type' => 'CALLOUT', 'asset_resource_name' => self::OLD_ASSET, 'link_resource_name' => self::OLD_LINK]];
     }
 
+    public function oldCallouts(): void
+    {
+        $this->proposal['callouts'] = ['Review Before Launch', 'Ad Spend Additional', 'Keyword Research', 'Campaign Monitoring'];
+        $this->proposal['existing_campaign_assets'] = [];
+        foreach (range(200, 203) as $id) {
+            $asset = 'customers/1234567890/assets/'.$id;
+            $link = 'customers/1234567890/campaignAssets/61~'.$id.'~CALLOUT';
+            $this->assetRows[$asset] = ['campaignAsset' => ['resourceName' => $link, 'asset' => $asset, 'fieldType' => 'CALLOUT', 'status' => 'ENABLED'],
+                'asset' => ['resourceName' => $asset, 'calloutAsset' => ['calloutText' => 'Previous Callout '.$id],
+                    'policySummary' => ['approvalStatus' => 'APPROVED', 'reviewStatus' => 'REVIEWED']]];
+            $this->proposal['existing_campaign_assets'][] = ['field_type' => 'CALLOUT', 'asset_resource_name' => $asset, 'link_resource_name' => $link];
+        }
+    }
+
     protected function inspect(Campaign $campaign): ?array
     {
+        $this->read('inspect');
+        if ($this->onInspection) {
+            ($this->onInspection)($campaign, $this->readCounts['inspect']);
+        }
+
         return $this->snapshot;
     }
 
     protected function spend(Campaign $campaign): array
     {
+        $this->read('spend');
+
         return $this->spendData;
+    }
+
+    protected function stagingSafety(Campaign $campaign): array
+    {
+        $this->read('spend');
+        $this->compactReads++;
+        if ($this->onStagingSafety) {
+            ($this->onStagingSafety)($campaign, $this->compactReads);
+        }
+
+        return $this->stagingOverrides + $this->snapshot + ['campaign_resource' => $campaign->googleAdsResourceName(),
+            'budget_resource' => 'customers/1234567890/campaignBudgets/90', 'cost_micros' => $this->spendData['cost_micros'],
+            'amplifying_bid_modifiers' => $this->spendData['amplifying_bid_modifiers'],
+            'modifier_reads_complete' => true, 'checked_at' => now()->toIso8601String()];
     }
 
     protected function assets(Campaign $campaign): array
     {
+        $this->read('assets');
+
         return $this->assetRows;
     }
 
     protected function ads(Campaign $campaign): array
     {
+        $this->read('ads');
         if ($this->hiddenReads > 0) {
             $this->hiddenReads--;
 
@@ -691,6 +1099,15 @@ class RankRepairFixture extends GoogleAdRankRepair
         }
 
         return $this->rows;
+    }
+
+    private function read(string $source): void
+    {
+        $this->readCalls++;
+        $this->readCounts[$source] = ($this->readCounts[$source] ?? 0) + 1;
+        if ($this->quotaReadSource === $source) {
+            throw new ApiException('Too many requests. Retry in 900 seconds.', 8, 'RESOURCE_EXHAUSTED');
+        }
     }
 
     protected function generateCopy(Campaign $campaign, Strategy $strategy, array $original, array $snapshot, bool $ownerRequested): array
@@ -731,6 +1148,7 @@ class RankRepairFixture extends GoogleAdRankRepair
 
     protected function setAdStatus(Campaign $campaign, string $resource, string $status): bool
     {
+        $this->servingGuards[] = $this->readCounts['inspect'] ?? 0;
         $this->writes[] = ['status', $resource, $status];
         $this->rows[$resource]['adGroupAd']['status'] = $status;
         if ($resource === self::OLD && $status === 'PAUSED' && $this->hideOriginalAfterPause) {
@@ -745,6 +1163,9 @@ class RankRepairFixture extends GoogleAdRankRepair
         $this->writes[] = ['create_asset'];
         if ($this->isDryRun()) {
             return null;
+        }
+        if ($this->assetMutationQuota) {
+            throw new ApiException('Too many requests. Retry in 900 seconds.', 8, 'RESOURCE_EXHAUSTED');
         }
         if ($this->detailsBeforeAssetCreate === []) {
             $this->detailsBeforeAssetCreate = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail()->details;
@@ -767,6 +1188,8 @@ class RankRepairFixture extends GoogleAdRankRepair
 
     protected function setAssetStatus(Campaign $campaign, string $resource, string $status): bool
     {
+        $this->servingGuards[] = $this->readCounts['inspect'] ?? 0;
+        $this->activationWriteDetails[] = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail()->details;
         $this->writes[] = ['asset_status', $resource, $status];
         if ($this->assetActivationFails && $status === 'ENABLED') {
             return false;

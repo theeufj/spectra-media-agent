@@ -52,6 +52,9 @@ const holdReasons = {
     creative_staging_interrupted: 'Replacement preparation was interrupted. The working ad has been preserved; review the recorded result before another attempt.',
     replacement_copy_review_failed: 'The proposed replacement did not pass ad review. Review its feedback before another attempt; the working ad has been preserved.',
     replacement_asset_evidence_review_failed: 'The proposed assets did not pass the website evidence review. The working ad has been preserved.',
+    google_api_quota_cooldown: 'Google temporarily limited API requests. The saved repair will resume after the cooldown; spending limits remain in place.',
+    google_read_quota_after_creative_write: 'Google limited verification after a creative change. Review the recorded status before another change.',
+    activating: 'Google approved the replacements. Their activation is being verified in batches within the existing spending limits.',
 };
 
 function holdReason(reason) {
@@ -164,6 +167,9 @@ export default function SearchDeliveryCard({ campaign }) {
     const status = searchDeliveryStatus(state, now);
     if (!status) return null;
     const measurement = state.measurement || {};
+    const waitingForReportingHours = observedNumber(measurement.complete_hours) === 0
+        && validTime(measurement.from) && validTime(measurement.through)
+        && Date.parse(measurement.from) > Date.parse(measurement.through);
     const diagnosis = state.diagnosis || {};
     const rank = state.ad_rank || {};
     const rankEvidence = rank.diagnosis?.evidence;
@@ -183,10 +189,15 @@ export default function SearchDeliveryCard({ campaign }) {
     const needsAttention = ['low_reach', 'low_traffic', 'approval_required', 'needs_review', 'unavailable'].includes(status);
     const styles = isHealthy ? 'border-green-200 bg-green-50' : needsAttention ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50';
     const phase = rankRepair?.metadata?.phase;
-    const [label, explanation] = status === 'verifying' && phase === 'staging_assets'
+    const quotaCooldown = status === 'verifying' && rankRepair?.metadata?.reason === 'google_api_quota_cooldown';
+    const [label, explanation] = quotaCooldown
+        ? ['Waiting for Google API cooldown', holdReasons.google_api_quota_cooldown]
+        : status === 'verifying' && phase === 'staging_assets'
         ? ['Preparing ad replacements', 'The reviewed replacement is being prepared in paused batches. The working approved ad continues serving.']
         : status === 'verifying' && phase === 'awaiting_policy_review'
             ? ['Waiting for Google approval', 'The replacement ad and assets are paused while Google reviews them. The working approved ad continues serving.']
+            : status === 'verifying' && phase === 'activating'
+                ? ['Applying approved ad improvements', holdReasons.activating]
             : statuses[status];
     const forecast = diagnosis.forecast;
     const hasForecast = [forecast, diagnosis.combined_forecast].some(value => value && typeof value === 'object' && Object.keys(value).length > 0);
@@ -200,11 +211,15 @@ export default function SearchDeliveryCard({ campaign }) {
             <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-900">{label}</span>
         </div>
         <p className="mt-2 text-sm text-gray-800">{explanation}</p>
+        {quotaCooldown && validTime(rankRepair.metadata?.next_check_at) && <p className="mt-2 text-sm text-gray-700">The next check can run after <Time value={rankRepair.metadata.next_check_at} />.</p>}
         {stale && <p className="mt-2 text-sm text-amber-900">This delivery check is out of date. A new check is needed before the campaign can be confirmed healthy.</p>}
 
         <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
             <h3 className="text-sm font-semibold text-gray-900">Measured results</h3>
-            <p className="mt-1 text-xs text-gray-600">From <Time value={measurement.from} /> through <Time value={measurement.through} />.</p>
+            {quotaCooldown && <p className="mt-1 text-xs text-gray-600">These are the last available results. Live delivery has not been checked again during the API cooldown.</p>}
+            {waitingForReportingHours
+                ? <p className="mt-1 text-xs text-gray-600">Waiting for complete reporting hours after the latest change.</p>
+                : <p className="mt-1 text-xs text-gray-600">From <Time value={measurement.from} /> through <Time value={measurement.through} />.</p>}
             {observedNumber(measurement.complete_hours) !== null && <p className="mt-1 text-xs text-gray-600">{measuredCount(measurement.complete_hours)} complete reporting hours. Recent Google figures can still change.</p>}
             <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {[['Impressions', measuredCount(measurement.impressions)], ['Clicks', measuredCount(measurement.clicks)],
@@ -228,10 +243,14 @@ export default function SearchDeliveryCard({ campaign }) {
         {rankRepair && rankRepair.status !== 'no_op' && <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="Ad repair progress">
             <h3 className="text-sm font-semibold text-gray-900">Ad repair progress</h3>
             <p className="mt-2 text-sm text-gray-700">{rankRepair.status === 'verifying'
-                ? (rankRepair.metadata?.phase === 'observing_delivery'
+                ? (quotaCooldown
+                    ? 'The saved preparation and resource IDs are preserved. A later check resumes this repair without generating duplicate ads.'
+                    : rankRepair.metadata?.phase === 'observing_delivery'
                     ? 'The approved replacement is serving. Its effect on auction competitiveness and useful clicks is still being measured.'
                     : (rankRepair.metadata?.phase === 'staging_assets'
                         ? 'The replacement assets are being staged in paused batches. Google approval and traffic verification follow when preparation is complete.'
+                        : rankRepair.metadata?.phase === 'activating'
+                            ? 'Approved asset replacements are being activated and checked in batches. The original ad remains enabled until the complete replacement passes verification.'
                         : 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.'))
                 : 'The ad repair needs review before further changes can be applied.'}</p>
             <p className="mt-2 text-xs text-gray-600">The approved budget and bid limits remain in place. Applying copy or asset changes does not prove Ad Rank recovery.</p>

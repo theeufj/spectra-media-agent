@@ -42,6 +42,9 @@ class GoogleSearchDeliveryAlertContent
             'creative_staging_interrupted' => 'Replacement preparation was interrupted. The working ad has been preserved; review the recorded result before another attempt.',
             'replacement_copy_review_failed' => 'The proposed replacement did not pass ad review. Review its feedback before another attempt; the working ad has been preserved.',
             'replacement_asset_evidence_review_failed' => 'The proposed assets did not pass the website evidence review. The working ad has been preserved.',
+            'google_api_quota_cooldown' => 'Google temporarily limited API requests. The saved repair will resume after the cooldown; spending limits remain in place.',
+            'google_read_quota_after_creative_write' => 'Google limited verification after a creative change. Review the recorded status before another change.',
+            'activating' => 'Google approved the replacements. Their activation is being verified in batches within the existing spending limits.',
             default => 'Automatic changes are on hold. Review the delivery report before making changes.',
         };
     }
@@ -51,15 +54,18 @@ class GoogleSearchDeliveryAlertContent
         $unavailable = ($state['status'] ?? null) === 'unavailable' || ! empty($state['errors']);
         $attempted = ! empty($state['repair']['started_at']);
         $rankRepair = $state['ad_rank']['repair'] ?? [];
+        $quotaCooldown = ($rankRepair['status'] ?? null) === 'verifying'
+            && ($rankRepair['metadata']['reason'] ?? null) === 'google_api_quota_cooldown';
         $rankIncident = ($state['ad_rank']['diagnosis']['status'] ?? null) === 'rank_limited'
             || ! empty($rankRepair['started_at']) || in_array($rankRepair['status'] ?? null, ['verifying', 'needs_review'], true);
         $message = $unavailable
             ? 'We could not verify the current Google Search delivery diagnosis. This alert does not confirm that the campaign is receiving traffic.'
             : ($attempted ? 'A keyword repair was attempted, but traffic recovery has not been confirmed.' : 'Your Google Search campaign needs a delivery review.');
         if (! $unavailable && $rankIncident) {
-            $message = ! empty($rankRepair['started_at']) || ($rankRepair['status'] ?? null) === 'verifying'
+            $message = $quotaCooldown ? self::holdReason('google_api_quota_cooldown')
+                : (! empty($rankRepair['started_at']) || ($rankRepair['status'] ?? null) === 'verifying'
                 ? 'An ad repair is being verified. Improved auction competitiveness and useful traffic have not yet been confirmed.'
-                : 'Your Google Search campaign needs an auction competitiveness review.';
+                : 'Your Google Search campaign needs an auction competitiveness review.');
         }
         $evidence = [];
         $measurement = $state['verification'] ?? $state['measurement'] ?? [];
@@ -67,19 +73,19 @@ class GoogleSearchDeliveryAlertContent
         $impressions = $measurement['impressions'] ?? null;
         $clicks = $measurement['clicks'] ?? null;
         if (is_numeric($hours) && $hours > 0 && is_numeric($impressions) && is_numeric($clicks)) {
-            $evidence[] = ($unavailable ? 'Last available measured results' : 'Measured results').': '
+            $evidence[] = ($unavailable || $quotaCooldown ? 'Last available measured results' : 'Measured results').': '
                 .number_format((int) $impressions).' impressions and '.number_format((int) $clicks)
                 .' clicks across '.number_format((int) $hours).' complete reporting hours.';
         }
         $currency = $state['currency_code'] ?? null;
         if (is_numeric($hours) && $hours > 0 && isset($measurement['cost_micros'])
             && is_int($measurement['cost_micros']) && $measurement['cost_micros'] >= 0) {
-            $evidence[] = ($unavailable ? 'Last available reported ad spend' : 'Reported ad spend for that period')
+            $evidence[] = ($unavailable || $quotaCooldown ? 'Last available reported ad spend' : 'Reported ad spend for that period')
                 .': '.self::money($measurement['cost_micros'], $currency).'.';
         }
         // A failed check must not present an earlier snapshot as today's verified settings.
         $limits = $state['verified_limits'] ?? [];
-        if (! $unavailable && ! empty($state['checked_at']) && ($limits['checked_at'] ?? null) === $state['checked_at']) {
+        if (! $unavailable && ! $quotaCooldown && ! empty($state['checked_at']) && ($limits['checked_at'] ?? null) === $state['checked_at']) {
             if (is_int($limits['daily_budget_micros'] ?? null) && $limits['daily_budget_micros'] > 0) {
                 $evidence[] = 'Daily budget at this check: '.self::money($limits['daily_budget_micros'], $currency).'/day.';
             }
@@ -88,7 +94,7 @@ class GoogleSearchDeliveryAlertContent
             }
         }
         $rankEvidence = $state['ad_rank']['diagnosis']['evidence'] ?? [];
-        if (! $unavailable && ($rankEvidence['status'] ?? null) === 'verified'
+        if (! $unavailable && ! $quotaCooldown && ($rankEvidence['status'] ?? null) === 'verified'
             && is_numeric($rankEvidence['lost_to_rank'] ?? null) && $rankEvidence['lost_to_rank'] >= 0 && $rankEvidence['lost_to_rank'] <= 1) {
             $loss = (float) $rankEvidence['lost_to_rank'] === 0.9001 ? 'over 90%' : round($rankEvidence['lost_to_rank'] * 100, 1).'%';
             $evidence[] = 'Google estimates '.$loss.' of available Search impressions were lost to Ad Rank in the measured account-day window.';
@@ -101,6 +107,7 @@ class GoogleSearchDeliveryAlertContent
         }
         $issues = $unavailable ? ($state['errors'] ?? []) : ($state['diagnosis']['issues'] ?? []);
         $actions = match (true) {
+            $quotaCooldown => 'No approval is needed for this temporary API cooldown. The agent will check again and verify the saved repair within the existing spending limits.',
             $unavailable => 'Ask your administrator to verify the latest Google Ads status and delivery evidence before approving changes.',
             $rankIncident => 'Review the current ad relevance, landing page and verified repair outcome. Assess fresh auction and click evidence before another change or any increase to spending limits.',
             $attempted => 'Ask your administrator to review the repair outcome and live keyword settings before another change.',

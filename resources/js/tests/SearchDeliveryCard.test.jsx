@@ -293,6 +293,35 @@ describe('SearchDeliveryCard', () => {
         expect(screen.queryByText('Checking traffic after the repair')).toBeNull();
     });
 
+    it('distinguishes a saved repair waiting for API cooldown from policy review or recovery', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'verifying', blocked_reason: 'google_api_quota_cooldown',
+            ad_rank: { repair: { status: 'verifying', metadata: { phase: 'staging_assets', reason: 'google_api_quota_cooldown',
+                next_check_at: '2026-10-11T01:15:00Z' } } } } }} />);
+        expect(screen.getByText('Waiting for Google API cooldown')).toBeVisible();
+        expect(screen.getByText(/next check can run after/)).toBeVisible();
+        expect(screen.getByText(/last available results/)).toBeVisible();
+        expect(screen.getByText(/without generating duplicate ads/)).toBeVisible();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
+        expect(screen.queryByText(/Google is reviewing the replacement ad and assets/)).toBeNull();
+    });
+
+    it('shows approved activation separately from Google review and traffic recovery', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'verifying', blocked_reason: 'activating',
+            ad_rank: { repair: { status: 'verifying', metadata: { phase: 'activating' } } } } }} />);
+        expect(screen.getByText('Applying approved ad improvements')).toBeVisible();
+        expect(screen.getByText(/original ad remains enabled until the complete replacement/)).toBeVisible();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
+        expect(screen.queryByText(/Google is reviewing the replacement ad and assets/)).toBeNull();
+    });
+
+    it('explains reporting lag instead of showing an inverted zero-hour reporting range', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'verifying',
+            measurement: { complete_hours: 0, from: '2026-10-11T03:00:00Z', through: '2026-10-11T00:00:00Z' } } }} />);
+        expect(screen.getByText('Waiting for complete reporting hours after the latest change.')).toBeVisible();
+        expect(screen.queryByText(/^From/)).toBeNull();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
+    });
+
     it('renders current delivery diagnosis on the customer campaign page and refreshes with new props', () => {
         const { rerender } = render(<CampaignShow auth={{ user: {} }} campaign={campaign} />);
         expect(screen.getByRole('region', { name: 'Google Search delivery diagnosis' })).toHaveTextContent('Changes need your approval');

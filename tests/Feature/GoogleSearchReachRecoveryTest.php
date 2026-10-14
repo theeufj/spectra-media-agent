@@ -696,6 +696,105 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame('spend_safety_hold', $state['blocked_reason']);
     }
 
+    private function coolingRankAttempt(Campaign $campaign, array $overrides = []): AgentActivity
+    {
+        return AgentActivity::record('ad_rank', 'ad_rank_repair', 'Paused creative staging is waiting for Google read quota.',
+            $campaign->customer_id, $campaign->id, array_replace(['phase' => 'staging_assets',
+                'customer_id' => $campaign->customer_id, 'google_customer_id' => $campaign->customer->cleanGoogleCustomerId(),
+                'campaign_resource' => $campaign->googleAdsResourceName(), 'quota_source' => 'spend',
+                'next_check_at' => now()->addSeconds(900)->toIso8601String()], $overrides), 'pending');
+    }
+
+    public function test_a_scoped_durable_rank_read_cooldown_skips_inspection_research_and_mutations_without_refreshing_old_proof(): void
+    {
+        $this->freezeTime();
+        $campaign = $this->makeCampaign();
+        $campaign->update(['search_delivery_state' => ['status' => 'verifying', 'checked_at' => now()->subMinutes(20)->toIso8601String(),
+            'evaluation_started_at' => now()->subDays(2)->toIso8601String(), 'config_fingerprint' => 'existing_live_fingerprint',
+            'measurement' => $this->snapshot()['measurement'], 'verified_limits' => ['checked_at' => now()->subMinutes(20)->toIso8601String()],
+            'other_agent' => ['keep' => true], 'ad_rank' => ['diagnosis' => ['status' => 'collecting_evidence']]]]);
+        $before = $campaign->fresh()->search_delivery_state;
+        $attempt = $this->coolingRankAttempt($campaign);
+        $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
+        $watchdog->onInspect = fn () => throw new \LogicException('Google inspection is forbidden during the known read cooldown.');
+        $watchdog->rankResult = ['status' => 'verifying', 'mutation_allowed' => true, 'issues' => [],
+            'metadata' => ['attempt_id' => $attempt->id, 'reason' => 'google_api_quota_cooldown',
+                'next_check_at' => $attempt->details['next_check_at'], 'actions_taken' => 0, 'phase' => 'staging_assets']];
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('verifying', $state['status']);
+        $this->assertSame('google_api_quota_cooldown', $state['blocked_reason']);
+        $this->assertFalse($state['mutation_allowed']);
+        $this->assertSame(now()->toIso8601String(), $state['checked_at']);
+        $this->assertSame($before['measurement'], $state['measurement']);
+        $this->assertSame($before['evaluation_started_at'], $state['evaluation_started_at']);
+        $this->assertSame($before['config_fingerprint'], $state['config_fingerprint']);
+        $this->assertSame($before['verified_limits'], $state['verified_limits']);
+        $this->assertSame($before['other_agent'], $state['other_agent']);
+        $this->assertSame(0, $watchdog->inspectCount);
+        $this->assertSame([[]], $watchdog->rankSnapshots, 'Old evidence is not supplied as fresh rank recovery proof.');
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $this->researchCalls);
+        Notification::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_local_owner_pause_still_blocks_a_cooling_rank_repair_before_delegation_or_any_google_read(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->coolingRankAttempt($campaign);
+        $campaign->update(['status' => CampaignStatus::Paused]);
+        $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('paused', $state['status']);
+        $this->assertSame(0, $watchdog->inspectCount);
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $this->researchCalls);
+    }
+
+    public function test_coordinator_permission_holds_during_cooldown_are_preserved_without_first_reading_google(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->coolingRankAttempt($campaign);
+        $campaign->update(['spend_safety_hold' => ['reason' => 'owner_review']]);
+        $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
+        $watchdog->rankResult = ['status' => 'held', 'mutation_allowed' => false, 'issues' => [],
+            'metadata' => ['reason' => 'spend_safety_hold', 'actions_taken' => 0]];
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('approval_required', $state['status']);
+        $this->assertSame('spend_safety_hold', $state['blocked_reason']);
+        $this->assertSame(0, $watchdog->inspectCount);
+        $this->assertCount(1, $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $this->researchCalls);
+        Http::assertNothingSent();
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('untrustedRankCooldowns')]
+    public function test_unscoped_expired_or_unproven_cooldowns_cannot_suppress_normal_delivery_inspection(array $overrides): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->coolingRankAttempt($campaign, $overrides);
+        $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
+
+        $watchdog->check($campaign);
+
+        $this->assertGreaterThan(0, $watchdog->inspectCount);
+        Http::assertNothingSent();
+    }
+
+    public static function untrustedRankCooldowns(): array
+    {
+        return [[['google_customer_id' => '9999999999']], [['campaign_resource' => 'customers/1234567890/campaigns/999']],
+            [['next_check_at' => '2020-01-01T00:00:00Z']], [['quota_source' => 'mutateAssets']]];
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('durablePendingRankPhases')]
     public function test_a_durable_pending_attempt_resumes_after_a_transient_display_hold_without_fresh_rank_days(string $displayStatus, string $durableStatus, string $phase): void
     {
@@ -827,6 +926,8 @@ class FakeSearchReachWatchdog extends GoogleSearchReachRecovery
 
     public array $rankCalls = [];
 
+    public array $rankSnapshots = [];
+
     public array $rankResult = ['status' => 'held', 'mutation_allowed' => false, 'issues' => [], 'metadata' => []];
 
     public int $inspectCount = 0;
@@ -864,6 +965,7 @@ class FakeSearchReachWatchdog extends GoogleSearchReachRecovery
     protected function repairAdRank(Campaign $campaign, array $snapshot, array $rankDiagnosis): array
     {
         $this->rankCalls[] = $rankDiagnosis;
+        $this->rankSnapshots[] = $snapshot;
 
         return $this->rankResult;
     }

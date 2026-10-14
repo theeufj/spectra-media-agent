@@ -14,6 +14,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
+use App\Services\GoogleAds\CommonServices\ReadCreativeStagingSafety;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
@@ -37,6 +38,7 @@ use Google\Ads\GoogleAds\V22\Services\CampaignAssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsRequest;
+use Google\ApiCore\ApiException;
 use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +47,10 @@ use Illuminate\Support\Facades\Gate;
 /** Staged creative repair only: no keyword, bidding, budget, targeting or campaign-status mutations. */
 class GoogleAdRankRepair
 {
+    private const STAGING_CONTEXT_FIELDS = ['status', 'start_date', 'end_date', 'channel', 'bidding_strategy',
+        'portfolio_bidding_strategy', 'daily_budget_micros', 'actual_cpc_ceiling_micros', 'currency_code', 'time_zone',
+        'google_search_enabled', 'search_partners_enabled', 'display_enabled', 'positive_geo_target_type'];
+
     private int $actionsTaken = 0;
 
     protected bool $dryRun = false;
@@ -71,17 +77,32 @@ class GoogleAdRankRepair
             return $this->result('held', 'another_rank_repair_running');
         }
         $attempt = null;
+        $quotaKey = null;
         try {
             $fresh = $campaign->fresh(['customer']);
             if (! $fresh || ! $fresh->customer) {
                 return $this->result('held', 'campaign_or_customer_missing');
             }
+            $quotaKey = $this->quotaCacheKey($fresh);
             $strategy = app(GoogleAdStrengthRepair::class)->strategyForCampaign($fresh);
             if (! $strategy) {
                 return $this->result('held', 'approved_strategy_missing');
             }
             $attempt = AgentActivity::where('campaign_id', $fresh->id)->where('customer_id', $fresh->customer_id)
                 ->where('action', 'ad_rank_repair')->latest('id')->first();
+            $cooldown = $attempt?->details['next_check_at'] ?? Cache::get($this->quotaCacheKey($fresh));
+            if ($cooldown && (! $attempt || in_array($attempt->details['phase'] ?? '', ['staging_assets', 'awaiting_policy_review', 'activating', 'observing_delivery'], true))) {
+                if ($attempt) {
+                    $this->assertLocalAttemptAllowed($fresh, $strategy, $attempt);
+                }
+                if (CarbonImmutable::parse($cooldown)->isFuture()) {
+                    return $this->result('verifying', 'google_api_quota_cooldown', $attempt, ['next_check_at' => $cooldown]);
+                }
+                if ($attempt && ! $this->dryRun) {
+                    $this->mergeAttempt($attempt, ['next_check_at' => null, 'quota_source' => null], $attempt->status);
+                }
+                Cache::forget($this->quotaCacheKey($fresh));
+            }
             if ($attempt && ($attempt->details['phase'] ?? '') === 'preparing') {
                 if ($this->dryRun) {
                     return $this->result('no_op', 'validate_only_interrupted_staging_not_mutated', $attempt, ['validate_only' => true]);
@@ -123,7 +144,7 @@ class GoogleAdRankRepair
             if ($this->fingerprint($snapshot) !== $this->fingerprint($live)) {
                 return $this->result('held', 'serving_settings_changed_before_repair');
             }
-            $rows = $this->ads($fresh);
+            $rows = $this->googleRead('ads', fn () => $this->ads($fresh));
             $original = collect($rows)->first(function ($row) use ($fresh, $strategy): bool {
                 $ad = GoogleAdStrengthRepair::ad($row);
 
@@ -149,6 +170,7 @@ class GoogleAdRankRepair
                         'customer_id' => $fresh->customer_id, 'google_customer_id' => $fresh->customer->cleanGoogleCustomerId(),
                         'campaign_resource' => $fresh->googleAdsResourceName(), 'strategy_id' => $strategy->id,
                         'settings_fingerprint' => $this->fingerprint($live), 'authorization_hash' => $this->authorizationHash($fresh),
+                        'staging_guard_context' => $this->stagingContext($live),
                         'owner_requested' => $ownerRequested, 'rank_causality_verified' => ! $ownerRequested,
                         'original' => $original, 'assets' => []], 'running');
             }
@@ -162,7 +184,7 @@ class GoogleAdRankRepair
 
                 return $this->result('needs_review', 'replacement_copy_review_failed', $attempt, ['review' => $review]);
             }
-            $assets = $this->assetPlan($fresh, $proposal, $this->assets($fresh));
+            $assets = $this->assetPlan($fresh, $proposal, $this->googleRead('assets', fn () => $this->assets($fresh)));
             if ($assets === [] && $this->sameCreative($original, $copy)) {
                 throw new \RuntimeException('The reviewed proposal is unchanged; no repair has been submitted.');
             }
@@ -187,7 +209,7 @@ class GoogleAdRankRepair
             // Google accepts a write but before its resource ID is recorded; never recreate it blindly.
             $this->mergeAttempt($attempt, ['copy' => $copy, 'review' => $review,
                 'planned_assets' => $assets, 'phase' => 'staging_assets'], 'running');
-            $this->guard($fresh, $strategy, $attempt);
+            $this->stagingGuard($fresh, $strategy, $attempt);
             $replacement = $this->createPausedAd($fresh, $group, $copy);
             if (! $this->ownedAd($fresh, $replacement ?? '', $group) || $replacement === $original['resource_name']) {
                 throw new \RuntimeException('Google did not confirm a distinct paused replacement ad.');
@@ -200,6 +222,26 @@ class GoogleAdRankRepair
             }
 
             return $this->stageAssets($fresh, $strategy, $attempt);
+        } catch (GoogleAdRankReadQuota $e) {
+            if ($this->actionsTaken > 0) {
+                report($e);
+                if ($attempt) {
+                    $this->mergeAttempt($attempt, ['phase' => 'needs_review', 'error' => $e->getMessage(),
+                        'reason' => 'google_read_quota_after_creative_write'], 'needs_review');
+                }
+
+                return $this->result('needs_review', 'google_read_quota_after_creative_write', $attempt);
+            }
+            $nextCheck = now()->addSeconds($e->retryAfterSeconds)->toIso8601String();
+            if ($attempt && ! $this->dryRun) {
+                $this->mergeAttempt($attempt, ['next_check_at' => $nextCheck, 'quota_source' => $e->source], $attempt->status);
+            }
+            if ($quotaKey) {
+                Cache::put($quotaKey, $nextCheck, $e->retryAfterSeconds);
+            }
+
+            return $this->result('verifying', 'google_api_quota_cooldown', $attempt,
+                ['next_check_at' => $nextCheck, 'quota_source' => $e->source]);
         } catch (\DomainException $e) {
             if ($attempt) {
                 $this->mergeAttempt($attempt, ['last_hold' => $e->getMessage()], $attempt->status);
@@ -222,13 +264,19 @@ class GoogleAdRankRepair
     {
         $details = $attempt->details;
         $this->assertStagedAssetPrefix($campaign, $details);
-        $this->guard($campaign, $strategy, $attempt);
+        [, $initial] = $this->guard($campaign, $strategy, $attempt);
+        if (! isset($details['staging_guard_context'])) {
+            // Upgrade a resumable older attempt only after its full saved
+            // fingerprint and all current limits passed a fresh step-start guard.
+            $this->mergeAttempt($attempt, ['staging_guard_context' => $this->stagingContext($initial)], $attempt->status);
+        }
         $replacement = $this->adFor($campaign, $details['replacement_resource'] ?? '');
         if (! $replacement || $replacement['status'] !== 'PAUSED' || ! $this->sameCreative($replacement, $details['copy'] ?? [])) {
             throw new \RuntimeException('The staged replacement ad is missing, changed or no longer paused.');
         }
+        $prefix = $details['assets'] ? $this->googleRead('assets', fn () => $this->assets($campaign)) : [];
         foreach ($details['assets'] as $plan) {
-            $row = $this->assetFor($campaign, $plan['asset_resource']);
+            $row = collect($prefix)->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $plan['asset_resource']);
             if (! $row || ($row['campaignAsset']['resourceName'] ?? null) !== $plan['link_resource']
                 || ($row['campaignAsset']['status'] ?? null) !== 'PAUSED' || ! $this->sameAsset($row, $plan)) {
                 throw new \RuntimeException('A staged asset prefix could not be confirmed paused with its reviewed content.');
@@ -238,7 +286,7 @@ class GoogleAdRankRepair
         // Only complete, acknowledged prefixes can resume; uncertain creates require review.
         $next = array_slice($details['planned_assets'], count($details['assets']), 2);
         foreach ($next as $plan) {
-            $this->guard($campaign, $strategy, $attempt);
+            $this->stagingGuard($campaign, $strategy, $attempt);
             $this->mergeAttempt($attempt, ['assets' => [...$attempt->details['assets'], $plan]], 'pending');
             $asset = $this->createAsset($campaign, $plan);
             if (! $this->ownedAsset($campaign, $asset ?? '')) {
@@ -249,7 +297,7 @@ class GoogleAdRankRepair
             $index = array_key_last($created);
             $created[$index]['asset_resource'] = $asset;
             $this->mergeAttempt($attempt, ['assets' => $created], 'pending');
-            $this->guard($campaign, $strategy, $attempt);
+            $this->stagingGuard($campaign, $strategy, $attempt);
             $link = $this->linkPausedAsset($campaign, $asset, $plan['field_type']);
             if (! $this->ownedLink($campaign, $link ?? '', $plan['field_type'])) {
                 throw new \RuntimeException('Google did not confirm the paused replacement asset link.');
@@ -277,6 +325,10 @@ class GoogleAdRankRepair
     {
         $details = $attempt->details;
         $this->assertCompleteAssetPlan($campaign, $details);
+        if (($details['activation_inflight'] ?? null) !== null
+            || ($details['phase'] ?? null) === 'activating' && ! is_int($details['activated_asset_count'] ?? null)) {
+            throw new \RuntimeException('An activation write has no complete durable readback receipt; review before another write.');
+        }
         if (($details['phase'] ?? null) === 'observing_delivery') {
             $this->guard($campaign, $strategy, $attempt, false);
             $replacement = $this->adFor($campaign, $details['replacement_resource']);
@@ -299,7 +351,7 @@ class GoogleAdRankRepair
         }
         $this->guard($campaign, $strategy, $attempt);
         $replacement = $this->adFor($campaign, $details['replacement_resource']);
-        if (! $replacement || ! $this->sameCreative($replacement, $details['copy'])) {
+        if (! $replacement || $replacement['status'] !== 'PAUSED' || ! $this->sameCreative($replacement, $details['copy'])) {
             throw new \RuntimeException('The replacement ad is missing or its copy was changed externally.');
         }
         if (! $this->approved($replacement)) {
@@ -311,8 +363,11 @@ class GoogleAdRankRepair
 
             return $this->result('verifying', 'awaiting_policy_review', $attempt);
         }
+        $policyAssets = $details['assets'] ? $this->googleRead('assets', fn () => $this->assets($campaign)) : [];
+        $activated = $details['activated_asset_count'] ?? 0;
+        $this->assertActivatedAssetPrefix($campaign, $details, $policyAssets, $activated);
         foreach ($details['assets'] as $plan) {
-            $row = $this->assetFor($campaign, $plan['asset_resource']);
+            $row = collect($policyAssets)->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $plan['asset_resource']);
             if (! $row || ! $this->sameAsset($row, $plan)) {
                 throw new \RuntimeException('A replacement asset is missing or has changed.');
             }
@@ -327,16 +382,21 @@ class GoogleAdRankRepair
                 return $this->result('verifying', 'awaiting_policy_review', $attempt);
             }
         }
-        $this->mergeAttempt($attempt, ['phase' => 'activating'], 'pending');
+        $this->mergeAttempt($attempt, ['phase' => 'activating', 'activated_asset_count' => $activated], 'pending');
         try {
-            foreach ($attempt->details['assets'] as $plan) {
+            foreach (array_slice($details['assets'], $activated, 2, true) as $index => $plan) {
                 $this->guard($campaign, $strategy, $attempt);
+                $this->mergeAttempt($attempt, ['activation_inflight' => ['kind' => 'asset_pair', 'index' => $index,
+                    'new_link_resource' => $plan['link_resource'], 'old_link_resource' => $plan['old_link_resource'] ?? null,
+                    'started_at' => now()->toIso8601String()]], 'pending');
                 if (! $this->setAssetStatus($campaign, $plan['link_resource'], 'ENABLED')) {
                     throw new \RuntimeException('Google did not confirm replacement asset activation.');
                 }
                 $this->actionsTaken++;
                 $readback = $this->assetFor($campaign, $plan['asset_resource']);
-                if (! $readback || ($readback['campaignAsset']['status'] ?? null) !== 'ENABLED' || ! $this->assetApproved($readback)) {
+                if (! $readback || ($readback['campaignAsset']['resourceName'] ?? null) !== $plan['link_resource']
+                    || ($readback['campaignAsset']['status'] ?? null) !== 'ENABLED' || ! $this->assetApproved($readback)
+                    || ! $this->sameAsset($readback, $plan)) {
                     throw new \RuntimeException('Replacement asset activation did not pass readback.');
                 }
                 if (isset($plan['old_link_resource'])) {
@@ -346,14 +406,26 @@ class GoogleAdRankRepair
                         || ! $this->sameAsset($oldAsset, $plan['old_copy'])) {
                         throw new \RuntimeException('The old asset changed or was paused while its replacement was being reviewed.');
                     }
-                    if (! $this->setAssetStatus($campaign, $plan['old_link_resource'], 'PAUSED')
-                        || ($this->assetFor($campaign, $plan['old_asset_resource'])['campaignAsset']['status'] ?? null) !== 'PAUSED') {
+                    if (! $this->setAssetStatus($campaign, $plan['old_link_resource'], 'PAUSED')) {
                         throw new \RuntimeException('Google did not confirm the old asset pause.');
                     }
                     $this->actionsTaken++;
+                    $oldReadback = $this->assetFor($campaign, $plan['old_asset_resource']);
+                    if (! $oldReadback || ($oldReadback['campaignAsset']['resourceName'] ?? null) !== $plan['old_link_resource']
+                        || ($oldReadback['campaignAsset']['status'] ?? null) !== 'PAUSED'
+                        || ! $this->sameAsset($oldReadback, $plan['old_copy'])) {
+                        throw new \RuntimeException('The old asset pause did not match its scoped content and status readback.');
+                    }
                 }
+                $this->mergeAttempt($attempt, ['activated_asset_count' => $index + 1, 'activation_inflight' => null], 'pending');
+            }
+            if ($attempt->details['activated_asset_count'] < count($details['assets'])) {
+                return $this->result('verifying', 'activating', $attempt);
             }
             $this->guard($campaign, $strategy, $attempt);
+            $this->mergeAttempt($attempt, ['activation_inflight' => ['kind' => 'rsa_swap',
+                'replacement_resource' => $details['replacement_resource'], 'original_resource' => $details['original']['resource_name'],
+                'started_at' => now()->toIso8601String()]], 'pending');
             if (! $this->setAdStatus($campaign, $details['replacement_resource'], 'ENABLED')) {
                 throw new \RuntimeException('Google did not confirm replacement ad activation.');
             }
@@ -374,18 +446,48 @@ class GoogleAdRankRepair
                 throw new \RuntimeException('The original ad pause could not be read back.');
             }
         } catch (\Throwable $e) {
-            $this->compensate($campaign, $strategy, $attempt);
+            if (! $e instanceof GoogleAdRankReadQuota || $this->actionsTaken > 0) {
+                $this->compensate($campaign, $strategy, $attempt);
+            }
             throw $e;
         }
         $this->syncBaseline($strategy, $attempt->details);
         $this->mergeAttempt($attempt, ['phase' => 'observing_delivery', 'activated_at' => now()->toIso8601String(),
-            'creative_replacement_verified' => true, 'rank_recovery_verified' => false], 'pending');
+            'creative_replacement_verified' => true, 'rank_recovery_verified' => false, 'activation_inflight' => null], 'pending');
 
         return $this->result('verifying', 'observing_delivery', $attempt);
     }
 
+    private function assertActivatedAssetPrefix(Campaign $campaign, array $details, array $rows, mixed $activated): void
+    {
+        if (! is_int($activated) || $activated < 0 || $activated > count($details['assets'])
+            || ($details['phase'] ?? null) !== 'activating' && $activated !== 0) {
+            throw new \RuntimeException('The activation prefix is not a valid durable completion receipt.');
+        }
+        foreach ($details['assets'] as $index => $plan) {
+            $new = collect($rows)->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $plan['asset_resource']
+                && ($row['campaignAsset']['resourceName'] ?? null) === $plan['link_resource']);
+            if (! $new || ($new['campaignAsset']['asset'] ?? null) !== $plan['asset_resource']
+                || ($new['campaignAsset']['status'] ?? null) !== ($index < $activated ? 'ENABLED' : 'PAUSED')
+                || ! $this->sameAsset($new, $plan) || $index < $activated && ! $this->assetApproved($new)) {
+                throw new \RuntimeException('The completed activation prefix or paused remainder changed; no automatic replay is safe.');
+            }
+            if (isset($plan['old_link_resource'])) {
+                $old = collect($rows)->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $plan['old_asset_resource']
+                    && ($row['campaignAsset']['resourceName'] ?? null) === $plan['old_link_resource']);
+                if (! $this->ownedAsset($campaign, $plan['old_asset_resource'])
+                    || ! $this->ownedLink($campaign, $plan['old_link_resource'], $plan['field_type']) || ! $old
+                    || ($old['campaignAsset']['asset'] ?? null) !== $plan['old_asset_resource']
+                    || ($old['campaignAsset']['status'] ?? null) !== ($index < $activated ? 'PAUSED' : 'ENABLED')
+                    || ! $this->sameAsset($old, $plan['old_copy'])) {
+                    throw new \RuntimeException('The old asset activation prefix or untouched remainder changed; review before another write.');
+                }
+            }
+        }
+    }
+
     /** @throws \DomainException When fresh ownership, approval, serving settings or spending limits do not permit a write. */
-    private function guard(Campaign $campaign, Strategy $strategy, ?AgentActivity $attempt = null, bool $requireOriginalEnabled = true): array
+    private function guard(Campaign $campaign, Strategy $strategy, ?AgentActivity $attempt = null, bool $requireOriginalEnabled = true, bool $pausedStaging = false): array
     {
         $fresh = $campaign->fresh(['customer']);
         if (! $fresh || ! $fresh->customer) {
@@ -397,16 +499,11 @@ class GoogleAdRankRepair
         if (! preg_match('~^customers/'.preg_quote($fresh->customer->cleanGoogleCustomerId(), '~').'/campaigns/\d+$~', $fresh->googleAdsResourceName() ?? '')) {
             throw new \DomainException('exact_google_campaign_scope_required');
         }
-        if ($attempt && (($attempt->details['customer_id'] ?? null) !== $fresh->customer_id
-            || ($attempt->details['google_customer_id'] ?? null) !== $fresh->customer->cleanGoogleCustomerId()
-            || ($attempt->details['campaign_resource'] ?? null) !== $fresh->googleAdsResourceName()
-            || ($attempt->details['authorization_hash'] ?? null) !== $this->authorizationHash($fresh))) {
-            throw new \DomainException('creative_repair_ownership_or_permission_changed');
+        if ($attempt) {
+            $this->assertLocalAttemptAllowed($fresh, $strategy, $attempt);
         }
-        if ($attempt && ($attempt->details['owner_requested'] ?? false) && ! $this->ownerRequestAllowed($fresh)) {
-            throw new \DomainException('owner_requested_repair_authorization_expired');
-        }
-        $snapshot = $this->inspect($fresh);
+        $snapshot = $pausedStaging ? $this->googleRead('spend', fn () => $this->stagingSafety($fresh))
+            : $this->googleRead('inspect', fn () => $this->inspect($fresh));
         $approved = CampaignSpendGuardrails::moneyToMicros($fresh->approved_daily_budget);
         if (! $snapshot || ($snapshot['status'] ?? null) !== 2 || ($snapshot['channel'] ?? null) !== 2
             || ! $fresh->budget_confirmed_at || ! is_int($snapshot['daily_budget_micros'] ?? null)
@@ -414,12 +511,32 @@ class GoogleAdRankRepair
             || ! is_int($snapshot['actual_cpc_ceiling_micros'] ?? null) || $snapshot['actual_cpc_ceiling_micros'] <= 0) {
             throw new \DomainException('live_active_search_budget_or_cap_unverified');
         }
-        if ($attempt && $attempt->details['settings_fingerprint'] !== $this->fingerprint($snapshot)) {
+        if ($pausedStaging) {
+            if (! $attempt || ($attempt->details['phase'] ?? null) !== 'staging_assets'
+                || ($snapshot['bidding_strategy'] ?? null) !== BiddingStrategyType::TARGET_SPEND
+                || ($snapshot['portfolio_bidding_strategy'] ?? null) !== ''
+                || ($snapshot['campaign_resource'] ?? null) !== $fresh->googleAdsResourceName()
+                || ! is_int($snapshot['cost_micros'] ?? null) || $snapshot['cost_micros'] < 0
+                || ($snapshot['modifier_reads_complete'] ?? false) !== true || ! empty($snapshot['amplifying_bid_modifiers'])
+                || $this->stagingContext($snapshot) !== $this->stagingContext($attempt->details['staging_guard_context'] ?? [])) {
+                throw new \DomainException('critical_staging_settings_or_spend_unverified');
+            }
+            $budgetResource = $attempt->details['staging_budget_resource'] ?? null;
+            if (! is_string($snapshot['budget_resource'] ?? null)
+                || ! preg_match('#^customers/'.preg_quote($fresh->customer->cleanGoogleCustomerId(), '#').'/campaignBudgets/\d+$#', $snapshot['budget_resource'])
+                || $budgetResource && $budgetResource !== $snapshot['budget_resource']) {
+                throw new \DomainException('creative_staging_budget_resource_changed');
+            }
+            if ($budgetResource === null) {
+                $this->mergeAttempt($attempt, ['staging_budget_resource' => $snapshot['budget_resource']], $attempt->status);
+            }
+        } elseif ($attempt && $attempt->details['settings_fingerprint'] !== $this->fingerprint($snapshot)) {
             throw new \DomainException('serving_settings_changed_during_creative_repair');
         }
         $trial = CampaignSpendGuardrails::activeTrial($fresh);
         if ($trial) {
-            $spend = $this->spend($fresh);
+            $spend = $pausedStaging ? $snapshot + ['cpc_bid_ceiling_micros' => $snapshot['actual_cpc_ceiling_micros'], 'account_timezone' => $snapshot['time_zone']]
+                : $this->googleRead('spend', fn () => $this->spend($fresh));
             foreach (['baseline_cost_micros', 'max_spend_micros', 'max_daily_budget_micros', 'max_cpc_bid_micros'] as $field) {
                 if (! is_int($trial[$field] ?? null) || ($field === 'baseline_cost_micros' ? $trial[$field] < 0 : $trial[$field] <= 0)) {
                     throw new \DomainException('trial_envelope_unverified');
@@ -435,13 +552,18 @@ class GoogleAdRankRepair
                 || ($spend['currency_code'] ?? null) !== ($snapshot['currency_code'] ?? null)
                 || ($spend['account_timezone'] ?? null) !== ($snapshot['time_zone'] ?? null)
                 || ($spend['status'] ?? null) !== 2 || ($spend['bidding_strategy'] ?? null) !== BiddingStrategyType::TARGET_SPEND
+                || $pausedStaging && (($trial['currency_code'] ?? null) !== $snapshot['currency_code']
+                    || ($trial['account_timezone'] ?? null) !== $snapshot['time_zone'])
                 || ! empty($spend['amplifying_bid_modifiers'])) {
                 throw new \DomainException('creative_repair_trial_limits_or_remaining_spend_unverified');
             }
         }
         if ($attempt) {
             $original = $this->adFor($fresh, $attempt->details['original']['resource_name']);
-            if (! $original || $requireOriginalEnabled && $original['status'] !== 'ENABLED' || ! $this->sameCreative($original, $attempt->details['original'])) {
+            if (! $original || $requireOriginalEnabled && ($original['status'] !== 'ENABLED'
+                || $original['ad_group_status'] !== 'ENABLED' || $original['campaign_status'] !== 'ENABLED')
+                || ! $this->ownedAd($fresh, $original['resource_name'], $strategy->google_ads_ad_group_id)
+                || ! $this->sameCreative($original, $attempt->details['original'])) {
                 throw new \DomainException('working_ad_changed_or_paused');
             }
         }
@@ -453,6 +575,78 @@ class GoogleAdRankRepair
         }
 
         return [$current, $snapshot];
+    }
+
+    private function assertLocalAttemptAllowed(Campaign $campaign, Strategy $strategy, AgentActivity $attempt): void
+    {
+        if ($reason = app(GoogleAdStrengthRepair::class)->mutationBlocked($campaign, $strategy, true)) {
+            throw new \DomainException($reason);
+        }
+        if (($attempt->details['strategy_id'] ?? null) !== $strategy->id
+            || ($attempt->details['customer_id'] ?? null) !== $campaign->customer_id
+            || ($attempt->details['google_customer_id'] ?? null) !== $campaign->customer->cleanGoogleCustomerId()
+            || ($attempt->details['campaign_resource'] ?? null) !== $campaign->googleAdsResourceName()
+            || ($attempt->details['authorization_hash'] ?? null) !== $this->authorizationHash($campaign)) {
+            throw new \DomainException('creative_repair_ownership_or_permission_changed');
+        }
+        if (($attempt->details['owner_requested'] ?? false) && ! $this->ownerRequestAllowed($campaign)) {
+            throw new \DomainException('owner_requested_repair_authorization_expired');
+        }
+    }
+
+    private function stagingGuard(Campaign $campaign, Strategy $strategy, AgentActivity $attempt): array
+    {
+        // Only capped Maximize Clicks has a campaign-level bid ceiling which
+        // this compact reader can establish. Other modes retain the full guard.
+        if (($attempt->details['staging_guard_context']['bidding_strategy'] ?? null) !== BiddingStrategyType::TARGET_SPEND) {
+            return $this->guard($campaign, $strategy, $attempt);
+        }
+
+        return $this->guard($campaign, $strategy, $attempt, true, true);
+    }
+
+    private function stagingContext(array $snapshot): array
+    {
+        $context = [];
+        foreach (self::STAGING_CONTEXT_FIELDS as $field) {
+            if (! array_key_exists($field, $snapshot)) {
+                throw new \DomainException('creative_staging_context_incomplete');
+            }
+            $value = $snapshot[$field];
+            if (in_array($field, ['start_date', 'end_date'], true)) {
+                $value = $value === null || $value === '' ? null : preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', (string) $value);
+            }
+            $context[$field] = $value;
+        }
+
+        return $context;
+    }
+
+    protected function stagingSafety(Campaign $campaign): array
+    {
+        return app(ReadCreativeStagingSafety::class, ['customer' => $campaign->customer])->forCampaign($campaign);
+    }
+
+    private function quotaCacheKey(Campaign $campaign): string
+    {
+        return 'ad_rank_read_quota:'.$campaign->customer->cleanGoogleCustomerId().':'.$campaign->id;
+    }
+
+    /** Only this read boundary may classify an SDK quota error as safely retryable. */
+    private function googleRead(string $source, callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (ApiException $e) {
+            if ($e->getStatus() !== 'RESOURCE_EXHAUSTED') {
+                throw $e;
+            }
+            $delay = 900;
+            if (preg_match('/\bretry\s+(?:in|after)\s+(\d+)\s*(?:seconds?|s)\b/i', $e->getMessage(), $matches)) {
+                $delay = max(1, min(3600, (int) $matches[1]));
+            }
+            throw new GoogleAdRankReadQuota($source, $delay, $e);
+        }
     }
 
     private function compensate(Campaign $campaign, Strategy $strategy, AgentActivity $attempt): void
@@ -477,6 +671,7 @@ class GoogleAdRankRepair
             // Never risk leaving both ads paused when the old pause may have
             // succeeded. Keep the approved replacement if restoration is unknown.
             if (($old['status'] ?? null) === 'ENABLED' && $this->approved($old) && ($new['status'] ?? null) === 'ENABLED') {
+                $this->guard($current, $strategy, $attempt);
                 if ($this->setAdStatus($current, $new['resource_name'], 'PAUSED')) {
                     $this->actionsTaken++;
                     $new = $this->adFor($current, $new['resource_name']);
@@ -803,14 +998,14 @@ class GoogleAdRankRepair
 
     private function adFor(Campaign $campaign, string $resource): ?array
     {
-        $row = collect($this->ads($campaign))->first(fn ($row) => ($row['adGroupAd']['resourceName'] ?? null) === $resource);
+        $row = collect($this->googleRead('ads', fn () => $this->ads($campaign)))->first(fn ($row) => ($row['adGroupAd']['resourceName'] ?? null) === $resource);
 
         return $row ? GoogleAdStrengthRepair::ad($row) : null;
     }
 
     private function assetFor(Campaign $campaign, string $resource): ?array
     {
-        return collect($this->assets($campaign))->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $resource);
+        return collect($this->googleRead('assets', fn () => $this->assets($campaign)))->first(fn ($row) => ($row['asset']['resourceName'] ?? null) === $resource);
     }
 
     private function mergeAttempt(AgentActivity $attempt, array $details, string $status): void
@@ -861,6 +1056,8 @@ class GoogleAdRankRepair
                 'rank_causality_verified' => $details['rank_causality_verified'] ?? false, 'rank_recovery_verified' => $details['rank_recovery_verified'] ?? false,
                 'creative_replacement_verified' => $details['creative_replacement_verified'] ?? false,
                 'replacement_resource' => $details['replacement_resource'] ?? null, 'original_resource' => $details['original']['resource_name'] ?? null,
+                'activated_asset_count' => $details['activated_asset_count'] ?? 0,
+                'next_check_at' => $details['next_check_at'] ?? null, 'quota_source' => $details['quota_source'] ?? null,
                 'activated_at' => $details['activated_at'] ?? null, 'assets' => $details['assets'] ?? [], ...$metadata]];
     }
 

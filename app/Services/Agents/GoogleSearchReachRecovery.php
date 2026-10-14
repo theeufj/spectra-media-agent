@@ -47,6 +47,15 @@ class GoogleSearchReachRecovery
                 ->whereIn('deployment_status', ['active', 'verified', 'deployed'])->exists()) {
                 return $this->save($campaign, [...$state, 'status' => 'paused', 'blocked_reason' => 'not_deployed_search_campaign']);
             }
+            if ($this->rankRepairCoolingDown($campaign)) {
+                // The durable repair owns this server-imposed read cooldown. Let its
+                // local ownership/permission checks run before making any Google read.
+                // Old measurements and fingerprints remain old; this is no fresh proof.
+                $result = $this->repairAdRank($campaign, [], ['status' => 'collecting_evidence',
+                    'reason' => 'google_api_quota_cooldown']);
+
+                return $this->saveRankResult($campaign, $state, $result);
+            }
             $started = $this->evaluationStart($campaign, $previous);
             $snapshot = $this->inspect($campaign, $started);
             if (! $snapshot) {
@@ -103,30 +112,8 @@ class GoogleSearchReachRecovery
                 // Creative repair has its own narrow permissions and durable
                 // read-back workflow. A passing reach forecast cannot hide rank loss.
                 $result = $this->repairAdRank($campaign, $snapshot, $rank);
-                $state['ad_rank']['repair'] = $result;
-                $state['mutation_allowed'] = (bool) ($result['mutation_allowed'] ?? false);
-                $state['status'] = match ($result['status'] ?? 'unavailable') {
-                    'verifying' => 'verifying',
-                    'held' => 'approval_required',
-                    'needs_review' => 'needs_review',
-                    'no_op' => ($result['metadata']['rank_recovery_verified'] ?? false) ? 'recovered' : 'low_traffic',
-                    default => 'unavailable',
-                };
-                $state['blocked_reason'] = match ($state['status']) {
-                    'verifying' => 'ad_rank_repair_verification_pending',
-                    'recovered' => null,
-                    'approval_required' => 'ad_rank_repair_not_authorized',
-                    'unavailable' => 'ad_rank_repair_unavailable',
-                    default => 'ad_rank_limits_reached',
-                };
-                $reason = $result['metadata']['blocked_reason'] ?? $result['metadata']['reason']
-                    ?? $result['blocked_reason'] ?? $result['reason'] ?? null;
-                if (is_string($reason) && $reason !== '' && $state['status'] !== 'recovered') {
-                    $state['blocked_reason'] = $reason;
-                }
 
-                return in_array($state['status'], ['needs_review', 'unavailable', 'approval_required'], true)
-                    ? $this->alertAndSave($campaign, $state) : $this->save($campaign, $state);
+                return $this->saveRankResult($campaign, $state, $result);
             }
             if (! empty($state['repair']['started_at']) && ! $campaign->spend_safety_hold) {
                 return $this->verify($campaign, $snapshot, $state);
@@ -336,6 +323,63 @@ class GoogleSearchReachRecovery
         return $attempt !== null && in_array($attempt->status, ['running', 'pending'], true)
             && in_array($attempt->details['phase'] ?? '', ['preparing', 'staging_assets', 'awaiting_policy_review',
                 'activating', 'observing_delivery'], true);
+    }
+
+    private function rankRepairCoolingDown(Campaign $campaign): bool
+    {
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('customer_id', $campaign->customer_id)
+            ->where('action', 'ad_rank_repair')->latest('id')->first();
+        if (! $attempt) {
+            return false;
+        }
+        $details = $attempt->details ?? [];
+        if (! in_array($attempt->status, ['running', 'pending'], true)
+            || ! in_array($details['phase'] ?? '', ['staging_assets', 'awaiting_policy_review', 'activating', 'observing_delivery'], true)
+            || ($details['customer_id'] ?? null) !== $campaign->customer_id
+            || ($details['google_customer_id'] ?? null) !== $campaign->customer->cleanGoogleCustomerId()
+            || ($details['campaign_resource'] ?? null) !== $campaign->googleAdsResourceName()
+            || ! in_array($details['quota_source'] ?? null, ['inspect', 'spend', 'ads', 'assets'], true)
+            || ! is_string($details['next_check_at'] ?? null)) {
+            return false;
+        }
+        try {
+            $next = CarbonImmutable::parse($details['next_check_at']);
+
+            return $next->isFuture() && $next->lte(now()->addHour());
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function saveRankResult(Campaign $campaign, array $state, array $result): array
+    {
+        $state['ad_rank']['repair'] = $result;
+        $state['mutation_allowed'] = (bool) ($result['mutation_allowed'] ?? false);
+        $state['status'] = match ($result['status'] ?? 'unavailable') {
+            'verifying' => 'verifying',
+            'held' => 'approval_required',
+            'needs_review' => 'needs_review',
+            'no_op' => ($result['metadata']['rank_recovery_verified'] ?? false) ? 'recovered' : 'low_traffic',
+            default => 'unavailable',
+        };
+        $state['blocked_reason'] = match ($state['status']) {
+            'verifying' => 'ad_rank_repair_verification_pending',
+            'recovered' => null,
+            'approval_required' => 'ad_rank_repair_not_authorized',
+            'unavailable' => 'ad_rank_repair_unavailable',
+            default => 'ad_rank_limits_reached',
+        };
+        $reason = $result['metadata']['blocked_reason'] ?? $result['metadata']['reason']
+            ?? $result['blocked_reason'] ?? $result['reason'] ?? null;
+        if (is_string($reason) && $reason !== '' && $state['status'] !== 'recovered') {
+            $state['blocked_reason'] = $reason;
+        }
+        if ($reason === 'google_api_quota_cooldown') {
+            $state['mutation_allowed'] = false;
+        }
+
+        return in_array($state['status'], ['needs_review', 'unavailable', 'approval_required'], true)
+            ? $this->alertAndSave($campaign, $state) : $this->save($campaign, $state);
     }
 
     protected function repairAdRank(Campaign $campaign, array $snapshot, array $rankDiagnosis): array
