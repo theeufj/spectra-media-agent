@@ -11,10 +11,21 @@ use App\Models\Strategy;
 use App\Models\User;
 use App\Services\Campaigns\AdvertisingEvidence;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\GoogleAdRankRepair;
 use App\Services\GoogleAds\GoogleAdStrengthRepair;
 use Carbon\CarbonImmutable;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient;
 use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V22\Services\Client\AdGroupAdServiceClient;
+use Google\Ads\GoogleAds\V22\Services\Client\AssetServiceClient;
+use Google\Ads\GoogleAds\V22\Services\Client\CampaignAssetServiceClient;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdResult;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsResponse;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetResult;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetsResponse;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetResult;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsResponse;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -244,6 +255,156 @@ class GoogleAdRankRepairTest extends TestCase
         $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->count());
     }
 
+    public function test_full_reviewed_asset_plan_is_durable_before_the_first_google_write(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->oldCallout();
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $result['status']);
+        $this->assertSame('staging_assets', $service->detailsBeforeFirstWrite['phase']);
+        $this->assertCount(1, $service->detailsBeforeFirstWrite['planned_assets']);
+        $this->assertSame([], $service->detailsBeforeFirstWrite['assets']);
+        $this->assertArrayNotHasKey('replacement_resource', $service->detailsBeforeFirstWrite);
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $this->assertSame('awaiting_policy_review', $attempt->details['phase']);
+        $this->assertCount(1, $attempt->details['assets']);
+    }
+
+    public function test_interrupted_staging_never_activates_an_approved_partial_set_or_recreates_it(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->oldCallout();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $details = $attempt->details;
+        $details['phase'] = 'staging_assets';
+        unset($details['assets'][0]['link_resource']);
+        $attempt->update(['details' => $details]);
+        $service->approve();
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertSame('needs_review', $attempt->fresh()->status);
+        $this->assertSame([], $service->writes);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('PAUSED', $service->rows[RankRepairFixture::NEW]['adGroupAd']['status']);
+    }
+
+    public function test_two_asset_batches_resume_only_the_paused_acknowledged_prefix_without_recreating_the_rsa(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->proposal['callouts'] = ['Review Before Launch', 'Ad Spend Additional', 'Keyword Research', 'Campaign Monitoring'];
+
+        $first = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $first['status']);
+        $this->assertSame('staging_assets', $first['metadata']['phase']);
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $this->assertCount(4, $attempt->details['planned_assets']);
+        $this->assertCount(2, $attempt->details['assets']);
+        $this->assertSame(5, $first['metadata']['actions_taken']);
+        $this->assertCount(1, $service->detailsBeforeAssetCreate['assets'], 'The first asset intent is durable before its create call.');
+        $this->assertArrayNotHasKey('asset_resource', $service->detailsBeforeAssetCreate['assets'][0]);
+        $service->approve();
+        $service->writes = [];
+
+        $second = $service->repair($campaign, $service->snapshot, ['status' => 'collecting_evidence']);
+
+        $this->assertSame('verifying', $second['status']);
+        $this->assertSame('awaiting_policy_review', $second['metadata']['phase']);
+        $this->assertSame(4, $second['metadata']['actions_taken']);
+        $this->assertCount(4, $attempt->fresh()->details['assets']);
+        $this->assertSame(1, $service->generationCalls);
+        $this->assertNotContains(['create_paused_ad'], $service->writes);
+        $this->assertNotContains(['status', RankRepairFixture::NEW, 'ENABLED'], $service->writes);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        foreach ($service->assetRows as $row) {
+            $this->assertSame('PAUSED', $row['campaignAsset']['status']);
+        }
+    }
+
+    public function test_incomplete_reviewed_asset_list_cannot_enter_activation_even_with_an_approved_rsa(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->oldCallout();
+        $service->repair($campaign, $service->snapshot, $this->limited());
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail();
+        $attempt->update(['details' => array_replace($attempt->details, ['assets' => []])]);
+        $service->approve();
+        $service->writes = [];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('unavailable', $result['status']);
+        $this->assertSame('needs_review', $attempt->fresh()->status);
+        $this->assertSame([], $service->writes);
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('ENABLED', $service->assetRows[RankRepairFixture::OLD_ASSET]['campaignAsset']['status']);
+    }
+
+    public function test_validation_is_bounded_to_four_sitelinks_four_callouts_and_one_snippet(): void
+    {
+        [$campaign, , $service] = $this->fixture();
+        $service->proposal['callouts'] = array_map(fn ($i) => 'Reviewed Benefit '.$i, range(1, 6));
+        $service->proposal['sitelinks'] = array_map(fn ($i) => ['link_text' => 'Reviewed Link '.$i,
+            'url' => 'https://example.com', 'description1' => 'Google Ads management.', 'description2' => 'Review before launch.'], range(1, 6));
+        $service->proposal['structured_snippet'] = ['header' => 'Services', 'values' => ['Keyword Research', 'Ad Copy Preparation', 'Campaign Monitoring']];
+
+        $result = $service->dryRun()->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('no_op', $result['status']);
+        $this->assertCount(10, $service->writes, 'One RSA plus at most nine assets are validated.');
+        $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->count());
+    }
+
+    public function test_every_sdk_mutation_uses_a_bounded_timeout_and_no_automatic_retries(): void
+    {
+        [$campaign] = $this->fixture();
+        $service = (new GoogleAdRankRepair($this->createMock(GeminiService::class), new AdvertisingEvidence))->dryRun();
+        $options = ['retrySettings' => ['retriesEnabled' => false, 'noRetriesRpcTimeoutMillis' => 30_000]];
+        $adClient = $this->createMock(AdGroupAdServiceClient::class);
+        $adClient->expects($this->exactly(2))->method('mutateAdGroupAds')->willReturnCallback(function ($request, $callOptions) use ($options) {
+            $this->assertSame($options, $callOptions);
+            $this->assertTrue($request->getValidateOnly());
+
+            return new MutateAdGroupAdsResponse(['results' => [new MutateAdGroupAdResult(['resource_name' => RankRepairFixture::NEW])]]);
+        });
+        $assetClient = $this->createMock(AssetServiceClient::class);
+        $assetClient->expects($this->once())->method('mutateAssets')->willReturnCallback(function ($request, $callOptions) use ($options) {
+            $this->assertSame($options, $callOptions);
+            $this->assertTrue($request->getValidateOnly());
+
+            return new MutateAssetsResponse(['results' => [new MutateAssetResult(['resource_name' => RankRepairFixture::NEW_ASSET])]]);
+        });
+        $linkClient = $this->createMock(CampaignAssetServiceClient::class);
+        $linkClient->expects($this->exactly(2))->method('mutateCampaignAssets')->willReturnCallback(function ($request, $callOptions) use ($options) {
+            $this->assertSame($options, $callOptions);
+            $this->assertTrue($request->getValidateOnly());
+
+            return new MutateCampaignAssetsResponse(['results' => [new MutateCampaignAssetResult(['resource_name' => RankRepairFixture::NEW_LINK])]]);
+        });
+        $client = $this->createMock(GoogleAdsClient::class);
+        $client->method('getAdGroupAdServiceClient')->willReturn($adClient);
+        $client->method('getAssetServiceClient')->willReturn($assetClient);
+        $client->method('getCampaignAssetServiceClient')->willReturn($linkClient);
+        $account = $this->createMock(AccountStructureService::class);
+        $account->method('getClient')->willReturn($client);
+        $this->app->bind(AccountStructureService::class, fn () => $account);
+        $copy = ['headline_assets' => [['text' => 'Google Ads Management']], 'description_assets' => [['text' => 'Review ads before launch.']],
+            'path1' => '', 'path2' => '', 'final_urls' => ['https://example.com?utm_campaign=61']];
+
+        (new \ReflectionMethod($service, 'createPausedAd'))->invoke($service, $campaign, 'customers/1234567890/adGroups/7', $copy);
+        (new \ReflectionMethod($service, 'setAdStatus'))->invoke($service, $campaign, RankRepairFixture::NEW, 'ENABLED');
+        (new \ReflectionMethod($service, 'createAsset'))->invoke($service, $campaign, ['field_type' => 'CALLOUT', 'text' => 'Review Before Launch']);
+        (new \ReflectionMethod($service, 'linkPausedAsset'))->invoke($service, $campaign, RankRepairFixture::NEW_ASSET, 'CALLOUT');
+        (new \ReflectionMethod($service, 'setAssetStatus'))->invoke($service, $campaign, RankRepairFixture::NEW_LINK, 'ENABLED');
+        Http::assertNothingSent();
+    }
+
     public function test_pending_staged_repair_blocks_legacy_in_place_strength_writer_even_outside_trial(): void
     {
         [$campaign, $strategy, $service] = $this->fixture(false);
@@ -442,6 +603,12 @@ class RankRepairFixture extends GoogleAdRankRepair
 
     public array $assetRows = [];
 
+    public array $detailsBeforeFirstWrite = [];
+
+    public array $detailsBeforeAssetCreate = [];
+
+    private int $createdAssets = 0;
+
     public bool $assetActivationFails = false;
 
     public bool $generationFails = false;
@@ -552,6 +719,7 @@ class RankRepairFixture extends GoogleAdRankRepair
         if ($this->isDryRun()) {
             return null;
         }
+        $this->detailsBeforeFirstWrite = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail()->details;
         $this->rows[self::NEW] = ['campaign' => ['status' => 'ENABLED'], 'adGroup' => ['status' => 'ENABLED'],
             'adGroupAd' => ['resourceName' => self::NEW, 'status' => 'PAUSED', 'adStrength' => 'PENDING',
                 'policySummary' => ['approvalStatus' => 'UNKNOWN', 'reviewStatus' => 'REVIEW_IN_PROGRESS'],
@@ -575,18 +743,26 @@ class RankRepairFixture extends GoogleAdRankRepair
     protected function createAsset(Campaign $campaign, array $plan): ?string
     {
         $this->writes[] = ['create_asset'];
-        $this->assetRows[self::NEW_ASSET] = ['asset' => ['resourceName' => self::NEW_ASSET,
+        if ($this->isDryRun()) {
+            return null;
+        }
+        if ($this->detailsBeforeAssetCreate === []) {
+            $this->detailsBeforeAssetCreate = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail()->details;
+        }
+        $resource = 'customers/1234567890/assets/'.(91 + $this->createdAssets++);
+        $this->assetRows[$resource] = ['asset' => ['resourceName' => $resource,
             'calloutAsset' => ['calloutText' => $plan['text']], 'policySummary' => ['approvalStatus' => 'UNKNOWN', 'reviewStatus' => 'REVIEW_IN_PROGRESS']]];
 
-        return self::NEW_ASSET;
+        return $resource;
     }
 
     protected function linkPausedAsset(Campaign $campaign, string $asset, string $field): ?string
     {
         $this->writes[] = ['link_asset_paused'];
-        $this->assetRows[$asset]['campaignAsset'] = ['resourceName' => self::NEW_LINK, 'asset' => $asset, 'fieldType' => $field, 'status' => 'PAUSED'];
+        $resource = 'customers/1234567890/campaignAssets/61~'.basename($asset).'~'.$field;
+        $this->assetRows[$asset]['campaignAsset'] = ['resourceName' => $resource, 'asset' => $asset, 'fieldType' => $field, 'status' => 'PAUSED'];
 
-        return self::NEW_LINK;
+        return $resource;
     }
 
     protected function setAssetStatus(Campaign $campaign, string $resource, string $status): bool

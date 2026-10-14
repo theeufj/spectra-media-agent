@@ -47,6 +47,9 @@ const holdReasons = {
     replacement_asset_policy_not_approved: 'Google has not approved a replacement asset. Review its policy status before activating the repair.',
     creative_repair_or_readback_failed: 'Some ad repair changes could not be confirmed. Review the recorded live status before another attempt.',
     creative_repair_trial_limits_or_remaining_spend_unverified: 'The approved trial limits or remaining spend could not be verified. The ad repair is on hold.',
+    staging_assets: 'Preparing paused replacement assets. The working approved ad continues serving.',
+    interrupted_asset_staging: 'An asset submission could not be confirmed. The working ad has been preserved; review the recorded result before another attempt.',
+    creative_staging_interrupted: 'Replacement preparation was interrupted. The working ad has been preserved; review the recorded result before another attempt.',
 };
 
 function holdReason(reason) {
@@ -177,7 +180,12 @@ export default function SearchDeliveryCard({ campaign }) {
     const isHealthy = ['delivering', 'recovered'].includes(status);
     const needsAttention = ['low_reach', 'low_traffic', 'approval_required', 'needs_review', 'unavailable'].includes(status);
     const styles = isHealthy ? 'border-green-200 bg-green-50' : needsAttention ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50';
-    const [label, explanation] = statuses[status];
+    const phase = rankRepair?.metadata?.phase;
+    const [label, explanation] = status === 'verifying' && phase === 'staging_assets'
+        ? ['Preparing ad replacements', 'The reviewed replacement is being prepared in paused batches. The working approved ad continues serving.']
+        : status === 'verifying' && phase === 'awaiting_policy_review'
+            ? ['Waiting for Google approval', 'The replacement ad and assets are paused while Google reviews them. The working approved ad continues serving.']
+            : statuses[status];
     const forecast = diagnosis.forecast;
     const hasForecast = [forecast, diagnosis.combined_forecast].some(value => value && typeof value === 'object' && Object.keys(value).length > 0);
     const configuredHours = observedNumber(state.stale_after_hours);
@@ -220,7 +228,9 @@ export default function SearchDeliveryCard({ campaign }) {
             <p className="mt-2 text-sm text-gray-700">{rankRepair.status === 'verifying'
                 ? (rankRepair.metadata?.phase === 'observing_delivery'
                     ? 'The approved replacement is serving. Its effect on auction competitiveness and useful clicks is still being measured.'
-                    : 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.')
+                    : (rankRepair.metadata?.phase === 'staging_assets'
+                        ? 'The replacement assets are being staged in paused batches. Google approval and traffic verification follow when preparation is complete.'
+                        : 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.'))
                 : 'The ad repair needs review before further changes can be applied.'}</p>
             <p className="mt-2 text-xs text-gray-600">The approved budget and bid limits remain in place. Applying copy or asset changes does not prove Ad Rank recovery.</p>
         </div>}

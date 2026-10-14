@@ -223,7 +223,10 @@ abstract class BaseGoogleAdsService
             new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
-            ])
+            ]),
+            // Keep one SDK read within the worker's deadline. Callers that
+            // need retries use our explicit, bounded searchQueryWithRetry flow.
+            ['retrySettings' => ['retriesEnabled' => false, 'noRetriesRpcTimeoutMillis' => 30_000]]
         );
     }
 

@@ -284,6 +284,15 @@ describe('SearchDeliveryCard', () => {
         expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
     });
 
+    it('shows paused staging before policy or traffic verification', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'verifying', blocked_reason: 'staging_assets',
+            ad_rank: { repair: { status: 'verifying', metadata: { phase: 'staging_assets' } } } } }} />);
+        expect(screen.getByText('Preparing ad replacements')).toBeVisible();
+        expect(screen.getByText(/Google approval and traffic verification follow/)).toBeVisible();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
+        expect(screen.queryByText('Checking traffic after the repair')).toBeNull();
+    });
+
     it('renders current delivery diagnosis on the customer campaign page and refreshes with new props', () => {
         const { rerender } = render(<CampaignShow auth={{ user: {} }} campaign={campaign} />);
         expect(screen.getByRole('region', { name: 'Google Search delivery diagnosis' })).toHaveTextContent('Changes need your approval');

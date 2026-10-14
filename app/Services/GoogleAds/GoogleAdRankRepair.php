@@ -82,6 +82,21 @@ class GoogleAdRankRepair
             }
             $attempt = AgentActivity::where('campaign_id', $fresh->id)->where('customer_id', $fresh->customer_id)
                 ->where('action', 'ad_rank_repair')->latest('id')->first();
+            if ($attempt && ($attempt->details['phase'] ?? '') === 'preparing') {
+                if ($this->dryRun) {
+                    return $this->result('no_op', 'validate_only_interrupted_staging_not_mutated', $attempt, ['validate_only' => true]);
+                }
+                $this->mergeAttempt($attempt, ['phase' => 'needs_review', 'reason' => 'creative_staging_interrupted'], 'needs_review');
+
+                return $this->result('needs_review', 'creative_staging_interrupted', $attempt);
+            }
+            if ($attempt && ($attempt->details['phase'] ?? '') === 'staging_assets') {
+                if ($this->dryRun) {
+                    return $this->result('no_op', 'validate_only_pending_staging_not_mutated', $attempt, ['validate_only' => true]);
+                }
+
+                return $this->stageAssets($fresh, $strategy, $attempt);
+            }
             if ($attempt && in_array($attempt->details['phase'] ?? '', ['awaiting_policy_review', 'activating', 'observing_delivery'], true)) {
                 if ($this->dryRun) {
                     return $this->result('no_op', 'validate_only_pending_repair_not_mutated', $attempt, ['validate_only' => true]);
@@ -162,49 +177,29 @@ class GoogleAdRankRepair
                 $this->guard($fresh, $strategy);
                 $this->createPausedAd($fresh, $group, $copy);
                 foreach ($assets as $plan) {
-                    $this->guard($fresh, $strategy);
                     $this->createAsset($fresh, $plan);
                 }
 
                 return $this->result('no_op', 'creative_requests_validated_only', null, ['validate_only' => true,
                     'validation_note' => 'Creation requests were validated without creating ads or assets. Link, review and activation chains cannot be validated without real resource IDs.']);
             }
-            $this->mergeAttempt($attempt, ['copy' => $copy, 'review' => $review], 'running');
+            // Persist the whole reviewed plan before any remote creation. A worker may die after
+            // Google accepts a write but before its resource ID is recorded; never recreate it blindly.
+            $this->mergeAttempt($attempt, ['copy' => $copy, 'review' => $review,
+                'planned_assets' => $assets, 'phase' => 'staging_assets'], 'running');
             $this->guard($fresh, $strategy, $attempt);
             $replacement = $this->createPausedAd($fresh, $group, $copy);
             if (! $this->ownedAd($fresh, $replacement ?? '', $group) || $replacement === $original['resource_name']) {
                 throw new \RuntimeException('Google did not confirm a distinct paused replacement ad.');
             }
             $this->actionsTaken++;
-            $this->mergeAttempt($attempt, ['replacement_resource' => $replacement, 'phase' => 'awaiting_policy_review'], 'pending');
+            $this->mergeAttempt($attempt, ['replacement_resource' => $replacement], 'running');
             $readback = $this->adFor($fresh, $replacement);
             if (! $readback || $readback['status'] !== 'PAUSED' || ! $this->sameCreative($readback, $copy)) {
                 throw new \RuntimeException('The paused replacement copy, pins or destination did not match Google readback.');
             }
-            foreach ($assets as $plan) {
-                $this->guard($fresh, $strategy, $attempt);
-                $asset = $this->createAsset($fresh, $plan);
-                if (! $this->ownedAsset($fresh, $asset ?? '')) {
-                    throw new \RuntimeException('Google did not confirm the scoped replacement asset.');
-                }
-                $this->actionsTaken++;
-                $this->mergeAttempt($attempt, ['assets' => [...($attempt->details['assets'] ?? []), $plan + ['asset_resource' => $asset]]], 'pending');
-                $this->guard($fresh, $strategy, $attempt);
-                $link = $this->linkPausedAsset($fresh, $asset, $plan['field_type']);
-                if (! $this->ownedLink($fresh, $link ?? '', $plan['field_type'])) {
-                    throw new \RuntimeException('Google did not confirm the paused replacement asset link.');
-                }
-                $this->actionsTaken++;
-                $created = $attempt->details['assets'];
-                $created[array_key_last($created)]['link_resource'] = $link;
-                $this->mergeAttempt($attempt, ['assets' => $created], 'pending');
-                $linked = $this->assetFor($fresh, $asset);
-                if (! $linked || ($linked['campaignAsset']['status'] ?? null) !== 'PAUSED' || ! $this->sameAsset($linked, $plan)) {
-                    throw new \RuntimeException('The paused replacement asset did not match Google readback.');
-                }
-            }
 
-            return $this->result('verifying', 'awaiting_policy_review', $attempt);
+            return $this->stageAssets($fresh, $strategy, $attempt);
         } catch (\DomainException $e) {
             if ($attempt) {
                 $this->mergeAttempt($attempt, ['last_hold' => $e->getMessage()], $attempt->status);
@@ -223,9 +218,65 @@ class GoogleAdRankRepair
         }
     }
 
+    private function stageAssets(Campaign $campaign, Strategy $strategy, AgentActivity $attempt): array
+    {
+        $details = $attempt->details;
+        $this->assertStagedAssetPrefix($campaign, $details);
+        $this->guard($campaign, $strategy, $attempt);
+        $replacement = $this->adFor($campaign, $details['replacement_resource'] ?? '');
+        if (! $replacement || $replacement['status'] !== 'PAUSED' || ! $this->sameCreative($replacement, $details['copy'] ?? [])) {
+            throw new \RuntimeException('The staged replacement ad is missing, changed or no longer paused.');
+        }
+        foreach ($details['assets'] as $plan) {
+            $row = $this->assetFor($campaign, $plan['asset_resource']);
+            if (! $row || ($row['campaignAsset']['resourceName'] ?? null) !== $plan['link_resource']
+                || ($row['campaignAsset']['status'] ?? null) !== 'PAUSED' || ! $this->sameAsset($row, $plan)) {
+                throw new \RuntimeException('A staged asset prefix could not be confirmed paused with its reviewed content.');
+            }
+        }
+        // Keep each check within its worker deadline without removing fresh guards.
+        // Only complete, acknowledged prefixes can resume; uncertain creates require review.
+        $next = array_slice($details['planned_assets'], count($details['assets']), 2);
+        foreach ($next as $plan) {
+            $this->guard($campaign, $strategy, $attempt);
+            $this->mergeAttempt($attempt, ['assets' => [...$attempt->details['assets'], $plan]], 'pending');
+            $asset = $this->createAsset($campaign, $plan);
+            if (! $this->ownedAsset($campaign, $asset ?? '')) {
+                throw new \RuntimeException('Google did not confirm the scoped replacement asset.');
+            }
+            $this->actionsTaken++;
+            $created = $attempt->details['assets'];
+            $index = array_key_last($created);
+            $created[$index]['asset_resource'] = $asset;
+            $this->mergeAttempt($attempt, ['assets' => $created], 'pending');
+            $this->guard($campaign, $strategy, $attempt);
+            $link = $this->linkPausedAsset($campaign, $asset, $plan['field_type']);
+            if (! $this->ownedLink($campaign, $link ?? '', $plan['field_type'])) {
+                throw new \RuntimeException('Google did not confirm the paused replacement asset link.');
+            }
+            $this->actionsTaken++;
+            $created = $attempt->details['assets'];
+            $created[$index]['link_resource'] = $link;
+            $this->mergeAttempt($attempt, ['assets' => $created], 'pending');
+            $linked = $this->assetFor($campaign, $asset);
+            if (! $linked || ($linked['campaignAsset']['resourceName'] ?? null) !== $link
+                || ($linked['campaignAsset']['status'] ?? null) !== 'PAUSED' || ! $this->sameAsset($linked, $plan)) {
+                throw new \RuntimeException('The paused replacement asset did not match Google readback.');
+            }
+        }
+        if (count($attempt->details['assets']) < count($attempt->details['planned_assets'])) {
+            return $this->result('verifying', 'staging_assets', $attempt);
+        }
+        $this->assertCompleteAssetPlan($campaign, $attempt->details);
+        $this->mergeAttempt($attempt, ['phase' => 'awaiting_policy_review'], 'pending');
+
+        return $this->result('verifying', 'awaiting_policy_review', $attempt);
+    }
+
     private function verify(Campaign $campaign, Strategy $strategy, AgentActivity $attempt, array $snapshot): array
     {
         $details = $attempt->details;
+        $this->assertCompleteAssetPlan($campaign, $details);
         if (($details['phase'] ?? null) === 'observing_delivery') {
             $this->guard($campaign, $strategy, $attempt, false);
             $replacement = $this->adFor($campaign, $details['replacement_resource']);
@@ -642,7 +693,7 @@ class GoogleAdRankRepair
                 throw new \RuntimeException('The replacement plan does not match an enabled asset in this exact campaign.');
             }
         }
-        foreach (['SITELINK' => array_slice($proposal['sitelinks'] ?? [], 0, 6), 'CALLOUT' => array_slice($proposal['callouts'] ?? [], 0, 6),
+        foreach (['SITELINK' => array_slice($proposal['sitelinks'] ?? [], 0, 4), 'CALLOUT' => array_slice($proposal['callouts'] ?? [], 0, 4),
             'STRUCTURED_SNIPPET' => isset($proposal['structured_snippet']) ? [$proposal['structured_snippet']] : []] as $field => $items) {
             $oldForType = array_values(array_filter($old, fn ($asset) => $asset['field_type'] === $field));
             foreach ($items as $index => $item) {
@@ -675,6 +726,36 @@ class GoogleAdRankRepair
         }
 
         return $plans;
+    }
+
+    private function assertCompleteAssetPlan(Campaign $campaign, array $details): void
+    {
+        $this->assertStagedAssetPrefix($campaign, $details);
+        if (count($details['planned_assets']) !== count($details['assets'])) {
+            throw new \RuntimeException('The reviewed asset plan has not been completely staged; activation requires review.');
+        }
+    }
+
+    private function assertStagedAssetPrefix(Campaign $campaign, array $details): void
+    {
+        if (! isset($details['planned_assets'], $details['assets']) || ! is_array($details['planned_assets']) || ! is_array($details['assets'])
+            || count($details['planned_assets']) < count($details['assets'])) {
+            throw new \RuntimeException('The reviewed asset plan has not been completely staged; activation requires review.');
+        }
+        $assets = [];
+        $links = [];
+        foreach ($details['assets'] as $index => $created) {
+            $plan = $details['planned_assets'][$index] ?? null;
+            if (! is_array($created) || ! is_array($plan) || empty($plan['field_type'])
+                || ! $this->ownedAsset($campaign, $created['asset_resource'] ?? '')
+                || ! $this->ownedLink($campaign, $created['link_resource'] ?? '', $plan['field_type'])
+                || array_diff_key($created, ['asset_resource' => true, 'link_resource' => true]) !== $plan
+                || isset($assets[$created['asset_resource']]) || isset($links[$created['link_resource']])) {
+                throw new \RuntimeException('The staged asset resources do not match every reviewed asset in the exact campaign.');
+            }
+            $assets[$created['asset_resource']] = true;
+            $links[$created['link_resource']] = true;
+        }
     }
 
     private function assetShape(array $row, string $field): array
@@ -905,7 +986,7 @@ class GoogleAdRankRepair
 
         $response = $client?->getAdGroupAdServiceClient()->mutateAdGroupAds(new MutateAdGroupAdsRequest([
             'validate_only' => $this->dryRun, 'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'operations' => [$operation],
-        ]));
+        ]), $this->mutationCallOptions());
 
         return $this->dryRun ? null : $response?->getResults()[0]->getResourceName();
     }
@@ -918,7 +999,7 @@ class GoogleAdRankRepair
 
         return $client?->getAdGroupAdServiceClient()->mutateAdGroupAds(new MutateAdGroupAdsRequest([
             'validate_only' => $this->dryRun, 'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'operations' => [$operation],
-        ]))->getResults()[0]->getResourceName() === $resource;
+        ]), $this->mutationCallOptions())->getResults()[0]->getResourceName() === $resource;
     }
 
     protected function createAsset(Campaign $campaign, array $plan): ?string
@@ -935,7 +1016,7 @@ class GoogleAdRankRepair
 
         $response = $client?->getAssetServiceClient()->mutateAssets(new MutateAssetsRequest([
             'validate_only' => $this->dryRun, 'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'operations' => [$operation],
-        ]));
+        ]), $this->mutationCallOptions());
 
         return $this->dryRun ? null : $response?->getResults()[0]->getResourceName();
     }
@@ -948,7 +1029,7 @@ class GoogleAdRankRepair
 
         return $client?->getCampaignAssetServiceClient()->mutateCampaignAssets(new MutateCampaignAssetsRequest([
             'validate_only' => $this->dryRun, 'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'operations' => [$operation],
-        ]))->getResults()[0]->getResourceName();
+        ]), $this->mutationCallOptions())->getResults()[0]->getResourceName();
     }
 
     protected function setAssetStatus(Campaign $campaign, string $resource, string $status): bool
@@ -959,6 +1040,13 @@ class GoogleAdRankRepair
 
         return $client?->getCampaignAssetServiceClient()->mutateCampaignAssets(new MutateCampaignAssetsRequest([
             'validate_only' => $this->dryRun, 'customer_id' => $campaign->customer->cleanGoogleCustomerId(), 'operations' => [$operation],
-        ]))->getResults()[0]->getResourceName() === $resource;
+        ]), $this->mutationCallOptions())->getResults()[0]->getResourceName() === $resource;
+    }
+
+    protected function mutationCallOptions(): array
+    {
+        // The SDK defaults to a four-hour timeout. Unknown create responses must be
+        // reconciled from durable state, not automatically retried into duplicates.
+        return ['retrySettings' => ['retriesEnabled' => false, 'noRetriesRpcTimeoutMillis' => 30_000]];
     }
 }

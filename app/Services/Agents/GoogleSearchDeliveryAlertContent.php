@@ -37,6 +37,9 @@ class GoogleSearchDeliveryAlertContent
             'replacement_policy_not_approved', 'replacement_asset_policy_not_approved' => 'Google has not approved the complete replacement. Review its policy status before activating the repair.',
             'creative_repair_or_readback_failed' => 'Some ad repair changes could not be confirmed. Review the recorded live status before another attempt.',
             'creative_repair_trial_limits_or_remaining_spend_unverified' => 'The approved trial limits or remaining spend could not be verified. The ad repair is on hold.',
+            'staging_assets' => 'Preparing paused replacement assets. The working approved ad continues serving.',
+            'interrupted_asset_staging' => 'An asset submission could not be confirmed. The working ad has been preserved; review the recorded result before another attempt.',
+            'creative_staging_interrupted' => 'Replacement preparation was interrupted. The working ad has been preserved; review the recorded result before another attempt.',
             default => 'Automatic changes are on hold. Review the delivery report before making changes.',
         };
     }
