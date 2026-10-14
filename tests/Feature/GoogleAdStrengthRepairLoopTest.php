@@ -236,11 +236,62 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->app->instance(GeminiService::class, $ai);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
         $this->assertTrue($result['checked']);
-        $this->assertSame('approved_bounded_trial', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('approved_bounded_trial', $result['mutation_holds'][0]['reason']);
         $this->assertSame([], $result['actions']);
         $this->assertFalse($result['verified']);
         Queue::assertNotPushed(VerifyGoogleAdImprovement::class);
         $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_strength_repair_attempt')->count());
+    }
+
+    public function test_a_healthy_ad_under_a_trial_is_observed_verified_with_a_separate_write_hold(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->update(['spend_guardrails' => ['enabled' => true]]);
+        $this->reader([$this->row('GOOD')]);
+        $this->mock(GeminiService::class)->shouldNotReceive('generateContent');
+        $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+
+        $this->assertTrue($result['checked']);
+        $this->assertTrue($result['verified']);
+        $this->assertSame([], $result['unresolved']);
+        $this->assertSame('approved_bounded_trial', $result['mutation_holds'][0]['reason']);
+        $this->assertSame('GOOD', $result['observations'][0]['evidence']['ad_strength']);
+        $this->assertSame([], $result['actions']);
+    }
+
+    public function test_a_trial_hold_never_hides_a_real_google_review_or_policy_problem(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->update(['spend_guardrails' => ['enabled' => true]]);
+        $this->mock(GeminiService::class)->shouldNotReceive('generateContent');
+        foreach ([[$this->row('AVERAGE'), 'weak_ad_strength'], [$this->row('UNKNOWN'), 'ad_status_unknown'],
+            [$this->row('GOOD', approval: 'DISAPPROVED'), 'policy_disapproved'],
+            [$this->row('PENDING'), 'strength_pending']] as [$row, $reason]) {
+            $this->reader([$row]);
+            $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+            $this->assertSame($reason, $result['unresolved'][0]['reason']);
+            $this->assertFalse($result['verified']);
+            $this->assertSame('approved_bounded_trial', $result['mutation_holds'][0]['reason']);
+            $this->assertSame($row['adGroupAd']['adStrength'], $result['unresolved'][0]['evidence']['ad_strength']);
+            $this->assertSame([], $result['actions']);
+        }
+    }
+
+    public function test_a_pending_rank_replacement_is_a_write_hold_and_preserves_the_actual_rating(): void
+    {
+        $campaign = $this->campaign();
+        $state = Mockery::mock(GoogleAdStrengthRepair::class)->makePartial();
+        $state->shouldReceive('mutationBlocked')->andReturn('ad_rank_replacement_pending');
+        $this->app->instance(GoogleAdStrengthRepair::class, $state);
+        $this->reader([$this->row('AVERAGE')]);
+        $this->mock(GeminiService::class)->shouldNotReceive('generateContent');
+        $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
+
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('AVERAGE', $result['unresolved'][0]['evidence']['ad_strength']);
+        $this->assertSame('ad_rank_replacement_pending', $result['mutation_holds'][0]['reason']);
+        $this->assertSame([], $result['actions']);
     }
 
     public function test_one_pending_ad_does_not_block_a_different_weak_ad(): void
@@ -508,23 +559,27 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->mock(GeminiService::class)->shouldNotReceive('generateContent');
         Campaign::whereKey($campaign->id)->update(['status' => 'paused']);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
-        $this->assertSame('campaign_not_active', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('campaign_not_active', $result['mutation_holds'][0]['reason']);
         $this->assertSame([], $result['actions']);
         Campaign::whereKey($campaign->id)->update(['status' => 'active']);
         \App\Models\Setting::set('managed_billing_enabled', true, 'boolean');
         $campaign->customer->adSpendCredit()->update(['payment_status' => 'paused']);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
-        $this->assertSame('ad_spend_unfunded', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('ad_spend_unfunded', $result['mutation_holds'][0]['reason']);
         $this->assertSame([], $result['actions']);
         $campaign->customer->adSpendCredit()->update(['payment_status' => 'current']);
         \Laravel\Pennant\Feature::for($campaign->customer)->deactivate(\App\Features\AutoHealing::class);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
-        $this->assertSame('auto_healing_disabled', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('auto_healing_disabled', $result['mutation_holds'][0]['reason']);
         $this->assertSame([], $result['actions']);
         \Laravel\Pennant\Feature::for($campaign->customer)->activate(\App\Features\AutoHealing::class);
         $campaign->strategies()->update(['signed_off_at' => null]);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
-        $this->assertSame('strategy_not_approved', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('strategy_not_approved', $result['mutation_holds'][0]['reason']);
     }
 
     public function test_a_pause_during_copy_review_is_rechecked_before_the_google_write(): void
@@ -546,7 +601,8 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->app->bind(UpdateResponsiveSearchAd::class, fn () => $updater);
         $result = app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign);
         $this->assertSame([], $result['actions']);
-        $this->assertSame('campaign_not_active', $result['unresolved'][0]['reason']);
+        $this->assertSame('weak_ad_strength', $result['unresolved'][0]['reason']);
+        $this->assertSame('campaign_not_active', $result['mutation_holds'][0]['reason']);
         $this->assertSame(0, app(GoogleAdStrengthRepair::class)->attemptCount($campaign, self::AD));
     }
 

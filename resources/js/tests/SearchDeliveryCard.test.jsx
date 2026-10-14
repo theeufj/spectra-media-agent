@@ -119,6 +119,36 @@ describe('SearchDeliveryCard', () => {
         expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
     });
 
+    it('shows rank loss and low clicks without treating impressions as useful recovery', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'delivering', blocked_reason: null,
+            measurement: { ...state.measurement, impressions: 13, clicks: 0 },
+            ad_rank: { diagnosis: { status: 'rank_limited', evidence: { status: 'verified', lost_to_rank: 0.9001,
+                lost_to_budget: 0, from: '2026-10-10', through: '2026-10-10', account_timezone: 'Australia/Sydney' } } } } }} />);
+        expect(screen.getByText('Too few clicks to assess results')).toBeVisible();
+        expect(screen.queryByText('Ads are receiving traffic')).toBeNull();
+        const rank = screen.getByRole('region', { name: 'Google Search delivery diagnosis' });
+        expect(within(rank).getByText('Over 90%')).toBeVisible();
+        expect(within(rank).getByText('0%')).toBeVisible();
+        expect(within(rank).getByText(/Ad Strength feedback alone does not confirm/)).toBeVisible();
+    });
+
+    it('holds rank recovery while the replacement and its traffic are still being verified', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'recovered', blocked_reason: null,
+            verification: { complete_hours: 12, impressions: 30, clicks: 0 },
+            ad_rank: { repair: { status: 'verifying' }, diagnosis: { status: 'rank_limited' } } } }} />);
+        expect(screen.getByText('Checking traffic after the repair')).toBeVisible();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
+        expect(screen.getByText(/Applying copy or asset changes does not prove Ad Rank recovery/)).toBeVisible();
+    });
+
+    it('does not render missing or unverified auction evidence as measured zero loss', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'low_traffic', blocked_reason: null,
+            ad_rank: { diagnosis: { status: 'collecting_evidence', evidence: { status: 'unavailable', lost_to_rank: 0, lost_to_budget: 0 } } } } }} />);
+        expect(screen.getByText(/Auction metrics are not yet verified/)).toBeVisible();
+        expect(screen.queryByText('0%')).toBeNull();
+        expect(screen.queryByText('Estimated impressions lost to Ad Rank')).toBeNull();
+    });
+
     it('shows recovery only for measured post-repair traffic while separating conversion outcomes', () => {
         render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'recovered',
             verification: { complete_hours: 5, impressions: 9, clicks: 1 } } }} />);
@@ -236,10 +266,22 @@ describe('SearchDeliveryCard', () => {
         ['repair_attempt_limit', /reached its automatic repair attempt limit/],
         ['repair_did_not_restore_search_traffic', /repair has not restored measured Google Search traffic/],
         ['partial_repair_unresolved', /Some repair changes could not be confirmed/],
+        ['awaiting_policy_review', /Google is reviewing the replacement ad and assets/],
+        ['observing_delivery', /Google approved the replacement/],
+        ['weekly_creative_repair_limit', /weekly ad repair limit has been reached/],
+        ['rank_improvement_not_verified', /has not demonstrated improved auction competitiveness/],
     ])('explains the backend blocker %s in customer language', (blockedReason, message) => {
         render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'needs_review', blocked_reason: blockedReason } }} />);
         expect(screen.getByText(message)).toBeVisible();
         expect(screen.queryByText(blockedReason)).toBeNull();
+    });
+
+    it('distinguishes an approved replacement under observation from one awaiting review', () => {
+        render(<SearchDeliveryCard campaign={{ search_delivery_state: { ...state, status: 'verifying', blocked_reason: null,
+            ad_rank: { repair: { status: 'verifying', metadata: { phase: 'observing_delivery' } } } } }} />);
+        expect(screen.getByText(/The approved replacement is serving/)).toBeVisible();
+        expect(screen.queryByText(/Google is reviewing the replacement ad and assets/)).toBeNull();
+        expect(screen.queryByText('Traffic recovery confirmed')).toBeNull();
     });
 
     it('renders current delivery diagnosis on the customer campaign page and refreshes with new props', () => {

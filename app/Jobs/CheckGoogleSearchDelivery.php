@@ -48,13 +48,16 @@ class CheckGoogleSearchDelivery implements ShouldBeUnique, ShouldQueue
             $previousStatus = $campaign->search_delivery_state['status'] ?? null;
             $state = $recovery->check($campaign);
             $status = $state['status'];
+            $rankActions = $state['ad_rank']['repair']['metadata']['actions_taken'] ?? 0;
             $this->finishRun($started,
-                actions: $status === 'recovered' && $previousStatus !== 'recovered' ? 1 : 0,
+                actions: (is_int($rankActions) && $rankActions > 0 ? $rankActions : 0)
+                    + ($status === 'recovered' && $previousStatus !== 'recovered' ? 1 : 0),
                 errors: $status === 'unavailable' ? 1 : 0,
-                warnings: in_array($status, ['low_reach', 'approval_required', 'needs_review'], true) ? 1 : 0,
+                warnings: in_array($status, ['low_reach', 'low_traffic', 'approval_required', 'needs_review'], true) ? 1 : 0,
                 scope: "Campaign {$campaign->id}",
                 note: $status,
                 details: ['delivery_status' => $status, 'measurement' => $state['measurement'] ?? [],
+                    'ad_rank' => $state['ad_rank'] ?? [],
                     'blocked_reason' => $state['blocked_reason'] ?? null]);
         } finally {
             $lock->release();

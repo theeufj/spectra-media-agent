@@ -88,6 +88,22 @@ class GoogleSearchReachRecoveryTest extends TestCase
                 'candidate_keywords' => $keywords, 'blocked_by' => []]];
     }
 
+    private function rankSnapshot(): array
+    {
+        $snapshot = $this->snapshot();
+        $through = now('Australia/Sydney')->subHours(3)->startOfHour()->toImmutable();
+        $from = $through->startOfDay()->subDay();
+        $snapshot['measurement'] = ['started_at' => $from->toIso8601String(), 'from' => $from->toIso8601String(),
+            'through' => $through->toIso8601String(), 'complete_hours' => (int) (($through->timestamp - $from->timestamp) / 3600),
+            'impressions' => 13, 'clicks' => 0, 'cost_micros' => 0, 'conversions' => 0];
+        $snapshot['rank_evidence'] = ['status' => 'verified', 'checked_at' => now()->toIso8601String(),
+            'account_timezone' => 'Australia/Sydney', 'from' => $from->toDateString(), 'through' => $from->toDateString(),
+            'complete_days' => 1, 'impressions' => 13, 'clicks' => 0, 'cost_micros' => 0,
+            'lost_to_rank' => 0.9001, 'lost_to_budget' => 0.0, 'impression_share' => 0.0999];
+
+        return $snapshot;
+    }
+
     private function watchdog(array $snapshot, array $diagnosis): FakeSearchReachWatchdog
     {
         $planner = new FakeSearchReachPlanner(function ($campaign, $observed, $research) use ($diagnosis): array {
@@ -161,12 +177,13 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame(['EXACT', 'PHRASE', 'EXACT'], array_column($watchdog->added, 'match_type'));
         $this->assertSame([false, false, false], array_column($watchdog->added, 'set_keyword_bid'));
         $this->assertSame(0, $state['verification']['impressions']);
-        $watchdog->postRepairImpressions = 2;
+        $watchdog->postRepairImpressions = 5;
+        $watchdog->postRepairClicks = 3;
         $watchdog->postRepairHours = 1;
         $verified = $watchdog->check($campaign);
 
         $this->assertSame('recovered', $verified['status']);
-        $this->assertSame(2, $verified['verification']['impressions']);
+        $this->assertSame(5, $verified['verification']['impressions']);
         $this->assertCount(3, $watchdog->added);
         $this->assertEquals(10, $campaign->fresh()->daily_budget);
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'reach_recovery_verified')->count());
@@ -298,6 +315,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign(true);
         $snapshot = $this->snapshot();
         $snapshot['measurement']['impressions'] = 20;
+        $snapshot['measurement']['clicks'] = 3;
         $diagnosis = $this->diagnosis();
         $diagnosis['issues'] = [];
         $watchdog = $this->watchdog($snapshot, $diagnosis);
@@ -377,6 +395,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign(true);
         $snapshot = $this->snapshot();
         $snapshot['measurement']['impressions'] = 20;
+        $snapshot['measurement']['clicks'] = 3;
         $diagnosis = $this->diagnosis();
         $diagnosis['issues'] = [];
         $watchdog = $this->watchdog($snapshot, $diagnosis);
@@ -453,6 +472,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign(true);
         $snapshot = $this->snapshot();
         $snapshot['measurement']['impressions'] = 20;
+        $snapshot['measurement']['clicks'] = 3;
         $watchdog = $this->watchdog($snapshot, ['status' => 'unavailable', 'issues' => [],
             'proposal' => ['summary' => 'Current forecasts are unavailable.']]);
         $state = $watchdog->check($campaign);
@@ -467,6 +487,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign();
         $snapshot = $this->snapshot();
         $snapshot['measurement']['impressions'] = 20;
+        $snapshot['measurement']['clicks'] = 3;
         $diagnosis = $this->diagnosis();
         $diagnosis['forecast']['clicks'] = 35;
         $diagnosis['forecast']['impressions'] = 300;
@@ -485,6 +506,7 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign();
         $snapshot = $this->snapshot();
         $snapshot['measurement']['impressions'] = 20;
+        $snapshot['measurement']['clicks'] = 3;
         $snapshot['approved_ads'] = 0;
         $diagnosis = $this->diagnosis();
         $diagnosis['forecast']['clicks'] = 35;
@@ -556,7 +578,8 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $campaign = $this->makeCampaign();
         $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
         $this->assertSame('verifying', $watchdog->check($campaign)['status']);
-        $watchdog->postRepairImpressions = 2;
+        $watchdog->postRepairImpressions = 5;
+        $watchdog->postRepairClicks = 3;
         (new CheckGoogleSearchDelivery($campaign->id))->handle($watchdog);
         (new CheckGoogleSearchDelivery($campaign->id))->handle($watchdog);
         $runs = AgentRun::where('job', 'CheckGoogleSearchDelivery')->where('scope', "Campaign {$campaign->id}")
@@ -586,6 +609,123 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame('approval_required', $run->details['delivery_status']);
         $this->assertSame(0, $run->actions_taken);
         $this->assertSame(1, $run->warnings);
+    }
+
+    public function test_sustained_current_window_rank_loss_delegates_creative_repair_before_keyword_changes_even_with_a_good_forecast(): void
+    {
+        $campaign = $this->makeCampaign(true);
+        $snapshot = $this->rankSnapshot();
+        $trial = $campaign->spend_guardrails;
+        $trial['started_at'] = now()->subDays(3)->toIso8601String();
+        $trial['allow_ad_rank_repairs'] = true;
+        $campaign->update(['spend_guardrails' => $trial]);
+        $before = $campaign->fresh()->spend_guardrails;
+        $diagnosis = $this->diagnosis();
+        $diagnosis['forecast']['clicks'] = 60;
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+        $watchdog->rankResult = ['status' => 'verifying', 'mutation_allowed' => false, 'issues' => [],
+            'started_at' => now()->toIso8601String(), 'metadata' => ['phase' => 'awaiting_policy_review', 'rank_recovery_verified' => false]];
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('verifying', $state['status']);
+        $this->assertSame('rank_limited', $state['ad_rank']['diagnosis']['status']);
+        $this->assertSame('verified', $state['ad_rank']['diagnosis']['evidence']['status']);
+        $this->assertCount(1, $watchdog->rankCalls);
+        $this->assertSame([], $this->researchCalls, 'A passing keyword forecast cannot suppress actual rank loss.');
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame($before, $campaign->fresh()->spend_guardrails);
+        $this->assertEquals(10, $campaign->fresh()->daily_budget);
+        $this->assertSame(CampaignStatus::Active, $campaign->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unverifiedRankEvidence')]
+    public function test_partial_stale_missing_or_prior_configuration_rank_evidence_cannot_delegate_a_new_repair(array $override): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->rankSnapshot();
+        $snapshot['rank_evidence'] = $override + $snapshot['rank_evidence'];
+        $diagnosis = $this->diagnosis();
+        $diagnosis['issues'] = [];
+        $diagnosis['forecast']['clicks'] = 60;
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('low_traffic', $state['status']);
+        $this->assertNotSame('rank_limited', $state['ad_rank']['diagnosis']['status']);
+        $this->assertNotSame('verified', $state['ad_rank']['diagnosis']['evidence']['status']);
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+        Notification::assertNothingSent();
+    }
+
+    public static function unverifiedRankEvidence(): array
+    {
+        return [[['status' => 'collecting_evidence']], [['status' => 'unavailable']], [['lost_to_rank' => null]],
+            [['checked_at' => '2020-01-01T00:00:00Z']], [['from' => '2020-01-01']], [['complete_days' => 99]],
+            [['account_timezone' => 'UTC']], [['clicks' => null]]];
+    }
+
+    public function test_pending_creative_repair_is_rechecked_during_its_new_measurement_window_without_claiming_rank_recovery(): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->rankSnapshot();
+        $watchdog = $this->watchdog($snapshot, $this->diagnosis());
+        $watchdog->rankResult = ['status' => 'verifying', 'mutation_allowed' => false, 'issues' => [],
+            'metadata' => ['phase' => 'observing_delivery', 'rank_recovery_verified' => false]];
+        $this->assertSame('verifying', $watchdog->check($campaign)['status']);
+        $watchdog->snapshot['approved_ad_resources'] = ['customers/1234567890/adGroupAds/10~99'];
+        $state = $watchdog->check($campaign);
+
+        $this->assertCount(2, $watchdog->rankCalls);
+        $this->assertSame('verifying', $state['status']);
+        $this->assertSame(0, $state['measurement']['complete_hours']);
+        $this->assertFalse($state['ad_rank']['repair']['metadata']['rank_recovery_verified']);
+        $this->assertSame([], $watchdog->added);
+    }
+
+    public function test_rank_repair_hold_preserves_the_actual_service_reason(): void
+    {
+        $campaign = $this->makeCampaign();
+        $watchdog = $this->watchdog($this->rankSnapshot(), $this->diagnosis());
+        $watchdog->rankResult = ['status' => 'held', 'mutation_allowed' => false, 'issues' => [],
+            'metadata' => ['reason' => 'spend_safety_hold']];
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('approval_required', $state['status']);
+        $this->assertSame('spend_safety_hold', $state['blocked_reason']);
+    }
+
+    public function test_thirteen_impressions_without_clicks_are_low_traffic_even_when_forecasts_pass(): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->snapshot();
+        $snapshot['measurement']['impressions'] = 13;
+        $snapshot['rank_evidence'] = ['status' => 'collecting_evidence'];
+        $diagnosis = $this->diagnosis();
+        $diagnosis['issues'] = [];
+        $diagnosis['forecast']['clicks'] = 60;
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('low_traffic', $state['status']);
+        $this->assertSame('insufficient_meaningful_traffic', $state['blocked_reason']);
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+    }
+
+    public function test_keyword_repair_cannot_be_verified_by_a_few_impressions_without_meaningful_clicks(): void
+    {
+        $campaign = $this->makeCampaign();
+        $watchdog = $this->watchdog($this->snapshot(), $this->diagnosis());
+        $this->assertSame('verifying', $watchdog->check($campaign)['status']);
+        $watchdog->postRepairImpressions = 20;
+        $watchdog->postRepairHours = 24;
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('needs_review', $state['status']);
+        $this->assertSame('repair_did_not_restore_search_traffic', $state['blocked_reason']);
+        $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'reach_recovery_verified')->count());
     }
 }
 
@@ -631,6 +771,12 @@ class FakeSearchReachWatchdog extends GoogleSearchReachRecovery
 
     public int $postRepairHours = 0;
 
+    public int $postRepairClicks = 0;
+
+    public array $rankCalls = [];
+
+    public array $rankResult = ['status' => 'held', 'mutation_allowed' => false, 'issues' => [], 'metadata' => []];
+
     public int $inspectCount = 0;
 
     public bool $failReadback = false;
@@ -655,11 +801,19 @@ class FakeSearchReachWatchdog extends GoogleSearchReachRecovery
         if ($this->added) {
             $snapshot['measurement']['complete_hours'] = $this->postRepairHours;
             $snapshot['measurement']['impressions'] = $this->postRepairImpressions;
+            $snapshot['measurement']['clicks'] = $this->postRepairClicks;
             $snapshot['measurement']['started_at'] = $since->format(DATE_ATOM);
             $snapshot['measurement']['from'] = $since->format(DATE_ATOM);
         }
 
         return $snapshot;
+    }
+
+    protected function repairAdRank(Campaign $campaign, array $snapshot, array $rankDiagnosis): array
+    {
+        $this->rankCalls[] = $rankDiagnosis;
+
+        return $this->rankResult;
     }
 
     protected function addKeyword(Customer $customer, array $candidate, int $cap): ?string

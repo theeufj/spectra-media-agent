@@ -208,6 +208,10 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
                     $snapshot['mutation_allowed'] = false;
                     $snapshot['skip_reason'] = $snapshot['ad_strength']['skipped'];
                 }
+                if (! empty($snapshot['ad_strength']['mutation_holds'])) {
+                    $snapshot['mutation_allowed'] = false;
+                    $snapshot['skip_reason'] = $snapshot['ad_strength']['mutation_holds'][0]['reason'];
+                }
                 $snapshot['pending'] = $snapshot['ad_strength']['pending'] ?? [];
                 $snapshot['issues'] = array_merge($snapshot['issues'], $this->issues($snapshot['ad_strength']['errors'] ?? []), $this->strengthIssues($snapshot['ad_strength']));
                 $snapshot['errors'] = array_merge($snapshot['errors'], $this->issues($snapshot['ad_strength']['errors'] ?? []));
@@ -420,6 +424,11 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
                 if ($issue['reason'] === 'google_evaluation_delayed') {
                     return (new AgentIssue('ad_strength_google_evaluation_delayed', 'Google review or ad-strength evaluation is still pending after 72 hours of observation. Check the ad status in Google Ads; no approval or strength result has been assumed.'))->toArray();
                 }
+                if ($issue['reason'] === 'weak_ad_strength') {
+                    $rating = $issue['evidence']['ad_strength'] ?? 'weak';
+
+                    return (new AgentIssue('ad_strength_weak_ad_strength', 'Google reports '.$rating.' ad strength. Review the observed ad feedback; this rating does not itself mean Google rejected the ad.'))->toArray();
+                }
 
                 return (new AgentIssue('ad_strength_'.$issue['reason'], 'Google ad strength needs review: '.str_replace('_', ' ', $issue['reason']).'.'))->toArray();
             }
@@ -431,6 +440,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
     /** Waiting needs fresh provider evidence; unknown statuses and exhausted repairs remain actionable. */
     private function classifyStrength(array $strength, array $previous): array
     {
+        $strength = $this->separateStrengthMutationHolds($strength);
         $strength['pending'] = [];
         if (! ($strength['checked'] ?? false) || ! empty($strength['skipped'])) {
             return $strength;
@@ -479,7 +489,36 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
 
     private function strengthIssues(array $strength): array
     {
+        $strength = $this->separateStrengthMutationHolds($strength);
+
         return $this->unresolved(array_values(array_filter($strength['unresolved'] ?? [], fn ($issue) => ! is_array($issue) || empty($issue['waiting']))));
+    }
+
+    /** Normalize old persisted snapshots without discarding missing provider proof. */
+    private function separateStrengthMutationHolds(array $strength): array
+    {
+        $rows = [];
+        $changed = false;
+        foreach ($strength['unresolved'] ?? [] as $row) {
+            if (! is_array($row) || ! QualityScoreImprovementAgent::isStrengthMutationHold($row['reason'] ?? '')) {
+                $rows[] = $row;
+
+                continue;
+            }
+            $changed = true;
+            $strength['mutation_holds'][] = ['ad_resource' => $row['ad_resource'] ?? null, 'reason' => $row['reason']];
+            $actual = QualityScoreImprovementAgent::observedStrengthReason($row['evidence'] ?? []);
+            if ($actual !== null) {
+                $rows[] = [...$row, 'reason' => $actual];
+            }
+        }
+        $strength['unresolved'] = $rows;
+        if ($changed) {
+            $strength['verified'] = ($strength['checked'] ?? false) && empty($strength['skipped'])
+                && $rows === [] && empty($strength['errors']);
+        }
+
+        return $strength;
     }
 
     public function failed(\Throwable $exception): void

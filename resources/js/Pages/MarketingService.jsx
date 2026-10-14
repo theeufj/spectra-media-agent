@@ -6,8 +6,9 @@ import Hero from '@/Components/Marketing/Hero';
 import CtaBand from '@/Components/Marketing/CtaBand';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
 
-export default function MarketingService({ auth, service, plans = [] }) {
+export default function MarketingService({ auth, service, publicContent = {}, plans = [] }) {
     const setupOnly = service.slug === 'google-ads-setup';
+    const managementHero = service.slug === 'google-ads-management' ? publicContent.hero : null;
 
     return (
         <>
@@ -15,7 +16,14 @@ export default function MarketingService({ auth, service, plans = [] }) {
             <div className="min-h-screen bg-gray-50 flex flex-col">
                 <Header auth={auth} />
                 <main className="flex-1">
-                    <Hero eyebrow={service.eyebrow} headline={service.headline} sub={service.intro} />
+                    <Hero
+                        eyebrow={service.eyebrow}
+                        headline={managementHero?.headline ?? service.headline}
+                        sub={managementHero?.intro ?? service.intro}
+                        primaryCta={managementHero?.primaryCta}
+                        secondaryCta={managementHero?.secondaryCta}
+                        note={managementHero?.note}
+                    />
                     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
                         <article className="prose-article rounded-2xl border border-gray-100 bg-white p-6 sm:p-10" dangerouslySetInnerHTML={{ __html: service.content }} />
                         <section className="mt-12" aria-labelledby="service-questions">

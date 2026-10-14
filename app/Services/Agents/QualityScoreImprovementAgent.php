@@ -341,7 +341,7 @@ PROMPT;
     /** Repair weak RSAs without waiting for impressions; track outcomes per ad. */
     public function checkAdStrength(Campaign $campaign): array
     {
-        $result = ['actions' => [], 'errors' => [], 'unresolved' => [], 'verified' => false, 'checked' => false];
+        $result = ['actions' => [], 'errors' => [], 'unresolved' => [], 'mutation_holds' => [], 'observations' => [], 'verified' => false, 'checked' => false];
         $fresh = Campaign::with('customer')->find($campaign->id);
         $customer = $fresh?->customer;
         if ($customer) {
@@ -369,12 +369,20 @@ PROMPT;
             }
             $ads = array_filter($allAds, fn ($ad) => $ad['is_rsa'] && $ad['status'] === 'ENABLED' && $ad['ad_group_status'] === 'ENABLED');
             $result['checked'] = true;
+            $result['observations'] = array_values(array_map([\App\Services\GoogleAds\GoogleAdStrengthRepair::class, 'observation'], $ads));
             if ($ads === []) {
                 $result['unresolved'][] = ['reason' => 'no_enabled_rsa'];
             }
             $verifications = [];
             $submittedCopies = [];
             foreach ($ads as $ad) {
+                preg_match('#^(customers/\d+)/adGroupAds/(\d+)~#', $ad['resource_name'], $parts);
+                $group = isset($parts[1], $parts[2]) ? $parts[1].'/adGroups/'.$parts[2] : '';
+                $strategy = $campaign->strategies()->where('google_ads_ad_group_id', $group)->first();
+                $writeHold = $strategy ? $state->mutationBlocked($campaign, $strategy) : null;
+                if ($writeHold !== null) {
+                    $result['mutation_holds'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $writeHold];
+                }
                 $attempt = $state->latest($campaign, $ad['resource_name']);
                 if ($attempt && isset($attempt->details['submitted_at'])) {
                     $verification = $state->verify($campaign, $attempt, $ad);
@@ -409,11 +417,8 @@ PROMPT;
 
                     continue;
                 }
-                preg_match('#^(customers/\d+)/adGroupAds/(\d+)~#', $ad['resource_name'], $parts);
-                $group = isset($parts[1], $parts[2]) ? $parts[1].'/adGroups/'.$parts[2] : '';
-                $strategy = $campaign->strategies()->where('google_ads_ad_group_id', $group)->first();
-                if ($strategy && ($blocked = $state->mutationBlocked($campaign, $strategy))) {
-                    $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $blocked];
+                if ($writeHold !== null) {
+                    $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => self::observedStrengthReason($ad)];
 
                     continue;
                 }
@@ -456,7 +461,8 @@ PROMPT;
                     if ($blocked = $state->mutationBlocked($campaign, $strategy)) {
                         $attempt->update(['status' => 'skipped', 'description' => 'RSA repair skipped because a current management hold applies.',
                             'details' => array_merge($attempt->details ?? [], ['reason' => $blocked])]);
-                        $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $blocked];
+                        $result['mutation_holds'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $blocked];
+                        $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => self::observedStrengthReason($ad)];
 
                         continue;
                     }
@@ -527,6 +533,24 @@ PROMPT;
         }
 
         return $result;
+    }
+
+    public static function isStrengthMutationHold(string $reason): bool
+    {
+        return in_array($reason, ['sandbox', 'google_disabled', 'missing_google_account', 'google_account_changed',
+            'google_management_unavailable', 'customer_or_campaign_missing', 'campaign_not_active', 'google_campaign_paused',
+            'campaign_ended', 'spend_safety_hold', 'approved_bounded_trial', 'setup_only', 'strategy_not_approved',
+            'google_strategy_target_changed', 'auto_healing_disabled', 'ad_spend_unfunded', 'ad_rank_replacement_pending'], true);
+    }
+
+    /** Permission to write does not determine what Google actually reported. */
+    public static function observedStrengthReason(array $ad): ?string
+    {
+        if ($reason = \App\Services\GoogleAds\GoogleAdStrengthRepair::statusReason($ad)) {
+            return $reason;
+        }
+
+        return \App\Services\GoogleAds\GoogleAdStrengthRepair::healthy($ad) ? null : 'weak_ad_strength';
     }
 
     private function generateAdStrengthCopy(Campaign $campaign, object $customer, array $existing, \App\Models\Strategy $strategy): array

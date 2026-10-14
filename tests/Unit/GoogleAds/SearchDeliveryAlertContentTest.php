@@ -82,4 +82,25 @@ class SearchDeliveryAlertContentTest extends TestCase
         $this->assertStringNotContainsString('0 impressions', $body);
         $this->assertStringNotContainsString('Reported ad spend', $body);
     }
+
+    public function test_rank_incident_is_not_reported_as_a_keyword_problem_or_a_successful_creative_write(): void
+    {
+        $state = [...$this->state(), 'status' => 'verifying', 'blocked_reason' => null,
+            'ad_rank' => ['diagnosis' => ['status' => 'rank_limited', 'evidence' => ['status' => 'verified', 'lost_to_rank' => 0.9001]],
+                'repair' => ['status' => 'verifying', 'started_at' => '2026-10-11T00:00:00Z']]];
+        $content = GoogleSearchDeliveryAlertContent::forState($state);
+        $this->assertStringContainsString('useful traffic have not yet been confirmed', $content['message']);
+        $this->assertStringContainsString('over 90%', implode(' ', $content['evidence_lines']));
+        $this->assertStringContainsString('landing page and verified repair outcome', $content['action_required']);
+        $this->assertStringNotContainsString('different relevant keyword theme', $content['action_required']);
+        $this->assertStringNotContainsString('Automatic changes are on hold', implode(' ', $content['evidence_lines']));
+    }
+
+    public function test_unavailable_rank_share_does_not_become_verified_or_zero(): void
+    {
+        $state = $this->state();
+        $state['ad_rank'] = ['diagnosis' => ['status' => 'collecting_evidence', 'evidence' => ['status' => 'unavailable', 'lost_to_rank' => 0.9001]]];
+        $content = GoogleSearchDeliveryAlertContent::forState($state);
+        $this->assertStringNotContainsString('Google estimates', implode(' ', $content['evidence_lines']));
+    }
 }

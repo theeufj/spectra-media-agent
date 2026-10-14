@@ -11,6 +11,7 @@ use App\Notifications\CriticalAgentAlert;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
+use App\Services\GoogleAds\GoogleAdRankRepair;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
@@ -87,11 +88,52 @@ class GoogleSearchReachRecovery
                 'verified_limits' => ['checked_at' => $state['checked_at'],
                     'daily_budget_micros' => $snapshot['daily_budget_micros'] ?? null,
                     'cpc_bid_ceiling_micros' => $snapshot['actual_cpc_ceiling_micros'] ?? null]];
+            $rank = $this->rankDiagnosis($snapshot);
+            $rank['evidence'] = $snapshot['rank_evidence'] ?? [];
+            $rank['evidence']['status'] = match ($rank['status']) {
+                'rank_limited', 'not_rank_limited' => 'verified',
+                'collecting_evidence' => 'collecting_evidence',
+                default => 'unavailable',
+            };
+            $rank['evidence']['reason'] = $rank['reason'] ?? null;
+            $state['ad_rank']['diagnosis'] = $rank;
+            $pendingRankRepair = ($state['ad_rank']['repair']['status'] ?? null) === 'verifying';
+            if ($pendingRankRepair || $rank['status'] === 'rank_limited') {
+                // Creative repair has its own narrow permissions and durable
+                // read-back workflow. A passing reach forecast cannot hide rank loss.
+                $result = $this->repairAdRank($campaign, $snapshot, $rank);
+                $state['ad_rank']['repair'] = $result;
+                $state['mutation_allowed'] = (bool) ($result['mutation_allowed'] ?? false);
+                $state['status'] = match ($result['status'] ?? 'unavailable') {
+                    'verifying' => 'verifying',
+                    'held' => 'approval_required',
+                    'needs_review' => 'needs_review',
+                    'no_op' => ($result['metadata']['rank_recovery_verified'] ?? false) ? 'recovered' : 'low_traffic',
+                    default => 'unavailable',
+                };
+                $state['blocked_reason'] = match ($state['status']) {
+                    'verifying' => 'ad_rank_repair_verification_pending',
+                    'recovered' => null,
+                    'approval_required' => 'ad_rank_repair_not_authorized',
+                    'unavailable' => 'ad_rank_repair_unavailable',
+                    default => 'ad_rank_limits_reached',
+                };
+                $reason = $result['metadata']['blocked_reason'] ?? $result['metadata']['reason']
+                    ?? $result['blocked_reason'] ?? $result['reason'] ?? null;
+                if (is_string($reason) && $reason !== '' && $state['status'] !== 'recovered') {
+                    $state['blocked_reason'] = $reason;
+                }
+
+                return in_array($state['status'], ['needs_review', 'unavailable', 'approval_required'], true)
+                    ? $this->alertAndSave($campaign, $state) : $this->save($campaign, $state);
+            }
             if (! empty($state['repair']['started_at']) && ! $campaign->spend_safety_hold) {
                 return $this->verify($campaign, $snapshot, $state);
             }
             $mature = (int) $measurement['complete_hours'] >= (int) config('optimization.search_delivery.diagnosis_after_hours', 12);
             $enoughTraffic = (int) $measurement['impressions'] >= (int) config('optimization.search_delivery.min_impressions', 5);
+            $meaningfulTraffic = $enoughTraffic && (int) ($measurement['clicks'] ?? 0)
+                >= max(1, (int) config('optimization.search_delivery.min_meaningful_clicks', 3));
             $researchDue = empty($state['last_research_at'])
                 || CarbonImmutable::parse($state['last_research_at'])->lte(now()->subHours((int) config('optimization.search_delivery.research_cooldown_hours', 24)));
             $research = $mature && $researchDue && (! $enoughTraffic || $campaign->spend_safety_hold);
@@ -130,9 +172,11 @@ class GoogleSearchReachRecovery
 
                     return $mature ? $this->alertAndSave($campaign, $state) : $this->save($campaign, $state);
                 }
-                unset($state['alert_key'], $state['last_alert_at']);
+                if ($meaningfulTraffic) {
+                    unset($state['alert_key'], $state['last_alert_at']);
 
-                return $this->save($campaign, [...$state, 'status' => 'delivering', 'blocked_reason' => null]);
+                    return $this->save($campaign, [...$state, 'status' => 'delivering', 'blocked_reason' => null]);
+                }
             }
             if (! $mature) {
                 if (($diagnosis['status'] ?? null) !== 'evidence_ready') {
@@ -145,6 +189,12 @@ class GoogleSearchReachRecovery
             if (($diagnosis['status'] ?? null) !== 'evidence_ready') {
                 return $this->alertAndSave($campaign, [...$state, 'status' => 'unavailable',
                     'blocked_reason' => 'reach_evidence_unavailable']);
+            }
+            if (! $campaign->spend_safety_hold && $enoughTraffic && ! $reachRisk) {
+                // Impressions alone show that an ad appeared, not that the test
+                // reached prospective customers. Keep observing before another write.
+                return $this->save($campaign, [...$state, 'status' => 'low_traffic',
+                    'blocked_reason' => $rank['status'] === 'unavailable' ? 'ad_rank_evidence_unavailable' : 'insufficient_meaningful_traffic']);
             }
             $blocked = $this->mutationBlocked($campaign, $snapshot, $diagnosis, $state);
             if ($blocked !== null) {
@@ -208,6 +258,76 @@ class GoogleSearchReachRecovery
         return in_array('limited_keyword_demand', $codes, true)
             && (($forecast['success'] ?? false) !== true
                 || ($forecast['clicks'] ?? 0) < (int) config('optimization.search_delivery.min_forecast_clicks', 30));
+    }
+
+    private function rankDiagnosis(array $snapshot): array
+    {
+        $evidence = $snapshot['rank_evidence'] ?? [];
+        $rank = [...$evidence, 'status' => 'unavailable', 'checked_at' => now()->toIso8601String(),
+            'evidence_checked_at' => $evidence['checked_at'] ?? null, 'issues' => [],
+            'currency_code' => $snapshot['currency_code'] ?? null];
+        if (($evidence['status'] ?? null) === 'collecting_evidence') {
+            return [...$rank, 'status' => 'collecting_evidence', 'reason' => 'ad_rank_collecting_complete_days'];
+        }
+        if (($evidence['status'] ?? null) !== 'verified' || ! is_string($evidence['checked_at'] ?? null)
+            || ! is_string($evidence['from'] ?? null) || ! is_string($evidence['through'] ?? null)
+            || ($evidence['account_timezone'] ?? null) !== ($snapshot['time_zone'] ?? null)
+            || ! in_array($evidence['account_timezone'] ?? '', timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)) {
+            return [...$rank, 'reason' => 'ad_rank_evidence_unavailable'];
+        }
+        try {
+            $checked = CarbonImmutable::parse($evidence['checked_at']);
+            $timezone = $evidence['account_timezone'];
+            $from = CarbonImmutable::createFromFormat('!Y-m-d', $evidence['from'], $timezone);
+            $through = CarbonImmutable::createFromFormat('!Y-m-d', $evidence['through'], $timezone);
+            $measurementFrom = CarbonImmutable::parse($snapshot['measurement']['from'])->setTimezone($timezone);
+            $measurementStarted = CarbonImmutable::parse($snapshot['evaluation_started_at'] ?? $snapshot['measurement']['started_at']);
+            if ($measurementFrom->lt($measurementStarted)) {
+                return [...$rank, 'reason' => 'ad_rank_window_unverified'];
+            }
+            $expectedFrom = ($measurementFrom->isStartOfDay() ? $measurementFrom : $measurementFrom->addDay())->startOfDay();
+            $expectedThrough = CarbonImmutable::parse($snapshot['measurement']['through'])->setTimezone($timezone)->startOfDay()->subDay();
+            if (! $from || ! $through || $from->toDateString() !== $evidence['from'] || $through->toDateString() !== $evidence['through']
+                || ! $from->equalTo($expectedFrom) || ! $through->equalTo($expectedThrough) || $through->lt($from)
+                || $checked->lt(now()->subHours((int) config('optimization.search_delivery.ad_rank.evidence_stale_after_hours', 3)))
+                || $checked->gt(now()->addMinutes(5))) {
+                return [...$rank, 'reason' => 'ad_rank_window_unverified'];
+            }
+            $days = (int) $from->diffInDays($through->addDay());
+            if (($evidence['complete_days'] ?? null) !== $days
+                || $days < (int) config('optimization.search_delivery.ad_rank.min_complete_days', 1)
+                || (int) ($snapshot['measurement']['complete_hours'] ?? 0) < (int) config('optimization.search_delivery.ad_rank.min_complete_hours', 24)) {
+                return [...$rank, 'status' => 'collecting_evidence', 'reason' => 'ad_rank_collecting_complete_days'];
+            }
+        } catch (\Throwable) {
+            return [...$rank, 'reason' => 'ad_rank_window_unverified'];
+        }
+        foreach (['lost_to_rank', 'lost_to_budget', 'impression_share'] as $field) {
+            $share = $evidence[$field] ?? null;
+            if (! is_numeric($share) || ! is_finite($share) || $share < 0 || $share > 1) {
+                return [...$rank, 'reason' => 'ad_rank_share_unverified'];
+            }
+        }
+        foreach (['impressions', 'clicks', 'cost_micros'] as $field) {
+            if (! is_int($evidence[$field] ?? null) || $evidence[$field] < 0) {
+                return [...$rank, 'reason' => 'ad_rank_traffic_unverified'];
+            }
+        }
+        if ($evidence['impressions'] < (int) config('optimization.search_delivery.ad_rank.min_impressions', 10)) {
+            return [...$rank, 'status' => 'collecting_evidence', 'reason' => 'ad_rank_insufficient_observations'];
+        }
+        if ($evidence['lost_to_rank'] >= (float) config('optimization.search_delivery.ad_rank.lost_rank_threshold', 0.70)
+            && $evidence['clicks'] < max(1, (int) config('optimization.search_delivery.min_meaningful_clicks', 3))) {
+            return [...$rank, 'status' => 'rank_limited', 'issues' => [AgentIssue::make('sustained_ad_rank_loss',
+                'Google reports sustained Search opportunity lost to Ad Rank with few clicks in the current configuration window. Improve ad relevance and assets within the existing spending limits.')->toArray()]];
+        }
+
+        return [...$rank, 'status' => 'not_rank_limited', 'reason' => null];
+    }
+
+    protected function repairAdRank(Campaign $campaign, array $snapshot, array $rankDiagnosis): array
+    {
+        return app(GoogleAdRankRepair::class)->repair($campaign, $snapshot, $rankDiagnosis);
     }
 
     private function mutationBlocked(Campaign $campaign, array $snapshot, array $diagnosis, array $state): ?string
@@ -440,7 +560,8 @@ class GoogleSearchReachRecovery
 
             return $this->alertAndSave($campaign, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'configuration_changed_during_verification']);
         }
-        if ((int) $after['measurement']['impressions'] > 0) {
+        if ((int) $after['measurement']['impressions'] >= (int) config('optimization.search_delivery.min_impressions', 5)
+            && (int) ($after['measurement']['clicks'] ?? 0) >= max(1, (int) config('optimization.search_delivery.min_meaningful_clicks', 3))) {
             if (($state['status'] ?? null) !== 'recovered') {
                 AgentActivity::record('search_delivery', 'reach_recovery_verified',
                     'Google Search traffic was observed after the keyword repair.',
@@ -459,7 +580,7 @@ class GoogleSearchReachRecovery
     private function fingerprint(Campaign $campaign, array $snapshot): string
     {
         $settings = array_intersect_key($snapshot, array_flip(['status', 'channel', 'bidding_strategy', 'google_search_enabled', 'search_partners_enabled',
-            'daily_budget_micros', 'actual_cpc_ceiling_micros', 'currency_code', 'time_zone', 'keywords', 'approved_ads',
+            'daily_budget_micros', 'actual_cpc_ceiling_micros', 'currency_code', 'time_zone', 'keywords', 'approved_ads', 'approved_ad_resources',
             'negative_keywords', 'geo_target_constants', 'excluded_geo_target_constants', 'included_geos', 'excluded_geos', 'language_constants', 'languages', 'ad_schedule',
             'device_bid_modifiers', 'unsupported_targeting', 'positive_geo_target_type', 'negative_geo_target_type', 'targeting_setting',
             'ad_group_targeting_modes', 'audience_criteria']));

@@ -24,6 +24,19 @@ class GoogleSearchDeliveryAlertContent
             'repair_did_not_restore_search_traffic' => 'The repair has not restored measured Google Search traffic. Another change needs review.',
             'configuration_changed_during_diagnosis', 'configuration_changed_during_verification' => 'Campaign settings changed during the check. The current settings and repair outcome need review.',
             'reach_evidence_unavailable', 'search_delivery_check_unavailable' => 'The current delivery diagnosis could not be verified. A later check or administrator review is required.',
+            'ad_rank_diagnosis_pending' => 'A complete reporting period is needed to assess auction competitiveness after the last change.',
+            'ad_rank_evidence_unavailable' => 'Current auction evidence could not be verified. A fresh check is needed before an automatic ad repair.',
+            'ad_rank_creative_permission_required' => 'Ad-copy repairs need authorization for this controlled test. Its spending limits remain in place.',
+            'ad_rank_repair_attempt_limit' => 'The ad repair attempt limit has been reached. Review actual traffic before another change.',
+            'ad_rank_recovery_not_confirmed' => 'The ad repair has not yet restored useful traffic or confirmed improved auction competitiveness.',
+            'ad_rank_repair_held' => 'The ad repair is on hold. Review its evidence and the approved spending limits.',
+            'awaiting_policy_review' => 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.',
+            'observing_delivery' => 'Google approved the replacement. Fresh auction and click evidence is needed to confirm its effect.',
+            'weekly_creative_repair_limit' => 'The weekly ad repair limit has been reached. Review the measured outcome before another change.',
+            'rank_improvement_not_verified' => 'The replacement has not demonstrated improved auction competitiveness and useful clicks within the observation period.',
+            'replacement_policy_not_approved', 'replacement_asset_policy_not_approved' => 'Google has not approved the complete replacement. Review its policy status before activating the repair.',
+            'creative_repair_or_readback_failed' => 'Some ad repair changes could not be confirmed. Review the recorded live status before another attempt.',
+            'creative_repair_trial_limits_or_remaining_spend_unverified' => 'The approved trial limits or remaining spend could not be verified. The ad repair is on hold.',
             default => 'Automatic changes are on hold. Review the delivery report before making changes.',
         };
     }
@@ -32,9 +45,17 @@ class GoogleSearchDeliveryAlertContent
     {
         $unavailable = ($state['status'] ?? null) === 'unavailable' || ! empty($state['errors']);
         $attempted = ! empty($state['repair']['started_at']);
+        $rankRepair = $state['ad_rank']['repair'] ?? [];
+        $rankIncident = ($state['ad_rank']['diagnosis']['status'] ?? null) === 'rank_limited'
+            || ! empty($rankRepair['started_at']) || in_array($rankRepair['status'] ?? null, ['verifying', 'needs_review'], true);
         $message = $unavailable
             ? 'We could not verify the current Google Search delivery diagnosis. This alert does not confirm that the campaign is receiving traffic.'
             : ($attempted ? 'A keyword repair was attempted, but traffic recovery has not been confirmed.' : 'Your Google Search campaign needs a delivery review.');
+        if (! $unavailable && $rankIncident) {
+            $message = ! empty($rankRepair['started_at']) || ($rankRepair['status'] ?? null) === 'verifying'
+                ? 'An ad repair is being verified. Improved auction competitiveness and useful traffic have not yet been confirmed.'
+                : 'Your Google Search campaign needs an auction competitiveness review.';
+        }
         $evidence = [];
         $measurement = $state['verification'] ?? $state['measurement'] ?? [];
         $hours = $measurement['complete_hours'] ?? null;
@@ -61,10 +82,22 @@ class GoogleSearchDeliveryAlertContent
                 $evidence[] = 'Maximum cost-per-click bid at this check: '.self::money($limits['cpc_bid_ceiling_micros'], $currency).'.';
             }
         }
-        $evidence[] = self::holdReason($state['blocked_reason'] ?? null);
+        $rankEvidence = $state['ad_rank']['diagnosis']['evidence'] ?? [];
+        if (! $unavailable && ($rankEvidence['status'] ?? null) === 'verified'
+            && is_numeric($rankEvidence['lost_to_rank'] ?? null) && $rankEvidence['lost_to_rank'] >= 0 && $rankEvidence['lost_to_rank'] <= 1) {
+            $loss = (float) $rankEvidence['lost_to_rank'] === 0.9001 ? 'over 90%' : round($rankEvidence['lost_to_rank'] * 100, 1).'%';
+            $evidence[] = 'Google estimates '.$loss.' of available Search impressions were lost to Ad Rank in the measured account-day window.';
+        }
+        if (! empty($state['blocked_reason'])) {
+            $evidence[] = self::holdReason($state['blocked_reason']);
+        }
+        if ($rankIncident) {
+            $evidence[] = 'Ad copy and asset improvements do not by themselves prove improved Ad Rank. The approved spending limits remain in place.';
+        }
         $issues = $unavailable ? ($state['errors'] ?? []) : ($state['diagnosis']['issues'] ?? []);
         $actions = match (true) {
             $unavailable => 'Ask your administrator to verify the latest Google Ads status and delivery evidence before approving changes.',
+            $rankIncident => 'Review the current ad relevance, landing page and verified repair outcome. Assess fresh auction and click evidence before another change or any increase to spending limits.',
             $attempted => 'Ask your administrator to review the repair outcome and live keyword settings before another change.',
             in_array($state['blocked_reason'] ?? '', ['search_inventory_unavailable', 'approved_search_ad_required', 'search_keyword_eligibility_unavailable', 'eligible_search_keyword_required'], true) => 'Ask your administrator to review the reported serving issue before changing keywords or spending limits.',
             default => 'Ask your administrator to assess a different relevant keyword theme and compare bid-limit forecasts within your approved budget. Approve a specific change before it is applied.',

@@ -69,6 +69,7 @@ return [
         'measurement_window_hours' => 48,
         'diagnosis_after_hours' => 12,
         'min_impressions' => 5,
+        'min_meaningful_clicks' => 3,
         'min_forecast_clicks' => 30,
         'research_cooldown_hours' => 24,
         'verify_hours' => 24,
@@ -76,6 +77,13 @@ return [
         'max_candidates_to_forecast' => 6,
         'max_attempts_per_week' => 1,
         'stale_after_hours' => 3,
+        'ad_rank' => [
+            'min_complete_days' => 1,
+            'min_complete_hours' => 24,
+            'min_impressions' => 10,
+            'lost_rank_threshold' => 0.70,
+            'evidence_stale_after_hours' => 3,
+        ],
     ],
 
     'search_terms' => [

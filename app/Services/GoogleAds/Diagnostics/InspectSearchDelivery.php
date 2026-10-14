@@ -51,6 +51,7 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             $ceiling = (int) ($value->getTargetSpend()?->getCpcBidCeilingMicros() ?? 0);
             $settings = [
                 'time_zone' => $row->getCustomer()->getTimeZone() ?: ($campaign->customer->timezone ?: config('app.timezone', 'UTC')),
+                'account_time_zone_verified' => in_array($row->getCustomer()->getTimeZone(), timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
                 'status' => $value->getStatus(),
                 'start_date' => $value->getStartDate(),
@@ -105,9 +106,9 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         foreach ($this->rows($customerId, $query) as $row) {
             $metrics = $row->getMetrics();
             $auction = [
-                'impression_share' => $metrics->getSearchImpressionShare(),
-                'lost_to_rank' => $metrics->getSearchRankLostImpressionShare(),
-                'lost_to_budget' => $metrics->getSearchBudgetLostImpressionShare(),
+                'impression_share' => $metrics->hasSearchImpressionShare() ? $metrics->getSearchImpressionShare() : null,
+                'lost_to_rank' => $metrics->hasSearchRankLostImpressionShare() ? $metrics->getSearchRankLostImpressionShare() : null,
+                'lost_to_budget' => $metrics->hasSearchBudgetLostImpressionShare() ? $metrics->getSearchBudgetLostImpressionShare() : null,
                 'conversions' => $metrics->getConversions(),
                 'cost_micros' => (int) $metrics->getCostMicros(),
                 'clicks' => (int) $metrics->getClicks(),
@@ -164,7 +165,8 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         }
 
         $approvedAds = 0;
-        $query = "SELECT ad_group.status, ad_group_ad.status, ad_group_ad.policy_summary.approval_status
+        $approvedAdResources = [];
+        $query = "SELECT ad_group.status, ad_group_ad.resource_name, ad_group_ad.status, ad_group_ad.policy_summary.approval_status
                   FROM ad_group_ad WHERE campaign.id = {$campaignId} AND ad_group_ad.status != REMOVED";
         foreach ($this->rows($customerId, $query) as $row) {
             $ad = $row->getAdGroupAd();
@@ -172,6 +174,9 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                 && $ad->getPolicySummary()?->getApprovalStatus() === PolicyApprovalStatus::APPROVED
                 && $row->getAdGroup()->getStatus() === AdGroupStatus::ENABLED) {
                 $approvedAds++;
+                if ($ad->getResourceName() !== '') {
+                    $approvedAdResources[] = $ad->getResourceName();
+                }
             }
         }
 
@@ -320,12 +325,16 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             }
         }
 
+        $measurement = $this->measurement($customerId, $campaignId, $startedAt, $settings['time_zone']);
+        sort($approvedAdResources);
+
         return $settings + [
             'complete_days' => $completeDays,
             'impressions' => $network,
             'auction' => $auction,
             'eligible_keywords' => $eligibleKeywords,
             'approved_ads' => $approvedAds,
+            'approved_ad_resources' => $approvedAdResources,
             'keywords' => $keywords,
             'geo_target_constants' => array_values(array_unique($geos)),
             'excluded_geo_target_constants' => array_values(array_unique($excludedGeos)),
@@ -337,7 +346,10 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             'ad_group_targeting_modes' => $targetingModes,
             'audience_criteria' => $audienceCriteria,
             'evaluation_started_at' => $startedAt?->toIso8601String(),
-            'measurement' => $this->measurement($customerId, $campaignId, $startedAt, $settings['time_zone']),
+            'measurement' => $measurement,
+            'rank_evidence' => $settings['account_time_zone_verified']
+                ? $this->rankEvidence($customerId, $campaignId, $measurement, $settings['time_zone'])
+                : ['status' => 'unavailable', 'reason' => 'google_account_timezone_unverified', 'checked_at' => now()->toIso8601String()],
         ];
     }
 
@@ -358,7 +370,7 @@ class InspectSearchDelivery extends BaseGoogleAdsService
     protected function evaluationStartedAt(Campaign $campaign, ?DateTimeInterface $since): ?CarbonImmutable
     {
         $values = [$since, $campaign->spend_guardrails['started_at'] ?? null,
-            $campaign->last_bidding_changed_at, $this->deploymentStartedAt($campaign)];
+            $campaign->last_bidding_changed_at, $campaign->last_budget_changed_at, $this->deploymentStartedAt($campaign)];
         $latest = null;
         foreach ($values as $value) {
             if (! $value instanceof DateTimeInterface && (! is_string($value) || trim($value) === '')) {
@@ -424,6 +436,51 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         }
 
         return $measurement;
+    }
+
+    /** Shares are Google aggregates, not averages of ratios or hourly estimates. */
+    private function rankEvidence(string $customerId, string $campaignId, array $measurement, string $timezone): array
+    {
+        $evidence = ['status' => 'unavailable', 'checked_at' => now()->toIso8601String(), 'account_timezone' => $timezone,
+            'from' => null, 'through' => null, 'complete_days' => 0, 'impression_share' => null, 'lost_to_rank' => null,
+            'lost_to_budget' => null, 'impressions' => null, 'clicks' => null, 'cost_micros' => null,
+            'source' => 'google_search_share_metrics', 'note' => 'Google impression-share estimates can lag. They describe auction opportunity, not guaranteed traffic.'];
+        if (! is_string($measurement['from'] ?? null) || ! is_string($measurement['through'] ?? null)) {
+            return $evidence;
+        }
+        $from = CarbonImmutable::parse($measurement['from'])->setTimezone($timezone);
+        $from = ($from->isStartOfDay() ? $from : $from->addDay())->startOfDay();
+        $through = CarbonImmutable::parse($measurement['through'])->setTimezone($timezone)->startOfDay()->subDay();
+        $evidence['from'] = $from->toDateString();
+        $evidence['through'] = $through->toDateString();
+        if ($from->gt($through)) {
+            $evidence['status'] = 'collecting_evidence';
+
+            return $evidence;
+        }
+        $evidence['complete_days'] = (int) $from->diffInDays($through->addDay());
+        $query = "SELECT metrics.search_impression_share, metrics.search_rank_lost_impression_share,
+                         metrics.search_budget_lost_impression_share, metrics.impressions, metrics.clicks, metrics.cost_micros
+                  FROM campaign WHERE campaign.id = {$campaignId}
+                  AND segments.date BETWEEN '{$from->toDateString()}' AND '{$through->toDateString()}'";
+        foreach ($this->rows($customerId, $query) as $row) {
+            $metrics = $row->getMetrics();
+            $evidence['impression_share'] = $metrics->hasSearchImpressionShare() ? $metrics->getSearchImpressionShare() : null;
+            $evidence['lost_to_rank'] = $metrics->hasSearchRankLostImpressionShare() ? $metrics->getSearchRankLostImpressionShare() : null;
+            $evidence['lost_to_budget'] = $metrics->hasSearchBudgetLostImpressionShare() ? $metrics->getSearchBudgetLostImpressionShare() : null;
+            $evidence['impressions'] = $metrics->hasImpressions() ? (int) $metrics->getImpressions() : null;
+            $evidence['clicks'] = $metrics->hasClicks() ? (int) $metrics->getClicks() : null;
+            $evidence['cost_micros'] = $metrics->hasCostMicros() ? (int) $metrics->getCostMicros() : null;
+            $shares = [$evidence['impression_share'], $evidence['lost_to_rank'], $evidence['lost_to_budget']];
+            if (count(array_filter($shares, fn ($share) => is_numeric($share) && is_finite($share) && $share >= 0 && $share <= 1)) === 3
+                && is_int($evidence['impressions']) && is_int($evidence['clicks']) && is_int($evidence['cost_micros'])
+                && min($evidence['impressions'], $evidence['clicks'], $evidence['cost_micros']) >= 0) {
+                $evidence['status'] = 'verified';
+            }
+            break;
+        }
+
+        return $evidence;
     }
 
     public static function isStalled(?array $snapshot, ?DateTimeInterface $deployedAt, ?DateTimeInterface $now = null): bool

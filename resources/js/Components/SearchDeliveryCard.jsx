@@ -6,6 +6,7 @@ const statuses = {
     collecting_evidence: ['Gathering delivery evidence', 'We are measuring a complete reporting period before deciding whether a repair is needed.'],
     delivering: ['Ads are receiving traffic', 'Google reported traffic in the measured period. This does not confirm that the campaign is generating signups or sales.'],
     low_reach: ['Limited search reach', 'The campaign is receiving little traffic. The diagnosis below explains the constraints and possible next steps.'],
+    low_traffic: ['Too few clicks to assess results', 'Google has shown the ad, but the measured clicks do not yet support a useful campaign test.'],
     approval_required: ['Changes need your approval', 'The proposed changes have not been applied. Review them with your administrator before changing the campaign.'],
     repairing: ['Applying a delivery repair', 'A repair is in progress. Its effect on traffic has not been confirmed yet.'],
     verifying: ['Checking traffic after the repair', 'The changes are in place. We are waiting for measured traffic before calling the repair successful.'],
@@ -32,6 +33,20 @@ const holdReasons = {
     repair_attempt_limit: 'This campaign has reached its automatic repair attempt limit. Review the results before approving another change.',
     repair_did_not_restore_search_traffic: 'The repair has not restored measured Google Search traffic. Review the targeting, keywords and bid limit before trying again.',
     partial_repair_unresolved: 'Some repair changes could not be confirmed. Review those changes before another repair is attempted.',
+    ad_rank_evidence_unavailable: 'Current auction evidence could not be verified. A fresh check is needed before an automatic ad repair.',
+    ad_rank_diagnosis_pending: 'A complete reporting period is needed to assess auction competitiveness after the last change.',
+    ad_rank_creative_permission_required: 'Ad-copy repairs need authorization for this controlled test. Its spending limits remain in place.',
+    ad_rank_repair_held: 'The ad repair is on hold. Review its evidence and the approved spending limits.',
+    ad_rank_repair_attempt_limit: 'The ad repair attempt limit has been reached. Review actual traffic before another change.',
+    ad_rank_recovery_not_confirmed: 'The ad repair has not yet restored useful traffic or confirmed improved auction competitiveness.',
+    awaiting_policy_review: 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.',
+    observing_delivery: 'Google approved the replacement. Fresh auction and click evidence is needed to confirm its effect.',
+    weekly_creative_repair_limit: 'The weekly ad repair limit has been reached. Review the measured outcome before another change.',
+    rank_improvement_not_verified: 'The replacement has not demonstrated improved auction competitiveness and useful clicks within the observation period.',
+    replacement_policy_not_approved: 'Google has not approved the replacement ad. The working ad has been preserved for review.',
+    replacement_asset_policy_not_approved: 'Google has not approved a replacement asset. Review its policy status before activating the repair.',
+    creative_repair_or_readback_failed: 'Some ad repair changes could not be confirmed. Review the recorded live status before another attempt.',
+    creative_repair_trial_limits_or_remaining_spend_unverified: 'The approved trial limits or remaining spend could not be verified. The ad repair is on hold.',
 };
 
 function holdReason(reason) {
@@ -60,6 +75,14 @@ function measuredSpend(value, currency) {
     const amount = result / 1_000_000;
     if (!/^[A-Z]{3}$/.test(currency || '')) return `${amount.toFixed(2)} in ad account currency`;
     return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(amount);
+}
+
+function measuredShare(value) {
+    const result = observedNumber(value);
+    if (result === null || result > 1) return 'Not available';
+    if (result === 0.9001) return 'Over 90%';
+    if (result === 0.0999) return 'Under 10%';
+    return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 }).format(result);
 }
 
 function validTime(value) {
@@ -96,6 +119,9 @@ export function searchDeliveryStatus(state, now = Date.now()) {
     const staleHours = configuredHours > 0 ? configuredHours : 3;
     if (state.stale === true || !validTime(state.checked_at) || now - Date.parse(state.checked_at) > staleHours * 3_600_000) return 'needs_review';
     if (state.repair?.errors?.length || state.verification?.errors?.length) return 'needs_review';
+    if (state.ad_rank?.repair?.issues?.length && ['needs_review', 'unavailable'].includes(state.ad_rank.repair.status)) return 'needs_review';
+    if (state.ad_rank?.repair?.status === 'verifying') return 'verifying';
+    if (['delivering', 'recovered'].includes(state.status) && state.ad_rank?.diagnosis?.status === 'rank_limited') return 'low_traffic';
     if (state.status === 'recovered' && !(observedNumber(state.verification?.impressions ?? state.verification?.measurement?.impressions) > 0)) return 'verifying';
     return Object.hasOwn(statuses, state.status) ? state.status : 'unavailable';
 }
@@ -134,9 +160,14 @@ export default function SearchDeliveryCard({ campaign }) {
     if (!status) return null;
     const measurement = state.measurement || {};
     const diagnosis = state.diagnosis || {};
+    const rank = state.ad_rank || {};
+    const rankEvidence = rank.diagnosis?.evidence;
+    const rankRepair = rank.repair;
     const proposal = diagnosis.proposal || {};
     const keywords = proposal.candidate_keywords || diagnosis.candidate_keywords || [];
-    const issues = Array.isArray(diagnosis.issues) ? diagnosis.issues.filter(issue => typeof issue?.message === 'string') : [];
+    const issues = [...new Map([...(Array.isArray(diagnosis.issues) ? diagnosis.issues : []),
+        ...(Array.isArray(rank.diagnosis?.issues) ? rank.diagnosis.issues : [])]
+        .filter(issue => typeof issue?.message === 'string').map(issue => [issue.message, issue])).values()];
     const blocked = state.blocked_reason || (typeof proposal.blocked_reason === 'string' ? proposal.blocked_reason : null);
     const holdText = blocked || state.mutation_allowed === false && ['approval_required', 'needs_review', 'low_reach'].includes(status)
         ? holdReason(blocked) || 'Automatic changes are on hold. Review the diagnosis and proposed next steps before making changes.' : null;
@@ -144,7 +175,7 @@ export default function SearchDeliveryCard({ campaign }) {
         ? [...new Set(proposal.blocked_by.filter(reason => typeof reason === 'string').map(reviewReason))].filter(reason => reason !== holdText) : [];
     const actions = Array.isArray(proposal.suggested_actions) ? proposal.suggested_actions.filter(action => typeof action === 'string') : [];
     const isHealthy = ['delivering', 'recovered'].includes(status);
-    const needsAttention = ['low_reach', 'approval_required', 'needs_review', 'unavailable'].includes(status);
+    const needsAttention = ['low_reach', 'low_traffic', 'approval_required', 'needs_review', 'unavailable'].includes(status);
     const styles = isHealthy ? 'border-green-200 bg-green-50' : needsAttention ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50';
     const [label, explanation] = statuses[status];
     const forecast = diagnosis.forecast;
@@ -172,6 +203,27 @@ export default function SearchDeliveryCard({ campaign }) {
                 </div>)}
             </dl>
         </div>
+
+        {rankEvidence && <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="Google auction evidence">
+            <h3 className="text-sm font-semibold text-gray-900">Auction competitiveness</h3>
+            {rankEvidence.status === 'verified' ? <>
+                <p className="mt-1 text-xs text-gray-600">Complete account days: {rankEvidence.from} to {rankEvidence.through}{rankEvidence.account_timezone ? ` (${rankEvidence.account_timezone})` : ''}.</p>
+                <dl className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                    <div><dt className="text-xs text-gray-600">Estimated impressions lost to Ad Rank</dt><dd className="mt-1 font-semibold text-gray-900">{measuredShare(rankEvidence.lost_to_rank)}</dd></div>
+                    <div><dt className="text-xs text-gray-600">Estimated impressions lost to budget</dt><dd className="mt-1 font-semibold text-gray-900">{measuredShare(rankEvidence.lost_to_budget)}</dd></div>
+                </dl>
+            </> : <p className="mt-2 text-sm text-gray-700">Auction metrics are not yet verified for a complete period after the latest change.</p>}
+            <p className="mt-2 text-xs text-gray-600">Ad Rank reflects auction competitiveness. Ad Strength feedback alone does not confirm a ranking or traffic improvement.</p>
+        </div>}
+        {rankRepair && rankRepair.status !== 'no_op' && <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4" aria-label="Ad repair progress">
+            <h3 className="text-sm font-semibold text-gray-900">Ad repair progress</h3>
+            <p className="mt-2 text-sm text-gray-700">{rankRepair.status === 'verifying'
+                ? (rankRepair.metadata?.phase === 'observing_delivery'
+                    ? 'The approved replacement is serving. Its effect on auction competitiveness and useful clicks is still being measured.'
+                    : 'Google is reviewing the replacement ad and assets. The working approved ad continues serving.')
+                : 'The ad repair needs review before further changes can be applied.'}</p>
+            <p className="mt-2 text-xs text-gray-600">The approved budget and bid limits remain in place. Applying copy or asset changes does not prove Ad Rank recovery.</p>
+        </div>}
 
         {issues.length > 0 && <div className="mt-4"><h3 className="text-sm font-semibold text-gray-900">What limits delivery</h3>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-800">{issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul>

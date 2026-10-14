@@ -46,6 +46,8 @@ class MarketingStructuredDataTest extends TestCase
         // One block, not two: the page used to emit its own copy client-side,
         // and a second FAQPage on the same URL is a structured-data error.
         $this->assertCount(1, $blocks, 'The home page should serve exactly one JSON-LD block.');
+        $this->assertSame(['@context', '@graph'], array_keys($blocks[0]));
+        $this->assertSame('https://schema.org', $blocks[0]['@context']);
 
         $types = array_column($blocks[0]['@graph'], '@type');
         $this->assertEqualsCanonicalizing(

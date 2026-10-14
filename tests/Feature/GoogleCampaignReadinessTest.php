@@ -489,6 +489,51 @@ class GoogleCampaignReadinessTest extends TestCase
         $this->assertEquals(50, $campaign->fresh()->daily_budget);
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('legacyMutationHoldFeedback')]
+    public function test_legacy_mutation_hold_rows_are_classified_from_actual_google_feedback(string $hold, array $evidence, ?string $issueCode, string $expectedStatus): void
+    {
+        [$campaign, , $strategy] = $this->workspace(['spend_guardrails' => ['enabled' => true]]);
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->once())->method('inspect')->willReturn($this->goals());
+        $goals->expects($this->never())->method('reconcile');
+        $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->strength(['verified' => false,
+            'unresolved' => [['reason' => $hold, 'ad_resource' => 'customers/1234567890/adGroupAds/1~2',
+                'copy_fingerprint' => 'held-copy', 'evidence' => $evidence]]]));
+        (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+
+        $this->assertSame($expectedStatus, $state['status']);
+        $this->assertFalse($state['mutation_allowed']);
+        $this->assertSame($hold, $state['ad_strength']['mutation_holds'][0]['reason']);
+        $this->assertNotContains('ad_strength_'.$hold, array_column($state['issues'], 'code'));
+        if ($issueCode === null) {
+            $this->assertSame([], $state['issues']);
+        } else {
+            $this->assertContains($issueCode, array_column($state['issues'], 'code'));
+            $this->assertFalse($state['ready']);
+        }
+        if ($expectedStatus === 'ready') {
+            $this->assertTrue($state['ready']);
+            $this->assertTrue($state['ad_strength']['verified']);
+        }
+        Http::assertNothingSent();
+    }
+
+    public static function legacyMutationHoldFeedback(): array
+    {
+        $approved = ['approval_status' => 'APPROVED', 'review_status' => 'REVIEWED'];
+
+        return [
+            ['approved_bounded_trial', $approved + ['ad_strength' => 'AVERAGE'], 'ad_strength_weak_ad_strength', 'needs_review'],
+            ['ad_rank_replacement_pending', $approved + ['ad_strength' => 'POOR'], 'ad_strength_weak_ad_strength', 'needs_review'],
+            ['approved_bounded_trial', $approved + ['ad_strength' => 'GOOD'], null, 'ready'],
+            ['approved_bounded_trial', $approved + ['ad_strength' => 'UNKNOWN'], 'ad_strength_ad_status_unknown', 'needs_review'],
+            ['approved_bounded_trial', ['approval_status' => 'DISAPPROVED', 'review_status' => 'REVIEWED', 'ad_strength' => 'GOOD'], 'ad_strength_policy_disapproved', 'needs_review'],
+            ['approved_bounded_trial', [], 'ad_strength_ad_status_unknown', 'needs_review'],
+            ['approved_bounded_trial', $approved + ['ad_strength' => 'PENDING'], null, 'pending'],
+        ];
+    }
+
     public function test_pause_retains_pending_evidence_without_claiming_a_fresh_check_and_resume_retains_the_timeout(): void
     {
         [$campaign, , $strategy] = $this->workspace();

@@ -102,9 +102,17 @@
             <nav aria-label="Related resources" class="mt-10 flex flex-wrap gap-5 font-semibold">@foreach($marketing['links'] ?? [] as $link)<a href="{{ $link['href'] }}" class="underline">{{ $link['label'] }}</a>@endforeach</nav>
         @elseif($publicType === 'service')
             @php($service = data_get($publicProps, 'service', []))
+            @php($hero = $service['slug'] === 'google-ads-management' ? data_get($publicProps, 'publicContent.hero') : null)
             <p class="mb-4 text-sm font-semibold uppercase tracking-wider">{{ $service['eyebrow'] }}</p>
-            <h1 class="text-3xl font-extrabold sm:text-4xl">{{ $service['headline'] }}</h1>
-            <p class="mt-5 text-lg leading-relaxed text-gray-600">{{ $service['intro'] }}</p>
+            <h1 class="text-3xl font-extrabold sm:text-4xl">{{ $hero['headline'] ?? $service['headline'] }}</h1>
+            <p class="mt-5 text-lg leading-relaxed text-gray-600">{{ $hero['intro'] ?? $service['intro'] }}</p>
+            @if($hero)
+                <div class="mt-6 flex flex-wrap gap-4">
+                    <a href="{{ $hero['primaryCta']['href'] }}" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">{{ $hero['primaryCta']['label'] }}</a>
+                    <a href="{{ $hero['secondaryCta']['href'] }}" class="inline-block rounded-lg border border-gray-300 bg-white px-6 py-3 font-semibold">{{ $hero['secondaryCta']['label'] }}</a>
+                </div>
+                <p class="mt-4 text-sm text-gray-600">{{ $hero['note'] }}</p>
+            @endif
             <article class="prose-article mt-8 rounded-2xl border border-gray-200 bg-white p-6 sm:p-10">{!! $service['content'] !!}</article>
             <section class="mt-10" aria-labelledby="service-questions">
                 <h2 id="service-questions" class="text-2xl font-bold">Questions before you start</h2>

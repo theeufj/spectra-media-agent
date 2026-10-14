@@ -45,7 +45,7 @@ class GoogleAdStrengthRepair
     }
 
     /** Re-read local approval and money holds before every repair write. */
-    public function mutationBlocked(Campaign $campaign, \App\Models\Strategy $strategy): ?string
+    public function mutationBlocked(Campaign $campaign, \App\Models\Strategy $strategy, bool $stagedRankCreative = false): ?string
     {
         $fresh = Campaign::with('customer')->find($campaign->id);
         $customer = $fresh?->customer;
@@ -65,7 +65,12 @@ class GoogleAdStrengthRepair
             $fresh->status !== \App\Enums\CampaignStatus::Active => 'campaign_not_active',
             strtoupper((string) $fresh->platform_status) === 'PAUSED' => 'google_campaign_paused',
             $fresh->hasPassedEndDate() => 'campaign_ended',
-            \App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($fresh) => \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh) ? 'approved_bounded_trial' : 'spend_safety_hold',
+            ! $stagedRankCreative && AgentActivity::where('campaign_id', $fresh->id)->where('customer_id', $fresh->customer_id)
+                ->where('action', 'ad_rank_repair')->whereIn('status', ['running', 'pending', 'needs_review'])
+                ->where('created_at', '>=', now()->subDays(7))->exists() => 'ad_rank_replacement_pending',
+            (bool) $fresh->spend_safety_hold => 'spend_safety_hold',
+            \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh) !== null
+                && (! $stagedRankCreative || ($fresh->spend_guardrails['allow_ad_rank_repairs'] ?? false) !== true) => 'approved_bounded_trial',
             $customer->service_type === 'setup_only' => 'setup_only',
             ! $approved?->signed_off_at => 'strategy_not_approved',
             basename((string) $approved->reusableGoogleCampaignId()) !== basename((string) $campaign->googleAdsResourceName()) => 'google_strategy_target_changed',
@@ -128,6 +133,11 @@ class GoogleAdStrengthRepair
             'asset_policy_summaries' => array_values(array_filter(array_column(array_merge($rsa['headlines'] ?? [], $rsa['descriptions'] ?? []), 'policySummaryInfo'), 'is_array')),
             'headlines' => array_column($rsa['headlines'] ?? [], 'text'),
             'descriptions' => array_column($rsa['descriptions'] ?? [], 'text'),
+            'headline_assets' => $rsa['headlines'] ?? [],
+            'description_assets' => $rsa['descriptions'] ?? [],
+            'final_urls' => $ad['ad']['finalUrls'] ?? [],
+            'path1' => $rsa['path1'] ?? '',
+            'path2' => $rsa['path2'] ?? '',
         ];
     }
 
