@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdCopy;
 use App\Prompts\AdCopyReviewPrompt;
+use App\Services\Agents\AgentIssue;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
@@ -83,7 +84,7 @@ class AdminMonitorService
             $headlinesString = implode("\n", $headlines);
             $descriptionsString = implode("\n", $descriptions);
 
-            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString, $evidence))->getPrompt();
+            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString, $evidence, $validationResults))->getPrompt();
 
             $generatedResponse = $this->geminiService->generateContent(config('ai.models.default'), $reviewPrompt);
 
@@ -123,9 +124,31 @@ class AdminMonitorService
             $geminiFeedback = ['overall_score' => 0, 'feedback' => ['general' => ['An unexpected error occurred during Gemini review.']]];
         }
 
+        $warnings = [];
+        if (is_array($geminiFeedback) && is_array($geminiFeedback['blocking_issues'] ?? null)) {
+            $blockers = [];
+            $falsePositives = [];
+            foreach ($geminiFeedback['blocking_issues'] as $issue) {
+                $verified = is_string($issue) ? $this->verifiedLengthFalsePositive($issue, $validationResults) : null;
+                if ($verified === null) {
+                    $blockers[] = $issue;
+
+                    continue;
+                }
+                $falsePositives[] = $verified;
+                $warnings[] = AgentIssue::make('model_false_positive',
+                    "The model reported a length violation for \"{$verified['text']}\"; code counted {$verified['characters']} characters within the configured {$verified['max_characters']}-character limit.")->toArray();
+            }
+            if ($falsePositives !== []) {
+                $geminiFeedback['reported_blocking_issues'] = $geminiFeedback['blocking_issues'];
+                $geminiFeedback['verified_length_false_positives'] = $falsePositives;
+                $geminiFeedback['blocking_issues'] = $blockers;
+            }
+        }
+
         // The generation loop may accept a lower style score, but must never bypass factual/intent failures.
-        if ($evidence !== [] && (($geminiFeedback['factual_accuracy'] ?? false) !== true
-            || ($geminiFeedback['intent_relevance'] ?? false) !== true || ! empty($geminiFeedback['blocking_issues']))) {
+        if (($evidence !== [] && (($geminiFeedback['factual_accuracy'] ?? false) !== true
+            || ($geminiFeedback['intent_relevance'] ?? false) !== true)) || ! empty($geminiFeedback['blocking_issues'])) {
             $validationResults['is_valid'] = false;
             $validationResults['feedback']['general'][] = 'Campaign evidence/intent review did not pass.';
             foreach ((array) ($geminiFeedback['blocking_issues'] ?? []) as $issue) {
@@ -138,12 +161,41 @@ class AdminMonitorService
         $finalReview = [
             'programmatic_validation' => $validationResults,
             'gemini_feedback' => $geminiFeedback,
+            'warnings' => $warnings,
             'overall_status' => ($validationResults['is_valid'] && ($geminiFeedback['overall_score'] ?? 0) > 75) ? 'approved' : 'needs_revision',
         ];
 
         Log::info("AdminMonitorService: Final review for AdCopy ID {$adCopy->id}.", $finalReview);
 
         return $finalReview;
+    }
+
+    /** Only a complete, length-only objection quoting an exact candidate can be disproved numerically. */
+    private function verifiedLengthFalsePositive(string $issue, array $validation): ?array
+    {
+        foreach (['headlines' => 'Headline', 'descriptions' => 'Description'] as $field => $label) {
+            $policy = $validation['numeric_policy'][$field] ?? null;
+            if (! is_array($policy) || ! is_int($policy['min_characters'] ?? null) || ! is_int($policy['max_characters'] ?? null)) {
+                continue;
+            }
+            foreach ($policy['assets'] ?? [] as $asset) {
+                if (! is_array($asset) || ! is_string($asset['text'] ?? null) || ! mb_check_encoding($asset['text'], 'UTF-8')) {
+                    continue;
+                }
+                $text = preg_quote($asset['text'], '~');
+                $quoted = "(?:'{$text}'|\"{$text}\"|‘{$text}’|“{$text}”)";
+                $pattern = '~\A(?i:'.$label.')(?:\s+\d+)?\s+'.$quoted.'\s+(?i:exceeds\s+(?:the\s+)?)(\d+)(?i:(?:-|\s+)character\s+limit)[.!]?\z~u';
+                $length = mb_strlen($asset['text']);
+                if (preg_match($pattern, $issue, $match) === 1 && (int) $match[1] === $policy['max_characters']
+                    && $length >= $policy['min_characters'] && $length <= $policy['max_characters']) {
+                    return ['code' => 'model_false_positive', 'reason' => 'verified_character_count_within_platform_limits',
+                        'reported_issue' => $issue, 'field' => $field, 'text' => $asset['text'], 'characters' => $length,
+                        'min_characters' => $policy['min_characters'], 'max_characters' => $policy['max_characters']];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -285,6 +337,11 @@ class AdminMonitorService
             return ['is_valid' => $isValid, 'feedback' => $feedback];
         }
 
+        $numericPolicy = [
+            'headlines' => ['min_characters' => $platformRules['headline_min_length'], 'max_characters' => $platformRules['headline_max_length'], 'assets' => []],
+            'descriptions' => ['min_characters' => $platformRules['description_min_length'], 'max_characters' => $platformRules['description_max_length'], 'assets' => []],
+        ];
+
         // Validate Headlines
         if ($existingSearchAd ? count($headlines) < 3 || count($headlines) > 15 : count($headlines) !== $platformRules['headline_count']) {
             $isValid = false;
@@ -292,6 +349,7 @@ class AdminMonitorService
         }
         foreach ($headlines as $index => $headline) {
             $length = mb_strlen($headline);
+            $numericPolicy['headlines']['assets'][] = ['text' => $headline, 'characters' => $length];
             if ($length < $platformRules['headline_min_length'] || $length > $platformRules['headline_max_length']) {
                 $isValid = false;
                 $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") is {$length} characters long. Expected between {$platformRules['headline_min_length']} and {$platformRules['headline_max_length']} characters.";
@@ -320,6 +378,7 @@ class AdminMonitorService
         }
         foreach ($descriptions as $index => $description) {
             $length = mb_strlen($description);
+            $numericPolicy['descriptions']['assets'][] = ['text' => $description, 'characters' => $length];
             if ($length < $platformRules['description_min_length'] || $length > $platformRules['description_max_length']) {
                 $isValid = false;
                 $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") is {$length} characters long. Expected between {$platformRules['description_min_length']} and {$platformRules['description_max_length']} characters.";
@@ -340,6 +399,6 @@ class AdminMonitorService
             }
         }
 
-        return ['is_valid' => $isValid, 'feedback' => $feedback];
+        return ['is_valid' => $isValid, 'feedback' => $feedback, 'numeric_policy' => $numericPolicy];
     }
 }

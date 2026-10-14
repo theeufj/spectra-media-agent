@@ -696,6 +696,58 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame('spend_safety_hold', $state['blocked_reason']);
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('durablePendingRankPhases')]
+    public function test_a_durable_pending_attempt_resumes_after_a_transient_display_hold_without_fresh_rank_days(string $displayStatus, string $durableStatus, string $phase): void
+    {
+        $campaign = $this->makeCampaign();
+        $campaign->update(['search_delivery_state' => ['ad_rank' => ['repair' => ['status' => $displayStatus,
+            'metadata' => ['reason' => 'another_rank_repair_running']]]]]);
+        $attempt = AgentActivity::record('ad_rank', 'ad_rank_repair', 'Existing staged creative repair',
+            $campaign->customer_id, $campaign->id, ['phase' => $phase, 'started_at' => now()->subMinutes(30)->toIso8601String()], $durableStatus);
+        $snapshot = $this->snapshot();
+        $snapshot['measurement']['complete_hours'] = 2;
+        $snapshot['rank_evidence'] = ['status' => 'collecting_evidence'];
+        $watchdog = $this->watchdog($snapshot, $this->diagnosis());
+        $watchdog->rankResult = ['status' => $phase === 'preparing' ? 'needs_review' : 'verifying',
+            'mutation_allowed' => false, 'issues' => [], 'metadata' => ['attempt_id' => $attempt->id, 'phase' => $phase]];
+        $state = $watchdog->check($campaign);
+
+        $this->assertCount(1, $watchdog->rankCalls);
+        $this->assertSame('collecting_evidence', $watchdog->rankCalls[0]['status']);
+        $this->assertSame($attempt->id, $state['ad_rank']['repair']['metadata']['attempt_id']);
+        $this->assertSame($phase === 'preparing' ? 'needs_review' : 'verifying', $state['status']);
+        $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->count());
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $this->researchCalls);
+        Http::assertNothingSent();
+    }
+
+    public static function durablePendingRankPhases(): array
+    {
+        return [['held', 'running', 'preparing'], ['held', 'running', 'staging_assets'],
+            ['unavailable', 'pending', 'awaiting_policy_review'], ['held', 'running', 'activating'],
+            ['unavailable', 'pending', 'observing_delivery']];
+    }
+
+    public function test_a_superseded_completed_or_foreign_customer_attempt_cannot_resume_staging(): void
+    {
+        $campaign = $this->makeCampaign();
+        AgentActivity::record('ad_rank', 'ad_rank_repair', 'Older pending attempt', $campaign->customer_id, $campaign->id,
+            ['phase' => 'staging_assets'], 'running');
+        AgentActivity::record('ad_rank', 'ad_rank_repair', 'Completed outcome', $campaign->customer_id, $campaign->id,
+            ['phase' => 'completed'], 'completed');
+        AgentActivity::record('ad_rank', 'ad_rank_repair', 'Foreign customer record', Customer::factory()->create()->id, $campaign->id,
+            ['phase' => 'staging_assets'], 'running');
+        $snapshot = $this->snapshot();
+        $snapshot['measurement']['complete_hours'] = 2;
+        $snapshot['rank_evidence'] = ['status' => 'collecting_evidence'];
+        $watchdog = $this->watchdog($snapshot, $this->diagnosis());
+        $watchdog->check($campaign);
+
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+    }
+
     public function test_thirteen_impressions_without_clicks_are_low_traffic_even_when_forecasts_pass(): void
     {
         $campaign = $this->makeCampaign();

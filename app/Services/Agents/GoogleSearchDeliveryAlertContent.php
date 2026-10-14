@@ -40,6 +40,8 @@ class GoogleSearchDeliveryAlertContent
             'staging_assets' => 'Preparing paused replacement assets. The working approved ad continues serving.',
             'interrupted_asset_staging' => 'An asset submission could not be confirmed. The working ad has been preserved; review the recorded result before another attempt.',
             'creative_staging_interrupted' => 'Replacement preparation was interrupted. The working ad has been preserved; review the recorded result before another attempt.',
+            'replacement_copy_review_failed' => 'The proposed replacement did not pass ad review. Review its feedback before another attempt; the working ad has been preserved.',
+            'replacement_asset_evidence_review_failed' => 'The proposed assets did not pass the website evidence review. The working ad has been preserved.',
             default => 'Automatic changes are on hold. Review the delivery report before making changes.',
         };
     }

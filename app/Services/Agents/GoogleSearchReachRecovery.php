@@ -97,7 +97,8 @@ class GoogleSearchReachRecovery
             };
             $rank['evidence']['reason'] = $rank['reason'] ?? null;
             $state['ad_rank']['diagnosis'] = $rank;
-            $pendingRankRepair = ($state['ad_rank']['repair']['status'] ?? null) === 'verifying';
+            $pendingRankRepair = ($state['ad_rank']['repair']['status'] ?? null) === 'verifying'
+                || $this->hasPendingRankRepair($campaign);
             if ($pendingRankRepair || $rank['status'] === 'rank_limited') {
                 // Creative repair has its own narrow permissions and durable
                 // read-back workflow. A passing reach forecast cannot hide rank loss.
@@ -323,6 +324,18 @@ class GoogleSearchReachRecovery
         }
 
         return [...$rank, 'status' => 'not_rank_limited', 'reason' => null];
+    }
+
+    private function hasPendingRankRepair(Campaign $campaign): bool
+    {
+        // A concurrent check can save a transient lock/read failure over the
+        // display state. The durable attempt still owns staging and verification.
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('customer_id', $campaign->customer_id)
+            ->where('action', 'ad_rank_repair')->latest('id')->first();
+
+        return $attempt !== null && in_array($attempt->status, ['running', 'pending'], true)
+            && in_array($attempt->details['phase'] ?? '', ['preparing', 'staging_assets', 'awaiting_policy_review',
+                'activating', 'observing_delivery'], true);
     }
 
     protected function repairAdRank(Campaign $campaign, array $snapshot, array $rankDiagnosis): array
