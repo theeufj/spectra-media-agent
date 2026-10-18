@@ -204,4 +204,8 @@ suites self-skip without their RUN_*_INTEGRATION_TESTS flags). The old hang
 
 ## Deployment
 
-Push to `master` auto-deploys via Forge. Never `git pull` manually on the server.
+Push to `master` deploys through GitHub Actions only after the complete CI run succeeds.
+Forge downloads the exact tested frontend build; keep its immediate push-to-deploy
+trigger disabled and its script synchronized with `infrastructure/deploy/forge.sh`.
+See README for the public build variables and deployment receipt checks. Never
+`git pull` manually on the server.

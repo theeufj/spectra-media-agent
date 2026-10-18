@@ -15,6 +15,7 @@ use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -296,6 +297,11 @@ class StagedSearchActivationTest extends TestCase
             'campaign_type' => 'search', 'deployment_status' => 'deployed', 'google_ads_campaign_id' => $secondResource,
             'execution_result' => ['metadata' => ['google_search_staging' => ['campaign_resource' => $secondResource,
                 'verified_platform_status' => 'PAUSED', 'enable_after_success' => true]]]]);
+        // A PostgreSQL update moves this tuple after the newer strategy. Force
+        // a heap scan so activation cannot accidentally rely on physical order.
+        DB::statement('SET LOCAL enable_indexscan = off');
+        DB::statement('SET LOCAL enable_bitmapscan = off');
+        DB::table('strategies')->where('id', $first->id)->update(['updated_at' => now()->addSecond()]);
         $builder->activationResults = [true, false];
         $reader->sequence = [GoogleCampaignStatus::PAUSED, GoogleCampaignStatus::PAUSED, GoogleCampaignStatus::ENABLED, GoogleCampaignStatus::PAUSED];
         try {

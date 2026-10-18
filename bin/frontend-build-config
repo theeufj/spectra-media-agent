@@ -1,0 +1,54 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Dotenv\Dotenv;
+
+// Composer can emit dependency deprecations on newer local PHP versions.
+// stdout must remain machine-readable; other warnings fail with a safe message.
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+set_error_handler(static function (): never {
+    throw new RuntimeException('Configuration export failed.');
+}, E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE);
+
+if ($argc !== 2 || str_starts_with($argv[1], '--')) {
+    fwrite(STDERR, "Usage: frontend-build-config <env-file>\n");
+    exit(2);
+}
+
+try {
+    require dirname(__DIR__).'/vendor/autoload.php';
+
+    $envFile = $argv[1];
+    if (! is_file($envFile) || ! is_readable($envFile)) {
+        throw new RuntimeException('Unreadable environment file.');
+    }
+
+    // Keep deployment secrets out of the process environment and Laravel bootstrap.
+    $values = Dotenv::createArrayBacked(dirname($envFile), basename($envFile))->load();
+    $appName = array_key_exists('VITE_APP_NAME', $values)
+        ? $values['VITE_APP_NAME']
+        : ($values['APP_NAME'] ?? '');
+    $stripeKey = array_key_exists('VITE_STRIPE_KEY', $values)
+        ? $values['VITE_STRIPE_KEY']
+        : ($values['STRIPE_KEY'] ?? '');
+
+    if (! is_string($appName) || trim($appName) === ''
+        || preg_match('/\$\{[A-Za-z_][A-Za-z0-9_]*\}/', $appName)) {
+        throw new RuntimeException('Invalid public application name.');
+    }
+
+    if (! is_string($stripeKey) || ! preg_match('/\Apk_(?:live|test)_[A-Za-z0-9_]+\z/', $stripeKey)) {
+        throw new RuntimeException('Invalid Stripe publishable key.');
+    }
+
+    echo json_encode([
+        'VITE_APP_NAME' => $appName,
+        'VITE_STRIPE_KEY' => $stripeKey,
+    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+} catch (Throwable) {
+    // Dotenv exceptions can contain the original secret-bearing line.
+    fwrite(STDERR, "Unable to export public frontend configuration; check the env file and public values.\n");
+    exit(1);
+}

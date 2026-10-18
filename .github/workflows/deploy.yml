@@ -1,0 +1,37 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  contents: read
+  actions: read
+
+# Never interrupt a deployment after Forge has accepted its request.
+concurrency:
+  group: forge-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run's default github.sha is not the commit that passed CI.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Deploy tested commit and verify activation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORGE_DEPLOY_HOOK: ${{ secrets.FORGE_DEPLOY_HOOK }}
+        run: python3 bin/trigger-forge-deploy

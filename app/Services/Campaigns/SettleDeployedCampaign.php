@@ -63,7 +63,7 @@ class SettleDeployedCampaign
         }
 
         $previousStatus = $campaign->status;
-        $staged = $campaign->strategies()->where('campaign_type', 'search')->get()
+        $staged = $campaign->strategies()->where('campaign_type', 'search')->orderBy('id')->get()
             ->filter(fn ($strategy) => ! empty($strategy->execution_result['metadata']['google_search_staging']));
         if ($staged->isNotEmpty()) {
             if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)) {

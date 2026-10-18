@@ -451,3 +451,45 @@ Presets for seasonal campaign adjustments used by `ApplySeasonalStrategyShift`:
 | Black Friday | 1.5× | TARGET_CPA | Urgency |
 | Summer Sale | 1.2× | MAXIMIZE_CONVERSIONS | Summer |
 | Default | 1.0× | MAXIMIZE_CONVERSIONS | Evergreen |
+
+## Production frontend builds and deployment
+
+GitHub Actions builds the frontend once on Node 22 and tests those assets with the
+rest of the application. A successful `master` push publishes an immutable GitHub
+prerelease named `frontend-<source SHA>-<CI run ID>-<attempt>`. The release contains
+`frontend-build.tar.gz` and `receipt.json`. Only the publisher job can write releases;
+pull requests never publish or deploy.
+
+The separate **Deploy production** workflow runs after the entire CI workflow
+succeeds. It ignores superseded commits and triggers Forge using the repository's
+`FORGE_DEPLOY_HOOK` Actions secret. Forge's **Push to deploy must stay disabled**;
+otherwise a push can start deployment before its assets or checks are ready.
+Keep the Forge deployment script synchronized with
+[`infrastructure/deploy/forge.sh`](infrastructure/deploy/forge.sh). Do not manually
+pull on the server.
+
+`bin/frontend-artifact install` downloads the build for the checked-out commit and
+latest successful CI attempt. It checks GitHub's current master, the source tag,
+receipt, archive checksum, public configuration fingerprint, safe archive paths and
+Vite manifest references before installing anything. Missing assets, incomplete CI,
+configuration drift or invalid evidence stop deployment before migrations and
+activation. There is no production compilation or fallback to an older build.
+Forge still runs locked `npm ci` because PDF generation requires Puppeteer.
+
+Set the public repository variables `VITE_APP_NAME` and `VITE_STRIPE_KEY` to match
+the production `.env`; **only a Stripe publishable `pk_live_…`/`pk_test_…` key belongs
+there**. Never upload the production `.env` or a Stripe secret key. The allowlisted
+exporter `php bin/frontend-build-config /path/to/.env` resolves those two settings
+without booting Laravel or printing other values. Update both the production
+settings and repository variables together, then run CI again. Pull request builds
+use public test fixtures.
+
+After Forge activates a release, `/build/deployment.json` identifies its exact source
+and CI run. The deployment workflow waits for this receipt and `/up` before reporting
+success. The existing live release keeps serving if any pre-activation step fails.
+Public release downloads require no new credential on Forge; GitHub API outages or
+rate limits fail closed. Retain release assets needed for redeployment; their GitHub
+Actions transfer copy expires after seven days, but the published release does not.
+If publication fails, use **Re-run all jobs** so the new attempt rebuilds and packages
+its own matching artifact; a partial rerun cannot reuse another attempt’s receipt.
+A rollback to an older commit should be reverted onto `master` and pass CI again.

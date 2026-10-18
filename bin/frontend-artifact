@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""Package CI's tested Vite build and install its exact, successful release on Forge.
+
+Only public build inputs belong here. Forge needs no GitHub credential because the
+repository and its release assets are public; unavailable evidence fails closed.
+"""
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import pathlib
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import urllib.request
+
+
+REPOSITORY = 'theeufj/spectra-media-agent'
+WORKFLOW = '.github/workflows/ci.yml'
+ARCHIVE_NAME = 'frontend-build.tar.gz'
+RECEIPT_NAME = 'receipt.json'
+PUBLIC_KEYS = ('VITE_APP_NAME', 'VITE_STRIPE_KEY')
+MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
+MAX_TAR_BYTES = 128 * 1024 * 1024
+MAX_FILES_BYTES = 120 * 1024 * 1024
+MAX_FILE_BYTES = 32 * 1024 * 1024
+MAX_MEMBERS = 5000
+
+
+class ArtifactError(Exception):
+    """An expected, safe-to-display deployment refusal."""
+
+
+def canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+
+
+def public_config(value):
+    if not isinstance(value, dict) or set(value) != set(PUBLIC_KEYS):
+        raise ArtifactError('Public build configuration must contain exactly the two documented VITE keys.')
+    if any(not isinstance(item, str) or not item or len(item) > 512 or '\n' in item or '\0' in item
+           for item in value.values()):
+        raise ArtifactError('Public VITE build configuration is missing or invalid.')
+    if not re.fullmatch(r'pk_(?:live|test)_[A-Za-z0-9_]+', value['VITE_STRIPE_KEY']):
+        raise ArtifactError('VITE_STRIPE_KEY must be a Stripe publishable key, never a secret key.')
+    return value
+
+
+def config_fingerprint(value):
+    return hashlib.sha256(canonical_json(public_config(value))).hexdigest()
+
+
+def checked_sha(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{40}', value):
+        raise ArtifactError('A full lowercase source commit SHA is required.')
+    return value
+
+
+def positive_int(value):
+    if isinstance(value, bool) or not str(value).isdigit() or int(value) < 1:
+        raise ArtifactError('Workflow run identifiers and attempts must be positive integers.')
+    return int(value)
+
+
+def release_tag(sha, run_id, attempt):
+    return f'frontend-{checked_sha(sha)}-{positive_int(run_id)}-{positive_int(attempt)}'
+
+
+def file_hash(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def relative_path(value):
+    if not isinstance(value, str) or not value or '\\' in value or '\0' in value:
+        raise ArtifactError('Build contains an invalid path.')
+    parts = value.split('/')
+    if any(part in ('', '.', '..') for part in parts) or ':' in parts[0]:
+        raise ArtifactError('Build contains an unsafe path.')
+    return pathlib.PurePosixPath(value)
+
+
+def validate_manifest(directory):
+    path = directory / 'manifest.json'
+    if not path.is_file() or path.is_symlink() or path.stat().st_size > 2 * 1024 * 1024:
+        raise ArtifactError('The frontend manifest is missing or invalid.')
+    try:
+        manifest = json.loads(path.read_text())
+    except (ValueError, UnicodeError) as error:
+        raise ArtifactError('The frontend manifest is not valid JSON.') from error
+    if not isinstance(manifest, dict) or not manifest or 'resources/js/app.jsx' not in manifest:
+        raise ArtifactError('The frontend manifest has no application entry.')
+    for entry in manifest.values():
+        if not isinstance(entry, dict) or not isinstance(entry.get('file'), str):
+            raise ArtifactError('The frontend manifest has an invalid entry.')
+        references = [entry['file']]
+        for field in ('css', 'assets'):
+            items = entry.get(field, [])
+            if not isinstance(items, list):
+                raise ArtifactError('The frontend manifest has invalid asset references.')
+            references.extend(items)
+        for reference in references:
+            asset = directory.joinpath(*relative_path(reference).parts)
+            if not asset.is_file() or asset.is_symlink():
+                raise ArtifactError('The frontend manifest references a missing asset.')
+        for field in ('imports', 'dynamicImports'):
+            items = entry.get(field, [])
+            if not isinstance(items, list) or any(not isinstance(item, str) or item not in manifest for item in items):
+                raise ArtifactError('The frontend manifest references a missing chunk.')
+
+
+def pack(root, output, sha, run_id, attempt, configuration):
+    sha = checked_sha(sha)
+    run_id, attempt = positive_int(run_id), positive_int(attempt)
+    fingerprint = config_fingerprint(configuration)
+    directory = pathlib.Path(root) / 'public/build'
+    if directory.is_symlink():
+        raise ArtifactError('The build directory cannot be a symbolic link.')
+    if (directory / 'deployment.json').exists():
+        raise ArtifactError('The frontend build contains a reserved deployment receipt.')
+    validate_manifest(directory)
+    paths = sorted(directory.rglob('*'))
+    if len(paths) > MAX_MEMBERS:
+        raise ArtifactError('The frontend build has too many files.')
+    total = 0
+    for path in paths:
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ArtifactError('The frontend build contains a link or special file.')
+        relative_path(path.relative_to(directory).as_posix())
+        if path.is_file():
+            size = path.stat().st_size
+            total += size
+            if size > MAX_FILE_BYTES or total > MAX_FILES_BYTES:
+                raise ArtifactError('The frontend build exceeds its size limits.')
+    output = pathlib.Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    archive = output / ARCHIVE_NAME
+    with tarfile.open(archive, 'w:gz', format=tarfile.USTAR_FORMAT) as bundle:
+        for path in paths:
+            if path.is_file():
+                info = bundle.gettarinfo(str(path), arcname=path.relative_to(directory).as_posix())
+                info.uid = info.gid = info.mtime = 0
+                info.uname = info.gname = ''
+                info.mode = 0o644
+                with path.open('rb') as stream:
+                    bundle.addfile(info, stream)
+    if archive.stat().st_size > MAX_ARCHIVE_BYTES:
+        raise ArtifactError('The compressed frontend build exceeds its size limit.')
+    receipt = {
+        'schema': 1,
+        'repository': REPOSITORY,
+        'source_sha': sha,
+        'workflow': WORKFLOW,
+        'run_id': run_id,
+        'run_attempt': attempt,
+        'release_tag': release_tag(sha, run_id, attempt),
+        'archive_name': ARCHIVE_NAME,
+        'archive_sha256': file_hash(archive),
+        'public_config_sha256': fingerprint,
+        'built_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    (output / RECEIPT_NAME).write_bytes(canonical_json(receipt) + b'\n')
+    return receipt
+
+
+def read_url(url, limit):
+    request = urllib.request.Request(url, headers={
+        'Accept': 'application/vnd.github+json' if url.startswith('https://api.github.com/') else 'application/octet-stream',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'sitetospend-frontend-deployment',
+    })
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            length = response.headers.get('Content-Length')
+            if length and (not length.isdigit() or int(length) > limit):
+                raise ArtifactError('GitHub returned an oversized artifact or response.')
+            data = response.read(limit + 1)
+    except ArtifactError:
+        raise
+    except Exception as error:
+        raise ArtifactError('GitHub build evidence is unavailable; deployment was refused.') from error
+    if len(data) > limit:
+        raise ArtifactError('GitHub returned an oversized artifact or response.')
+    return data
+
+
+def api_json(path):
+    try:
+        return json.loads(read_url(f'https://api.github.com/repos/{REPOSITORY}/{path}', 5 * 1024 * 1024))
+    except (ValueError, UnicodeError) as error:
+        raise ArtifactError('GitHub returned invalid build evidence.') from error
+
+
+def latest_successful_run(sha, api):
+    response = api(f'actions/workflows/ci.yml/runs?head_sha={sha}&event=push&per_page=100')
+    if not isinstance(response, dict) or not isinstance(response.get('workflow_runs'), list):
+        raise ArtifactError('GitHub returned invalid workflow evidence.')
+    matching = [run for run in response['workflow_runs'] if isinstance(run, dict)
+                and run.get('head_sha') == sha and run.get('head_branch') == 'master'
+                and run.get('event') == 'push' and run.get('path') == WORKFLOW
+                and isinstance(run.get('head_repository'), dict)
+                and run['head_repository'].get('full_name') == REPOSITORY]
+    if not matching:
+        raise ArtifactError('The exact deployment commit has no matching CI run.')
+    try:
+        run = max(matching, key=lambda item: (positive_int(item['id']), positive_int(item['run_attempt'])))
+    except (KeyError, TypeError) as error:
+        raise ArtifactError('GitHub returned an invalid workflow identifier.') from error
+    if run.get('status') != 'completed' or run.get('conclusion') != 'success':
+        raise ArtifactError('The latest CI run for this exact commit has not completed successfully.')
+    return run
+
+
+def verify_master(sha, api):
+    reference = api('git/ref/heads/master')
+    if not isinstance(reference, dict) or not isinstance(reference.get('object'), dict) \
+            or reference['object'].get('type') != 'commit' or reference['object'].get('sha') != sha:
+        raise ArtifactError('Master has moved; deployment of this stale commit was refused.')
+
+
+def verify_tag(tag, sha, api):
+    reference = api(f'git/ref/tags/{tag}')
+    target = reference.get('object', {}) if isinstance(reference, dict) else {}
+    for _ in range(4):
+        if not isinstance(target, dict):
+            break
+        if target.get('type') == 'commit' and target.get('sha') == sha:
+            return
+        if target.get('type') != 'tag':
+            break
+        tag_sha = checked_sha(target.get('sha'))
+        reference = api(f'git/tags/{tag_sha}')
+        target = reference.get('object', {}) if isinstance(reference, dict) else {}
+    raise ArtifactError('The frontend release tag does not point at the deployment commit.')
+
+
+def release_assets(release, tag):
+    if not isinstance(release, dict) or release.get('tag_name') != tag or release.get('draft') is not False \
+            or release.get('prerelease') is not True or not isinstance(release.get('assets'), list):
+        raise ArtifactError('The frontend prerelease is missing or invalid.')
+    result = {}
+    for name, limit in ((ARCHIVE_NAME, MAX_ARCHIVE_BYTES), (RECEIPT_NAME, 64 * 1024)):
+        matches = [asset for asset in release['assets'] if isinstance(asset, dict) and asset.get('name') == name]
+        expected_url = f'https://github.com/{REPOSITORY}/releases/download/{tag}/{name}'
+        if len(matches) != 1 or matches[0].get('browser_download_url') != expected_url \
+                or matches[0].get('state') != 'uploaded' \
+                or not isinstance(matches[0].get('size'), int) or not 0 < matches[0]['size'] <= limit:
+            raise ArtifactError('The frontend release has a missing or invalid asset.')
+        result[name] = matches[0]
+    return result
+
+
+def validate_receipt(receipt, sha, run, configuration):
+    expected = {
+        'schema': 1,
+        'repository': REPOSITORY,
+        'source_sha': sha,
+        'workflow': WORKFLOW,
+        'run_id': run['id'],
+        'run_attempt': run['run_attempt'],
+        'release_tag': release_tag(sha, run['id'], run['run_attempt']),
+        'archive_name': ARCHIVE_NAME,
+        'public_config_sha256': config_fingerprint(configuration),
+    }
+    if not isinstance(receipt, dict) or any(receipt.get(key) != value for key, value in expected.items()) \
+            or not re.fullmatch(r'[0-9a-f]{64}', str(receipt.get('archive_sha256', ''))):
+        raise ArtifactError('The frontend receipt does not match CI, the source commit, or public production settings.')
+
+
+def extract_archive(archive, destination):
+    """Validate before extracting; never let tar choose filesystem targets or modes."""
+    with tempfile.TemporaryFile() as raw:
+        total = 0
+        try:
+            with gzip.open(archive, 'rb') as compressed:
+                for chunk in iter(lambda: compressed.read(1024 * 1024), b''):
+                    total += len(chunk)
+                    if total > MAX_TAR_BYTES:
+                        raise ArtifactError('The expanded frontend archive exceeds its size limit.')
+                    raw.write(chunk)
+            raw.seek(0)
+            with tarfile.open(fileobj=raw, mode='r:') as bundle:
+                members, names, total = [], {}, 0
+                for member in bundle:
+                    relative_path(member.name)
+                    if member.name in names or not (member.isfile() or member.isdir()):
+                        raise ArtifactError('The frontend archive contains a duplicate, link, or special file.')
+                    names[member.name] = member
+                    members.append(member)
+                    total += member.size
+                    if len(members) > MAX_MEMBERS or member.size > MAX_FILE_BYTES or total > MAX_FILES_BYTES:
+                        raise ArtifactError('The frontend archive exceeds its file limits.')
+                for member in members:
+                    path = relative_path(member.name)
+                    if any(str(parent) in names and not names[str(parent)].isdir()
+                           for parent in path.parents if str(parent) != '.'):
+                        raise ArtifactError('The frontend archive has conflicting paths.')
+                for member in members:
+                    target = destination.joinpath(*relative_path(member.name).parts)
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True, mode=0o755)
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+                    with bundle.extractfile(member) as source, target.open('xb') as output:
+                        shutil.copyfileobj(source, output)
+                    target.chmod(0o644)
+        except (tarfile.TarError, gzip.BadGzipFile, EOFError) as error:
+            raise ArtifactError('The frontend archive is corrupt or incomplete.') from error
+    validate_manifest(destination)
+
+
+def install(root, sha, configuration, api=api_json, download=read_url):
+    sha = checked_sha(sha)
+    public_config(configuration)
+    root = pathlib.Path(root).resolve()
+    public = root / 'public'
+    if not public.is_dir() or public.is_symlink():
+        raise ArtifactError('The deployment public directory must be a real directory.')
+    verify_master(sha, api)
+    run = latest_successful_run(sha, api)
+    tag = release_tag(sha, run['id'], run['run_attempt'])
+    verify_tag(tag, sha, api)
+    assets = release_assets(api(f'releases/tags/{tag}'), tag)
+    try:
+        receipt = json.loads(download(assets[RECEIPT_NAME]['browser_download_url'], 64 * 1024))
+    except (ValueError, UnicodeError) as error:
+        raise ArtifactError('The frontend receipt is not valid JSON.') from error
+    validate_receipt(receipt, sha, run, configuration)
+    with tempfile.TemporaryDirectory(prefix='.frontend-install-', dir=public) as temporary:
+        temporary = pathlib.Path(temporary)
+        archive = temporary / ARCHIVE_NAME
+        archive.write_bytes(download(assets[ARCHIVE_NAME]['browser_download_url'], MAX_ARCHIVE_BYTES))
+        digest = file_hash(archive)
+        if digest != receipt['archive_sha256']:
+            raise ArtifactError('The frontend archive checksum does not match its receipt.')
+        asset_digest = assets[ARCHIVE_NAME].get('digest')
+        if asset_digest and asset_digest != f'sha256:{digest}':
+            raise ArtifactError('The frontend archive checksum does not match GitHub asset metadata.')
+        stage = temporary / 'build'
+        stage.mkdir()
+        extract_archive(archive, stage)
+        if (stage / 'deployment.json').exists():
+            raise ArtifactError('The frontend archive contains a reserved deployment receipt.')
+        (stage / 'deployment.json').write_bytes(canonical_json(receipt) + b'\n')
+        # A newer push or rerun while downloading must not activate stale assets.
+        verify_master(sha, api)
+        latest = latest_successful_run(sha, api)
+        if (latest['id'], latest['run_attempt']) != (run['id'], run['run_attempt']):
+            raise ArtifactError('CI changed while installing; deployment was refused.')
+        target = public / 'build'
+        if target.is_symlink():
+            raise ArtifactError('Refusing to replace a shared or linked build directory.')
+        backup = temporary / 'previous-build'
+        if target.exists():
+            if not target.is_dir():
+                raise ArtifactError('The deployment build path is not a directory.')
+            target.rename(backup)
+        try:
+            stage.rename(target)
+        except OSError:
+            if backup.exists():
+                backup.rename(target)
+            raise
+    return receipt
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    package = commands.add_parser('pack', help='Package the build already tested by CI.')
+    package.add_argument('--sha', required=True)
+    package.add_argument('--run-id', required=True)
+    package.add_argument('--run-attempt', required=True)
+    package.add_argument('--root', default='.')
+    package.add_argument('--output-dir', required=True)
+    deploy = commands.add_parser('install', help='Install a verified CI release into an inactive Forge release.')
+    deploy.add_argument('--sha', required=True)
+    deploy.add_argument('--root', default='.')
+    deploy.add_argument('--public-config-file', required=True, help='JSON containing only VITE_APP_NAME and VITE_STRIPE_KEY.')
+    args = parser.parse_args()
+    try:
+        if args.command == 'pack':
+            receipt = pack(args.root, args.output_dir, args.sha, args.run_id, args.run_attempt,
+                           {key: os.environ.get(key) for key in PUBLIC_KEYS})
+        else:
+            configuration = json.loads(pathlib.Path(args.public_config_file).read_text())
+            receipt = install(args.root, args.sha, configuration)
+        print(f'Frontend {args.command} verified for {receipt["source_sha"]} (CI {receipt["run_id"]}/{receipt["run_attempt"]}).')
+    except (ArtifactError, OSError, ValueError, TypeError, KeyError) as error:
+        # Public settings can contain user-supplied strings; never print config or request bodies.
+        message = str(error) if isinstance(error, ArtifactError) else 'Frontend artifact processing failed; deployment was refused.'
+        print(message, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
