@@ -44,10 +44,10 @@ return [
         'default' => env('AI_MODEL_DEFAULT', 'gemini-3.7-flash'),
 
         /*
-         * Pro model for complex reasoning tasks (competitor strategy,
-         * campaign planning, detailed analysis).
+         * Reasoning model for competitor strategy, campaign planning and
+         * detailed analysis. The tier keeps its name for existing callers.
          */
-        'pro' => env('AI_MODEL_PRO', 'gemini-3.1-pro-preview'),
+        'pro' => env('AI_MODEL_PRO', 'gemini-4-argon'),
 
         /*
          * Lite/budget model for high-volume, low-complexity tasks
@@ -171,6 +171,7 @@ return [
      * will automatically try the next model in this chain before giving up.
      */
     'fallback_chain' => [
+        'gemini-4-argon' => 'gemini-3.1-pro-preview',
         'gemini-3.7-flash' => 'gemini-3.5-flash',
         'gemini-3.1-pro-preview' => 'gemini-3.5-flash',
         'gemini-2.5-pro' => 'gemini-3.5-flash',
@@ -178,6 +179,23 @@ return [
         'gemini-3-flash-preview' => 'gemini-3.5-flash',
         'gemini-2.5-flash' => 'gemini-3.1-flash-lite-preview',
         'gemini-3.1-flash-lite-preview' => 'gemini-2.5-flash-lite',
+    ],
+
+    /*
+     * Model-specific GenerateContent limits, verified against Google's Argon
+     * migration guide. Thinking shares the output budget; older 8K limits can
+     * be consumed before an answer appears. Unary HTTP has a lower ceiling
+     * than streaming, and sampling controls are no longer supported.
+     * https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon
+     */
+    'generation_profiles' => [
+        'gemini-4-argon' => [
+            'min_output_tokens' => 32768,
+            'stream_max_output_tokens' => 65536,
+            'non_stream_max_output_tokens' => 32768,
+            'default_thinking_level' => 'MEDIUM',
+            'unsupported_parameters' => ['temperature', 'topP', 'topK', 'presencePenalty', 'frequencyPenalty', 'candidateCount'],
+        ],
     ],
 
     /*
@@ -220,6 +238,13 @@ return [
      * global rate. Veo is billed per second — see video_cost_per_second below.
      */
     'pricing' => [
+        // Global Vertex rates: the introductory period ends on 1 Dec 2026.
+        // Resolve that date per call, including when config is cached.
+        // https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+        'gemini-4-argon' => [
+            'input' => 4.00, 'output' => 20.00, 'cached' => 0.20,
+            'introductory' => ['until' => '2026-12-01', 'input' => 2.00, 'output' => 10.00, 'cached' => 0.10],
+        ],
         'gemini-3.1-pro-preview' => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
         'gemini-2.5-pro' => ['input' => 1.25,   'output' => 10.00, 'cached' => 0.13],
         // Standard rates, in force from 1 Jan 2027. The introductory rates that

@@ -12,35 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Currently Available Models (Verified March 2026 from ai.google.dev/gemini-api/docs/models):
- *
- * --- GEMINI 3 SERIES (Preview) ---
- * - gemini-3.1-pro-preview        | Advanced intelligence, agentic & vibe coding (replaces shut-down gemini-3-pro-preview)
- * - gemini-3.5-flash              | Latest stable flash — best price-performance (confirmed on Vertex AI global)
- * - gemini-3-flash-preview        | Earlier flash preview
- * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency (confirmed on Vertex AI global)
- * - gemini-3-pro-image-preview    | Nano Banana Pro - Studio-quality 4K image generation
- * - gemini-3.1-flash-image-preview| NOT available on this Vertex project (returns 404 NOT_FOUND) — do not use
- * - gemini-2.5-flash-image        | High-efficiency image generation (confirmed working via streamGenerateContent)
- *
- * --- GEMINI 2.5 SERIES (Stable) ---
- * - gemini-2.5-pro              | Deep reasoning & coding (stable)
- * - gemini-2.5-flash            | Best price-performance with reasoning (stable)
- * - gemini-2.5-flash-lite       | Fastest, most budget-friendly multimodal
- * - gemini-2.5-flash-image      | Nano Banana - Native image generation & editing
- *
- * --- EMBEDDING ---
- * - gemini-embedding-2-preview   | Multimodal embeddings (text/image/video/audio/PDF) - 3072 dims
- * - gemini-embedding-001         | Text embeddings for semantic search & RAG - 768 dims (legacy)
- *
- * --- VIDEO ---
- * - veo-3.1-generate-001     | State-of-the-art cinematic video with synced audio
- *
- * --- DEPRECATED (migrate away) ---
- * - gemini-2.0-flash             | Deprecated - use gemini-2.5-flash
- * - gemini-2.0-flash-lite        | Deprecated - use gemini-2.5-flash-lite
- * - gemini-3-pro-preview         | Shut down March 9, 2026 - use gemini-3.1-pro-preview or gemini-2.5-pro
- * - text-embedding-004           | Legacy - use gemini-embedding-2-preview
+ * Vertex generation, with model selection, compatibility and pricing in config/ai.php.
  */
 class GeminiService
 {
@@ -132,7 +104,7 @@ class GeminiService
 
     private string $location;
 
-    // Global endpoint — required for Gemini 3.x / 2.5 text and image models on Vertex AI
+    // Global endpoint for text and image models on Vertex AI.
     private string $vertexBaseUrl;
 
     // Regional endpoint — Veo video models + gemini-embedding-2 require a specific region (not global)
@@ -348,6 +320,32 @@ class GeminiService
         return app(XaiService::class)->isConfigured();
     }
 
+    /**
+     * Apply model limits without changing another model's caller settings.
+     * Rebuilt on fallback, since streaming and unary ceilings can differ.
+     */
+    private function generationConfigForModel(string $model, array $config, bool $streaming): array
+    {
+        $profile = (config('ai.generation_profiles') ?? [])[$model] ?? null;
+
+        if (! $profile) {
+            return $config;
+        }
+
+        foreach ($profile['unsupported_parameters'] as $parameter) {
+            unset($config[$parameter]);
+        }
+
+        $maximum = $profile[$streaming ? 'stream_max_output_tokens' : 'non_stream_max_output_tokens'];
+        $config['maxOutputTokens'] = min($maximum, max($profile['min_output_tokens'], (int) ($config['maxOutputTokens'] ?? $profile['min_output_tokens'])));
+        $thinking = $config['thinkingConfig'] ?? [];
+        unset($thinking['thinkingBudget']);
+        $thinking['thinkingLevel'] ??= $profile['default_thinking_level'];
+        $config['thinkingConfig'] = $thinking;
+
+        return $config;
+    }
+
     private function attemptGenerate(
         string $model,
         string $prompt,
@@ -396,6 +394,8 @@ class GeminiService
                     $payload['generationConfig']['thinkingConfig'] = ['thinkingLevel' => 'HIGH'];
                 }
 
+                $payload['generationConfig'] = $this->generationConfigForModel($model, $payload['generationConfig'], streaming: true);
+
                 if ($systemInstruction) {
                     $payload['systemInstruction'] = ['parts' => [['text' => $systemInstruction]]];
                 }
@@ -414,6 +414,7 @@ class GeminiService
                     if (is_array($responseData)) {
                         $textContent = null;
                         $usageMetadata = [];
+                        $finishReason = null;
 
                         foreach ($responseData as $chunk) {
                             $chunkParts = $chunk['candidates'][0]['content']['parts'] ?? [];
@@ -426,12 +427,24 @@ class GeminiService
                             if (! empty($chunk['usageMetadata'])) {
                                 $usageMetadata = $chunk['usageMetadata'];
                             }
+                            $finishReason = $chunk['candidates'][0]['finishReason'] ?? $finishReason;
+                        }
+
+                        // Thinking-only and truncated responses still incur a
+                        // charge. Record them before deciding whether usable.
+                        if ($textContent !== null || $usageMetadata !== []) {
+                            $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+                            $this->recordCost($model, 'generateContent', $usageMetadata, $durationMs, $context);
+                        }
+
+                        if ($finishReason === 'MAX_TOKENS') {
+                            $this->lastFailure = 'response truncated at maxOutputTokens';
+                            Log::warning('GeminiService: response truncated at maxOutputTokens', ['model' => $model, 'context' => $context]);
+
+                            return null;
                         }
 
                         if ($textContent) {
-                            $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
-                            $this->recordCost($model, 'generateContent', $usageMetadata, $durationMs, $context);
-
                             return ['text' => $textContent];
                         }
                     }
@@ -594,8 +607,6 @@ class GeminiService
         array $context = [],
         int $maxToolCalls = 15
     ): ?array {
-        $startTime = hrtime(true);
-
         $generationConfig = array_merge([
             'temperature' => 1,
             'topP' => 0.95,
@@ -618,13 +629,15 @@ class GeminiService
             $payload['systemInstruction'] = ['parts' => [['text' => $systemInstruction]]];
         }
 
-        $totalUsage = [];
         $toolCallCount = 0;
+        $originalModel = $model;
 
         // Resolve fallback chain once so we can switch mid-loop on 429
         $fallback = (config('ai.fallback_chain') ?? [])[$model] ?? null;
 
         while (true) {
+            $payload['generationConfig'] = $this->generationConfigForModel($model, $generationConfig, streaming: false);
+            $requestStartTime = hrtime(true);
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
                 ->post("{$this->vertexBaseUrl}{$model}:generateContent", $payload);
@@ -654,16 +667,11 @@ class GeminiService
             $data = $response->json();
             $parts = $data['candidates'][0]['content']['parts'] ?? [];
 
-            // Accumulate usage across all turns. usageMetadata mixes integer token
-            // counts with non-numeric fields (trafficType is a string; *TokensDetails
-            // are arrays), so only sum the numeric ones — otherwise 0 + "ON_DEMAND"
-            // throws "Unsupported operand types: int + string" and kills the call.
-            foreach (($data['usageMetadata'] ?? []) as $k => $v) {
-                if (! is_numeric($v)) {
-                    continue;
-                }
-                $totalUsage[$k] = ($totalUsage[$k] ?? 0) + $v;
-            }
+            // Bill each successful request at the model that served it. A
+            // later fallback or failed tool must not erase earlier paid work
+            // or charge Argon's reasoning at the fallback model's rate.
+            $costContext = $model === $originalModel ? $context : array_merge($context, ['fallback_from' => $originalModel]);
+            $this->recordCost($model, 'generateContent', $data['usageMetadata'] ?? [], (int) ((hrtime(true) - $requestStartTime) / 1e6), $costContext);
 
             // Separate function calls from text parts. Preserve the FULL function-call
             // part (including thoughtSignature) — Gemini 3 thinking models reject the
@@ -726,6 +734,7 @@ class GeminiService
                     $result = $toolHandler($fnName, $fnArgs);
                     $responseParts[] = [
                         'functionResponse' => [
+                            ...array_filter(['id' => $fc['id'] ?? null], fn ($value) => $value !== null),
                             'name' => $fnName,
                             // Same list-vs-object trap on the way back: an empty
                             // result would encode as [] and be rejected.
@@ -742,8 +751,6 @@ class GeminiService
 
             // Model returned a final text response
             if ($textContent) {
-                $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
-                $this->recordCost($model, 'generateContent', $totalUsage, $durationMs, $context);
                 Log::info("GeminiService: Function-calling loop done. Tool calls: {$toolCallCount}, model: {$model}");
 
                 // A response cut off at the token ceiling looks exactly like a
@@ -1533,13 +1540,15 @@ class GeminiService
     {
         try {
             $inputTokens = (int) ($usageMetadata['promptTokenCount'] ?? 0);
-            $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0);
+            // Reasoning is billed at the output rate, separately from visible text.
+            $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0)
+                + (int) ($usageMetadata['thoughtsTokenCount'] ?? 0);
             $cachedTokens = (int) ($usageMetadata['cachedContentTokenCount'] ?? 0);
             // Media billed by duration (video) carries an explicit cost; the
             // token calc only applies where tokens are the billing unit.
             $cost = array_key_exists('cost_override', $context)
                 ? (float) $context['cost_override']
-                : $this->calculateCost($model, $inputTokens, $outputTokens, $cachedTokens);
+                : $this->calculateCost($model, max(0, $inputTokens - $cachedTokens), $outputTokens, $cachedTokens);
 
             AiCost::create([
                 'campaign_id' => $context['campaign_id'] ?? null,
