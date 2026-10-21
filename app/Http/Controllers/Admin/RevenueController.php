@@ -308,12 +308,16 @@ class RevenueController extends Controller
             // writes nothing. It is done here too because the balance must not
             // depend on that event being subscribed.
             $charge = $refund->charge;
+            $paymentIntent = ($charge instanceof \Stripe\Charge ? $charge->payment_intent : null)
+                ?? $refund->payment_intent;
+            $paymentIntentId = $paymentIntent instanceof \Stripe\PaymentIntent ? $paymentIntent->id : $paymentIntent;
 
             StripeWebhookController::recordAdSpendRefund(
                 $chargeId,
                 // If the expand did not come back, this refund alone is the
                 // safe under-estimate — the webhook settles any remainder.
-                ($charge instanceof \Stripe\Charge ? $charge->amount_refunded : $refund->amount) / 100
+                ($charge instanceof \Stripe\Charge ? $charge->amount_refunded : $refund->amount) / 100,
+                $paymentIntentId,
             );
 
             return redirect()->back()->with('flash', [

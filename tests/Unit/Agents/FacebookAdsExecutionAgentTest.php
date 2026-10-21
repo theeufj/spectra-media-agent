@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
+use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
@@ -45,6 +46,7 @@ class FacebookAdsExecutionAgentTest extends TestCase
 
         $campaign = new Campaign([
             'customer_id' => $customer->id,
+            'approved_daily_budget' => 10,
         ]);
         $campaign->id = 1;
         $campaign->setRelation('customer', $customer);
@@ -52,6 +54,7 @@ class FacebookAdsExecutionAgentTest extends TestCase
         $strategy = new Strategy([
             'campaign_id' => 1,
             'platform' => 'Facebook Ads',
+            'daily_budget' => 10,
         ]);
         $strategy->id = 1;
         $strategy->setRelation('campaign', $campaign);
@@ -88,7 +91,7 @@ class FacebookAdsExecutionAgentTest extends TestCase
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\ExecutionPlan'));
+            ->andReturn(new ExecutionPlan([]));
 
         $agent->shouldReceive('executePlan')
             ->once()
@@ -177,7 +180,7 @@ class FacebookAdsExecutionAgentTest extends TestCase
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\ExecutionPlan'));
+            ->andReturn(new ExecutionPlan([]));
 
         $agent->shouldReceive('executePlan')
             ->once()

@@ -79,6 +79,10 @@ abstract class PlatformExecutionAgent
             }
 
             $plan = $this->generateExecutionPlan($context);
+            $budget = (new ExecutionBudgetGuard)->validate($plan, $context, $this->getPlatformName());
+            if (! $budget->passed) {
+                return ExecutionResult::failure($budget->errors, ['budget_validation' => $budget->toArray()], $validation->warnings);
+            }
             $result = $this->executePlan($plan, $context);
 
             // Executors that never stamp their own timing would otherwise report

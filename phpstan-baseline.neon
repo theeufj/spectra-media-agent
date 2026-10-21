@@ -1130,13 +1130,13 @@ parameters:
 		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.expr
-			count: 3
+			count: 2
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
 
 		-
 			message: '#^Left side of && is always true\.$#'
 			identifier: booleanAnd.leftAlwaysTrue
-			count: 2
+			count: 1
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
 
 		-
@@ -1147,12 +1147,6 @@ parameters:
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>bidding_strategy" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>daily_budget" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php

@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { SetupStages } from '@/Components/SetupJourney';
+import FormErrorSummary from '@/Components/FormErrorSummary';
 import { brandTint } from '@/Components/Marketing/Hero';
 import {
     ArrowRightIcon,

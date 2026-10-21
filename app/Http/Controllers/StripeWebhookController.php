@@ -259,7 +259,13 @@ class StripeWebhookController extends CashierController
         $charge = $payload['data']['object'] ?? [];
 
         if (! empty($charge['id'])) {
-            self::recordAdSpendRefund($charge['id'], (int) ($charge['amount_refunded'] ?? 0) / 100);
+            $paymentIntent = $charge['payment_intent'] ?? null;
+            $paymentIntentId = is_array($paymentIntent) ? ($paymentIntent['id'] ?? null) : $paymentIntent;
+            self::recordAdSpendRefund(
+                $charge['id'],
+                (int) ($charge['amount_refunded'] ?? 0) / 100,
+                is_string($paymentIntentId) ? $paymentIntentId : null,
+            );
         }
 
         return $this->successMethod();
@@ -285,18 +291,26 @@ class StripeWebhookController extends CashierController
      *
      * @param  float  $refundedTotal  Everything refunded on this charge so far, in dollars.
      */
-    public static function recordAdSpendRefund(string $chargeId, float $refundedTotal): void
+    public static function recordAdSpendRefund(string $chargeId, float $refundedTotal, ?string $paymentIntentId = null): void
     {
-        $creditId = AdSpendTransaction::query()
-            ->where('stripe_charge_id', $chargeId)
+        // Cashier payments are PaymentIntents, so the historical column name
+        // stripe_charge_id holds pi_ IDs for current charges. Older ledger rows
+        // hold ch_ IDs. A refund names both: match either without rewriting the
+        // payment identity used to deduplicate credits.
+        $paymentIds = $paymentIntentId ? [$chargeId, $paymentIntentId] : [$chargeId];
+        $creditTransaction = AdSpendTransaction::query()
+            ->whereIn('stripe_charge_id', $paymentIds)
             ->where('type', AdSpendTransaction::TYPE_CREDIT)
-            ->value('ad_spend_credit_id');
+            ->first();
 
-        if (! $creditId) {
+        if (! $creditTransaction) {
             return;
         }
 
-        DB::transaction(function () use ($creditId, $chargeId, $refundedTotal) {
+        $creditId = $creditTransaction->ad_spend_credit_id;
+        $ledgerPaymentId = $creditTransaction->stripe_charge_id;
+
+        DB::transaction(function () use ($creditId, $chargeId, $refundedTotal, $paymentIds, $ledgerPaymentId) {
             // Locked read-modify-write, like every other balance mutation on
             // this model: two concurrent deliveries would otherwise both read
             // the refund as unrecorded and take it out twice. No acting user in
@@ -312,7 +326,7 @@ class StripeWebhookController extends CashierController
                 return;
             }
 
-            $outstanding = round($refundedTotal - self::recordedRefundTotal($chargeId), 2);
+            $outstanding = round($refundedTotal - self::recordedRefundTotal($creditId, $paymentIds), 2);
 
             if ($outstanding <= 0) {
                 return;
@@ -341,7 +355,7 @@ class StripeWebhookController extends CashierController
                 -$applied,
                 'Stripe refund on charge '.$chargeId,
                 AdSpendTransaction::TYPE_REFUND,
-                $chargeId,
+                $ledgerPaymentId,
             );
 
             Log::info('Ad spend credit reduced by refund', [
@@ -357,10 +371,11 @@ class StripeWebhookController extends CashierController
      * What has already been taken back out of the ledger for this charge,
      * always positive. Refund rows are stored negative, like every other debit.
      */
-    private static function recordedRefundTotal(string $chargeId): float
+    private static function recordedRefundTotal(int $creditId, array $paymentIds): float
     {
         return round((float) AdSpendTransaction::query()
-            ->where('stripe_charge_id', $chargeId)
+            ->where('ad_spend_credit_id', $creditId)
+            ->whereIn('stripe_charge_id', $paymentIds)
             ->where('type', AdSpendTransaction::TYPE_REFUND)
             ->sum(DB::raw('ABS(amount)')), 2);
     }

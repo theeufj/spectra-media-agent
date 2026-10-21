@@ -33,7 +33,7 @@ INSTRUCTION;
         // generated was written without knowing the business or its vertical.
         $customer = $context->customer;
 
-        $dailyBudget = $context->calculateDailyBudget();
+        $dailyBudget = $strategy->daily_budget;
         $landingPageUrl = $campaign->landing_page_url
             ?? $strategy->bidding_strategy['landing_page_url']
             ?? $customer->website
@@ -49,15 +49,19 @@ Generate a comprehensive Microsoft Ads execution plan for the following campaign
 **Campaign Description:** {$customer->description}
 **Landing Page:** {$landingPageUrl}
 
-**Total Campaign Budget:** \${$campaign->total_budget}
-**Recommended Daily Budget:** \${$dailyBudget}
+**Allocated Daily Budget:** \${$dailyBudget}
+
+Create this strategy directly with create_campaign. The combined daily budgets of
+all created campaigns must fit this allocation. Omit daily_budget to use the
+allocation for one campaign. Account-wide Google imports cannot verify this limit
+and are unavailable in this execution plan.
 
 # EXECUTION PLAN FORMAT
 You must respond with a JSON object that matches this structure EXACTLY:
 {
     "steps": [
         {
-            "action": "string (e.g., 'create_campaign', 'import_from_google', 'create_ad_groups', 'configure_tracking', 'create_extensions')",
+            "action": "string (e.g., 'create_campaign', 'create_ad_groups', 'configure_tracking', 'create_extensions')",
             "description": "string",
             "params": {
                 // key-value pairs needed for this step

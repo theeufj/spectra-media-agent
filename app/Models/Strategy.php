@@ -49,6 +49,21 @@ class Strategy extends Model
         return in_array($this->deployment_status, self::DEPLOYED_STATUSES, true);
     }
 
+    /** Prior platform objects can still spend after requeueing or plan filtering. */
+    public function hasDeploymentFootprint(): bool
+    {
+        return $this->isDeployed() || $this->deployment_status === 'deploying'
+            || $this->deployed_at !== null || ! empty($this->google_ads_campaign_id)
+            || ! empty($this->facebook_campaign_id) || ! empty($this->execution_result['platform_ids']);
+    }
+
+    /** A plan restriction does not establish that an existing platform campaign stopped. */
+    public function reservesDeploymentBudget(): bool
+    {
+        return $this->hasDeploymentFootprint()
+            || $this->signed_off_at !== null && $this->deployment_status !== 'skipped_plan';
+    }
+
     /**
      * The attributes that are mass assignable.
      *

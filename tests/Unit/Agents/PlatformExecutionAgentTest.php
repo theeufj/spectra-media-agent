@@ -42,10 +42,10 @@ class PlatformExecutionAgentTest extends TestCase
     {
         $customer = $this->customer();
 
-        $campaign = new Campaign(['name' => 'Test Campaign']);
+        $campaign = new Campaign(['name' => 'Test Campaign', 'approved_daily_budget' => 10]);
         $campaign->id = 42;
 
-        $strategy = new Strategy(['platform' => 'test']);
+        $strategy = new Strategy(['platform' => 'test', 'daily_budget' => 10]);
         $strategy->id = 7;
 
         return new ExecutionContext($strategy, $campaign, $customer);

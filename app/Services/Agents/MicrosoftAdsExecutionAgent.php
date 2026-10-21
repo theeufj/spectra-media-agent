@@ -15,8 +15,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Mirrors Google Ads campaigns to Bing / Microsoft Advertising
  * with platform-specific optimizations. Supports:
- * - Direct campaign creation via API
- * - Import from Google Ads (recommended for mirroring)
+ * - Direct campaign creation within the approved strategy allocation
  * - Budget management
  * - Performance tracking
  */
@@ -59,32 +58,23 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
     protected function generateFallbackPlan(ExecutionContext $context): ExecutionPlan
     {
         $campaign = $context->campaign;
-        $useImport = $campaign && $campaign->google_ads_campaign_id
-            && $this->customer->microsoft_ads_account_id;
-
-        $steps = [];
-
-        if ($useImport) {
-            $steps[] = new ExecutionStep(
-                action: 'import_from_google',
-                description: 'Import campaign structure from Google Ads',
-                params: ['google_campaign_id' => $campaign->google_ads_campaign_id],
-            );
-        } else {
-            $steps[] = new ExecutionStep(
+        // An account-wide import can copy unrelated campaigns and budgets.
+        // The fallback must stay within this strategy's approved allocation.
+        $steps = [
+            new ExecutionStep(
                 action: 'create_campaign',
                 description: 'Create new search campaign on Microsoft Ads',
                 params: [
                     'name' => $campaign?->name ?? 'New Campaign',
-                    'daily_budget' => ($campaign?->daily_budget ?? 50) * 0.3, // Start at 30% of Google budget
+                    'daily_budget' => $context->strategy->daily_budget,
                 ],
-            );
-            $steps[] = new ExecutionStep(
+            ),
+            new ExecutionStep(
                 action: 'create_ad_groups',
                 description: 'Create ad groups with keywords and ads',
                 params: [],
-            );
-        }
+            ),
+        ];
 
         $steps[] = new ExecutionStep(
             action: 'configure_tracking',
@@ -94,10 +84,8 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
 
         return new ExecutionPlan(
             steps: $steps,
-            reasoning: $useImport
-                ? 'Fallback: Importing from existing Google Ads campaign for fastest deployment'
-                : 'Fallback: Creating fresh campaign — no Google Ads source to import from',
-            estimatedDuration: $useImport ? '5 minutes' : '15 minutes',
+            reasoning: 'Fallback: Creating a campaign within the approved strategy allocation',
+            estimatedDuration: '15 minutes',
         );
     }
 
@@ -453,7 +441,7 @@ PROMPT;
 
         $campaignService = new CampaignService($this->customer);
         $name = $params['name'] ?? $params['campaign_name'] ?? $context->campaign?->name ?? 'Sitetospend Campaign';
-        $dailyBudget = $params['daily_budget'] ?? $params['budget'] ?? $context->strategy?->daily_budget ?? 10.00;
+        $dailyBudget = $params['daily_budget'] ?? $params['budget'] ?? $context->strategy->daily_budget;
 
         $result = $campaignService->createSearchCampaign([
             'name' => $name,

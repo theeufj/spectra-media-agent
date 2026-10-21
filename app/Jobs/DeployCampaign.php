@@ -13,6 +13,7 @@ use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
 use App\Services\Campaigns\SettleDeployedCampaign;
 use App\Services\Customers\HandOverAccount;
+use App\Services\Deployment\StrategyBudgetAllocator;
 use App\Services\DeploymentService;
 use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use App\Services\FacebookAds\PixelService;
@@ -22,7 +23,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -268,63 +268,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if ($strategies->count() > 0 && $this->campaign->daily_budget) {
-            DB::transaction(function () use ($strategies, $customer) {
-                // Try to use cross-channel budget allocation for smart splits
-                $allocation = \App\Models\PlatformBudgetAllocation::where('customer_id', $customer->id)->first();
-
-                if ($allocation && $allocation->strategy !== 'manual') {
-                    $platformMap = [
-                        'google' => 'google_ads_pct',
-                        'facebook' => 'facebook_ads_pct',
-                        'microsoft' => 'microsoft_ads_pct',
-                        'linkedin' => 'linkedin_ads_pct',
-                    ];
-
-                    // Calculate allocated budget per strategy based on platform percentages
-                    $totalPct = 0;
-                    $strategyPcts = [];
-                    foreach ($strategies as $strategy) {
-                        $platform = strtolower($strategy->platform);
-                        $pctField = $platformMap[$platform] ?? null;
-                        $pct = $pctField ? (float) $allocation->$pctField : 0;
-                        $strategyPcts[$strategy->id] = $pct;
-                        $totalPct += $pct;
-                    }
-
-                    if (abs($totalPct - 100) > 1) {
-                        Log::warning("Budget allocation percentages sum to {$totalPct}% (expected ~100%) for campaign {$this->campaign->id} — falling back to even split");
-                        $totalPct = 0; // Force even-split fallback below
-                    }
-
-                    foreach ($strategies as $strategy) {
-                        if (! $strategy->daily_budget) {
-                            if ($totalPct > 0) {
-                                $share = $strategyPcts[$strategy->id] / $totalPct;
-                                $budget = round($this->campaign->daily_budget * $share, 2);
-                            } else {
-                                $budget = round($this->campaign->daily_budget / $strategies->count(), 2);
-                            }
-                            if ($budget < 5.00) {
-                                Log::warning("Strategy {$strategy->id} ({$strategy->platform}) allocated only \${$budget}/day for campaign {$this->campaign->id}");
-                            }
-                            $strategy->update(['daily_budget' => max($budget, 1.00)]);
-                        }
-                    }
-                } else {
-                    // Fallback: even split
-                    $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
-                    foreach ($strategies as $strategy) {
-                        if (! $strategy->daily_budget) {
-                            if ($budgetPerStrategy < 5.00) {
-                                Log::warning("Strategy {$strategy->id} ({$strategy->platform}) allocated only \${$budgetPerStrategy}/day for campaign {$this->campaign->id}");
-                            }
-                            $strategy->update(['daily_budget' => $budgetPerStrategy]);
-                        }
-                    }
-                }
-            });
-        }
+        app(StrategyBudgetAllocator::class)->allocate($this->campaign, $strategies);
 
         $deploymentResults = [];
         $successCount = 0;

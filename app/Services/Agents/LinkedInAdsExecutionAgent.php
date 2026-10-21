@@ -97,6 +97,10 @@ Business name: {$this->customer->name}
 
 Available ad copies: {$context->availableAssets['ad_copies']}
 
+The budget above is this strategy's spending allocation. The combined daily
+budgets of all created campaigns must fit it. Omit daily_budget to use the
+allocation for one campaign.
+
 NOTE: This integration creates text creatives only (headline, description,
 destination URL). Do not plan image or video ads — media cannot be attached.
 
@@ -105,7 +109,7 @@ BUYER PERSPECTIVE RULE: Target and write copy for the decision-maker who wants t
 Create an execution plan as JSON with this structure:
 {
     "steps": [
-        {"action": "create_campaign", "description": "...", "parameters": {"campaign_type": "SPONSORED_UPDATES|SPONSORED_INMAILS", "objective": "WEBSITE_VISITS|LEAD_GENERATION|BRAND_AWARENESS", "daily_budget": 50}},
+        {"action": "create_campaign", "description": "...", "parameters": {"campaign_type": "SPONSORED_UPDATES|SPONSORED_INMAILS", "objective": "WEBSITE_VISITS|LEAD_GENERATION|BRAND_AWARENESS"}},
         {"action": "set_targeting", "description": "...", "parameters": {"job_titles": [], "industries": [], "company_sizes": [], "seniorities": []}},
         {"action": "create_creatives", "description": "...", "parameters": {}},
         {"action": "setup_conversion_tracking", "description": "...", "parameters": {}}
@@ -271,7 +275,7 @@ PROMPT;
 
         $createParams = [
             'name' => $campaign?->name ?? 'New LinkedIn Campaign',
-            'daily_budget' => $params['daily_budget'] ?? $context->strategy->daily_budget ?? 50,
+            'daily_budget' => $params['daily_budget'] ?? $context->strategy->daily_budget,
             'objective' => $params['objective'] ?? 'WEBSITE_VISITS',
             'status' => $this->deployStatus(),
             'targeting' => $targeting,

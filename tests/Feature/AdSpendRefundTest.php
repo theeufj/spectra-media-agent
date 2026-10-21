@@ -6,8 +6,15 @@ use App\Http\Controllers\StripeWebhookController;
 use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
 use App\Models\Customer;
+use App\Models\Role;
+use App\Models\User;
+use App\Services\AdSpendBillingService;
+use App\Services\Billing\AdSpendPaymentGateway;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
+use Stripe\ApiRequestor;
+use Stripe\HttpClient\ClientInterface;
+use Stripe\PaymentIntent;
 use Tests\TestCase;
 
 /**
@@ -21,6 +28,157 @@ use Tests\TestCase;
 class AdSpendRefundTest extends TestCase
 {
     use DatabaseTransactions;
+
+    private ClientInterface $previousStripeClient;
+
+    private RefundStripeTransport $stripe;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['cashier.secret' => 'sk_test_refunds', 'services.stripe.secret' => 'sk_test_refunds']);
+        $this->previousStripeClient = ApiRequestor::httpClient();
+        $this->stripe = new RefundStripeTransport;
+        ApiRequestor::setHttpClient($this->stripe);
+    }
+
+    protected function tearDown(): void
+    {
+        ApiRequestor::setHttpClient($this->previousStripeClient);
+        parent::tearDown();
+    }
+
+    /** Exercise chargeCustomer() and the ledger with a fake payment gateway. */
+    private function fundedCredit(string $paymentIntentId, string $chargeId): AdSpendCredit
+    {
+        $customer = Customer::factory()->create(['currency_code' => 'AUD']);
+        $payer = User::factory()->create(['stripe_id' => 'cus_refund', 'pm_type' => 'visa']);
+        $customer->users()->attach($payer->id, ['role' => 'owner']);
+        $this->mock(AdSpendPaymentGateway::class, function ($mock) use ($customer, $paymentIntentId, $chargeId) {
+            $mock->shouldReceive('collect')->once()
+                ->withArgs(fn ($account, $params, $key) => $account->id === $customer->id && $params['amount'] === 35000 && $params['currency'] === 'aud')
+                ->andReturn(PaymentIntent::constructFrom([
+                    'id' => $paymentIntentId, 'object' => 'payment_intent',
+                    'amount' => 35000, 'currency' => 'aud', 'status' => 'succeeded', 'latest_charge' => $chargeId,
+                ]));
+        });
+
+        return app(AdSpendBillingService::class)->initializeCreditAccount($customer, 50);
+    }
+
+    private function refundEvent(string $chargeId, int $refundedCents, string|array|null $paymentIntent = null): void
+    {
+        $method = 'handle'.Str::studly(str_replace('.', '_', 'charge.refunded'));
+        (new \ReflectionMethod(StripeWebhookController::class, $method))->invoke(new StripeWebhookController, [
+            'type' => 'charge.refunded',
+            'data' => ['object' => ['id' => $chargeId, 'amount_refunded' => $refundedCents, 'payment_intent' => $paymentIntent]],
+        ]);
+    }
+
+    private function actingAsAdmin(): self
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+
+        return $this->actingAs($admin);
+    }
+
+    public function test_a_real_payment_is_reversed_by_its_charge_refund_events(): void
+    {
+        $credit = $this->fundedCredit('pi_real_refund', 'ch_real_refund');
+        $this->assertSame('pi_real_refund', $credit->transactions()->sole()->getAttribute('stripe_charge_id'));
+
+        $this->refundEvent('ch_real_refund', 20000, 'pi_real_refund');
+        $this->assertSame(150.0, (float) $credit->fresh()->current_balance);
+        $this->refundEvent('ch_real_refund', 20000, 'pi_real_refund');
+        $this->refundEvent('ch_real_refund', 30000, 'pi_real_refund');
+        $this->refundEvent('ch_real_refund', 20000, 'pi_real_refund');
+
+        $this->assertSame(50.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame(2, $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->count());
+        $this->assertSame(0.0, AdSpendTransaction::totalDebited($credit->id));
+    }
+
+    public function test_legacy_charge_ids_still_settle_when_the_event_also_names_a_payment_intent(): void
+    {
+        $credit = $this->creditBoughtBy('ch_legacy_refund');
+
+        $this->refundEvent('ch_legacy_refund', 20000, ['id' => 'pi_legacy_refund', 'object' => 'payment_intent']);
+        $this->refundEvent('ch_legacy_refund', 20000, 'pi_legacy_refund');
+
+        $this->assertSame(150.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame('ch_legacy_refund', $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->sole()->getAttribute('stripe_charge_id'));
+    }
+
+    public function test_an_existing_charge_id_refund_is_counted_against_a_payment_intent_credit(): void
+    {
+        $credit = $this->creditBoughtBy('pi_mixed_refund');
+        $credit->recordAdjustment(-100, 'Earlier Stripe refund', AdSpendTransaction::TYPE_REFUND, 'ch_mixed_refund');
+
+        $this->refundEvent('ch_mixed_refund', 20000, 'pi_mixed_refund');
+        $this->refundEvent('ch_mixed_refund', 20000, 'pi_mixed_refund');
+
+        $this->assertSame(150.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame(2, $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->count());
+    }
+
+    public function test_admin_and_webhook_refunds_share_the_real_payments_cumulative_total(): void
+    {
+        $credit = $this->fundedCredit('pi_admin_refund', 'ch_admin_refund');
+        $this->stripe->refundResponses[] = [
+            'id' => 're_first', 'object' => 'refund', 'amount' => 20000, 'payment_intent' => 'pi_admin_refund',
+            'charge' => ['id' => 'ch_admin_refund', 'object' => 'charge', 'amount_refunded' => 20000, 'payment_intent' => 'pi_admin_refund'],
+        ];
+        $this->actingAsAdmin()->post(route('admin.revenue.refund', 'ch_admin_refund'), ['amount' => 200, 'confirmed' => true])
+            ->assertSessionHas('flash.type', 'success');
+        $this->assertSame(150.0, (float) $credit->fresh()->current_balance);
+
+        $this->refundEvent('ch_admin_refund', 20000, 'pi_admin_refund');
+        $this->refundEvent('ch_admin_refund', 30000, 'pi_admin_refund');
+        $this->stripe->refundResponses[] = [
+            'id' => 're_second', 'object' => 'refund', 'amount' => 10000, 'payment_intent' => 'pi_admin_refund',
+            'charge' => ['id' => 'ch_admin_refund', 'object' => 'charge', 'amount_refunded' => 30000, 'payment_intent' => 'pi_admin_refund'],
+        ];
+        $this->post(route('admin.revenue.refund', 'ch_admin_refund'), ['amount' => 100, 'confirmed' => true])
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertSame(50.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame(2, $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->count());
+    }
+
+    public function test_an_unexpanded_admin_refund_uses_its_payment_intent_then_the_webhook_settles_the_remainder(): void
+    {
+        $credit = $this->creditBoughtBy('pi_unexpanded_refund');
+        $this->stripe->refundResponses[] = [
+            'id' => 're_unexpanded', 'object' => 'refund', 'amount' => 10000,
+            'charge' => 'ch_unexpanded_refund', 'payment_intent' => 'pi_unexpanded_refund',
+        ];
+        $this->actingAsAdmin()->post(route('admin.revenue.refund', 'ch_unexpanded_refund'), ['amount' => 100, 'confirmed' => true])
+            ->assertSessionHas('flash.type', 'success');
+        $this->assertSame(250.0, (float) $credit->fresh()->current_balance);
+
+        $this->refundEvent('ch_unexpanded_refund', 20000, 'pi_unexpanded_refund');
+        $this->refundEvent('ch_unexpanded_refund', 20000, 'pi_unexpanded_refund');
+
+        $this->assertSame(150.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame(2, $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->count());
+    }
+
+    public function test_an_expanded_charge_without_a_payment_intent_uses_the_refunds_payment_intent(): void
+    {
+        $credit = $this->creditBoughtBy('pi_expanded_refund');
+        $this->stripe->refundResponses[] = [
+            'id' => 're_expanded', 'object' => 'refund', 'amount' => 10000,
+            'charge' => ['id' => 'ch_expanded_refund', 'object' => 'charge', 'amount_refunded' => 10000, 'payment_intent' => null],
+            'payment_intent' => ['id' => 'pi_expanded_refund', 'object' => 'payment_intent'],
+        ];
+
+        $this->actingAsAdmin()->post(route('admin.revenue.refund', 'ch_expanded_refund'), ['amount' => 100, 'confirmed' => true])
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertSame(250.0, (float) $credit->fresh()->current_balance);
+        $this->assertSame('pi_expanded_refund', $credit->transactions()->where('type', AdSpendTransaction::TYPE_REFUND)->sole()->getAttribute('stripe_charge_id'));
+    }
 
     /**
      * A credit account whose balance was bought by one Stripe charge — the
@@ -157,5 +315,30 @@ class AdSpendRefundTest extends TestCase
         ]);
 
         $this->assertSame(150.00, (float) $credit->fresh()->current_balance);
+    }
+}
+
+/** Stripe's SDK bypasses Laravel HTTP fakes, so reject any unexpected request here. */
+class RefundStripeTransport implements ClientInterface
+{
+    public array $refundResponses = [];
+
+    public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+    {
+        $path = parse_url($absUrl, PHP_URL_PATH);
+        if ($method === 'get' && $path === '/v1/customers/cus_refund') {
+            return [json_encode([
+                'id' => 'cus_refund', 'object' => 'customer',
+                'invoice_settings' => ['default_payment_method' => [
+                    'id' => 'pm_refund', 'object' => 'payment_method', 'type' => 'card', 'customer' => 'cus_refund',
+                    'card' => ['brand' => 'visa', 'last4' => '4242'],
+                ]],
+            ]), 200, []];
+        }
+        if ($method === 'post' && $path === '/v1/refunds' && $this->refundResponses !== []) {
+            return [json_encode(array_shift($this->refundResponses)), 200, []];
+        }
+
+        throw new \RuntimeException('Unexpected Stripe test request: '.$method.' '.$path);
     }
 }

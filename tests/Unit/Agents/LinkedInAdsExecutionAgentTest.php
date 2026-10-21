@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
+use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
@@ -41,6 +42,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $campaign = new Campaign([
             'customer_id' => $customer->id,
             'name' => 'B2B Lead Gen Campaign',
+            'approved_daily_budget' => 50,
         ]);
         $campaign->id = 1;
         $campaign->setRelation('customer', $customer);
@@ -187,7 +189,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\ExecutionPlan'));
+            ->andReturn(new ExecutionPlan([]));
 
         $agent->shouldReceive('executePlan')
             ->once()
