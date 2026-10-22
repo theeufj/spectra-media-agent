@@ -7,9 +7,9 @@ See `README.md` for the full architecture diagram and job-by-job walkthrough.
 
 ## Tech stack
 
-- Laravel 12 / PHP 8.4 on the server (Forge has 8.2 and 8.4 pools; local dev may be
-  8.5 — `composer.json` allows ^8.2, and CI runs 8.4 to match the box that serves
-  traffic). Raising this means upgrading Forge first, not editing this line.
+- Laravel 12 / PHP 8.5.12 on the server. `composer.json` requires ^8.5.12,
+  and CI runs PHP 8.5 to match production. Upgrade Forge before raising the
+  PHP requirement or CI version.
 - Inertia.js + React 18, Tailwind
 - Postgres (with `pgvector` for embeddings)
 - Horizon (Redis) for queues
@@ -172,7 +172,7 @@ npm test                   # frontend (vitest) — resources/js/tests/
 Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not to
 absorb new debt. Regenerate it only when a refactor moves existing errors between
 files. CI runs all five of the above plus `bin/check-fatal-classes` and
-`bin/check-baseline-growth`, on PHP 8.4 (matching the Forge server).
+`bin/check-baseline-growth`, on PHP 8.5 (matching the Forge server).
 
 `npm run lint` enforces one rule, `no-undef`, and is deliberately narrow so it
 stays quiet enough to be believed. It exists because three separate crashes

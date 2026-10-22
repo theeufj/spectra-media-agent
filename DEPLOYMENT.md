@@ -1,5 +1,9 @@
 # Deployment Guide for sitetospend.com
 
+> Legacy guide. Production uses Laravel Forge with CI-built frontend assets. See
+> [Production frontend builds and deployment](README.md#production-frontend-builds-and-deployment)
+> for the current workflow.
+
 ## Architecture Overview
 
 ```

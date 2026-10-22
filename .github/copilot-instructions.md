@@ -43,7 +43,7 @@
 
 ## Tech Stack
 
-- **Backend**: Laravel 11 (PHP 8.3)
+- **Backend**: Laravel 12 (PHP 8.5)
 - **Frontend**: Inertia.js + React, Tailwind CSS
 - **AI**: Google Gemini API (text: gemini-3-flash-preview, images: gemini-3.1-flash-image-preview)
 - **Queue**: Laravel Horizon (Redis)
