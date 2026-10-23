@@ -157,7 +157,7 @@ class SearchKeywordBuilder
             $campaign->refresh()->load('customer');
             $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
             $campaign->refresh()->load('customer');
-            $gate = app(GoogleSearchReachGate::class)->evaluate($campaign, $snapshot, $assessment);
+            $gate = app(GoogleSearchReachGate::class)->evaluateInitialLaunch($campaign, $snapshot, $assessment);
             if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId || $campaign->customer_id !== $this->customer->id) {
                 $gate = $this->holdGate($gate, 'search_reach_account_mismatch', 'The customer account changed while researching reach. Review the staged resource.');
             }
@@ -193,8 +193,14 @@ class SearchKeywordBuilder
             foreach (\App\Services\Agents\AgentIssue::list($assessment['issues'] ?? []) as $assessmentIssue) {
                 $result->addWarning($assessmentIssue->code, $assessmentIssue->message);
             }
+            foreach (\App\Services\Agents\AgentIssue::list($gate['warnings'] ?? []) as $warning) {
+                $result->addWarning($warning->code, $warning->message);
+            }
             AgentActivity::record('deployment', $blocked ? 'search_reach_preflight_blocked' : 'search_reach_preflight_checked',
-                $blocked ? 'Search launch held: '.($firstGateIssue['message'] ?? 'Keyword reach could not be verified.') : 'Verified useful Search keyword reach within the staged bid, targeting and approved spending limits.',
+                $blocked ? 'Search launch held: '.($firstGateIssue['message'] ?? 'Keyword reach could not be verified.')
+                    : ($gate['status'] === 'estimated_with_limitations'
+                        ? 'Useful Search traffic is estimated within the staged spending settings. Retained negative keywords are not modeled; actual traffic may be lower.'
+                        : 'Verified useful Search keyword reach within the staged bid, targeting and approved spending limits.'),
                 $campaign->customer_id, $campaign->id, ['assessment' => $assessment, 'gate' => $gate]);
             foreach (\App\Services\Agents\AgentIssue::list($gate['issues']) as $gateIssue) {
                 $result->addError($gateIssue->code, $gateIssue->message.' No serving ads were added.');
@@ -229,7 +235,7 @@ class SearchKeywordBuilder
             $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
             // Inspection itself may outlast an owner change to budget or pause.
             $campaign->refresh()->load('customer');
-            $gate = app(GoogleSearchReachGate::class)->evaluate($campaign, $snapshot, $proof);
+            $gate = app(GoogleSearchReachGate::class)->evaluateInitialLaunch($campaign, $snapshot, $proof);
             if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId || $campaign->customer_id !== $this->customer->id) {
                 $gate = $this->holdGate($gate, 'search_reach_account_mismatch', 'The customer account changed while verifying activation. Review the staged resource.');
             }
@@ -242,6 +248,9 @@ class SearchKeywordBuilder
                 $gate = $this->holdGate($gate, 'search_reach_activation_authorization_changed', 'Current campaign pause, end date, spending hold or launch settings do not allow activation.');
             }
             $result->addMetadata('search_reach_activation_check', $gate);
+            foreach (\App\Services\Agents\AgentIssue::list($gate['warnings'] ?? []) as $warning) {
+                $result->addWarning($warning->code, $warning->message);
+            }
             foreach (\App\Services\Agents\AgentIssue::list($gate['issues']) as $issue) {
                 $result->addError($issue->code, $issue->message);
             }

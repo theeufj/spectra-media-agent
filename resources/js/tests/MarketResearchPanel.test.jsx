@@ -152,6 +152,40 @@ describe('campaign market research', () => {
             { daily_budget: '20.00', research_id: 'request-one', research_fingerprint: 'context-one', budget_option_id: null, accept_proposal: true });
     });
 
+    it('shows forecast average CPC from unrounded clicks separately from the maximum bid', () => {
+        const research = withOptions();
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+
+        expect(view.getAllByText('Maximum CPC: AUD 5.00')).toHaveLength(3);
+        expect(within(view.getByText('About 53 clicks').parentElement).getByText('Estimated average CPC: AUD 2.72')).toBeInTheDocument();
+        expect(view.getByText('About 53 clicks')).toBeInTheDocument();
+        expect(within(view.getByText('Estimated average CPC').parentElement).getByText('AUD 2.72')).toBeInTheDocument();
+        expect(view.queryByText('Estimated average CPC: AUD 2.74')).toBeNull();
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { clicks: 0 }, { clicks: Infinity }, { cost_micros: undefined }, { cost_micros: 0 }, { success: false },
+    ])('keeps average CPC unverified for incomplete or invalid forecast data %j', (changes) => {
+        const research = ready();
+        Object.assign(research.result.strategies[0].forecast, changes);
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(within(view.getByText('Estimated average CPC').parentElement).getByText('Not verified')).toBeInTheDocument();
+    });
+
+    it('explains efficient bid selection only when the current proposal has that evidence', () => {
+        const research = withOptions();
+        const explanation = 'Bids favour lower estimated cost per click while meeting the traffic threshold.';
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(view.queryByText(explanation)).toBeNull();
+        research.result.strategies[0].evidence = { selection_policy: 'cost_efficient_reach' };
+        view.rerender(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(view.getByText(explanation)).toBeInTheDocument();
+        expect(view.getByText(/purchases are not guaranteed/)).toBeInTheDocument();
+        expect(post).not.toHaveBeenCalled();
+    });
+
     it('does not linearly scale traffic or approve an arbitrary edited amount', () => {
         const view = render(budget(ready()));
         fireEvent.click(view.getByRole('button', { name: 'Use researched budget' }));

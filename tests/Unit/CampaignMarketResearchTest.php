@@ -388,6 +388,38 @@ class CampaignMarketResearchTest extends TestCase
         $this->assertCount(2, $result['strategies'][0]['evidence']['tested_sets']);
     }
 
+    public function test_lower_cost_relevant_profile_beats_more_expensive_traffic_without_relaxing_a_keyword_cap(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->keywords = [[...$this->selected()[0], 'cpc_bid_micros' => 4_000_000]];
+        $calls = [];
+        $service = $this->service($this->planner(function ($keywords, $budget, $cap) use (&$calls) {
+            $calls[] = [$keywords[0]['text'], $cap];
+            $estimate = $this->estimate(true, $budget);
+            $economic = $keywords[0]['text'] === 'relevant setup service';
+            $estimate['cpc_bid_micros'] = $economic ? 2_000_000 : 4_000_000;
+            $estimate['evidence']['forecast']['clicks'] = $economic ? 35 : 90;
+            $estimate['evidence']['forecast']['cost_micros'] = $economic ? 35_000_000 : 135_000_000;
+
+            return $estimate;
+        }), true);
+        $service->keywordSets = [
+            ['kind' => 'category', 'keywords' => [['text' => 'ordinary category term', 'match_type' => 'PHRASE', 'selection_reason' => 'Commercial category match']]],
+            ['kind' => 'specific', 'keywords' => [['text' => 'specific buyer term', 'match_type' => 'EXACT', 'selection_reason' => 'Buyer intent match']]],
+            ['kind' => 'cost_efficient', 'keywords' => [['text' => 'relevant setup service', 'match_type' => 'PHRASE', 'selection_reason' => 'Relevant service with measured demand and lower historical cost']]],
+        ];
+        $result = $service->research($campaign, 5_000_000);
+        $row = $result['strategies'][0];
+        $this->assertSame(['selected', 'combined', 'category', 'specific', 'cost_efficient'], array_column($row['evidence']['tested_sets'], 'kind'));
+        $this->assertCount(5, $calls);
+        $this->assertSame([4_000_000], array_values(array_unique(array_column($calls, 1))));
+        $this->assertSame('relevant setup service', $row['proposed_keywords'][0]['text']);
+        $this->assertSame(4_000_000, $row['proposed_keywords'][0]['cpc_bid_micros']);
+        $this->assertSame(35, $row['forecast']['clicks']);
+        $this->assertSame('cost_efficient_reach', $row['evidence']['selection_policy']);
+        $this->assertSame('5.00', $campaign->daily_budget);
+    }
+
     public function test_fingerprint_binds_business_account_dates_caps_keywords_and_full_targeting_but_approval_survives_lifecycle_changes(): void
     {
         $campaign = $this->campaign();
@@ -425,8 +457,10 @@ class CampaignMarketResearchTest extends TestCase
         $oldInputs = $input->invoke($research, $campaign, true);
         foreach ([null, 50_000_000] as $requestedBudget) {
             $legacy = hash('sha256', json_encode([$oldInputs, $requestedBudget], JSON_THROW_ON_ERROR));
+            $previousMaxClicksQuote = hash('sha256', json_encode([2, $oldInputs, $requestedBudget], JSON_THROW_ON_ERROR));
             $current = $research->fingerprint($campaign, $requestedBudget);
             $this->assertNotSame($legacy, $current);
+            $this->assertNotSame($previousMaxClicksQuote, $current);
             $campaign->search_delivery_state = ['market_research' => ['input_fingerprint' => $current, 'status' => 'ready']];
             $this->assertSame($current, $research->fingerprint($campaign, $requestedBudget));
         }

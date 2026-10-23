@@ -20,14 +20,16 @@ class InitialSearchBidEstimateTest extends TestCase
         $historical->expects($this->once())->method('__invoke')->with('1234567890', ['real business offer'], ['geoTargetConstants/2036'], null)
             ->willReturn(['success' => true, 'keywords' => ['real business offer' => ['low_top_of_page_bid_micros' => 1_250_000]]]);
         $forecast = $this->createMock(GenerateKeywordForecast::class);
-        $forecast->expects($this->once())->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+        $forecast->expects($this->exactly(3))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
             $this->assertSame('1234567890', $id);
-            $this->assertSame(1_250_000, $context['cpc_bid_ceiling_micros']);
+            $this->assertLessThanOrEqual(1_250_000, $context['cpc_bid_ceiling_micros']);
             $this->assertSame(5_000_000, $context['daily_budget_micros']);
             $this->assertArrayNotHasKey('ad_group_resource', $keywords[0]);
             $this->assertArrayNotHasKey('campaign_resource', $context);
 
-            return ['success' => true, 'clicks' => 40, 'cost_micros' => 20_000_000, 'period_days' => $days,
+            $credible = $context['cpc_bid_ceiling_micros'] === 1_250_000;
+
+            return ['success' => true, 'clicks' => $credible ? 40 : 5, 'cost_micros' => $credible ? 20_000_000 : 10_000, 'period_days' => $days,
                 'context' => $context + ['keywords' => $keywords], 'caveats' => [],
                 'forecast_period' => ['from' => $context['forecast_start_date'],
                     'through' => CarbonImmutable::parse($context['forecast_start_date'])->addDays($days - 1)->toDateString()]];
@@ -36,6 +38,7 @@ class InitialSearchBidEstimateTest extends TestCase
         $result = $this->planner($historical, $forecast)->estimate($campaign, $this->keywords(), $context, 5_000_000);
 
         $this->assertTrue($result['ready'], json_encode($result));
+        $this->assertSame([1_250_000, 620_000, 930_000], array_column($result['evidence']['candidates'], 'cpc_bid_micros'));
         $this->assertTrue($result['evidence']['proposal_only']);
         $this->assertFalse($result['activation_ready']);
         $this->assertNull($campaign->approved_daily_budget);
@@ -57,7 +60,7 @@ class InitialSearchBidEstimateTest extends TestCase
         }
     }
 
-    public function test_preapproval_search_is_bounded_to_four_measured_bid_candidates_and_does_not_fall_back(): void
+    public function test_preapproval_search_stops_after_four_coarse_candidates_without_credible_reach_and_does_not_fall_back(): void
     {
         $keywords = $metrics = [];
         for ($index = 1; $index <= 12; $index++) {
@@ -84,11 +87,12 @@ class InitialSearchBidEstimateTest extends TestCase
         $historical->expects($this->once())->method('__invoke')->willReturn(['success' => true,
             'keywords' => ['real business offer' => ['low_top_of_page_bid_micros' => 1_250_000]]]);
         $forecast = $this->createMock(GenerateKeywordForecast::class);
-        $forecast->expects($this->once())->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
-            $this->assertSame(250_000, $context['cpc_bid_ceiling_micros']);
-            $this->assertSame(250_000, $keywords[0]['cpc_bid_micros']);
+        $forecast->expects($this->exactly(3))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+            $this->assertLessThanOrEqual(250_000, $context['cpc_bid_ceiling_micros']);
+            $this->assertSame($context['cpc_bid_ceiling_micros'], $keywords[0]['cpc_bid_micros']);
+            $credible = $context['cpc_bid_ceiling_micros'] === 250_000;
 
-            return ['success' => true, 'clicks' => 40, 'cost_micros' => 5_000_000, 'period_days' => $days,
+            return ['success' => true, 'clicks' => $credible ? 40 : 5, 'cost_micros' => $credible ? 5_000_000 : 10_000, 'period_days' => $days,
                 'context' => $context + ['keywords' => $keywords], 'caveats' => [],
                 'forecast_period' => ['from' => $context['forecast_start_date'],
                     'through' => CarbonImmutable::parse($context['forecast_start_date'])->addDays($days - 1)->toDateString()]];
@@ -98,6 +102,7 @@ class InitialSearchBidEstimateTest extends TestCase
 
         $this->assertTrue($result['ready'], json_encode($result));
         $this->assertSame(250_000, $result['cpc_bid_micros']);
+        $this->assertSame([250_000, 120_000, 180_000], array_column($result['evidence']['candidates'], 'cpc_bid_micros'));
         $this->assertSame(250_000, $result['evidence']['max_cpc_bid_micros']);
         $this->assertSame(250_000, $result['evidence']['keywords'][0]['cpc_bid_micros']);
     }

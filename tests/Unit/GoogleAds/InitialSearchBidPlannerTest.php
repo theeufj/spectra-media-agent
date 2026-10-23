@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Illuminate\Support\Facades\Exceptions;
 use Tests\TestCase;
 
 class InitialSearchBidPlannerTest extends TestCase
@@ -31,7 +32,7 @@ class InitialSearchBidPlannerTest extends TestCase
             ->willReturn($this->historical());
         $forecast = $this->createMock(GenerateKeywordForecast::class);
         $bids = [];
-        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
+        $forecast->expects($this->exactly(6))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
             $this->assertSame('1234567890', $id);
             $this->assertSame(['PHRASE', 'EXACT'], array_column($keywords, 'match_type'));
             $this->assertSame($snapshot['negative_keywords'], $context['negative_keywords']);
@@ -50,8 +51,8 @@ class InitialSearchBidPlannerTest extends TestCase
         $result = $this->planner($historical, $forecast)->plan($this->campaign(), $snapshot);
 
         $this->assertTrue($result['ready'], json_encode($result));
-        $this->assertSame([500_000, 1_000_000, 2_000_000, 3_000_000], $bids);
-        $this->assertSame(1_000_000, $result['cpc_bid_micros']);
+        $this->assertSame([500_000, 1_000_000, 2_000_000, 3_000_000, 750_000, 620_000], $bids);
+        $this->assertSame(620_000, $result['cpc_bid_micros']);
         $this->assertFalse($result['activation_ready']);
         $this->assertFalse($result['auto_repair_safe']);
         $this->assertStringContainsString('negative keywords', implode(' ', $result['caveats']));
@@ -64,11 +65,11 @@ class InitialSearchBidPlannerTest extends TestCase
         $result = $this->withEstimates()->plan($this->campaign(), $this->snapshot());
 
         $this->assertTrue($result['ready']);
-        $this->assertSame(500_000, $result['cpc_bid_micros']);
+        $this->assertSame(120_000, $result['cpc_bid_micros']);
         $this->assertGreaterThan(10_000, $result['cpc_bid_micros']);
     }
 
-    public function test_a_later_cost_candidate_with_better_traffic_wins_without_blindly_choosing_the_highest_bid(): void
+    public function test_economic_selection_refines_sparse_historical_bids_for_cheaper_useful_traffic(): void
     {
         $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
         $historical->expects($this->once())->method('__invoke')->willReturn(['success' => true, 'keywords' => [
@@ -76,10 +77,12 @@ class InitialSearchBidPlannerTest extends TestCase
             'advertising agency' => ['low_top_of_page_bid_micros' => 29_690_000, 'high_top_of_page_bid_micros' => 62_500_000],
         ]]);
         $forecast = $this->createMock(GenerateKeywordForecast::class);
-        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+        $forecast->expects($this->exactly(6))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
             [$clicks, $cost] = match ($context['cpc_bid_ceiling_micros']) {
                 5_680_000 => [5.0357, 17_582_940], 21_630_000 => [17.1228, 203_209_464],
-                29_690_000 => [20.5408, 329_220_000], default => [12.6964, 375_000_000],
+                29_690_000 => [20.5408, 329_220_000], 62_500_000 => [12.6964, 375_000_000],
+                13_650_000 => [12, 90_000_000], 9_660_000 => [8, 40_000_000],
+                default => throw new \UnexpectedValueException('Unexpected bid in the lower-cost forecast.'),
             };
 
             return [...$this->forecast($keywords, $context, $days, $clicks), 'cost_micros' => $cost];
@@ -88,9 +91,12 @@ class InitialSearchBidPlannerTest extends TestCase
         $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 62_500_000, 'authorized_daily_budget_micros' => 62_500_000];
         $result = $this->planner($historical, $forecast)->plan($campaign, $snapshot);
         $this->assertTrue($result['ready']);
-        $this->assertSame(29_690_000, $result['cpc_bid_micros']);
-        $this->assertSame(20.5408, $result['evidence']['forecast']['clicks']);
-        $this->assertCount(4, $result['evidence']['candidates']);
+        $this->assertSame(9_660_000, $result['cpc_bid_micros']);
+        $this->assertSame(8, $result['evidence']['forecast']['clicks']);
+        $this->assertSame(40_000_000, $result['evidence']['forecast']['cost_micros']);
+        $this->assertSame('cost_efficient_reach', $result['evidence']['selection_policy']);
+        $this->assertFalse($result['evidence']['candidates'][0]['credible_reach']);
+        $this->assertCount(6, $result['evidence']['candidates']);
         $this->assertSame(6, $result['evidence']['forecast']['period_days']);
     }
 
@@ -103,7 +109,47 @@ class InitialSearchBidPlannerTest extends TestCase
         ];
         $this->assertSame(500_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
         $candidates[2]['forecast']['clicks'] = 60;
+        $this->assertSame(500_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+        $candidates[2]['forecast']['cost_micros'] = 1_500_000;
         $this->assertSame(2_000_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+    }
+
+    public function test_economic_ranking_rejects_a_large_cost_increase_for_a_few_more_clicks_regardless_of_order(): void
+    {
+        $candidates = [
+            ['cpc_bid_micros' => 21_630_000, 'forecast' => ['clicks' => 17.1228, 'cost_micros' => 203_209_464]],
+            ['cpc_bid_micros' => 29_690_000, 'forecast' => ['clicks' => 20.5408, 'cost_micros' => 329_220_000]],
+            ['cpc_bid_micros' => 82_250_000, 'forecast' => ['clicks' => 31.2445, 'cost_micros' => 1_125_000_000]],
+        ];
+        $this->assertSame(21_630_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+        $this->assertSame(21_630_000, InitialSearchBidPlanner::bestForecast(array_reverse($candidates))['cpc_bid_micros']);
+    }
+
+    public function test_refinement_failure_or_less_efficient_forecasts_preserve_the_verified_economic_choice(): void
+    {
+        Exceptions::fake();
+        foreach (['unavailable', 'exception', 'worse'] as $outcome) {
+            $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+            $historical->method('__invoke')->willReturn($this->historical());
+            $forecast = $this->createMock(GenerateKeywordForecast::class);
+            $forecast->expects($this->exactly($outcome === 'exception' ? 5 : 6))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use ($outcome) {
+                if ($context['cpc_bid_ceiling_micros'] < 500_000) {
+                    if ($outcome === 'exception') {
+                        throw new \RuntimeException('Optional forecast failed');
+                    }
+
+                    return $outcome === 'unavailable' ? ['success' => false]
+                        : [...$this->forecast($keywords, $context, $days, 35), 'cost_micros' => 3_000_000];
+                }
+
+                return $this->forecast($keywords, $context, $days, 40);
+            });
+            $snapshot = [...$this->snapshot(), 'approved_cpc_ceiling_micros' => null];
+            $result = $this->planner($historical, $forecast)->plan($this->campaign(), $snapshot);
+            $this->assertTrue($result['ready'], json_encode($result));
+            $this->assertSame(500_000, $result['cpc_bid_micros']);
+        }
+        Exceptions::assertReported(fn (\RuntimeException $error) => $error->getMessage() === 'Optional forecast failed');
     }
 
     public function test_budget_comparison_forecasts_the_exact_selected_bid_instead_of_choosing_a_cheaper_candidate(): void
@@ -184,7 +230,7 @@ class InitialSearchBidPlannerTest extends TestCase
         $result = $this->withEstimates()->plan($this->campaign(), $snapshot);
 
         $this->assertTrue($result['ready'], json_encode($result));
-        $this->assertSame(250_000, $result['cpc_bid_micros']);
+        $this->assertSame(60_000, $result['cpc_bid_micros']);
         $this->assertSame(400_000, $result['evidence']['forecast']['context']['daily_budget_micros']);
         $this->assertSame(250_000, $result['evidence']['max_cpc_bid_micros']);
     }

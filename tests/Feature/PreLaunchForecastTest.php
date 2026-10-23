@@ -225,6 +225,31 @@ class PreLaunchForecastTest extends TestCase
         $this->assertSame('collecting_evidence', $campaign->search_delivery_state['status']);
     }
 
+    public function test_initial_launch_preserves_standard_negatives_and_reports_their_forecast_limitation(): void
+    {
+        $limitation = 'Google’s forecast no longer supports negative keywords; live campaign or ad-group negatives are not modeled.';
+        [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => false,
+            'clicks' => 40, 'caveats' => [$limitation],
+            'limitations' => [['code' => 'negative_keywords_unmodeled', 'message' => $limitation]]],
+            snapshotOverrides: ['negative_keywords' => [['text' => 'jobs', 'match_type' => 'PHRASE', 'scope' => 'campaign']]]);
+
+        $this->assertTrue($allowed, $result->errorMessage());
+        $this->assertTrue($result->success);
+        $proof = $result->metadata['search_reach_preflight'];
+        $this->assertSame('estimated_with_limitations', $proof['gate']['status']);
+        $this->assertFalse($proof['forecast']['auto_repair_safe']);
+        $this->assertSame([$limitation], $proof['forecast']['caveats']);
+        $this->assertContains('search_reach_negative_keywords_unmodeled', array_column($result->warnings, 'code'));
+        $this->assertSame('collecting_evidence', $campaign->search_delivery_state['status']);
+
+        $campaign->update(['status' => 'active']);
+        $activation = ExecutionResult::success();
+        $this->assertTrue((new SearchKeywordBuilder($campaign->customer))->confirmActivationProof($campaign, '1234567890',
+            'customers/1234567890/campaigns/456', $proof, $activation), $activation->errorMessage());
+        $this->assertContains('search_reach_negative_keywords_unmodeled', array_column($activation->warnings, 'code'));
+        $this->assertSame('estimated_with_limitations', $activation->metadata['search_reach_activation_check']['status']);
+    }
+
     public function test_positive_but_insufficient_forecast_is_blocked_and_recorded(): void
     {
         [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 3.63, 'impressions' => 30]);

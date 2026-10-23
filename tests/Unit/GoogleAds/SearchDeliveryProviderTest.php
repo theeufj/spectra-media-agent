@@ -238,6 +238,8 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertFalse($result['auto_repair_safe']);
         $this->assertStringContainsString('negative keywords', implode(' ', $result['caveats']));
+        $this->assertSame([['code' => 'negative_keywords_unmodeled',
+            'message' => 'Google’s forecast no longer supports negative keywords; live campaign or ad-group negatives are not modeled.']], $result['limitations']);
         $this->assertNull($result['impressions']);
         $this->assertNull($result['ctr']);
         $this->assertSame($context['negative_keywords'], $result['context']['negative_keywords']);

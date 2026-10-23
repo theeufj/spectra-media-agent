@@ -20,6 +20,8 @@ class InitialSearchBidPlanner
 {
     private const MAX_CANDIDATES = 8;
 
+    private const REFINEMENT_CANDIDATES = 2;
+
     public function plan(Campaign $campaign, array $snapshot): array
     {
         $evidence = ['checked_at' => now()->toIso8601String(), 'snapshot' => $snapshot,
@@ -199,7 +201,7 @@ class InitialSearchBidPlanner
             }
             $evidence['keywords_with_unknown_costs'] = $unknownCosts;
             $minimumClicks = max(1, (int) config('optimization.search_delivery.min_forecast_clicks', 30));
-            foreach ($bids as $bid) {
+            $observe = function (int $bid) use ($customer, $keywords, $context, $budget, $minimumClicks): array {
                 $proposed = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $bid]), $keywords);
                 $candidateContext = $context + ['cpc_bid_ceiling_micros' => $bid];
                 // The existing provider takes currency units; exact money limits remain integer micros in context.
@@ -211,8 +213,40 @@ class InitialSearchBidPlanner
                     && $clicks >= 1 && $clicks * 30 >= $minimumClicks * $context['forecast_period_days']
                     && is_int($cost) && $cost > 0 && $cost <= $budget * $context['forecast_period_days']
                     && $this->matchesForecast($forecast, $proposed, $candidateContext);
-                $evidence['candidates'][] = ['cpc_bid_micros' => $bid, 'credible_reach' => $credible, 'forecast' => $forecast];
+
+                return ['cpc_bid_micros' => $bid, 'credible_reach' => $credible, 'forecast' => $forecast];
+            };
+            foreach ($bids as $bid) {
+                $evidence['candidates'][] = $observe($bid);
             }
+            // Top-of-page estimates are not auction minimums. Test below the
+            // best observed economic bid as well, instead of treating a sparse
+            // historical range as proof that cheaper useful traffic is absent.
+            for ($step = 0; $exactBidMicros === null && $step < self::REFINEMENT_CANDIDATES; $step++) {
+                $best = self::bestForecast(array_values(array_filter($evidence['candidates'], fn ($candidate) => $candidate['credible_reach'])));
+                if ($best === null) {
+                    break;
+                }
+                $lower = 0;
+                foreach ($evidence['candidates'] as $candidate) {
+                    if ($candidate['cpc_bid_micros'] < $best['cpc_bid_micros']) {
+                        $lower = max($lower, $candidate['cpc_bid_micros']);
+                    }
+                }
+                $midpoint = intdiv($lower + $best['cpc_bid_micros'], 20_000) * 10_000;
+                if ($midpoint <= $lower || $midpoint >= $best['cpc_bid_micros']) {
+                    break;
+                }
+                try {
+                    $evidence['candidates'][] = $observe($midpoint);
+                } catch (\Throwable $e) {
+                    report($e);
+                    $evidence['candidates'][] = ['cpc_bid_micros' => $midpoint, 'credible_reach' => false,
+                        'forecast' => ['success' => false, 'reason' => 'The additional lower-bid forecast was unavailable.']];
+                    break; // Optional refinement cannot erase a verified base estimate.
+                }
+            }
+            $evidence['selection_policy'] = 'cost_efficient_reach';
             $chosen = self::bestForecast(array_values(array_filter($evidence['candidates'], fn ($candidate) => $candidate['credible_reach'])));
             if ($chosen !== null) {
                 $forecast = $chosen['forecast'];
@@ -226,7 +260,7 @@ class InitialSearchBidPlanner
 
                 return ['ready' => true, 'status' => 'estimated', 'cpc_bid_micros' => $chosen['cpc_bid_micros'],
                     'reason' => $exactBidMicros === null
-                        ? 'The tested bid with the most useful forecast traffic within retained spending limits; similar traffic favors lower estimated cost and bid.'
+                        ? 'The tested bid favours lower estimated cost per click while meeting the traffic threshold. Similar click costs favour more useful traffic; this does not establish profitable purchases.'
                         : 'Fresh forecast reach at the exact researched bid and this proposed daily budget.',
                     'issues' => [], 'caveats' => $caveats, 'evidence' => $evidence, 'activation_ready' => false, 'auto_repair_safe' => false];
             }
@@ -245,10 +279,15 @@ class InitialSearchBidPlanner
         if ($candidates === []) {
             return null;
         }
-        $maximum = max(array_map(fn ($candidate) => $candidate['forecast']['clicks'], $candidates));
+        // A daily budget is a ceiling, not a target to consume. Compare actual
+        // forecast cost per click, never the maximum bid or rounded UI clicks.
+        $averageCost = fn ($candidate) => $candidate['forecast']['cost_micros'] / $candidate['forecast']['clicks'];
+        $lowest = min(array_map($averageCost, $candidates));
+        $efficient = array_values(array_filter($candidates, fn ($candidate) => $averageCost($candidate) <= $lowest * 1.05));
+        $maximum = max(array_map(fn ($candidate) => $candidate['forecast']['clicks'], $efficient));
         // Forecast noise must not justify a more expensive bid for a fractional
         // click. Compare every candidate to the maximum to avoid pairwise ties.
-        $nearBest = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecast']['clicks'] >= $maximum - max(0.1, $maximum * 0.01)));
+        $nearBest = array_values(array_filter($efficient, fn ($candidate) => $candidate['forecast']['clicks'] >= $maximum - max(0.1, $maximum * 0.01)));
         usort($nearBest, fn ($a, $b) => [$a['forecast']['cost_micros'], $a['cpc_bid_micros'], -$a['forecast']['clicks']]
             <=> [$b['forecast']['cost_micros'], $b['cpc_bid_micros'], -$b['forecast']['clicks']]);
 

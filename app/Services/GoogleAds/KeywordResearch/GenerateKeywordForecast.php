@@ -71,6 +71,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             }
 
             $caveats = $this->caveats($context);
+            $limitations = [];
             $dailyBudget = (int) ($context['daily_budget_micros'] ?? 0);
             if ($dailyBudget <= 0) {
                 $caveats[] = 'Daily budget is not supplied; forecast is not constrained to the live campaign budget.';
@@ -113,7 +114,9 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                 }
             }
             if (! empty($context['negative_keywords'])) {
-                $caveats[] = 'Google’s forecast no longer supports negative keywords; live campaign or ad-group negatives are not modeled.';
+                $limitations[] = ['code' => 'negative_keywords_unmodeled',
+                    'message' => 'Google’s forecast no longer supports negative keywords; live campaign or ad-group negatives are not modeled.'];
+                $caveats[] = $limitations[0]['message'];
             }
             $campaign = new CampaignToForecast([
                 'bidding_strategy' => $bidding,
@@ -150,6 +153,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                 'period_days' => $days,
                 'forecast_period' => ['from' => $start->toDateString(), 'through' => $end->toDateString()],
                 'caveats' => $caveats,
+                'limitations' => $limitations,
                 'auto_repair_safe' => $caveats === [],
                 'context' => ['bidding_strategy' => $forecastStrategy, 'cpc_bid_ceiling_micros' => $bidMicros,
                     'daily_budget_micros' => $dailyBudget, 'currency_code' => $context['currency_code'] ?? null,

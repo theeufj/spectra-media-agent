@@ -20,6 +20,7 @@ class CampaignKeywordResearch extends KeywordResearchService
             'existing_keywords' => array_column($selected, 'text')];
         $landingPage = $campaign->landing_page_url ?: $this->customer->website;
         $sets = [];
+        $costCandidates = [];
         $previousProfile = $this->discoveryProfile;
         try {
             foreach ($categoryOnly ? ['category'] : ['category', 'specific'] as $kind) {
@@ -38,6 +39,7 @@ class CampaignKeywordResearch extends KeywordResearchService
                         $seeds = array_filter(array_map(fn ($seed) => is_string($seed) ? trim($seed) : '', $seeds), fn ($seed) => $seed !== '');
                         $result = ['keywords' => $this->seedsToKeywords(array_slice(array_values(array_unique($seeds)), 0, 12))];
                     }
+                    $costCandidates = [...$costCandidates, ...($result['cost_candidates'] ?? [])];
                     $verified = ($result['discovery']['planner_metrics_available'] ?? false) === true;
                     $sets[] = ['kind' => $kind, 'keywords' => $result['keywords'],
                         'status' => $verified ? 'ready' : 'needs_review', 'demand_verified' => $verified,
@@ -55,6 +57,24 @@ class CampaignKeywordResearch extends KeywordResearchService
             $this->discoveryProfile = $previousProfile;
         }
 
+        $combined = $this->balancedKeywords($sets);
+        $discoveredProfiles = array_column($sets, 'kind');
+        $priced = $this->costEfficientKeywords($costCandidates, 24);
+        // Compare the cheaper half separately instead of letting costly head
+        // terms or unknown-demand jargon dilute every candidate group.
+        $cutoff = $priced[min(6, intdiv(count($priced) + 1, 2)) - 1]['cost_evidence']['amount_micros'] ?? null;
+        if ($cutoff !== null) {
+            // A large expensive majority must not drag the cheaper cohort back
+            // up to head-term prices. This is a sampling rule, not a CPC limit.
+            $cutoff = min($cutoff, $priced[0]['cost_evidence']['amount_micros'] * 2);
+        }
+        $economical = array_slice(array_values(array_filter($priced, fn ($keyword) => $keyword['cost_evidence']['amount_micros'] <= $cutoff)), 0, 6);
+        $sets[] = ['kind' => 'cost_efficient', 'keywords' => $economical,
+            'status' => $economical === [] ? 'needs_review' : 'ready', 'demand_verified' => $economical !== [],
+            'reason' => $economical === []
+                ? 'No relevant keyword group had both measured demand and usable cost estimates. Cheap traffic has not been assumed.'
+                : 'This group tests the lower-cost relevant terms from the same research. Historical prices are estimates; traffic and purchase results still need separate checks.'];
+
         $negatives = [];
         $allPositive = array_merge(...array_column($sets, 'keywords'));
         if ($allPositive !== []) {
@@ -67,8 +87,9 @@ class CampaignKeywordResearch extends KeywordResearchService
             }
         }
 
-        return ['keywords' => $this->balancedKeywords($sets), 'keyword_sets' => $sets, 'negative_keywords' => $negatives,
-            'discovery' => ['profiles_attempted' => array_column($sets, 'kind'), 'category_recovery_attempted' => false],
+        return ['keywords' => $combined, 'keyword_sets' => $sets, 'negative_keywords' => $negatives,
+            'discovery' => ['profiles_attempted' => $discoveredProfiles, 'derived_profiles' => ['cost_efficient'],
+                'cost_cohort' => ['max_keywords' => 6, 'max_relative_measured_cost' => 2], 'category_recovery_attempted' => false],
             'source' => empty($context['customer_id']) ? 'business_context_only' : 'google_keyword_planner_and_business_relevance',
             'note' => empty($context['customer_id'])
                 ? 'No account-scoped platform demand, pricing or reach estimates were available.'

@@ -13,7 +13,7 @@ class CampaignMarketResearch
 {
     // Unapproved quotes must be rerun when optimizer semantics change. This
     // version deliberately does not enter durable customer approval hashes.
-    private const RESEARCH_VERSION = 2;
+    private const RESEARCH_VERSION = 3;
 
     public function fingerprint(Campaign $campaign, ?int $requestedDailyBudgetMicros = null): string
     {
@@ -261,9 +261,9 @@ class CampaignMarketResearch
             $setKinds[] = 'combined';
         }
         $profileKinds = [];
-        foreach (array_slice($business['keyword_sets'] ?? [], 0, 2) as $profile) {
+        foreach (array_slice($business['keyword_sets'] ?? [], 0, 3) as $profile) {
             $kind = $profile['kind'] ?? null;
-            if (! in_array($kind, ['category', 'specific'], true) || in_array($kind, $profileKinds, true)) {
+            if (! in_array($kind, ['category', 'specific', 'cost_efficient'], true) || in_array($kind, $profileKinds, true)) {
                 continue;
             }
             $profileKinds[] = $kind;
@@ -346,13 +346,14 @@ class CampaignMarketResearch
             $row['proposed_keywords'] = $sets[$chosen['set']];
             $row['budget_micros'] = $chosen['budget'];
             $row['cpc_bid_micros'] = $estimate['cpc_bid_micros'];
+            $row['evidence']['selection_policy'] = 'cost_efficient_reach';
             $row['bidding_strategy'] = 'MANUAL_CPC';
             $row['forecast'] = $estimate['evidence']['forecast'];
             $row['forecast']['auto_repair_safe'] = false;
             $row['forecast_period'] = $row['forecast']['forecast_period'] ?? null;
             $row['caveats'] = [...$estimate['caveats'],
                 'Google’s forecast does not model negative keywords. Retained or subsequently added negatives may reduce delivery; this proposal cannot establish their effect.'];
-            $row['reasons'] = ['The lowest tested viable budget, with useful traffic compared across researched bids and relevant keyword sets.'];
+            $row['reasons'] = ['This plan favours lower estimated cost per click among relevant keywords that meet the traffic threshold. Purchase profitability still needs conversion evidence.'];
 
             return $row;
         }

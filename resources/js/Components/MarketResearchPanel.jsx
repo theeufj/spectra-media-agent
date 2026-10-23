@@ -53,6 +53,12 @@ const message = (value) => typeof value === 'string' ? value : value?.message ||
 const numeric = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const money = (micros, currency) => numeric(micros) ? `${currency} ${(micros / 1_000_000).toFixed(2)}` : 'Not verified';
 const clicks = (value) => numeric(value) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value) : 'Not verified';
+const averageCpc = (forecast, currency) => forecast?.success === true
+    && Number.isSafeInteger(forecast.cost_micros) && forecast.cost_micros > 0
+    && numeric(forecast.clicks) && forecast.clicks > 0
+    ? money(forecast.cost_micros / forecast.clicks, currency) : 'Not verified';
+const costEfficientReach = (strategy) => strategy?.evidence?.selection_policy === 'cost_efficient_reach'
+    || strategy?.evidence?.budget_option_forecast?.selection_policy === 'cost_efficient_reach';
 const biddingMode = (value) => {
     const mode = typeof value === 'string' ? value.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/\s+/g, '_').toUpperCase() : '';
     return ({ MANUAL_CPC: 'Manual cost-per-click bidding', MAXIMIZE_CONVERSIONS: 'Maximize conversions', TARGET_CPA: 'Target cost per conversion', TARGET_SPEND: 'Maximize clicks' })[mode] || 'Not verified';
@@ -72,9 +78,10 @@ function Forecast({ forecast, period, timezone, currency }) {
     const dates = period || forecast?.forecast_period;
     return <div className="mt-3 border-t border-gray-100 pt-3">
         <p className="text-xs font-semibold text-gray-500">Indicative traffic estimate</p>
-        <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
+        <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <div><dt className="text-gray-500">Clicks for the period</dt><dd className="font-semibold text-gray-900">{verified ? clicks(forecast.clicks) : 'Not verified'}</dd></div>
             <div><dt className="text-gray-500">Estimated ad spend</dt><dd className="font-semibold text-gray-900">{verified ? money(forecast.cost_micros, currency) : 'Not verified'}</dd></div>
+            <div><dt className="text-gray-500">Estimated average CPC</dt><dd className="font-semibold text-gray-900">{averageCpc(forecast, currency)}</dd></div>
         </dl>
         <p className="mt-2 text-xs text-gray-500">{dates?.from && dates?.through ? `${dates.from} to ${dates.through}` : 'Forecast dates not verified'}{forecast?.period_days ? ` · ${forecast.period_days} days` : ''}{timezone ? ` · ${timezone}` : ''}</p>
     </div>;
@@ -130,6 +137,7 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
             <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>
             <p className="mt-1 text-sm text-gray-600"><strong>Indicative estimates.</strong> Each option uses the same keyword set, with a researched maximum CPC for each daily budget. Google forecasts clicks and ad spend for the dates shown; actual results can vary. Click counts are rounded.</p>
+            {asList(result?.strategies).some(costEfficientReach) && <p className="mt-2 text-sm text-gray-600">Bids favour lower estimated cost per click while meeting the traffic threshold.</p>}
             {littleBudgetGain && <div role="note" className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                 <p className="font-semibold">Higher budgets add little forecast traffic</p>
                 <p className="mt-1">Google forecasts little or no extra traffic across these researched budgets and maximum CPC bids for this keyword set. A higher spending limit does not guarantee more clicks.</p>
@@ -146,6 +154,7 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                         <span className="font-semibold text-gray-900">{money(option.daily_budget_micros, code)} / day</span>
                     </span>
                     <span className="mt-2 block text-sm text-gray-700">Maximum CPC: {money(option.cpc_bid_micros, code)}</span>
+                    <span className="mt-1 block text-sm text-gray-700">Estimated average CPC: {averageCpc(option.forecast, code)}</span>
                     <span className="mt-3 block text-sm text-gray-700">About {Math.round(option.forecast.clicks)} clicks</span>
                     <span className="mt-1 block text-sm text-gray-700">{money(option.forecast.cost_micros, code)} estimated ad spend</span>
                     <span className="mt-1 block text-xs text-gray-500">{option.forecast.forecast_period?.from} to {option.forecast.forecast_period?.through}{option.forecast.period_days ? ` · ${option.forecast.period_days} days` : ''}</span>

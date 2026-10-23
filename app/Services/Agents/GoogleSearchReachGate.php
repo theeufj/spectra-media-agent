@@ -51,6 +51,17 @@ class GoogleSearchReachGate
 
     public function evaluate(Campaign $campaign, array $snapshot, array $assessment, ?array $forecast = null): array
     {
+        return $this->evaluateReach($campaign, $snapshot, $assessment, $forecast, false);
+    }
+
+    /** Initial launch can use a disclosed estimate; automatic repairs still require faithful reach proof. */
+    public function evaluateInitialLaunch(Campaign $campaign, array $snapshot, array $assessment, ?array $forecast = null): array
+    {
+        return $this->evaluateReach($campaign, $snapshot, $assessment, $forecast, true);
+    }
+
+    private function evaluateReach(Campaign $campaign, array $snapshot, array $assessment, ?array $forecast, bool $initialLaunch): array
+    {
         $forecast ??= $assessment['forecast'] ?? [];
         $issues = [];
         $unknown = false;
@@ -170,15 +181,30 @@ class GoogleSearchReachGate
         $period = $forecast['period_days'] ?? null;
         $clicks = $forecast['clicks'] ?? null;
         $cost = $forecast['cost_micros'] ?? null;
-        $forecastValid = ($forecast['success'] ?? null) === true && ($forecast['auto_repair_safe'] ?? null) === true
-            && ($forecast['source'] ?? null) === 'google_keyword_forecast' && isset($forecast['caveats']) && $forecast['caveats'] === []
+        $limitations = $forecast['limitations'] ?? [];
+        $negativeOnly = $initialLaunch && ! CampaignSpendGuardrails::activeTrial($campaign)
+            && is_array($limitations) && count($limitations) === 1 && is_array($limitations[0] ?? null)
+            && ($limitations[0]['code'] ?? null) === 'negative_keywords_unmodeled'
+            && is_string($limitations[0]['message'] ?? null) && trim($limitations[0]['message']) !== ''
+            && ($forecast['caveats'] ?? null) === [$limitations[0]['message']]
+            && ($forecast['auto_repair_safe'] ?? null) === false;
+        $negativeIssues = $negativeOnly ? $this->negativeEstimateIssues($snapshot, $keywords) : [];
+        foreach ($negativeIssues as $issue) {
+            $add($issue['code'], $issue['message'], true);
+        }
+        $limitedEstimate = $negativeOnly && $negativeIssues === [];
+        $forecastValid = ($forecast['success'] ?? null) === true
+            && ((($forecast['auto_repair_safe'] ?? null) === true && ($forecast['caveats'] ?? null) === [] && $limitations === []) || $limitedEstimate)
+            && ($forecast['source'] ?? null) === 'google_keyword_forecast'
             && $this->recent($forecast['checked_at'] ?? null, 6 * 60)
             && is_int($period) && $period > 0 && $period <= 365
             && $this->number($clicks)
             && (($forecast['impressions'] ?? null) === null || $this->number($forecast['impressions']))
             && is_int($cost) && $cost >= 0 && $this->period($forecast['forecast_period'] ?? [], $period, $snapshot['time_zone'] ?? 'UTC');
         if (! $forecastValid) {
-            $add('search_reach_forecast_unverified', 'A fresh, uncaveated Google traffic forecast with its period and actual spending settings is required.', true);
+            $add('search_reach_forecast_unverified', $initialLaunch
+                ? 'A fresh Google traffic forecast must match the actual spending settings. Unknown or additional forecast limitations need review.'
+                : 'A fresh, uncaveated Google traffic forecast with its period and actual spending settings is required.', true);
         }
         $context = $forecast['context'] ?? [];
         $matches = is_array($context) && ($context['daily_budget_micros'] ?? null) === $budget
@@ -257,8 +283,42 @@ class GoogleSearchReachGate
             }
         }
 
-        return ['ready' => $issues === [], 'status' => $issues === [] ? 'ready' : ($unknown ? 'unavailable' : 'blocked'),
-            'issues' => $issues, 'metadata' => $metadata];
+        $warnings = [];
+        if ($limitedEstimate) {
+            $metadata += ['forecast_limitations' => $limitations, 'negative_keyword_effect_verified' => false];
+            $warnings[] = (new AgentIssue('search_reach_negative_keywords_unmodeled',
+                $limitations[0]['message'].' Traffic may be lower than this indicative estimate. The negatives were retained; this evidence does not authorize automatic keyword repairs.'))->jsonSerialize();
+        }
+
+        return ['ready' => $issues === [], 'status' => $issues === [] ? ($limitedEstimate ? 'estimated_with_limitations' : 'ready') : ($unknown ? 'unavailable' : 'blocked'),
+            'issues' => $issues, 'warnings' => $warnings, 'metadata' => $metadata];
+    }
+
+    /** A known limitation cannot conceal unknown scope or a direct positive/negative conflict. */
+    private function negativeEstimateIssues(array $snapshot, array $keywords): array
+    {
+        $negatives = $snapshot['negative_keywords'] ?? null;
+        $groups = array_values(array_unique(array_filter(array_column($keywords, 'ad_group_resource'))));
+        if (! is_array($negatives) || $negatives === []) {
+            return [['code' => 'search_reach_negative_scope_unverified', 'message' => 'The forecast limitation does not match a verified retained negative-keyword set.']];
+        }
+        foreach ($negatives as $negative) {
+            if (! is_array($negative) || ! is_string($negative['text'] ?? null) || trim($negative['text']) === ''
+                || ! in_array($negative['match_type'] ?? null, ['EXACT', 'PHRASE', 'BROAD'], true)
+                || ! in_array($negative['scope'] ?? null, ['campaign', 'ad_group'], true)
+                || ($negative['scope'] === 'campaign' && ! empty($negative['ad_group_resource']))
+                || ($negative['scope'] === 'ad_group' && (! is_string($negative['ad_group_resource'] ?? null)
+                    || ! in_array($negative['ad_group_resource'], $groups, true)))) {
+                return [['code' => 'search_reach_negative_scope_unverified', 'message' => 'Retained negative-keyword match types and scope must be verified before using this launch estimate.']];
+            }
+        }
+        foreach ($keywords as $keyword) {
+            if (GoogleSearchReachPlanner::negativeConflict($keyword['text'], $negatives, $keyword['ad_group_resource'] ?? '')) {
+                return [['code' => 'search_reach_negative_keyword_conflict', 'message' => 'A retained negative keyword directly conflicts with the selected Search keywords. Review the keyword selection before launching.']];
+            }
+        }
+
+        return [];
     }
 
     private function servingDate(mixed $value): ?string

@@ -286,9 +286,9 @@ class SearchKeywordSelectionTest extends TestCase
             [['text' => 'old selected term', 'match_type' => 'EXACT']]);
 
         $this->assertCount(2, $passes);
-        $this->assertSame(['category', 'specific'], array_column($result['keyword_sets'], 'kind'));
-        $this->assertSame(['ready', 'ready'], array_column($result['keyword_sets'], 'status'));
-        $this->assertSame([true, true], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertSame(['category', 'specific', 'cost_efficient'], array_column($result['keyword_sets'], 'kind'));
+        $this->assertSame(['ready', 'ready', 'needs_review'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame([true, true, false], array_column($result['keyword_sets'], 'demand_verified'));
         $this->assertCount(12, $result['keyword_sets'][0]['keywords']);
         $this->assertSame($specific, array_column($result['keyword_sets'][1]['keywords'], 'text'));
         $this->assertCount(12, $result['keywords']);
@@ -353,8 +353,8 @@ class SearchKeywordSelectionTest extends TestCase
         $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(), []);
 
         $this->assertSame(2, $passes);
-        $this->assertSame(['needs_review', 'ready'], array_column($result['keyword_sets'], 'status'));
-        $this->assertSame([false, true], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertSame(['needs_review', 'ready', 'needs_review'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame([false, true, false], array_column($result['keyword_sets'], 'demand_verified'));
         $this->assertNull($result['keyword_sets'][0]['keywords'][0]['avg_monthly_searches']);
         $this->assertStringContainsString('could not be verified', $result['keyword_sets'][0]['reason']);
         $this->assertSame('small business google ads setup melbourne', $result['keyword_sets'][1]['keywords'][0]['text']);
@@ -378,9 +378,9 @@ class SearchKeywordSelectionTest extends TestCase
         $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, [], []);
 
         $this->assertSame('business_context_only', $result['source']);
-        $this->assertSame(['category', 'specific'], array_column($result['keyword_sets'], 'kind'));
-        $this->assertSame([false, false], array_column($result['keyword_sets'], 'demand_verified'));
-        $this->assertSame(['needs_review', 'needs_review'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame(['category', 'specific', 'cost_efficient'], array_column($result['keyword_sets'], 'kind'));
+        $this->assertSame([false, false, false], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertSame(['needs_review', 'needs_review', 'needs_review'], array_column($result['keyword_sets'], 'status'));
         $this->assertSame(['PHRASE', 'PHRASE'], array_column($result['keywords'], 'match_type'));
         $this->assertSame([null, null], array_column($result['keywords'], 'avg_monthly_searches'));
     }
@@ -429,6 +429,128 @@ class SearchKeywordSelectionTest extends TestCase
             $this->assertContains($keyword, array_column($result['keywords'], 'text'));
         }
         $this->assertNotContains('BROAD', array_column($profile['keywords'], 'match_type'));
+    }
+
+    public function test_campaign_separately_tests_lower_cost_relevant_buyer_tasks_without_cheap_irrelevant_or_unknown_traffic(): void
+    {
+        $specific = ['multi agent ppc management', 'google ads management for small business'];
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.default')
+            && str_contains($prompt, 'category and buyer-synonym') && str_contains($prompt, 'job they pay to get done')
+            && str_contains($prompt, 'customer buying language'))->once()->andReturn(['text' => '["google ads management service"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent')
+            && str_contains($prompt, 'practical purchase tasks') && str_contains($prompt, 'Do not manufacture AI')
+            && str_contains($prompt, 'Managed Google Ads service with campaign setup'))->once()->andReturn(['text' => json_encode($specific)]);
+        $reviews = array_map(fn ($id) => ['id' => $id, 'relevant' => in_array($id, [1, 2, 5, 7], true),
+            'commercial_intent' => true, 'reason' => in_array($id, [1, 2, 5, 7], true)
+                ? 'Buyer seeks the managed Google Ads service and campaign setup actually sold.'
+                : 'Login, DIY education and software features are not the managed service sold.'], range(1, 7));
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'Review keyword candidates')
+            && str_contains($prompt, 'A cheaper term must pass the same relevance'))->once()->andReturn(['text' => json_encode(['reviews' => $reviews])]);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords')
+            && str_contains($prompt, 'google ads management pricing') && str_contains($prompt, 'ppc campaign setup service'))
+            ->once()->andReturn(['text' => '["login"]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $passes = 0;
+        $this->fakePlanner(function ($id, $seeds, $url, $language, $geos) use (&$passes, $specific) {
+            $passes++;
+            $this->assertSame('123', $id);
+            $this->assertSame('https://example.com/google-ads-setup', $url);
+            $this->assertSame(['geoTargetConstants/1000567'], $geos);
+            if ($passes === 2) {
+                $this->assertSame($specific, $seeds);
+
+                return [['keyword' => $specific[0], 'avg_monthly_searches' => 0, 'average_cpc_micros' => 50_000],
+                    ['keyword' => $specific[1], 'avg_monthly_searches' => null, 'average_cpc_micros' => null]];
+            }
+
+            return [
+                ['keyword' => 'google ads management service', 'avg_monthly_searches' => 1000, 'average_cpc_micros' => 50_000_000],
+                ['keyword' => 'ppc campaign setup service', 'avg_monthly_searches' => 120, 'average_cpc_micros' => 2_000_000,
+                    'low_top_of_page_bid_micros' => 1_500_000, 'high_top_of_page_bid_micros' => 4_000_000],
+                ['keyword' => 'google ads management pricing', 'avg_monthly_searches' => 90, 'average_cpc_micros' => 0,
+                    'low_top_of_page_bid_micros' => 1_000_000, 'high_top_of_page_bid_micros' => 3_000_000],
+                ['keyword' => 'google ads login', 'avg_monthly_searches' => 1000000, 'average_cpc_micros' => 1000],
+                ['keyword' => 'google ads free tutorial', 'avg_monthly_searches' => 500000, 'average_cpc_micros' => 10000],
+                ['keyword' => 'affordable ppc management', 'avg_monthly_searches' => 500, 'average_cpc_micros' => null],
+                ['keyword' => 'ai agent software', 'avg_monthly_searches' => 0, 'average_cpc_micros' => 10000],
+                ['keyword' => 'google ads specialist', 'avg_monthly_searches' => 500, 'average_cpc_micros' => 10_000_000],
+            ];
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $campaign->product_focus = 'Managed Google Ads service with campaign setup';
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(), []);
+
+        $this->assertSame(2, $passes, 'The economical cohort must reuse both discovery passes, not make a third call.');
+        $this->assertSame(['category', 'specific'], $result['discovery']['profiles_attempted']);
+        $this->assertSame(['cost_efficient'], $result['discovery']['derived_profiles']);
+        $economical = $result['keyword_sets'][2];
+        $this->assertSame('cost_efficient', $economical['kind']);
+        $this->assertSame('ready', $economical['status']);
+        $this->assertTrue($economical['demand_verified']);
+        $this->assertSame(['google ads management pricing', 'ppc campaign setup service'], array_column($economical['keywords'], 'text'));
+        $this->assertSame(['low_top_of_page_bid_micros', 'average_cpc_micros'], array_column(array_column($economical['keywords'], 'cost_evidence'), 'basis'));
+        $this->assertSame([1_000_000, 2_000_000], array_column(array_column($economical['keywords'], 'cost_evidence'), 'amount_micros'));
+        $this->assertSame([0, 2_000_000], array_column($economical['keywords'], 'average_cpc_micros'));
+        $this->assertSame([1_000_000, 1_500_000], array_column($economical['keywords'], 'low_top_of_page_bid_micros'));
+        $this->assertSame([3_000_000, 4_000_000], array_column($economical['keywords'], 'high_top_of_page_bid_micros'));
+        $this->assertNotContains('BROAD', array_column($economical['keywords'], 'match_type'));
+        $this->assertSame($specific, array_column(array_slice($result['keyword_sets'][1]['keywords'], 0, 2), 'text'));
+        $this->assertFalse($result['keyword_sets'][1]['demand_verified']);
+        $this->assertSame(['login'], $result['negative_keywords']);
+        $ordinary = array_column($result['keyword_sets'][0]['keywords'], null, 'text');
+        $this->assertSame(50_000_000, $ordinary['google ads management service']['average_cpc_micros']);
+        $this->assertNotContains('google ads login', array_column($result['keywords'], 'text'));
+        $this->assertNotContains('google ads free tutorial', array_column($result['keywords'], 'text'));
+    }
+
+    public function test_unknown_zero_malformed_costs_and_zero_demand_never_become_free_economical_clicks(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $ideas = [
+            ['keyword' => 'unknown cost service', 'avg_monthly_searches' => 100],
+            ['keyword' => 'zero cost service', 'avg_monthly_searches' => 100, 'average_cpc_micros' => 0,
+                'low_top_of_page_bid_micros' => 0, 'high_top_of_page_bid_micros' => 0],
+            ['keyword' => 'malformed cost service', 'avg_monthly_searches' => 100, 'average_cpc_micros' => false,
+                'low_top_of_page_bid_micros' => 'unknown', 'high_top_of_page_bid_micros' => '99999999999999999999'],
+            ['keyword' => 'no demand service', 'avg_monthly_searches' => 0, 'average_cpc_micros' => 1000],
+            ['keyword' => 'known bid service', 'avg_monthly_searches' => 10, 'average_cpc_micros' => 0,
+                'low_top_of_page_bid_micros' => '250000', 'high_top_of_page_bid_micros' => 900000],
+        ];
+        $result = $this->researchService($this->customer(), $ideas)->research('123', 'SiteToSpend', userSeedKeywords: array_column($ideas, 'keyword'));
+
+        $this->assertSame(['known bid service'], array_column($result['cost_candidates'], 'text'));
+        $this->assertSame(['basis' => 'low_top_of_page_bid_micros', 'amount_micros' => 250000], $result['cost_candidates'][0]['cost_evidence']);
+        $ordinary = array_column($result['keywords'], null, 'text');
+        $this->assertNull($ordinary['unknown cost service']['average_cpc_micros']);
+        $this->assertSame(0, $ordinary['zero cost service']['average_cpc_micros']);
+        $this->assertNull($ordinary['malformed cost service']['average_cpc_micros']);
+        $this->assertNull($ordinary['malformed cost service']['low_top_of_page_bid_micros']);
+        $this->assertNull($ordinary['malformed cost service']['high_top_of_page_bid_micros']);
+    }
+
+    public function test_cost_candidates_come_from_all_relevant_ideas_before_the_top_volume_cutoff(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $ideas = array_map(fn ($index) => ['keyword' => 'managed ads service '.$index, 'avg_monthly_searches' => 100000,
+            'average_cpc_micros' => 50_000_000, 'competition_index' => 10], range(1, 14));
+        $ideas[] = ['keyword' => 'search marketing services', 'avg_monthly_searches' => 110, 'low_top_of_page_bid_micros' => 5_670_000];
+        $ideas[] = ['keyword' => 'sem services', 'avg_monthly_searches' => 170, 'low_top_of_page_bid_micros' => 6_280_000];
+        $result = $this->researchService($this->customer(), $ideas)->research('123', 'SiteToSpend', maxKeywords: 12,
+            userSeedKeywords: array_column($ideas, 'keyword'));
+
+        $this->assertCount(12, $result['keywords']);
+        $this->assertNotContains('search marketing services', array_column($result['keywords'], 'text'));
+        $this->assertNotContains('sem services', array_column($result['keywords'], 'text'));
+        $this->assertSame(['search marketing services', 'sem services'], array_column(array_slice($result['cost_candidates'], 0, 2), 'text'));
+        $this->assertSame([5_670_000, 6_280_000], array_column(array_column(array_slice($result['cost_candidates'], 0, 2), 'cost_evidence'), 'amount_micros'));
+        $this->assertSame(['low_top_of_page_bid_micros', 'low_top_of_page_bid_micros'], array_column(array_column(array_slice($result['cost_candidates'], 0, 2), 'cost_evidence'), 'basis'));
     }
 
     private function profileCampaign(): array

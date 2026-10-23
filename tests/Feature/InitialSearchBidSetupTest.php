@@ -187,7 +187,7 @@ class InitialSearchBidSetupTest extends TestCase
         return ['managed' => ['managed'], 'paid setup' => ['setup_only']];
     }
 
-    public function test_keyword_cost_research_selects_and_verifies_the_stronger_affordable_bid_on_a_paused_campaign(): void
+    public function test_keyword_cost_research_writes_the_economical_useful_bid_without_changing_pause_or_budget(): void
     {
         [$customer, $campaign, $strategy] = $this->fixture();
         $bidding = $strategy->bidding_strategy;
@@ -206,8 +206,14 @@ class InitialSearchBidSetupTest extends TestCase
             $this->assertSame(5_000_000, $context['daily_budget_micros']);
             $this->assertLessThanOrEqual(1_800_000, $bid);
 
-            return ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => $days * ($bid === 1_800_000 ? 2 : 1),
-                'cost_micros' => $days * ($bid === 1_800_000 ? 3_000_000 : 1_000_000), 'period_days' => $days,
+            [$dailyClicks, $dailyCost] = match ($bid) {
+                1_800_000 => [2, 3_000_000], 1_000_000 => [1, 800_000],
+                500_000 => [0.5, 200_000], 750_000 => [1.2, 600_000],
+                default => throw new \UnexpectedValueException('Unexpected bid in the economic setup forecast.'),
+            };
+
+            return ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => $days * $dailyClicks,
+                'cost_micros' => $days * $dailyCost, 'period_days' => $days,
                 'forecast_period' => ['from' => $context['forecast_start_date'],
                     'through' => \Carbon\CarbonImmutable::parse($context['forecast_start_date'])->addDays($days - 1)->toDateString()],
                 'context' => [...$context, 'keywords' => $keywords]];
@@ -227,9 +233,9 @@ class InitialSearchBidSetupTest extends TestCase
             }
         });
         $this->assertTrue($this->configure($customer, $campaign, $strategy, $result), $result->errorMessage());
-        $this->assertSame([1_000_000, 1_800_000], $tested);
-        $this->assertSame([['account' => self::ACCOUNT, 'resource' => self::GROUP, 'bid' => 1_800_000]], $this->writes);
-        $this->assertSame(1_800_000, $this->remote['keywords'][0]['ad_group_cpc_bid_micros']);
+        $this->assertSame([1_000_000, 1_800_000, 500_000, 750_000], $tested);
+        $this->assertSame([['account' => self::ACCOUNT, 'resource' => self::GROUP, 'bid' => 750_000]], $this->writes);
+        $this->assertSame(750_000, $this->remote['keywords'][0]['ad_group_cpc_bid_micros']);
         $this->assertSame(GoogleStatus::PAUSED, $this->remote['status']);
         $this->assertSame(5_000_000, $this->remote['daily_budget_micros']);
         $this->assertSame('5.00', $campaign->fresh()->approved_daily_budget);
