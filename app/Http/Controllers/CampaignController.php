@@ -12,6 +12,7 @@ use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\ActivityLogger;
+use App\Services\Campaigns\CampaignBudgetConfirmation;
 use App\Services\StorageHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -310,18 +311,10 @@ class CampaignController extends Controller
             'daily_budget' => 'required|numeric|min:5|max:10000',
         ]);
 
-        $daily = round((float) $validated['daily_budget'], 2);
+        $dailyCents = (int) round((float) $validated['daily_budget'] * 100);
+        $campaign = app(CampaignBudgetConfirmation::class)->confirm($campaign, $dailyCents);
 
-        $campaign->update([
-            'daily_budget' => $daily,
-            'approved_daily_budget' => $daily,
-            // Kept in step with the daily figure, so the seven-day prepay and
-            // the campaign's own total cannot disagree.
-            'total_budget' => round($daily * 7, 2),
-            'budget_confirmed_at' => now(),
-        ]);
-
-        ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $daily, 'budget_confirmed' => true]);
+        ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $campaign->daily_budget, 'budget_confirmed' => true]);
 
         // Deploy-intent: this is the moment a real Google Ads sub-account is
         // worth creating (provisioning at signup minted accounts for

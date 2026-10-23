@@ -292,12 +292,14 @@ class GenerateStrategy implements ShouldQueue
 
             Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found ".count($strategyData['strategies']).' strategies');
 
-            $document = \App\Services\Campaigns\StrategyDocument::fromArray(
-                $strategyData, $enabledPlatforms, (float) $this->campaign->daily_budget, requireCreativeCandidates: true
-            );
-            $strategyData['strategies'] = $document->strategies;
-            \Illuminate\Support\Facades\DB::transaction(function () use ($strategyData) {
-                Campaign::whereKey($this->campaign->id)->lockForUpdate()->firstOrFail();
+            \Illuminate\Support\Facades\DB::transaction(function () use ($strategyData, $enabledPlatforms) {
+                $current = Campaign::whereKey($this->campaign->id)->lockForUpdate()->firstOrFail();
+                // Approval can change while the model is working. Normalize its
+                // suggestions inside the approval lock using the current budget.
+                $document = \App\Services\Campaigns\StrategyDocument::fromArray(
+                    $strategyData, $enabledPlatforms, (float) $current->daily_budget, requireCreativeCandidates: true
+                );
+                $strategyData['strategies'] = $document->strategies;
                 $oldIds = $this->campaign->strategies()->pluck('id');
                 $generationId = (string) \Illuminate\Support\Str::uuid();
                 // Step 4: Parse the response and save the platform-specific strategies.
