@@ -43,7 +43,7 @@ describe('Ad policy visibility', () => {
 
     it('keeps the last rejection visible when a later policy check is unavailable', () => {
         render(<PolicyStatusCard campaign={campaign} policyStatus={{ ...snapshot, status: 'unknown', issues: [], last_incident: { issues: [issue] } }} />);
-        expect(screen.getByText('Unknown')).toBeInTheDocument();
+        expect(screen.getByText('Latest check unavailable')).toBeInTheDocument();
         expect(screen.getByText('HTTP 522')).toBeInTheDocument();
         expect(screen.getByText(/unavailable check does not mean the ads are approved/)).toBeInTheDocument();
         expect(screen.getByText(/Last successful policy check:/)).toBeInTheDocument();
@@ -65,10 +65,50 @@ describe('Ad policy visibility', () => {
         expect(screen.getByText(/Campaign status: Paused/)).toBeInTheDocument();
     });
 
-    it('shows unknown before the first check and never creates an unsafe destination link', () => {
+    it('keeps an initial unconfirmed check compact on the campaign and preserves admin visibility', () => {
         const { rerender } = render(<PolicyStatusCard campaign={{ ...campaign, policy_checks: null }} />);
-        expect(screen.getByText('No completed policy check is available yet.')).toBeInTheDocument();
+        expect(screen.getByRole('status')).toHaveTextContent('Ad approval has not been confirmed yet.');
+        expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Get help with this issue' })).not.toBeInTheDocument();
+        rerender(<PolicyStatusCard campaign={{ ...campaign, policy_checks: null }} admin />);
         expect(screen.getByText('Unknown')).toBeInTheDocument();
+        expect(screen.getByText('No completed policy check is available yet.')).toBeInTheDocument();
+    });
+
+    it.each([
+        null,
+        { status: 'unknown', issues: [] },
+        { status: 'unknown', issues: [], platforms: { google_ads: { error: 'The ads are awaiting review.' } } },
+        { status: 'unknown', issues: [], last_incident: { issues: [issue], resolved_at: snapshot.checked_at } },
+    ])('does not render a customer overview warning without an unresolved issue: %j', policyStatus => {
+        const { container } = render(<PolicyStatusCard campaign={campaign} policyStatus={policyStatus} showClear={false} showCampaignLink />);
+        expect(container).toBeEmptyDOMElement();
+        expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Get help with this issue' })).not.toBeInTheDocument();
+    });
+
+    it('keeps confirmed limited approval visible on a paused campaign with a clear action', () => {
+        const limited = { platform: 'google_ads', limited_approval: true, approval_status: 'APPROVED_LIMITED',
+            message: 'Google approved this ad with restrictions.', policy_topics: [{ topic: 'TRADEMARKS' }] };
+        render(<PolicyStatusCard campaign={campaign} policyStatus={{ ...snapshot, repair_status: 'needs_policy_review', issues: [limited] }} showClear={false} showCampaignLink />);
+        expect(screen.getByText('Limited approval')).toBeInTheDocument();
+        expect(screen.getByText('Ad delivery has restrictions')).toBeInTheDocument();
+        expect(screen.getByText(/Google approved this ad with restrictions. Review the policy details/)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Review in Google Ads' })).toHaveAttribute('href', 'https://ads.google.com/');
+        expect(screen.getByText(/Campaign status: Paused/)).toBeInTheDocument();
+        expect(screen.queryByText('No current policy issues reported')).not.toBeInTheDocument();
+    });
+
+    it('does not put an initial policy warning on the setup dashboard', () => {
+        const journey = { current_step: { key: 'handover', title: 'Your account is ready', description: 'Review your handover.' }, steps: [{ key: 'handover' }], business: { name: 'Business' }, campaign: { review_url: '/review' }, paid: true, checklist: [] };
+        render(<SetupHome journey={journey} policyCampaigns={[{ ...campaign, policy_checks: null }]} />);
+        expect(screen.queryByRole('region', { name: /Ad policy status/ })).not.toBeInTheDocument();
+        expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Get help with this issue' })).not.toBeInTheDocument();
+    });
+
+    it('never creates an unsafe destination link', () => {
+        const { rerender } = render(<PolicyStatusCard campaign={campaign} admin />);
         rerender(<PolicyStatusCard campaign={campaign} policyStatus={{ ...snapshot, issues: [{ ...issue, final_urls: ['javascript:alert(1)'], policy_topics: [] }] }} admin />);
         expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).not.toBeInTheDocument();

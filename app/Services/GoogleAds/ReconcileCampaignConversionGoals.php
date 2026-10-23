@@ -26,6 +26,14 @@ use Laravel\Pennant\Feature;
 /** Reconcile one campaign with declared intent, preserving account-wide primaries and defaults. */
 class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
 {
+    private bool $pausedSetupRequest = false;
+
+    private bool $preparingActions = false;
+
+    private ?string $checkingCampaignResource = null;
+
+    private ?string $checkingCustomerId = null;
+
     public static function categoryFor(Strategy $strategy): ?string
     {
         $declared = $strategy->conversion_goals['primary_goal'] ?? null;
@@ -48,13 +56,29 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
     /** Check action eligibility before creating a new Google campaign. */
     public function prepare(Strategy $strategy): array
     {
-        return $this->check($strategy, null, false, true);
+        $this->preparingActions = true;
+        try {
+            return $this->check($strategy, null, false, true);
+        } finally {
+            $this->preparingActions = false;
+        }
     }
 
     /** Read-only diagnosis; ready is false for a safely repairable campaign mismatch. */
     public function inspect(Strategy $strategy, ?string $campaignResource = null): array
     {
         return $this->check($strategy, $campaignResource, false);
+    }
+
+    /** Explicit owner configuration; every write rechecks the exact paid setup campaign is PAUSED. */
+    public function reconcilePausedSetup(Strategy $strategy, string $resource): array
+    {
+        $this->pausedSetupRequest = true;
+        try {
+            return $this->reconcile($strategy, $resource, allowInactive: true);
+        } finally {
+            $this->pausedSetupRequest = false;
+        }
     }
 
     /** Apply only campaign goal operations, then verify their effective settings. */
@@ -91,6 +115,10 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             throw new \LogicException('Conversion goals must belong to the strategy customer.');
         }
         $customerId = $this->customer->cleanGoogleCustomerId();
+        $this->checkingCustomerId = $customerId;
+        $checkedResource = $prepare ? null : ($resource ?? $strategy->reusableGoogleCampaignId());
+        $this->checkingCampaignResource = $checkedResource && ctype_digit($checkedResource)
+            ? "customers/{$customerId}/campaigns/{$checkedResource}" : $checkedResource;
         if (! $customerId || ! ctype_digit($customerId)) {
             return $this->result($strategy, null, [new AgentIssue('conversion_goal_account_missing', 'A Google Ads account is required to verify conversion goals.')]);
         }
@@ -135,7 +163,8 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             }
             $matchingPrimaries = array_filter(array_column($rows, 'conversionAction'), fn ($other) => ($other['category'] ?? '') === $category
                 && ($other['origin'] ?? '') === $action['origin'] && ($other['primaryForGoal'] ?? false));
-            $intent = ['mode' => ($action['primaryForGoal'] ?? false) && count($matchingPrimaries) === 1 ? 'category' : 'custom',
+            $exactSelection = ($strategy->conversion_goals['selection_mode'] ?? null) === 'exact_action';
+            $intent = ['mode' => ! $exactSelection && ($action['primaryForGoal'] ?? false) && count($matchingPrimaries) === 1 ? 'category' : 'custom',
                 'category' => $category, 'origin' => $action['origin'], 'action_resource' => $action['resourceName']];
             if ($issue = $this->validateDelivery($customerId, $action)) {
                 return $this->result($strategy, $intent, [$issue]);
@@ -218,6 +247,20 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
     /** Re-read holds after remote work, immediately before each recurring write. */
     private function mutationHold(Strategy $strategy, string $customerId, string $resource, array $intent, bool $allowInactive): ?array
     {
+        if ($this->pausedSetupRequest) {
+            if (! $this->pausedSetupIsCurrent($strategy, $customerId, $resource)) {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_paused_setup_changed', 'The reviewed paid setup campaign changed. Goal updates require another check.')]);
+            }
+            $rows = $this->readRows($customerId, "SELECT campaign.status FROM campaign WHERE campaign.resource_name = '{$resource}'");
+            if (($rows[0]['campaign']['status'] ?? null) !== 'PAUSED') {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_paused_setup_required', 'Google must confirm the campaign is paused immediately before a goal update.')]);
+            }
+            if (! $this->pausedSetupIsCurrent($strategy, $customerId, $resource)) {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_paused_setup_changed', 'The campaign authorization changed during its Google status check. No goal update was authorized.')]);
+            }
+
+            return null;
+        }
         if ($allowInactive) {
             return null;
         }
@@ -264,6 +307,30 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
         }
 
         return null;
+    }
+
+    /**
+     * Fresh database state can change across the intervening Google status request.
+     *
+     * @phpstan-impure
+     */
+    private function pausedSetupIsCurrent(Strategy $strategy, string $customerId, string $resource): bool
+    {
+        $fresh = Strategy::with('campaign.customer')->findOrFail($strategy->id);
+        $campaign = $fresh->campaign;
+        $customer = $campaign->customer;
+        $currentResource = $fresh->reusableGoogleCampaignId();
+        if ($currentResource && ctype_digit($currentResource)) {
+            $currentResource = "customers/{$customerId}/campaigns/{$currentResource}";
+        }
+
+        return $customer?->isPaidSetupOnly() && $customer->id === $this->customer?->id
+            && $customer->cleanGoogleCustomerId() === $customerId && $currentResource === $resource
+            && $fresh->conversion_goals === $strategy->conversion_goals
+            && ! in_array($fresh->deployment_status, ['queued', 'deploying'], true)
+            && ! $campaign->hasPassedEndDate() && ! in_array($campaign->status->value, ['ended', 'completed'], true)
+            && ! $campaign->spend_safety_hold && ! \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($campaign)
+            && ! in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true);
     }
 
     private function matches(array $goal, array $intent): bool
@@ -441,15 +508,28 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
     private function result(Strategy $strategy, ?array $intent, array $issues = [], array $actions = [], bool $repairable = false, string $status = 'needs_review'): array
     {
         $state = ['status' => $issues === [] ? 'ready' : $status, 'ready' => $issues === [], 'intent' => $intent,
-            'actions' => $actions, 'issues' => $issues, 'repairable' => $repairable];
+            'actions' => $actions, 'issues' => $issues, 'repairable' => $repairable,
+            'configuration_verified' => ! $this->preparingActions && $issues === [],
+            'campaign_resource' => $this->preparingActions ? null : $this->checkingCampaignResource];
+        $stale = false;
         // Other workers write readiness and deployment evidence to this same JSON column.
         // Read its latest contents under the same row lock they use, then change only our keys.
-        $execution = DB::transaction(function () use ($strategy, $state, $intent, $issues, $actions, $status) {
+        $execution = DB::transaction(function () use ($strategy, $state, $intent, $issues, $actions, $status, &$stale) {
             $locked = Strategy::whereKey($strategy->id)->lockForUpdate()->firstOrFail();
             if ($locked->campaign->customer_id !== $this->customer?->id) {
                 throw new \LogicException('Conversion readiness must belong to the service customer.');
             }
             $execution = $locked->execution_result ?? [];
+            $currentResource = $locked->reusableGoogleCampaignId();
+            $currentResource = $currentResource && ctype_digit($currentResource)
+                ? 'customers/'.$this->checkingCustomerId.'/campaigns/'.$currentResource : $currentResource;
+            if ($locked->conversion_goals !== $strategy->conversion_goals
+                || $locked->campaign->customer?->cleanGoogleCustomerId() !== $this->checkingCustomerId
+                || (! $this->preparingActions && $currentResource !== $this->checkingCampaignResource)) {
+                $stale = true;
+
+                return $execution;
+            }
             $previous = $execution['metadata']['conversion_goal_readiness'] ?? [];
             $persisted = array_merge($state, ['issues' => array_map(fn (AgentIssue $issue) => $issue->toArray(), $issues), 'checked_at' => now()->toIso8601String()]);
             if (isset($intent['custom_goal']) || isset($previous['managed_custom_goal'])) {
@@ -457,13 +537,13 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             }
             if ($status === 'unknown' && isset($previous['last_ready'])) {
                 $persisted['last_ready'] = $previous['last_ready'];
-            } elseif ($state['ready']) {
-                $persisted['last_ready'] = ['intent' => $intent, 'checked_at' => $persisted['checked_at']];
+            } elseif ($state['ready'] && (! $this->preparingActions || ! isset($previous['last_ready']))) {
+                $persisted['last_ready'] = ['intent' => $intent, 'checked_at' => $persisted['checked_at'], 'configuration_verified' => $state['configuration_verified']];
             } elseif (isset($previous['last_ready'])) {
                 $persisted['last_ready'] = $previous['last_ready'];
             }
             $execution['metadata']['conversion_goal_readiness'] = $persisted;
-            if ($state['ready'] && $intent && ($intent['mode'] !== 'custom' || ! empty($intent['custom_goal']))) {
+            if ($state['configuration_verified'] && $intent && ($intent['mode'] !== 'custom' || ! empty($intent['custom_goal']))) {
                 $execution['metadata']['google_search_baseline']['conversion_goal'] = $intent;
                 $execution['metadata']['google_search_baseline']['conversion_category'] = $intent['category'];
             }
@@ -479,6 +559,10 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
 
             return $execution;
         }, 3);
+        if ($stale) {
+            return ['status' => 'needs_review', 'ready' => false, 'configuration_verified' => false, 'intent' => null,
+                'actions' => [], 'issues' => [new AgentIssue('conversion_goal_intent_changed', 'The customer changed this conversion goal during verification. The newer choice was preserved.')], 'repairable' => false];
+        }
         $strategy->setAttribute('execution_result', $execution)->syncOriginalAttribute('execution_result');
 
         return array_merge($execution['metadata']['conversion_goal_readiness'], ['issues' => $issues]);

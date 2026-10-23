@@ -66,7 +66,7 @@ class GTMContainerService
      * Creates a container, stores its ID on the customer record, and returns
      * the GTM container public ID (e.g. GTM-XXXXXXX) ready for snippet generation.
      */
-    public function provisionContainerForCustomer(Customer $customer): array
+    public function provisionContainerForCustomer(Customer $customer, bool $customerScoped = false, ?callable $authorize = null): array
     {
         try {
             $accountId = config('services.gtm.platform_account_id');
@@ -89,7 +89,8 @@ class GTMContainerService
             // error) meant the next attempt minted another container, up to three
             // per customer, each with its own snippet the customer would have to
             // install for tracking to work.
-            if ($customer->gtm_container_id && ! empty($customer->gtm_config['container_path'])) {
+            if ($customer->gtm_container_id && ! empty($customer->gtm_config['container_path'])
+                && (! $customerScoped || ($customer->gtm_config['customer_uuid'] ?? null) === $customer->uuid)) {
                 Log::info('GTMContainerService: Container already provisioned, reusing', [
                     'customer_id' => $customer->id,
                     'container_id' => $customer->gtm_container_id,
@@ -104,7 +105,10 @@ class GTMContainerService
                 ];
             }
 
-            $containerName = $customer->name.' — Site to Spend';
+            $containerName = $customerScoped ? 'Site to Spend '.$customer->uuid : $customer->name.' — Site to Spend';
+            if ($authorize) {
+                $authorize();
+            }
             $response = $this->makeApiCall('POST', "/accounts/{$accountId}/containers", $accessToken, [
                 'name' => $containerName,
                 'usageContext' => ['WEB'],
@@ -155,6 +159,9 @@ class GTMContainerService
                 }
             }
 
+            if ($authorize) {
+                $authorize();
+            }
             $customer->update([
                 'gtm_container_id' => $containerId,
                 'gtm_account_id' => $accountId,
@@ -168,6 +175,7 @@ class GTMContainerService
                     'account_id' => $accountId,
                     'workspace_id' => $workspaceId,
                     'provisioned_at' => now()->toIso8601String(),
+                    ...($customerScoped ? ['customer_uuid' => $customer->uuid] : []),
                 ],
             ]);
 
@@ -299,6 +307,231 @@ HTML;
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /** Upsert one owned campaign tag with exactly the trigger its owner approved. */
+    public function configureReviewedConversionTag(Customer $customer, string $strategyUuid, array $goal, string $conversionId, string $label, ?callable $authorize = null): array
+    {
+        $accountId = (string) config('services.gtm.platform_account_id');
+        $containerPath = $customer->gtm_config['container_path'] ?? '';
+        if (! $accountId || (string) $customer->gtm_account_id !== $accountId
+            || ! preg_match('#^accounts/'.preg_quote($accountId, '#').'/containers/\d+$#', $containerPath)
+            || ! $customer->gtm_workspace_id || ! preg_match('/^AW-\d+$/', $conversionId) || ! preg_match('/^[A-Za-z0-9_-]+$/', $label)
+            || ! \Illuminate\Support\Str::isUuid($strategyUuid)) {
+            return ['success' => false, 'error' => 'A platform-owned customer tag container and valid conversion tag are required.'];
+        }
+        $token = $this->getPlatformAccessToken();
+        if (! $token) {
+            return ['success' => false, 'error' => 'Managed tag authentication is unavailable.'];
+        }
+        $host = parse_url($customer->website ?? '', PHP_URL_HOST);
+        if (! is_string($host) || $host === '') {
+            return ['success' => false, 'error' => 'A business website is required.'];
+        }
+        $condition = fn (string $variable, string $value) => ['type' => 'equals', 'parameter' => [
+            ['type' => 'template', 'key' => 'arg0', 'value' => '{{'.$variable.'}}'],
+            ['type' => 'template', 'key' => 'arg1', 'value' => $value],
+        ]];
+        $trigger = ['name' => 'Site to Spend '.$strategyUuid.' '.substr(hash('sha256', json_encode($goal)), 0, 16),
+            'filter' => [$condition('Page Hostname', $host)]];
+        if (($goal['trigger'] ?? '') === 'thank_you_url') {
+            $url = parse_url($goal['thank_you_url'] ?? '');
+            if (! $url || ($url['scheme'] ?? '') !== 'https' || ($url['host'] ?? '') !== $host || in_array($url['path'] ?? '/', ['', '/'], true)) {
+                return ['success' => false, 'error' => 'A precise same-site conversion page is required.'];
+            }
+            $trigger['type'] = 'pageview';
+            $trigger['filter'][] = $condition('Page URL', $goal['thank_you_url']);
+        } elseif (($goal['trigger'] ?? '') === 'event' && preg_match('/^[A-Za-z][A-Za-z0-9_]{1,99}$/', $goal['event_name'] ?? '')) {
+            $trigger['type'] = 'customEvent';
+            $trigger['customEventFilter'] = [$condition('_event', $goal['event_name'])];
+        } else {
+            return ['success' => false, 'error' => 'A specific conversion trigger is required.'];
+        }
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $workspace = $this->getWorkspacePath($customer);
+            $listed = $this->makeApiCall('GET', "/{$workspace}/triggers", $token);
+            if (! $listed['success'] && $this->workspaceIsUnusable($listed) && $this->rotateWorkspace($customer, $token, $authorize)) {
+                continue;
+            }
+            if (! $listed['success']) {
+                return ['success' => false, 'error' => 'Managed conversion triggers could not be read.'];
+            }
+            if ($authorize) {
+                $authorize();
+            }
+            $types = $trigger['type'] === 'pageview' ? 'type=pageHostname&type=pageUrl' : 'type=pageHostname&type=event';
+            $variables = $this->makeApiCall('POST', "/{$workspace}/built_in_variables?{$types}", $token);
+            if (! $variables['success']) {
+                return ['success' => false, 'error' => 'The reviewed trigger variables could not be enabled.'];
+            }
+            $existing = collect($listed['data']['trigger'] ?? [])->firstWhere('name', $trigger['name']);
+            if ($existing) {
+                foreach (['type', 'filter', 'customEventFilter'] as $key) {
+                    if (! $this->reviewedEqual($existing[$key] ?? [], $trigger[$key] ?? [])) {
+                        return ['success' => false, 'error' => 'An existing managed trigger differs from the reviewed definition.'];
+                    }
+                }
+                $triggerId = $existing['triggerId'] ?? null;
+            } else {
+                if ($authorize) {
+                    $authorize();
+                }
+                $created = $this->makeApiCall('POST', "/{$workspace}/triggers", $token, $trigger);
+                $triggerId = $created['success'] ? ($created['data']['triggerId'] ?? null) : null;
+            }
+            if (! $triggerId) {
+                return ['success' => false, 'error' => 'The reviewed conversion trigger could not be created.'];
+            }
+            $name = 'Site to Spend '.$strategyUuid.' conversion';
+            $tags = $this->makeApiCall('GET', "/{$workspace}/tags", $token);
+            if (! $tags['success']) {
+                return ['success' => false, 'error' => 'Managed conversion tags could not be read.'];
+            }
+            $existingTag = collect($tags['data']['tag'] ?? [])->firstWhere('name', $name);
+            $tag = ['name' => $name, 'type' => 'awct', 'parameter' => [
+                ['key' => 'conversionId', 'type' => 'template', 'value' => substr($conversionId, 3)],
+                ['key' => 'conversionLabel', 'type' => 'template', 'value' => $label],
+            ], 'firingTriggerId' => [(string) $triggerId]];
+            $endpoint = "/{$workspace}/tags".($existingTag ? '/'.$existingTag['tagId'] : '');
+            if ($authorize) {
+                $authorize();
+            }
+            $written = $this->makeApiCall($existingTag ? 'PUT' : 'POST', $endpoint, $token, $tag);
+            if (! $written['success'] && $this->workspaceIsUnusable($written) && $this->rotateWorkspace($customer, $token, $authorize)) {
+                continue;
+            }
+            if (! $written['success']) {
+                return ['success' => false, 'error' => 'The reviewed conversion tag could not be saved.'];
+            }
+
+            return $this->publishReviewedWorkspace($customer, $workspace, $token, $tag, $trigger + ['triggerId' => (string) $triggerId], $authorize);
+        }
+
+        return ['success' => false, 'error' => 'A writable managed tag workspace is required.'];
+    }
+
+    /** Remove only this strategy's previously managed measurement when an existing action replaces it. */
+    public function retireReviewedConversionTag(Customer $customer, string $strategyUuid, ?callable $authorize = null): array
+    {
+        $account = (string) config('services.gtm.platform_account_id');
+        $container = $customer->gtm_config['container_path'] ?? '';
+        if (! $account || (string) $customer->gtm_account_id !== $account
+            || ! preg_match('#^accounts/'.preg_quote($account, '#').'/containers/\d+$#', $container)
+            || ! \Illuminate\Support\Str::isUuid($strategyUuid)) {
+            return ['success' => false, 'error' => 'A platform-owned tag container is required.'];
+        }
+        $token = $this->getPlatformAccessToken();
+        if (! $token) {
+            return ['success' => false, 'error' => 'Managed tag authentication is unavailable.'];
+        }
+        $name = 'Site to Spend '.$strategyUuid.' conversion';
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $workspace = $this->getWorkspacePath($customer);
+            $tags = $this->makeApiCall('GET', "/{$workspace}/tags", $token);
+            if (! $tags['success'] && $this->workspaceIsUnusable($tags) && $this->rotateWorkspace($customer, $token, $authorize)) {
+                continue;
+            }
+            if (! $tags['success']) {
+                return ['success' => false, 'error' => 'Existing managed tags could not be checked.'];
+            }
+            $tag = collect($tags['data']['tag'] ?? [])->firstWhere('name', $name);
+            if (! $tag) {
+                $live = $this->makeApiCall('GET', "/{$container}/versions:live", $token);
+                if (! $live['success']) {
+                    return ['success' => false, 'error' => 'The replaced tag could not be checked in the live container.'];
+                }
+                if (! collect($live['data']['tag'] ?? [])->firstWhere('name', $name)) {
+                    return ['success' => true];
+                }
+
+                return $this->publishReviewedWorkspace($customer, $workspace, $token, ['name' => $name], null, $authorize);
+            }
+            if ($authorize) {
+                $authorize();
+            }
+            $deleted = $this->makeApiCall('DELETE', "/{$workspace}/tags/{$tag['tagId']}", $token);
+            if (! $deleted['success']) {
+                return ['success' => false, 'error' => 'The replaced managed tag could not be retired.'];
+            }
+
+            return $this->publishReviewedWorkspace($customer, $workspace, $token, ['name' => $name], null, $authorize);
+        }
+
+        return ['success' => false, 'error' => 'A writable managed workspace is required.'];
+    }
+
+    /** Publish exactly our reviewed version, then inspect its actual live tag and trigger. */
+    private function publishReviewedWorkspace(Customer $customer, string $workspace, string $token, array $tag, ?array $trigger, ?callable $authorize): array
+    {
+        if ($authorize) {
+            $authorize();
+        }
+        $created = $this->makeApiCall('POST', "/{$workspace}:create_version", $token, ['name' => 'Site to Spend reviewed goal '.now()->format('Y-m-d His')]);
+        $version = $created['data']['containerVersion'] ?? [];
+        $path = $version['path'] ?? '';
+        $container = $customer->gtm_config['container_path'];
+        if (! $created['success'] || ($created['data']['compilerError'] ?? false)
+            || ! preg_match('#^'.preg_quote($container, '#').'/versions/\d+$#', $path)
+            || ! $this->reviewedVersionMatches($version, $tag, $trigger)) {
+            return ['success' => false, 'error' => 'The reviewed tag version could not be compiled and verified.'];
+        }
+        if ($authorize) {
+            $authorize();
+        }
+        $published = $this->makeApiCall('POST', "/{$path}:publish", $token);
+        if (! $published['success'] || ($published['data']['compilerError'] ?? false)
+            || ($published['data']['containerVersion']['path'] ?? null) !== $path) {
+            return ['success' => false, 'error' => 'The exact reviewed tag version could not be published.'];
+        }
+        $live = $this->makeApiCall('GET', "/{$container}/versions:live", $token);
+        if (! $live['success'] || ($live['data']['path'] ?? null) !== $path || ! $this->reviewedVersionMatches($live['data'], $tag, $trigger)) {
+            return ['success' => false, 'error' => 'The live tag does not match the reviewed conversion configuration.'];
+        }
+
+        return ['success' => true, 'version_path' => $path];
+    }
+
+    private function reviewedVersionMatches(array $version, array $tag, ?array $trigger): bool
+    {
+        $actualTag = collect($version['tag'] ?? [])->firstWhere('name', $tag['name']);
+        if ($trigger === null) {
+            return $actualTag === null;
+        }
+        if (! $actualTag || ($actualTag['type'] ?? null) !== 'awct' || ($actualTag['paused'] ?? false) === true
+            || ! $this->reviewedEqual($actualTag['parameter'] ?? [], $tag['parameter'])
+            || ! $this->reviewedEqual($actualTag['firingTriggerId'] ?? [], $tag['firingTriggerId'])) {
+            return false;
+        }
+        $actualTrigger = collect($version['trigger'] ?? [])->firstWhere('triggerId', $trigger['triggerId']);
+        if (! $actualTrigger) {
+            return false;
+        }
+        foreach (['type', 'filter', 'customEventFilter'] as $key) {
+            if (! $this->reviewedEqual($actualTrigger[$key] ?? [], $trigger[$key] ?? [])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function reviewedEqual(mixed $left, mixed $right): bool
+    {
+        $canonical = function ($value) use (&$canonical) {
+            if (! is_array($value)) {
+                return $value;
+            }
+            $value = array_map($canonical, $value);
+            if (array_is_list($value)) {
+                usort($value, fn ($a, $b) => strcmp(json_encode($a), json_encode($b)));
+            } else {
+                ksort($value);
+            }
+
+            return $value;
+        };
+
+        return $canonical($left) === $canonical($right);
     }
 
     /**
@@ -514,7 +747,7 @@ JS;
             || str_contains($error, 'Not Found');
     }
 
-    private function rotateWorkspace(Customer $customer, string $accessToken): ?string
+    private function rotateWorkspace(Customer $customer, string $accessToken, ?callable $authorize = null): ?string
     {
         $containerPath = $customer->gtm_config['container_path']
             ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
@@ -542,11 +775,17 @@ JS;
                 continue;
             }
 
+            if ($authorize) {
+                $authorize();
+            }
             $this->rememberWorkspace($customer, $id);
 
             return "{$containerPath}/workspaces/{$id}";
         }
 
+        if ($authorize) {
+            $authorize();
+        }
         $response = $this->makeApiCall('POST', "/{$containerPath}/workspaces", $accessToken, [
             // No colons: GTM rejects them in workspace names, which is not
             // obvious from a timestamp until the create fails.
@@ -569,6 +808,9 @@ JS;
             return null;
         }
 
+        if ($authorize) {
+            $authorize();
+        }
         $this->rememberWorkspace($customer, $workspaceId);
 
         return "{$containerPath}/workspaces/{$workspaceId}";

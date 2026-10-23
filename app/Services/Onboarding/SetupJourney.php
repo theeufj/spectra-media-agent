@@ -7,7 +7,6 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Strategy;
-use App\Services\Agents\AgentIssue;
 
 /** A read-only description of the purchased setup, shared by every setup screen. */
 class SetupJourney
@@ -54,15 +53,32 @@ class SetupJourney
         $campaignUrl = $campaign ? route('campaigns.show', $campaign) : null;
         $reviewUrl = $campaign && $strategy?->signed_off_at
             ? route('campaigns.collateral.show', [$campaign, $strategy]) : $campaignUrl;
-        $pendingGoals = $strategies->filter(fn (Strategy $s) => ($s->execution_result['metadata']['google_search_staging']['mode'] ?? null) === 'setup_only_paused_handover'
-            && ($s->execution_result['metadata']['conversion_goal_readiness']['ready'] ?? false) !== true);
-        $goalRequirements = $pendingGoals->map(function (Strategy $s): string {
-            $goal = $s->conversion_goals['primary_goal'] ?? null;
-            $label = is_string($goal) && $goal !== '' ? $goal : 'the campaign objective';
-            $issues = $s->execution_result['metadata']['conversion_goal_readiness']['issues'] ?? [];
-
-            return 'Configure and verify the intended conversion action and campaign bidding goal for '.$label.' in Google Ads before switching on ads. '.AgentIssue::toSentence($issues);
-        })->implode(' ');
+        $googleStrategies = $strategies->filter(fn (Strategy $s) => str_contains(strtolower($s->platform ?? ''), 'google') && $s->campaign_type === 'search')->sortBy('id')->values();
+        $goalSetups = $googleStrategies->map(fn (Strategy $s) => SetupConversionGoal::configurationFor($s));
+        $goalConfigured = $goalSetups->isNotEmpty() && $goalSetups->every(fn (array $setup) => ($setup['status'] ?? null) === 'configured');
+        $goalConfiguring = $goalSetups->contains(fn (array $setup) => ($setup['status'] ?? null) === 'configuring');
+        $goalWaitingForCampaign = $goalSetups->contains(fn (array $setup) => ($setup['status'] ?? null) === 'waiting_for_campaign');
+        $goalNeedsAttention = $goalSetups->contains(fn (array $setup) => in_array($setup['status'] ?? null, ['needs_review', 'unknown'], true));
+        $goalSaved = $goalSetups->contains(fn (array $setup) => ! empty($setup['request_id']));
+        $goalTarget = $googleStrategies->first(fn (Strategy $s, int $key) => ($goalSetups->get($key)['status'] ?? null) !== 'configured') ?? $googleStrategies->first();
+        $goalSetupUrl = $campaign && $goalTarget ? route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $goalTarget->uuid]) : null;
+        $trackingTarget = $googleStrategies->first(fn (Strategy $s, int $key) => ($goalSetups->get($key)['goal']['trigger'] ?? null) === 'prepare_only');
+        $trackingGoal = $trackingTarget?->execution_result['metadata']['setup_conversion_goal']['goal'] ?? [];
+        $purchaseTracking = ($trackingGoal['objective'] ?? null) === 'purchase';
+        $trackingSetupUrl = $campaign && $trackingTarget
+            ? route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $trackingTarget->uuid])
+            : ($customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null);
+        $goalDetail = match (true) {
+            $goalConfigured => 'Your selected goal is configured in Google Ads. Website installation and a real conversion still need their own checks.',
+            $goalConfiguring => 'We are configuring your selected goal. Your ads remain paused; you can check progress here.',
+            $goalWaitingForCampaign => 'Your goal is saved. Configuration will finish after your paused campaign is created.',
+            $goalNeedsAttention => 'Goal setup needs attention. Review your choices and try again; your ads remain paused.',
+            default => 'Choose what counts as a successful enquiry, signup or purchase. We will configure the matching Google Ads goal and tracking trigger.',
+        };
+        if ($googleStrategies->count() > 1 && ! $goalConfigured) {
+            $goalDetail = $goalSetups->where('status', 'configured')->count().' of '.$googleStrategies->count()
+                .' Search campaign goals configured. Set up the remaining goals before switching on ads.';
+        }
 
         $steps = [
             ['key' => 'business', 'title' => 'Your business', 'completed' => $ready,
@@ -104,6 +120,7 @@ class SetupJourney
                 'name' => $campaign->name, 'url' => $campaignUrl, 'review_url' => $reviewUrl,
                 'budget' => ($campaign->approved_daily_budget ?? $campaign->daily_budget), 'budget_confirmed' => $campaign->budget_confirmed_at !== null,
                 'status' => $campaign->status->value,
+                'goal_setup_url' => $goalSetupUrl,
             ] : null,
             'checklist' => [
                 ['title' => 'Google Ads account', 'done' => (bool) $customer->google_ads_customer_id,
@@ -122,10 +139,14 @@ class SetupJourney
                 // conversion_tracking_verified_at is also set when configuration is merely published.
                 // It cannot prove that a website tag is installed or that a test conversion fired.
                 ['title' => 'Conversion tracking', 'done' => false,
-                    'detail' => $customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.',
-                    'url' => $customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null],
-                ...($goalRequirements !== '' ? [['title' => 'Campaign conversion goal', 'done' => false,
-                    'detail' => $goalRequirements]] : []),
+                    'detail' => $trackingTarget
+                        ? ($purchaseTracking ? 'Connect a completed purchase on your website to this goal using a confirmation page, success event or existing action. Then install or update the website tag and test a real purchase before switching on ads.'
+                            : 'Connect the chosen customer action to this goal using a confirmation page, success event or existing action. Then install or update the website tag and test a real conversion before switching on ads.')
+                        : ($customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.'),
+                    'url' => $trackingSetupUrl, 'action_text' => $trackingTarget ? ($purchaseTracking ? 'Connect purchase tracking' : 'Connect tracking') : 'Set up tracking'],
+                ...($goalSetupUrl ? [['title' => 'Campaign conversion goal', 'done' => $goalConfigured,
+                    'detail' => $goalDetail, 'url' => $goalSetupUrl,
+                    'action_text' => $goalConfiguring ? 'View goal setup' : ($goalSaved || $goalConfigured ? 'Edit goal' : 'Set up goal')]] : []),
             ],
         ];
     }

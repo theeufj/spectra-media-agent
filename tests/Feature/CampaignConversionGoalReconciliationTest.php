@@ -512,6 +512,116 @@ class CampaignConversionGoalReconciliationTest extends TestCase
         }
     }
 
+    public function test_prepare_checks_action_eligibility_without_certifying_a_campaign_goal(): void
+    {
+        $state = $this->service->prepare($this->strategy);
+        $this->assertTrue($state['ready']);
+        $this->assertFalse($state['configuration_verified']);
+        $this->assertNull($state['campaign_resource']);
+        $this->assertArrayNotHasKey('conversion_goal', $this->strategy->fresh()->execution_result['metadata']['google_search_baseline']);
+    }
+
+    public function test_old_goal_verification_cannot_overwrite_new_customer_intent_or_campaign_identity(): void
+    {
+        foreach (['intent', 'resource'] as $change) {
+            $this->strategy->refresh()->forceFill(['google_ads_campaign_id' => 'customers/123/campaigns/9',
+                'conversion_goals' => ['primary_goal' => 'Purchase'], 'execution_result' => ['metadata' => ['newer_choice' => $change]]])->save();
+            foreach ($this->service->goals as &$goal) {
+                $goal['biddable'] = $goal['category'] === 'PURCHASE';
+            }
+            unset($goal);
+            $this->service->duringRead = function ($query) use ($change) {
+                if (str_contains($query, 'FROM conversion_action ')) {
+                    $this->service->duringRead = null;
+                    $fresh = $this->strategy->fresh();
+                    $fresh->forceFill($change === 'intent' ? ['conversion_goals' => ['primary_goal' => 'Lead']]
+                        : ['google_ads_campaign_id' => 'customers/123/campaigns/10'])->save();
+                }
+            };
+            $state = $this->service->inspect($this->strategy, 'customers/123/campaigns/9');
+            $this->assertFalse($state['ready']);
+            $this->assertSame('conversion_goal_intent_changed', $state['issues'][0]->code);
+            $this->assertSame(['metadata' => ['newer_choice' => $change]], $this->strategy->fresh()->execution_result);
+        }
+    }
+
+    public function test_explicit_paid_setup_can_configure_a_secondary_lead_without_touching_account_primaries_or_enabling_ads(): void
+    {
+        $this->customer->update(['service_type' => 'setup_only', 'setup_fee_paid_at' => now()]);
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Lead', 'action_resource' => 'customers/123/conversionActions/9']]);
+        $this->campaign->update(['status' => 'paused', 'platform_status' => 'PAUSED']);
+        $this->service->remoteStatus = 'PAUSED';
+        $actions = $this->service->actions;
+
+        $state = $this->service->reconcilePausedSetup($this->strategy, 'customers/123/campaigns/9');
+
+        $this->assertTrue($state['ready']);
+        $this->assertTrue($state['configuration_verified']);
+        $this->assertSame('customers/123/campaigns/9', $state['campaign_resource']);
+        $this->assertSame('custom', $state['intent']['mode']);
+        $this->assertSame('customers/123/conversionActions/9', $state['intent']['action_resource']);
+        $this->assertSame($actions, $this->service->actions);
+        $this->assertSame('PAUSED', $this->service->remoteStatus);
+        $this->assertSame('paused', $this->campaign->fresh()->status->value);
+    }
+
+    public function test_explicit_setup_goal_mutations_are_blocked_if_the_campaign_becomes_enabled_during_reads(): void
+    {
+        $this->customer->update(['service_type' => 'setup_only', 'setup_fee_paid_at' => now()]);
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Lead', 'action_resource' => 'customers/123/conversionActions/9']]);
+        $this->service->remoteStatus = 'PAUSED';
+        $this->service->duringRead = function ($query) {
+            if (str_contains($query, 'FROM conversion_action ')) {
+                $this->service->duringRead = null;
+                $this->service->remoteStatus = 'ENABLED';
+            }
+        };
+
+        $state = $this->service->reconcilePausedSetup($this->strategy, 'customers/123/campaigns/9');
+
+        $this->assertFalse($state['ready']);
+        $this->assertSame('conversion_goal_paused_setup_required', $state['issues'][0]->code);
+        $this->assertSame([], $this->service->operations);
+        $this->assertSame(0, $this->service->created);
+    }
+
+    public function test_explicit_exact_action_selection_can_replace_our_owned_custom_goal_without_changing_account_primaries(): void
+    {
+        $this->customer->update(['service_type' => 'setup_only', 'setup_fee_paid_at' => now()]);
+        $this->service->remoteStatus = 'PAUSED';
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Lead', 'action_resource' => 'customers/123/conversionActions/9', 'selection_mode' => 'exact_action']]);
+        $this->assertTrue($this->service->reconcilePausedSetup($this->strategy, 'customers/123/campaigns/9')['ready']);
+        $this->strategy->refresh()->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => 'customers/123/conversionActions/7', 'selection_mode' => 'exact_action']]);
+        $actions = $this->service->actions;
+
+        $state = $this->service->reconcilePausedSetup($this->strategy, 'customers/123/campaigns/9');
+
+        $this->assertTrue($state['ready'], \App\Services\Agents\AgentIssue::toSentence($state['issues']));
+        $this->assertSame('custom', $state['intent']['mode']);
+        $this->assertSame('customers/123/conversionActions/7', $state['intent']['action_resource']);
+        $this->assertSame($actions, $this->service->actions);
+    }
+
+    public function test_a_local_hold_added_during_the_remote_paused_status_read_prevents_goal_writes(): void
+    {
+        $this->customer->update(['service_type' => 'setup_only', 'setup_fee_paid_at' => now()]);
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Lead', 'action_resource' => 'customers/123/conversionActions/9']]);
+        $this->service->remoteStatus = 'PAUSED';
+        $this->service->duringRead = function ($query) {
+            if (str_contains($query, 'SELECT campaign.status ')) {
+                $this->service->duringRead = null;
+                $this->campaign->update(['spend_safety_hold' => ['reason' => 'Owner requested review']]);
+            }
+        };
+
+        $state = $this->service->reconcilePausedSetup($this->strategy, 'customers/123/campaigns/9');
+
+        $this->assertFalse($state['ready']);
+        $this->assertSame('conversion_goal_paused_setup_changed', $state['issues'][0]->code);
+        $this->assertSame([], $this->service->operations);
+        $this->assertSame(0, $this->service->created);
+    }
+
     private function bindOwnSiteImport(string $event, string $id): void
     {
         config(['conversions.google_ads_customer_id' => '123']);
@@ -599,13 +709,14 @@ class CampaignGoalsFixture extends ReconcileCampaignConversionGoals
     protected function createCustomGoal(string $customerId, string $name, string $action): ?string
     {
         $this->created++;
-        $this->customs[] = ['resourceName' => 'customers/123/customConversionGoals/99', 'name' => $name,
+        $resource = 'customers/123/customConversionGoals/'.(98 + $this->created);
+        $this->customs[] = ['resourceName' => $resource, 'name' => $name,
             'status' => 'ENABLED', 'conversionActions' => [$action]];
         if ($this->afterCustomCreated) {
             ($this->afterCustomCreated)();
         }
 
-        return 'customers/123/customConversionGoals/99';
+        return $resource;
     }
 
     protected function applyOperations(string $customerId, array $operations): void

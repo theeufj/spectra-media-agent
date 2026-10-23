@@ -13,6 +13,7 @@ use App\Services\GoogleAds\CommonServices\CreateConversionValueRuleSet;
 use App\Services\GoogleAds\CommonServices\PromoteCampaignExperiment;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
 use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCountingTypeEnum\ConversionActionCountingType;
 use Google\Ads\GoogleAds\V26\Enums\UserListLogicalRuleOperatorEnum\UserListLogicalRuleOperator;
 use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetDimensionEnum\ValueRuleSetDimension;
 use Google\Ads\GoogleAds\V26\Services\Client\ConversionActionServiceClient;
@@ -59,6 +60,33 @@ class GoogleAdsV26MutationCompatibilityTest extends TestCase
         $client->method('getConversionActionServiceClient')->willReturn($api);
 
         $this->assertSame($resource, ($this->service(CreateConversionAction::class, $client))(self::CUSTOMER, 'Fixture conversion'));
+    }
+
+    public function test_reviewed_website_action_is_explicitly_secondary_with_the_correct_counting_and_no_invented_revenue(): void
+    {
+        foreach ([ConversionActionCategory::SUBMIT_LEAD_FORM => ConversionActionCountingType::ONE_PER_CLICK,
+            ConversionActionCategory::PURCHASE => ConversionActionCountingType::MANY_PER_CLICK] as $category => $counting) {
+            $resource = 'customers/'.self::CUSTOMER.'/conversionActions/9';
+            $api = $this->createMock(ConversionActionServiceClient::class);
+            $api->expects($this->once())->method('mutateConversionActions')->willReturnCallback(function (MutateConversionActionsRequest $request) use ($resource, $category, $counting) {
+                $action = $request->getOperations()[0]->getCreate();
+                $this->assertTrue($action->hasPrimaryForGoal());
+                $this->assertFalse($action->getPrimaryForGoal());
+                $this->assertSame($category, $action->getCategory());
+                $this->assertSame($counting, $action->getCountingType());
+                $this->assertSame(0.0, $action->getValueSettings()->getDefaultValue());
+                $this->assertSame('AUD', $action->getValueSettings()->getDefaultCurrencyCode());
+                $this->assertFalse($action->getValueSettings()->getAlwaysUseDefaultValue());
+
+                return new MutateConversionActionsResponse(['results' => [new MutateConversionActionResult(['resource_name' => $resource])]]);
+            });
+            $client = $this->createMock(GoogleAdsClient::class);
+            $client->method('getGoogleAdsServiceClient')->willReturn($this->emptySearch());
+            $client->method('getConversionActionServiceClient')->willReturn($api);
+            ($this->service(CreateConversionAction::class, $client))(self::CUSTOMER, 'Reviewed action', $category,
+                ['primary_for_goal' => false, 'counting_type' => $counting, 'default_value' => 0,
+                    'default_currency_code' => 'AUD', 'always_use_default_value' => false]);
+        }
     }
 
     public function test_offline_upload_can_create_and_resolve_its_missing_conversion_action(): void

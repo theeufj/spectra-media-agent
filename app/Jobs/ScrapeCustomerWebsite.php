@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -70,7 +71,8 @@ class ScrapeCustomerWebsite implements ShouldQueue
             }
 
             // Fetch the HTML content of the customer's website
-            $htmlContent = $this->fetchWebsiteContent($this->customer->website);
+            $website = $this->customer->website;
+            $htmlContent = $this->fetchWebsiteContent($website);
 
             if (! $htmlContent) {
                 Log::warning('Failed to fetch website content', [
@@ -84,12 +86,27 @@ class ScrapeCustomerWebsite implements ShouldQueue
             // Detect GTM container ID
             $gtmMetadata = $gtmDetectionService->getDetectionMetadata($htmlContent);
 
-            // Update customer with GTM detection results
-            $this->customer->update([
-                'gtm_detected' => $gtmMetadata['detected'],
-                'gtm_container_id' => $gtmMetadata['container_id'],
-                'gtm_detected_at' => $gtmMetadata['detected_at'],
-            ]);
+            // Observing a website's tag never assigns a writable container.
+            // Provisioning may finish while the page is loading, so merge the
+            // observation into the current row without changing its pointers.
+            $updated = DB::transaction(function () use ($website, $gtmMetadata) {
+                $current = Customer::whereKey($this->customer->id)->lockForUpdate()->firstOrFail();
+                if ($current->website !== $website) {
+                    return false;
+                }
+                $config = $current->gtm_config ?? [];
+                $config['detected_container_id'] = $gtmMetadata['container_id'];
+                $current->update([
+                    'gtm_detected' => $gtmMetadata['detected'],
+                    'gtm_detected_at' => $gtmMetadata['detected_at'],
+                    'gtm_config' => $config,
+                ]);
+
+                return true;
+            });
+            if (! $updated) {
+                return; // The fetched page belongs to an earlier website.
+            }
 
             Log::info('Website scrape completed with GTM detection', [
                 'customer_id' => $this->customer->id,

@@ -91,19 +91,38 @@ class PolicyVisibilityJourneyTest extends TestCase
             ->where('policyCampaigns.0.policy_checks.issues.0.final_urls.0', 'https://business.example/services'));
     }
 
-    public function test_dashboard_prioritizes_issues_bounds_unavailable_cards_and_omits_clear_or_ended_unknown_campaigns(): void
+    public function test_dashboard_omits_initial_pending_and_resolved_unknown_states_without_hiding_paused_issues(): void
     {
         $customer = $this->workspace('setup_only');
         $incident = $this->pausedIncident($customer);
         Campaign::factory()->count(26)->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Paused, 'google_ads_campaign_id' => '555', 'policy_checks' => null]);
         Campaign::factory()->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Paused, 'google_ads_campaign_id' => '777', 'policy_checks' => ['status' => 'clear', 'issues' => []]]);
         Campaign::factory()->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Ended, 'google_ads_campaign_id' => '888', 'policy_checks' => ['status' => 'unknown', 'issues' => []]]);
+        Campaign::factory()->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Paused, 'google_ads_campaign_id' => '889',
+            'policy_checks' => ['status' => 'unknown', 'issues' => [], 'platforms' => ['google_ads' => ['error' => 'The ads are still awaiting review.']]]]);
+        Campaign::factory()->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Paused, 'google_ads_campaign_id' => '890',
+            'policy_checks' => ['status' => 'unknown', 'issues' => [], 'last_incident' => ['issues' => $incident->policy_checks['issues'], 'resolved_at' => now()->toIso8601String()]]]);
         $this->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Setup/Index')
-            ->has('policyCampaigns', 25)
-            ->where('policyCampaignCount', 27)
+            ->has('policyCampaigns', 1)
+            ->where('policyCampaignCount', 1)
             ->where('policyCampaigns.0.id', $incident->id)
             ->missing('policyCampaigns.0.reason'));
+    }
+
+    public function test_dashboard_keeps_unresolved_incidents_when_the_latest_check_is_unknown_and_counts_only_actionable_campaigns(): void
+    {
+        $customer = $this->workspace('setup_only');
+        $incident = $this->pausedIncident($customer);
+        $issues = $incident->policy_checks['issues'];
+        Campaign::factory()->count(25)->create(['customer_id' => $customer->id, 'status' => CampaignStatus::Paused,
+            'google_ads_campaign_id' => '555', 'policy_checks' => ['status' => 'unknown', 'issues' => [],
+                'last_incident' => ['issues' => $issues, 'resolved_at' => null]]]);
+
+        $this->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('policyCampaigns', 25)
+            ->where('policyCampaignCount', 26)
+            ->where('policyCampaigns.0.id', $incident->id));
     }
 
     public function test_admin_campaign_detail_exposes_the_same_persisted_unknown_snapshot(): void

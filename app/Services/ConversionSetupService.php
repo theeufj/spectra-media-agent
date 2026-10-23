@@ -32,6 +32,12 @@ class ConversionSetupService
      */
     public function setup(Customer $customer): array
     {
+        if ($customer->service_type === 'setup_only') {
+            // The paid setup workflow collects the actual business goal and a
+            // precise trigger. Never manufacture a generic Signup/any-form goal.
+            return ['success' => true, 'waiting_for_goal' => true, 'resource_name' => null,
+                'conversion_id' => null, 'snippet' => null, 'errors' => []];
+        }
         $errors = [];
         $snippet = null;
 

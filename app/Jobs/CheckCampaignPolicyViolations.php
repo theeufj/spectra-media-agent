@@ -123,12 +123,19 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         $disapprovedAds = [];
         $issues = [];
         foreach ($ads as $ad) {
-            if (($ad['approval_status'] ?? null) === PolicyApprovalStatus::DISAPPROVED && ($ad['status'] ?? null) !== AdGroupAdStatus::REMOVED) {
+            $limited = ($ad['approval_status'] ?? null) === PolicyApprovalStatus::APPROVED_LIMITED
+                && in_array($ad['review_status'] ?? null, [PolicyReviewStatus::REVIEWED, PolicyReviewStatus::ELIGIBLE_MAY_SERVE], true);
+            if ((($ad['approval_status'] ?? null) === PolicyApprovalStatus::DISAPPROVED || $limited)
+                && ($ad['status'] ?? null) !== AdGroupAdStatus::REMOVED) {
                 $destination = GoogleAdPolicy::isDestinationIssue($ad);
                 $this->destinationIssueDetected = $this->destinationIssueDetected || $destination;
+                $reason = ($ad['policy_topics'] ?? []) !== [] ? GoogleAdPolicy::summarize($ad) : null;
                 $issues[] = array_merge(GoogleAdPolicy::details($ad), [
-                    'platform' => 'google_ads', 'message' => GoogleAdPolicy::summarize($ad),
-                    'action_required' => $destination ? 'Fix the website destination, then request Google Ads review.' : 'Review the policy issue and request Google Ads review.',
+                    'platform' => 'google_ads', 'limited_approval' => $limited,
+                    'message' => $limited ? 'Google approved this ad with restrictions.'.($reason ? ' '.$reason : '') : GoogleAdPolicy::summarize($ad),
+                    'action_required' => $destination ? 'Fix the website destination, then request Google Ads review.'
+                        : ($limited ? 'Review the delivery restrictions in Google Ads before changing the ad or requesting another review.'
+                            : 'Review the policy issue and request Google Ads review.'),
                 ]);
             }
             if (($ad['status'] ?? null) !== AdGroupAdStatus::ENABLED

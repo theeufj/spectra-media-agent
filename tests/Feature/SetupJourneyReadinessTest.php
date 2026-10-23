@@ -143,6 +143,7 @@ class SetupJourneyReadinessTest extends TestCase
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'status' => 'paused']);
         Strategy::factory()->create([
             'campaign_id' => $campaign->id, 'signed_off_at' => now(), 'deployment_status' => 'verified',
+            'platform' => 'Google Ads', 'campaign_type' => 'search',
             'conversion_goals' => ['primary_goal' => 'Lead'],
             'execution_result' => ['metadata' => [
                 'google_search_staging' => ['mode' => 'setup_only_paused_handover'],
@@ -156,8 +157,10 @@ class SetupJourneyReadinessTest extends TestCase
         $this->assertTrue($journey['steps'][3]['completed']);
         $this->assertNotNull($goal);
         $this->assertFalse($goal['done']);
-        $this->assertStringContainsString('for Lead in Google Ads', $goal['detail']);
-        $this->assertStringContainsString('no matching enabled primary action', $goal['detail']);
+        $this->assertSame(route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $campaign->strategies()->sole()->uuid]), $goal['url']);
+        $this->assertSame('Set up goal', $goal['action_text']);
+        $this->assertStringContainsString('Choose what counts as a successful enquiry', $goal['detail']);
+        $this->assertStringNotContainsString('primary action', $goal['detail']);
         $this->assertFalse($journey['checklist'][5]['done']);
     }
 }

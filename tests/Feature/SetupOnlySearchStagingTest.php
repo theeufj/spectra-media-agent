@@ -62,13 +62,14 @@ class SetupOnlySearchStagingTest extends TestCase
         return [$customer, $campaign, $strategy];
     }
 
-    private function executor(Customer $customer, ?AgentIssue $stepError = null): SearchCampaignExecutor
+    private function executor(Customer $customer, ?AgentIssue $stepError = null, bool $goalsReady = false): SearchCampaignExecutor
     {
         $goals = $this->createMock(ReconcileCampaignConversionGoals::class);
-        $goals->method('prepare')->willReturn(['ready' => false, 'status' => 'needs_review',
+        $readiness = ['ready' => $goalsReady, 'status' => $goalsReady ? 'ready' : 'needs_review',
             'intent' => ['category' => 'SUBMIT_LEAD_FORM'],
-            'issues' => [new AgentIssue('conversion_action_missing', 'No eligible Lead conversion action matches this objective.')]]);
-        $goals->expects($this->never())->method('reconcile');
+            'issues' => $goalsReady ? [] : [new AgentIssue('conversion_action_missing', 'No eligible Lead conversion action matches this objective.')]];
+        $goals->method('prepare')->willReturn($readiness);
+        $goals->expects($goalsReady ? $this->once() : $this->never())->method('reconcile')->willReturn($readiness);
         $this->app->bind(ReconcileCampaignConversionGoals::class, fn () => $goals);
         $reader = $this->createMock(GetCampaignStatus::class);
         $reader->method('__invoke')->willReturnCallback(function () {
@@ -154,6 +155,19 @@ class SetupOnlySearchStagingTest extends TestCase
         $this->assertSame('MANUAL_CPC', $result->metadata['google_search_baseline']['bidding']);
         $this->assertSame('Lead', $strategy->fresh()->conversion_goals['primary_goal']);
         $this->assertContains('conversion_action_missing', array_column($result->warnings, 'code'));
+    }
+
+    public function test_ready_goal_settings_do_not_apply_smart_bidding_or_value_rules_before_website_delivery_is_tested(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $result = ExecutionResult::success();
+
+        $this->executor($customer, goalsReady: true)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $this->assertTrue($result->success, $result->errorMessage());
+        $this->assertSame('MANUAL_CPC', $result->metadata['google_search_baseline']['bidding']);
+        $this->assertFalse($result->metadata['google_search_staging']['enable_after_success']);
+        $this->assertFalse($result->metadata['search_reach_preflight']['gate']['ready']);
     }
 
     #[DataProvider('strictCustomers')]

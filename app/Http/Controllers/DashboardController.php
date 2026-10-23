@@ -54,9 +54,15 @@ class DashboardController extends Controller
             ->where(function ($query) {
                 $query->where('policy_checks->status', 'issues')
                     ->orWhere(function ($unknown) {
-                        $unknown->whereNotIn('status', ['ended', 'draft'])
-                            ->where(function ($status) {
-                                $status->where('policy_checks->status', 'unknown')->orWhereNull('policy_checks');
+                        // Missing or pending approval is not a customer task.
+                        // An unavailable read must still retain actual issues.
+                        $unknown->where('policy_checks->status', 'unknown')
+                            ->where(function ($evidence) {
+                                $evidence->whereJsonLength('policy_checks->issues', '>', 0)
+                                    ->orWhere(function ($incident) {
+                                        $incident->whereNull('policy_checks->last_incident->resolved_at')
+                                            ->whereJsonLength('policy_checks->last_incident->issues', '>', 0);
+                                    });
                             });
                     });
             });

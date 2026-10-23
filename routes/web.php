@@ -246,6 +246,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // GET /campaigns/{campaign}/deployment-status
     Route::get('/campaigns/{campaign}/deployment-status', [App\Http\Controllers\CampaignController::class, 'deploymentStatus'])->name('campaigns.deployment-status');
 
+    Route::get('/campaigns/{campaign}/conversion-goal', [App\Http\Controllers\SetupConversionGoalController::class, 'edit'])->name('campaigns.conversion-goal.edit');
+    Route::post('/campaigns/{campaign}/conversion-goal', [App\Http\Controllers\SetupConversionGoalController::class, 'update'])
+        ->middleware('throttle:5,1')->name('campaigns.conversion-goal.update');
+    Route::get('/campaigns/{campaign}/conversion-goal/status', [App\Http\Controllers\SetupConversionGoalController::class, 'status'])->name('campaigns.conversion-goal.status');
+
     // Route to display the collateral generation page for a specific campaign strategy.
     // GET /campaigns/{campaign}/{strategy}/collateral
     Route::get('/campaigns/{campaign}/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'show'])->name('campaigns.collateral.show');

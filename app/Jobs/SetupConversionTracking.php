@@ -33,6 +33,25 @@ class SetupConversionTracking implements ShouldQueue
 
     public function handle(ConversionSetupService $service): void
     {
+        $this->customer->refresh();
+        if ($this->customer->service_type === 'setup_only') {
+            // A signup action is not a lead or purchase. Wait for the owner's
+            // explicit objective/trigger; account provisioning calls this job
+            // again, so a previously saved choice resumes when its account exists.
+            if ($this->customer->google_ads_customer_id) {
+                foreach ($this->customer->campaigns()->with('strategies')->get() as $campaign) {
+                    foreach ($campaign->strategies as $strategy) {
+                        $setup = $strategy->execution_result['metadata']['setup_conversion_goal'] ?? [];
+                        if (in_array($setup['status'] ?? null, ['configuring', 'waiting_for_campaign'], true) && ! empty($setup['request_id'])) {
+                            ConfigureSetupConversionGoal::dispatch($campaign, $setup['request_id']);
+                        }
+                    }
+                }
+            }
+            Log::info('SetupConversionTracking: setup customer goal is configured through the reviewed goal workflow', ['customer_id' => $this->customer->id]);
+
+            return;
+        }
         // Skip if already set up
         if ($this->customer->conversion_action_id) {
             Log::info('SetupConversionTracking: Already set up, skipping', ['customer_id' => $this->customer->id]);

@@ -53,6 +53,13 @@ class CampaignAlertService
                 'issues' => $status === 'unknown' ? ($previous['issues'] ?? []) : $issues,
                 'error' => $uncertainReason,
             ]);
+            if ($status === 'unknown' && $next['issues'] === []
+                && ($next['pending_alert']['type'] ?? null) === 'policy_check_unavailable'
+                && empty($next['pending_alert']['issues'])) {
+                // Older checks queued a warning for an initial pending review.
+                // Do not replay it; actual issues and recovery notices survive.
+                unset($next['pending_alert']);
+            }
             $event = null;
 
             if ($status === 'issues') {
@@ -71,7 +78,9 @@ class CampaignAlertService
                 $next['last_incident']['resolved_at'] = $checkedAt;
                 $event = $this->policyAlert($locked, $platform, 'policy_recovered', $previous['incident_id'], $previous['issues']);
                 $next['fingerprint'] = null;
-            } elseif ($status === 'unknown' && ($previous['status'] ?? null) !== 'unknown') {
+            } elseif ($status === 'unknown' && $next['issues'] !== [] && ($previous['status'] ?? null) !== 'unknown') {
+                // Pending or unavailable approval without a reported issue is
+                // observable state, not an action for the customer to repair.
                 $event = $this->policyAlert($locked, $platform, 'policy_check_unavailable', (string) Str::uuid(), $next['issues']);
             }
 
@@ -132,7 +141,8 @@ class CampaignAlertService
         $keys = array_map(function ($issue) {
             $topics = array_map(fn ($topic) => ['topic' => $topic['topic'] ?? null, 'evidences' => array_map(fn ($evidence) => array_intersect_key($evidence, array_flip(['type', 'expanded_url', 'device', 'http_error_code', 'dns_error_type'])), $topic['evidences'] ?? [])], $issue['policy_topics'] ?? []);
 
-            return json_encode([$issue['ad_resource_name'] ?? null, $issue['final_urls'] ?? [], $topics], JSON_THROW_ON_ERROR);
+            return json_encode([$issue['ad_resource_name'] ?? null, $issue['approval_status'] ?? null,
+                $issue['limited_approval'] ?? false, $issue['final_urls'] ?? [], $topics], JSON_THROW_ON_ERROR);
         }, $issues);
         sort($keys);
 
@@ -142,19 +152,21 @@ class CampaignAlertService
     private function policyAlert(Campaign $campaign, string $platform, string $type, string $incident, array $issues): array
     {
         $name = $platform === 'google_ads' ? 'Google Ads' : 'Facebook Ads';
+        $limited = $issues !== [] && count(array_filter($issues, fn ($issue) => ($issue['limited_approval'] ?? false) === true)) === count($issues);
         $message = match ($type) {
-            'policy_recovered' => $name.' reports that the previously disapproved ads in "'.$campaign->name.'" are no longer rejected. This does not resume the campaign.',
+            'policy_recovered' => $name.' no longer reports the previous ad approval issues in "'.$campaign->name.'". This does not resume the campaign.',
             'policy_check_unavailable' => 'The latest '.$name.' approval check for "'.$campaign->name.'" could not be confirmed. The last known policy evidence is retained.',
-            default => $name.' disapproved an ad in "'.$campaign->name.'": '.implode('; ', array_column($issues, 'message')),
+            default => $name.($limited ? ' limits ad delivery in "' : ' disapproved an ad in "').$campaign->name.'": '.implode('; ', array_column($issues, 'message')),
         };
 
         return [
             'type' => $type, 'title' => $type === 'policy_recovered' ? 'Ad policy issue cleared' : ($type === 'policy_check_unavailable' ? 'Ad approval check unavailable' : 'Ad approval needs attention'),
             'message' => $message, 'campaign_id' => $campaign->id, 'campaign_name' => $campaign->name, 'customer_id' => $campaign->customer_id,
-            'platform' => $platform, 'issues' => $issues, 'severity' => $type === 'policy_recovered' ? 'info' : 'critical',
+            'platform' => $platform, 'issues' => $issues, 'severity' => $type === 'policy_recovered' ? 'info' : ($limited ? 'warning' : 'critical'),
             'action_url' => route('campaigns.show', $campaign), 'dedupe_key' => $platform.':'.$type.':'.$incident,
             'action_required' => $type === 'policy_disapproved'
-                ? (in_array(true, array_column($issues, 'destination_issue'), true) ? 'Fix the landing-page availability with your website host, then request a review in the ad platform. The campaign remains in its current state.' : 'Review the reported policy issue and request a review in the ad platform.')
+                ? (in_array(true, array_column($issues, 'destination_issue'), true) ? 'Fix the landing-page availability with your website host, then request a review in the ad platform. The campaign remains in its current state.'
+                    : ($limited ? 'Review the ad delivery restrictions in the ad platform. This does not resume the campaign.' : 'Review the reported policy issue and request a review in the ad platform.'))
                 : 'Open the campaign to review the latest verified policy status.',
         ];
     }

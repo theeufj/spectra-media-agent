@@ -161,12 +161,71 @@ class CampaignPolicyVisibilityTest extends TestCase
 
     public function test_initial_empty_and_pending_policy_reads_are_unknown_not_clear(): void
     {
-        [$campaign] = $this->campaign();
+        [$campaign, $user] = $this->campaign();
         $this->runCheck($campaign, []);
         $this->assertSame('unknown', CampaignAlertService::policyStatus($campaign)['status']);
         $this->runCheck($campaign, [$this->ad(PolicyApprovalStatus::UNKNOWN, PolicyReviewStatus::REVIEW_IN_PROGRESS)]);
         $this->assertSame('unknown', CampaignAlertService::policyStatus($campaign)['status']);
         $this->assertStringContainsString('awaiting review', CampaignAlertService::policyStatus($campaign)['platforms']['google_ads']['error']);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->count());
+        NotificationFacade::assertNothingSent();
+    }
+
+    public function test_confirmed_limited_approval_remains_visible_without_claiming_disapproval_or_resuming_ads(): void
+    {
+        [$campaign, $user] = $this->campaign();
+        $ad = $this->ad(PolicyApprovalStatus::APPROVED_LIMITED);
+        $ad['policy_topics'] = [['topic' => 'TRADEMARKS', 'evidences' => []]];
+
+        $this->runCheck($campaign, [$ad]);
+
+        $state = CampaignAlertService::policyStatus($campaign);
+        $this->assertSame('issues', $state['status']);
+        $this->assertTrue($state['issues'][0]['limited_approval']);
+        $this->assertStringContainsString('approved this ad with restrictions', $state['issues'][0]['message']);
+        $this->assertSame('paused', $campaign->status->value);
+        $notice = Notification::where('user_id', $user->id)->sole();
+        $this->assertStringContainsString('limits ad delivery', $notice->message);
+        $this->assertStringNotContainsString('disapproved', $notice->message);
+        $this->assertSame('warning', $notice->data['severity'] ?? null);
+
+        $this->runCheck($campaign, [$this->ad(PolicyApprovalStatus::APPROVED)]);
+        $this->assertSame('clear', CampaignAlertService::policyStatus($campaign)['status']);
+        $this->assertSame('paused', $campaign->status->value);
+    }
+
+    public function test_limited_approval_that_is_still_under_review_is_unknown_without_a_customer_warning(): void
+    {
+        [$campaign, $user] = $this->campaign();
+
+        $this->runCheck($campaign, [$this->ad(PolicyApprovalStatus::APPROVED_LIMITED, PolicyReviewStatus::REVIEW_IN_PROGRESS)]);
+
+        $state = CampaignAlertService::policyStatus($campaign);
+        $this->assertSame('unknown', $state['status']);
+        $this->assertSame([], $state['issues']);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->count());
+        NotificationFacade::assertNothingSent();
+    }
+
+    public function test_legacy_initial_unknown_warning_is_removed_instead_of_delivered_on_the_next_pending_check(): void
+    {
+        [$campaign, $user] = $this->campaign();
+        $campaign->update(['policy_checks' => ['status' => 'unknown', 'issues' => [], 'platforms' => [
+            'google_ads' => ['status' => 'unknown', 'issues' => [], 'pending_alert' => [
+                'type' => 'policy_check_unavailable', 'title' => 'Ad approval check unavailable',
+                'message' => 'Approval has not been confirmed.', 'issues' => [],
+                'action_url' => route('campaigns.show', $campaign), 'dedupe_key' => 'legacy-initial-check',
+            ]],
+        ]]]);
+
+        $this->runCheck($campaign, [$this->ad(PolicyApprovalStatus::UNKNOWN, PolicyReviewStatus::REVIEW_IN_PROGRESS)]);
+
+        $state = CampaignAlertService::policyStatus($campaign);
+        $this->assertSame('unknown', $state['status']);
+        $this->assertSame([], $state['issues']);
+        $this->assertArrayNotHasKey('pending_alert', $state['platforms']['google_ads']);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->count());
+        NotificationFacade::assertNothingSent();
     }
 
     public function test_facebook_missing_or_pending_ad_does_not_clear_previous_rejection(): void

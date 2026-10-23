@@ -145,8 +145,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy, $setupOnlyStaging)) {
             return;
         }
-        $goalsReady = ($goalReadiness['ready'] ?? false) === true;
-        if ($setupOnlyStaging && ! $goalsReady && ! $this->confirmManualBidding($customerId, $campaignResourceName, $result)) {
+        if ($setupOnlyStaging && ! $this->confirmManualBidding($customerId, $campaignResourceName, $result)) {
             return;
         }
 
@@ -198,10 +197,10 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         // Stage the effective bidding settings before forecasting, while there
         // are no serving RSAs. A suggested market bid is not the approved bid.
-        if (! $setupOnlyStaging || $goalsReady) {
+        if (! $setupOnlyStaging) {
             $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
         } else {
-            $result->addWarning('setup_smart_bidding_deferred', 'The paused campaign retains verified Manual CPC. The suggested bidding strategy was not applied because the reviewed conversion goal is not ready. Review tracking and bidding before activation.');
+            $result->addWarning('setup_smart_bidding_deferred', 'The paused setup retains verified Manual CPC. Suggested bidding changes were not applied. Review website conversion delivery and bidding before activation.');
         }
         if ($setupOnlyStaging) {
             // An activation forecast is a separate decision from constructing
@@ -339,7 +338,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         ]);
 
         // 8. Apply conversion value rules (device + audience modifiers)
-        if (! $setupOnlyStaging || $goalsReady) {
+        if (! $setupOnlyStaging) {
             try {
                 $applyValueRules = app(\App\Services\GoogleAds\CommonServices\ApplyConversionValueRules::class, ['customer' => $this->customer]);
                 $applyValueRules($customerId, $campaignResourceName, $this->customer);
@@ -429,7 +428,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         } catch (\Throwable $e) {
             report($e);
         }
-        $result->addError('setup_search_manual_bidding_required', 'The paused campaign must have verified Manual CPC while its conversion goal is unready. Existing bidding settings were left unchanged; review them before retrying.');
+        $result->addError('setup_search_manual_bidding_required', 'The setup campaign must have verified Manual CPC for paused handover. Existing bidding settings were left unchanged; review them before retrying.');
 
         return false;
     }

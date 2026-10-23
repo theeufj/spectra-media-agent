@@ -20,7 +20,7 @@ class CreateConversionAction extends BaseGoogleAdsService
      * @param  int  $category  ConversionActionCategory enum value
      * @return string|null Resource name of the created Conversion Action
      */
-    public function __invoke(string $customerId, string $name, int $category = ConversionActionCategory::PBDEFAULT): ?string
+    public function __invoke(string $customerId, string $name, int $category = ConversionActionCategory::PBDEFAULT, array $options = []): ?string
     {
         $this->ensureClient();
 
@@ -40,16 +40,25 @@ class CreateConversionAction extends BaseGoogleAdsService
             'view_through_lookback_window_days' => 1,
             'click_through_lookback_window_days' => 30,
             'value_settings' => new \Google\Ads\GoogleAds\V26\Resources\ConversionAction\ValueSettings([
-                'default_value' => 1.0,
-                'default_currency_code' => 'USD',
-                'always_use_default_value' => true, // Simplified for now
+                'default_value' => $options['default_value'] ?? 1.0,
+                'default_currency_code' => $options['default_currency_code'] ?? 'USD',
+                'always_use_default_value' => $options['always_use_default_value'] ?? true,
             ]),
         ]);
+        if (array_key_exists('primary_for_goal', $options)) {
+            $conversionAction->setPrimaryForGoal($options['primary_for_goal']);
+        }
+        if (isset($options['counting_type'])) {
+            $conversionAction->setCountingType($options['counting_type']);
+        }
 
         $operation = new ConversionActionOperation;
         $operation->setCreate($conversionAction);
 
         try {
+            if (isset($options['before_write'])) {
+                ($options['before_write'])();
+            }
             $conversionActionServiceClient = $this->client->getConversionActionServiceClient();
             $response = $conversionActionServiceClient->mutateConversionActions(new MutateConversionActionsRequest([
                 'validate_only' => $this->dryRun,
