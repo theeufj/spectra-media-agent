@@ -98,6 +98,21 @@ describe('deployment completion feedback', () => {
         expect(toast.success).not.toHaveBeenCalled();
     });
 
+    it('offers the verified paused handover while keeping conversion blockers visible', () => {
+        render(<DeploymentStatus campaign={campaign} setupOnly deployments={[{
+            ...deployment, status: 'verified', progress: 4,
+            conversion_goal_readiness: { status: 'needs_review', ready: false,
+                issues: [{ code: 'conversion_goal_primary_ambiguous', message: 'The intended goal has no matching enabled primary action.' }] },
+        }]} />);
+
+        expect(screen.getByRole('heading', { name: 'Your paused ads have been created' })).toBeVisible();
+        expect(screen.getByRole('link', { name: 'View handover checklist →' })).toHaveAttribute('href', '/dashboard');
+        expect(screen.getByText('The intended goal has no matching enabled primary action.')).toBeVisible();
+        expect(screen.getByText('Needs review')).toBeVisible();
+        expect(screen.getByText(/Created ads and a verified deployment do not confirm readiness to deliver/)).toBeVisible();
+        expect(screen.queryByText(/Deployment Complete!/)).toBeNull();
+    });
+
     it('treats legacy active as terminal deployed with pending readiness, never structural verification', async () => {
         render(<DeploymentStatus campaign={campaign} deployments={[{ ...deployment, status: 'active', progress: 3 }]} />);
         expect(screen.getByText('75%')).toBeInTheDocument();

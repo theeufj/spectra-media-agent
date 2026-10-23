@@ -7,6 +7,22 @@ class GoogleSearchConfigurationCheck
 {
     public function compare(array $expected, array $actual): array
     {
+        return $this->compareConfiguration($expected, $actual, true);
+    }
+
+    /** Creation proof for an explicitly paused handover does not certify activation. */
+    public function comparePausedObjects(array $expected, array $actual): array
+    {
+        $issues = $this->compareConfiguration($expected, $actual, false);
+        if (empty($expected['budget_micros']) || empty($expected['bidding'])) {
+            $issues[] = 'The paused deployment has no complete reviewed budget and bidding baseline.';
+        }
+
+        return $issues;
+    }
+
+    private function compareConfiguration(array $expected, array $actual, bool $verifyConversionGoals): array
+    {
         if (empty($expected['keywords']) || empty($expected['ads'])) {
             return ['The deployment has no complete verification baseline.'];
         }
@@ -114,6 +130,9 @@ class GoogleSearchConfigurationCheck
                     }
                 }
             }
+        }
+        if (! $verifyConversionGoals) {
+            return array_values(array_unique($issues));
         }
         if ($intent = $expected['conversion_goal'] ?? null) {
             $issues = array_merge($issues, $this->conversionGoalIssues($intent, $actual));

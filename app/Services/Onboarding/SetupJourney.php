@@ -7,6 +7,7 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Strategy;
+use App\Services\Agents\AgentIssue;
 
 /** A read-only description of the purchased setup, shared by every setup screen. */
 class SetupJourney
@@ -53,6 +54,15 @@ class SetupJourney
         $campaignUrl = $campaign ? route('campaigns.show', $campaign) : null;
         $reviewUrl = $campaign && $strategy?->signed_off_at
             ? route('campaigns.collateral.show', [$campaign, $strategy]) : $campaignUrl;
+        $pendingGoals = $strategies->filter(fn (Strategy $s) => ($s->execution_result['metadata']['google_search_staging']['mode'] ?? null) === 'setup_only_paused_handover'
+            && ($s->execution_result['metadata']['conversion_goal_readiness']['ready'] ?? false) !== true);
+        $goalRequirements = $pendingGoals->map(function (Strategy $s): string {
+            $goal = $s->conversion_goals['primary_goal'] ?? null;
+            $label = is_string($goal) && $goal !== '' ? $goal : 'the campaign objective';
+            $issues = $s->execution_result['metadata']['conversion_goal_readiness']['issues'] ?? [];
+
+            return 'Configure and verify the intended conversion action and campaign bidding goal for '.$label.' in Google Ads before switching on ads. '.AgentIssue::toSentence($issues);
+        })->implode(' ');
 
         $steps = [
             ['key' => 'business', 'title' => 'Your business', 'completed' => $ready,
@@ -114,6 +124,8 @@ class SetupJourney
                 ['title' => 'Conversion tracking', 'done' => false,
                     'detail' => $customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.',
                     'url' => $customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null],
+                ...($goalRequirements !== '' ? [['title' => 'Campaign conversion goal', 'done' => false,
+                    'detail' => $goalRequirements]] : []),
             ],
         ];
     }

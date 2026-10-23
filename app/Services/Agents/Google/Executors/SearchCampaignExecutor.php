@@ -19,12 +19,14 @@ use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\StorageHelper;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Support\Facades\Log;
 
@@ -60,11 +62,16 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $customerId = $this->customer->cleanGoogleCustomerId();
         }
 
+        $setupOnlyStaging = $this->customer->fresh()?->isPaidSetupOnly() === true;
+        if ($setupOnlyStaging && ! $this->confirmSetupAuthorization($campaign, $customerId, $result)) {
+            return;
+        }
+
         // A tracking action's existence does not make it an eligible bidding
         // target. Validate the reviewed objective before creating live objects.
         $goalService = app(ReconcileCampaignConversionGoals::class, ['customer' => $this->customer]);
         $goalReadiness = $goalService->prepare($strategy);
-        if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy)) {
+        if (! $setupOnlyStaging && ! $this->recordGoalReadiness($goalReadiness, $result, $strategy)) {
             return;
         }
 
@@ -106,7 +113,15 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // Retrying an ENABLED campaign could expose keyword/bid changes to live
         // traffic before their demand forecast is checked. Pause is an explicit
         // owner decision; a deployment retry never pauses and resumes it itself.
+        if ($setupOnlyStaging && ! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#', $campaignResourceName)) {
+            $result->addError('setup_search_staging_account_mismatch', 'The staged Search campaign does not belong to this customer account. No configuration or ad changes were made.');
+
+            return;
+        }
         if (! $this->confirmPausedStage($customerId, $campaignResourceName, $result)) {
+            return;
+        }
+        if ($setupOnlyStaging && ! $this->confirmSetupAuthorization($campaign, $customerId, $result)) {
             return;
         }
         $priorIntent = $strategy->fresh()->execution_result['metadata']['google_search_staging'] ?? [];
@@ -115,14 +130,23 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             : (($priorIntent['campaign_resource'] ?? null) === $campaignResourceName && ($priorIntent['enable_after_success'] ?? false) === true);
         $result->addMetadata('google_search_staging', ['campaign_resource' => $campaignResourceName,
             'verified_platform_status' => 'PAUSED', 'checked_at' => now()->toIso8601String(),
-            'enable_after_success' => $enableAfterSuccess && $campaign->status !== \App\Enums\CampaignStatus::Paused
+            ...($setupOnlyStaging ? ['mode' => 'setup_only_paused_handover'] : []),
+            'enable_after_success' => ! $setupOnlyStaging && $enableAfterSuccess && $campaign->status !== \App\Enums\CampaignStatus::Paused
                 && ! $campaign->spend_safety_hold && ! CampaignSpendGuardrails::activeTrial($campaign)]);
 
         // Configure only this campaign, before adding ads or Smart Bidding.
         // Explicit deployment can configure a staged PAUSED campaign, without
         // enabling it or changing any other campaign's conversion actions.
-        $goalReadiness = $goalService->reconcile($strategy, $campaignResourceName, allowInactive: true);
-        if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy)) {
+        // A paid setup is delivered paused before the customer completes
+        // tracking. Never guess or relabel a different conversion objective.
+        if (! $setupOnlyStaging || ($goalReadiness['ready'] ?? false)) {
+            $goalReadiness = $goalService->reconcile($strategy, $campaignResourceName, allowInactive: true);
+        }
+        if (! $this->recordGoalReadiness($goalReadiness, $result, $strategy, $setupOnlyStaging)) {
+            return;
+        }
+        $goalsReady = ($goalReadiness['ready'] ?? false) === true;
+        if ($setupOnlyStaging && ! $goalsReady && ! $this->confirmManualBidding($customerId, $campaignResourceName, $result)) {
             return;
         }
 
@@ -138,7 +162,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             ]);
             $result->addPlatformId('ad_group', $adGroupResourceName);
         } else {
-            $createAdGroupService = new CreateSearchAdGroup($this->customer);
+            $createAdGroupService = app(CreateSearchAdGroup::class, ['customer' => $this->customer]);
             $adGroupName = 'Default Ad Group - '.$timestamp;
             $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
             if (! $adGroupResourceName) {
@@ -174,8 +198,28 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         // Stage the effective bidding settings before forecasting, while there
         // are no serving RSAs. A suggested market bid is not the approved bid.
-        $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
-        if (! $this->keywords->preflightReach($campaign, $strategy, $customerId, $campaignResourceName, $result)) {
+        if (! $setupOnlyStaging || $goalsReady) {
+            $this->bidding->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
+        } else {
+            $result->addWarning('setup_smart_bidding_deferred', 'The paused campaign retains verified Manual CPC. The suggested bidding strategy was not applied because the reviewed conversion goal is not ready. Review tracking and bidding before activation.');
+        }
+        if ($setupOnlyStaging) {
+            // An activation forecast is a separate decision from constructing
+            // assets that cannot serve. Do not turn an unchecked forecast green.
+            $prior = $strategy->fresh()->execution_result['metadata']['search_reach_preflight'] ?? null;
+            if (($prior['status'] ?? null) === 'not_checked') {
+                $prior = $prior['previous_assessment'] ?? null;
+            }
+            $result->addMetadata('search_reach_preflight', ['status' => 'not_checked',
+                'checked_at' => now()->toIso8601String(), 'activation_required' => true,
+                'gate' => ['ready' => false, 'status' => 'not_checked', 'issues' => [[
+                    'code' => 'setup_search_reach_activation_required',
+                    'message' => 'Current keyword reach and spending settings must be checked before activating the paused campaign.',
+                ]]],
+                ...($prior ? ['previous_assessment' => $prior] : []),
+            ]);
+            $result->addWarning('setup_search_reach_activation_required', 'The campaign is being built paused. Keyword reach, billing and tracking still require review before you activate it.');
+        } elseif (! $this->keywords->preflightReach($campaign, $strategy, $customerId, $campaignResourceName, $result)) {
             return;
         }
 
@@ -218,6 +262,11 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             );
         }
 
+        if ($setupOnlyStaging && (! $this->confirmSetupAuthorization($campaign, $customerId, $result)
+            || ! $this->confirmPausedStage($customerId, $campaignResourceName, $result))) {
+            return;
+        }
+
         // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
         $adCopies = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->limit(3)->get();
         if ($adCopies->isEmpty()) {
@@ -231,7 +280,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             if (! $finalUrl) {
                 $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
             } else {
-                $createAdService = new CreateResponsiveSearchAd($this->customer);
+                $createAdService = app(CreateResponsiveSearchAd::class, ['customer' => $this->customer]);
 
                 foreach ($adCopies as $adCopy) {
                     $expectedAds[] = ['ad_copy_id' => $adCopy->id, 'headlines' => $adCopy->headlines ?? [], 'descriptions' => $adCopy->descriptions ?? [], 'final_urls' => [$finalUrl]];
@@ -290,12 +339,20 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         ]);
 
         // 8. Apply conversion value rules (device + audience modifiers)
-        try {
-            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
-            $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
+        if (! $setupOnlyStaging || $goalsReady) {
+            try {
+                $applyValueRules = app(\App\Services\GoogleAds\CommonServices\ApplyConversionValueRules::class, ['customer' => $this->customer]);
+                $applyValueRules($customerId, $campaignResourceName, $this->customer);
+            } catch (\Throwable $e) {
+                report($e);
+                Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
+            }
+        }
+        if ($setupOnlyStaging && $this->confirmSetupAuthorization($campaign, $customerId, $result)
+            && $this->confirmPausedStage($customerId, $campaignResourceName, $result)) {
+            $staging = $result->metadata['google_search_staging'];
+            $staging['checked_at'] = now()->toIso8601String();
+            $result->addMetadata('google_search_staging', $staging);
         }
     }
 
@@ -306,7 +363,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             if (($status['status'] ?? null) === GoogleCampaignStatus::PAUSED) {
                 return true;
             }
-            $result->addError('search_staging_pause_required', 'The Google Search campaign must be verified paused before deployment changes can be staged. Review its live status; no keyword, targeting or ad changes were made.');
+            $result->addError('search_staging_pause_required', 'The Google Search campaign must be verified paused before deployment changes can continue. Review its live status; further keyword, targeting and ad changes are on hold.');
         } catch (\Throwable $e) {
             report($e);
             $result->addError('search_staging_status_unavailable', 'The Google Search campaign’s paused status could not be verified. Deployment changes are held for a fresh check.');
@@ -315,7 +372,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         return false;
     }
 
-    private function recordGoalReadiness(array $readiness, ExecutionResult $result, Strategy $strategy): bool
+    private function recordGoalReadiness(array $readiness, ExecutionResult $result, Strategy $strategy, bool $pausedSetup = false): bool
     {
         // Keep custom-goal ownership and the last verified configuration when
         // the surrounding deployment serializes its execution result.
@@ -329,8 +386,50 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $issues[] = new AgentIssue('conversion_goal_unready', 'The selected conversion goal could not be verified. Review tracking before launching.');
         }
         foreach ($issues as $issue) {
-            $result->addError($issue->code, $issue->message);
+            if ($pausedSetup) {
+                $result->addWarning($issue->code, $issue->message.' Resolve this before activating the paused campaign.');
+            } else {
+                $result->addError($issue->code, $issue->message);
+            }
         }
+
+        return $pausedSetup;
+    }
+
+    private function confirmSetupAuthorization(Campaign $campaign, string $customerId, ExecutionResult $result): bool
+    {
+        $current = $campaign->fresh();
+        $customer = $this->customer->fresh();
+        if (! $current || ! $customer?->isPaidSetupOnly() || $current->customer_id !== $customer->id
+            || $customer->cleanGoogleCustomerId() !== $customerId || $current->hasPassedEndDate()
+            || in_array($current->status, [\App\Enums\CampaignStatus::Completed, \App\Enums\CampaignStatus::Ended], true)
+            || $current->spend_safety_hold) {
+            $result->addError('setup_search_staging_authorization_changed', 'The paid setup, customer account or campaign authorization changed. Paused construction requires a fresh review.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function confirmManualBidding(string $customerId, string $resource, ExecutionResult $result): bool
+    {
+        try {
+            $configuration = app(ReadCampaignConfiguration::class, ['customer' => $this->customer])->read($customerId, $resource);
+            $campaign = $configuration['campaign']['campaign'] ?? [];
+            $bidding = $campaign['biddingStrategyType'] ?? $campaign['bidding_strategy_type'] ?? null;
+            if (is_int($bidding)) {
+                $bidding = BiddingStrategyType::name($bidding);
+            }
+            if ($bidding === 'MANUAL_CPC') {
+                $result->addMetadata('expected_bidding', 'MANUAL_CPC');
+
+                return true;
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+        $result->addError('setup_search_manual_bidding_required', 'The paused campaign must have verified Manual CPC while its conversion goal is unready. Existing bidding settings were left unchanged; review them before retrying.');
 
         return false;
     }

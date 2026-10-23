@@ -53,6 +53,12 @@ class CampaignSpendGuardrails
             return false;
         }
 
+        // A handover account is launched by its owner. A stale Active status
+        // must not let an unattended sweep switch its paused ads back on.
+        if (! $ownerApprovedRestart && $campaign->customer?->service_type === 'setup_only') {
+            return false;
+        }
+
         return $campaign->status !== CampaignStatus::Paused || $ownerApprovedRestart;
     }
 

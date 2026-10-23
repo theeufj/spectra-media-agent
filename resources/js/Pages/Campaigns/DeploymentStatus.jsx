@@ -255,6 +255,11 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             <p className="mt-2 text-sm text-green-700">{setupOnly
                                 ? 'Your ads remain paused. Complete your handover checks before switching them on.'
                                 : 'Ad delivery depends on platform approval, billing and your campaign start date.'}</p>
+                            {setupOnly && deployments.every(d => d.status === 'verified') && overallStatus !== 'completed' && (
+                                <Link href="/dashboard" className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-4 text-sm font-semibold text-white">
+                                    View handover checklist →
+                                </Link>
+                            )}
                         </div>
                     )}
 

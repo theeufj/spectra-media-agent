@@ -135,4 +135,29 @@ class SetupJourneyReadinessTest extends TestCase
         $this->assertFalse($item['done']);
         $this->assertStringContainsString('test conversion', $item['detail']);
     }
+
+    public function test_a_verified_paused_handover_keeps_the_missing_conversion_goal_actionable(): void
+    {
+        $customer = $this->customer();
+        $customer->update(['setup_fee_paid_at' => now(), 'handover_at' => now()]);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'status' => 'paused']);
+        Strategy::factory()->create([
+            'campaign_id' => $campaign->id, 'signed_off_at' => now(), 'deployment_status' => 'verified',
+            'conversion_goals' => ['primary_goal' => 'Lead'],
+            'execution_result' => ['metadata' => [
+                'google_search_staging' => ['mode' => 'setup_only_paused_handover'],
+                'conversion_goal_readiness' => ['ready' => false, 'status' => 'needs_review',
+                    'issues' => [['code' => 'conversion_goal_primary_ambiguous', 'message' => 'The intended goal has no matching enabled primary action.']]],
+            ]],
+        ]);
+
+        $journey = app(SetupJourney::class)->forCustomer($customer);
+        $goal = collect($journey['checklist'])->firstWhere('title', 'Campaign conversion goal');
+        $this->assertTrue($journey['steps'][3]['completed']);
+        $this->assertNotNull($goal);
+        $this->assertFalse($goal['done']);
+        $this->assertStringContainsString('for Lead in Google Ads', $goal['detail']);
+        $this->assertStringContainsString('no matching enabled primary action', $goal['detail']);
+        $this->assertFalse($journey['checklist'][5]['done']);
+    }
 }
