@@ -2,7 +2,7 @@ import React from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 
-const { page, postMock, visitMock } = vi.hoisted(() => ({ page: { url: '/' }, postMock: vi.fn(), visitMock: vi.fn() }));
+const { page, postMock, visitMock, researchPostMock } = vi.hoisted(() => ({ page: { url: '/' }, postMock: vi.fn(), visitMock: vi.fn(), researchPostMock: vi.fn() }));
 
 vi.mock('@inertiajs/react', () => ({
     Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
@@ -10,7 +10,7 @@ vi.mock('@inertiajs/react', () => ({
         const [data, setData] = React.useState(initial);
         return { data, setData: (key, value) => setData(previous => ({ ...previous, [key]: value })), post: postMock, processing: false, errors: {} };
     },
-    router: { post: vi.fn(), visit: visitMock },
+    router: { post: researchPostMock, visit: visitMock },
     usePage: () => ({ props: {}, url: page.url }),
     Head: () => null,
 }));
@@ -26,6 +26,48 @@ beforeEach(() => {
     page.url = '/';
     postMock.mockReset();
     visitMock.mockReset();
+    researchPostMock.mockReset();
+});
+
+it('opens custom research from the saved campaign and researches AUD50 without changing the saved AUD5 or approving it', () => {
+    const campaign = { id: 7, uuid: 'custom-research', name: 'Paused setup', strategies: [],
+        daily_budget: '5.00', approved_daily_budget: '5.00', budget_confirmed_at: '2026-10-23', currency_code: 'AUD' };
+    const marketResearch = { request_id: 'existing-research', input_fingerprint: 'context', status: 'ready',
+        current: true, approvable: true, expires_at: '2099-01-01T00:00:00Z',
+        result: { status: 'ready', fingerprint: 'context', proposed_daily_budget_micros: 5_000_000, strategies: [] } };
+    const props = { auth: { user: {} }, campaign, selfFunded: true, setupOnly: true, marketResearch };
+    const { getByRole, getByText, getByLabelText, rerender } = render(<CampaignShow {...props} />);
+    fireEvent.click(getByRole('button', { name: 'Review market research' }));
+    const customLink = getByRole('link', { name: 'Research a custom amount' });
+    expect(customLink).toHaveAttribute('href', `${route('campaigns.show', { campaign: campaign.uuid })}?budget=1#custom-budget-research`);
+    page.url = customLink.getAttribute('href');
+    rerender(<CampaignShow {...props} />);
+
+    expect(getByRole('heading', { name: 'Research a custom daily budget' })).toBeVisible();
+    expect(getByLabelText('Daily budget (AUD)').closest('form')).toHaveAttribute('id', 'custom-budget-research');
+    expect(getByText(/AUD 50\/day/)).toHaveTextContent('Researching does not save your budget or activate ads.');
+    fireEvent.change(getByLabelText('Daily budget (AUD)'), { target: { value: '50' } });
+    expect(getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+    fireEvent.click(getByRole('button', { name: 'Research this budget' }));
+    expect(researchPostMock).toHaveBeenCalledExactlyOnceWith(route('campaigns.market-research.refresh', { campaign: campaign.uuid }), { daily_budget: '50' }, expect.objectContaining({ preserveScroll: true }));
+    expect(getByText(/Saved daily budget:/)).toHaveTextContent('Saved daily budget: AUD 5.00');
+    expect(campaign.daily_budget).toBe('5.00');
+    expect(campaign.approved_daily_budget).toBe('5.00');
+    expect(postMock).not.toHaveBeenCalled();
+    expect(visitMock).not.toHaveBeenCalled();
+});
+
+it.each(['', '4.99', '50.001', '10000.01', '100000', '1e10'])('does not request unbounded or invalid custom daily budget %s', value => {
+    page.url = '/campaigns/bounded-custom?budget=1';
+    const campaign = { id: 7, uuid: 'bounded-custom', name: 'Paused setup', strategies: [], daily_budget: '5.00',
+        budget_confirmed_at: '2026-10-23', currency_code: 'AUD' };
+    const { getByLabelText, getByRole } = render(<CampaignShow auth={{ user: {} }} campaign={campaign} />);
+    expect(getByLabelText('Daily budget (AUD)')).toHaveAttribute('max', '10000');
+    fireEvent.change(getByLabelText('Daily budget (AUD)'), { target: { value } });
+    expect(getByRole('button', { name: 'Research this budget' })).toBeDisabled();
+    fireEvent.click(getByRole('button', { name: 'Research this budget' }));
+    expect(researchPostMock).not.toHaveBeenCalled();
+    expect(postMock).not.toHaveBeenCalled();
 });
 
 it('shows the current native purchase connection instead of asking for the legacy signup container', () => {

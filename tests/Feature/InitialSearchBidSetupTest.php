@@ -187,6 +187,55 @@ class InitialSearchBidSetupTest extends TestCase
         return ['managed' => ['managed'], 'paid setup' => ['setup_only']];
     }
 
+    public function test_keyword_cost_research_selects_and_verifies_the_stronger_affordable_bid_on_a_paused_campaign(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $bidding = $strategy->bidding_strategy;
+        $bidding['parameters']['initialCpcBidMicros'] = 1_800_000;
+        $strategy->update(['bidding_strategy' => $bidding]);
+        $historical = $this->createMock(\App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [[
+            'text' => 'google ads setup', 'keyword' => 'google ads setup',
+            'low_top_of_page_bid_micros' => 1_000_000, 'high_top_of_page_bid_micros' => 1_800_000,
+        ]]]);
+        $tested = [];
+        $forecast = $this->createMock(\App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast::class);
+        $forecast->method('__invoke')->willReturnCallback(function ($account, $keywords, $maxCpc, $rate, $days, $context) use (&$tested): array {
+            $bid = $context['cpc_bid_ceiling_micros'];
+            $tested[] = $bid;
+            $this->assertSame(5_000_000, $context['daily_budget_micros']);
+            $this->assertLessThanOrEqual(1_800_000, $bid);
+
+            return ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => $days * ($bid === 1_800_000 ? 2 : 1),
+                'cost_micros' => $days * ($bid === 1_800_000 ? 3_000_000 : 1_000_000), 'period_days' => $days,
+                'forecast_period' => ['from' => $context['forecast_start_date'],
+                    'through' => \Carbon\CarbonImmutable::parse($context['forecast_start_date'])->addDays($days - 1)->toDateString()],
+                'context' => [...$context, 'keywords' => $keywords]];
+        });
+        $this->app->instance(InitialSearchBidPlanner::class, new class($historical, $forecast) extends InitialSearchBidPlanner
+        {
+            public function __construct(private \App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics $historical, private \App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast $forecast) {}
+
+            protected function historicalProvider(Customer $customer): \App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics
+            {
+                return $this->historical;
+            }
+
+            protected function forecastProvider(Customer $customer): \App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast
+            {
+                return $this->forecast;
+            }
+        });
+        $this->assertTrue($this->configure($customer, $campaign, $strategy, $result), $result->errorMessage());
+        $this->assertSame([1_000_000, 1_800_000], $tested);
+        $this->assertSame([['account' => self::ACCOUNT, 'resource' => self::GROUP, 'bid' => 1_800_000]], $this->writes);
+        $this->assertSame(1_800_000, $this->remote['keywords'][0]['ad_group_cpc_bid_micros']);
+        $this->assertSame(GoogleStatus::PAUSED, $this->remote['status']);
+        $this->assertSame(5_000_000, $this->remote['daily_budget_micros']);
+        $this->assertSame('5.00', $campaign->fresh()->approved_daily_budget);
+        $this->assertSame('verified', $strategy->fresh()->execution_result['metadata']['initial_search_bid']['status']);
+    }
+
     public function test_missing_estimates_stop_before_a_bid_mutation_or_verified_evidence(): void
     {
         [$customer, $campaign, $strategy] = $this->fixture();

@@ -656,6 +656,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                             research={marketResearch || campaign.search_delivery_state?.market_research}
                             statusUrl={marketResearchStatusUrl}
                             currency={campaign.currency_code || 'USD'}
+                            customBudgetUrl={`${route('campaigns.show', { campaign: campaign.uuid })}?budget=1#custom-budget-research`}
                         />
                     )}
                 </div>

@@ -8,6 +8,7 @@ use App\Models\Strategy;
 use App\Models\TargetingConfig;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\Google\SearchKeywordBuilder;
+use App\Services\Campaigns\CampaignKeywordResearch;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
@@ -115,7 +116,7 @@ class SearchKeywordSelectionTest extends TestCase
 
             public function __invoke(string $customerId, array $seedKeywords = [], ?string $url = null, ?string $language = null, array $geoTargets = [], int $pageSize = 50): array
             {
-                return ($this->response)($customerId, $seedKeywords, $url);
+                return ($this->response)($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize);
             }
         });
     }
@@ -238,5 +239,211 @@ class SearchKeywordSelectionTest extends TestCase
         $result = $this->researchService($this->customer(), [])->research('123', 'SiteToSpend');
         $this->assertFalse($result['discovery']['category_recovery_attempted']);
         $this->assertSame('paid search management', $result['keywords'][0]['text']);
+    }
+
+    public function test_campaign_research_checks_category_and_specific_google_ideas_and_retains_lower_volume_buying_terms(): void
+    {
+        $category = ['google ads agency', 'ppc management services', 'paid search agency', 'google ads setup service',
+            'ppc consultants', 'search advertising agency', 'google ads account setup', 'ppc campaign setup',
+            'google advertising services', 'paid advertising service', 'search marketing agency', 'google ads specialist'];
+        $specific = ['small business google ads setup melbourne', 'one time ppc setup melbourne'];
+        $ai = Mockery::mock(GeminiService::class);
+        foreach (['category and buyer-synonym' => array_slice($category, 0, 2), 'specific buying-intent' => $specific] as $profile => $seeds) {
+            $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.default')
+                && str_contains($prompt, $profile) && str_contains($prompt, 'one-time Google Ads setup')
+                && str_contains($prompt, 'small businesses') && str_contains($prompt, 'Melbourne')
+                && str_contains($prompt, 'example.com') && str_contains($prompt, 'google-ads-setup'))->once()
+                ->andReturn(['text' => json_encode($seeds)]);
+        }
+        $reviews = array_map(fn ($id) => ['id' => $id, 'relevant' => true, 'commercial_intent' => true,
+            'reason' => 'A buyer looking for the Google Ads setup service actually sold.'], range(2, 11));
+        $reviews[] = ['id' => 12, 'relevant' => false, 'commercial_intent' => true, 'reason' => 'ERP is not sold.'];
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'Review keyword candidates')
+            && str_contains($prompt, 'one-time Google Ads setup'))->once()->andReturn(['text' => json_encode(['reviews' => $reviews])]);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords')
+            && str_contains($prompt, $specific[0]) && str_contains($prompt, $category[11]))->once()->andReturn(['text' => '["jobs"]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $passes = [];
+        $this->fakePlanner(function ($id, $seeds, $url, $language, $geos, $pageSize) use (&$passes, $category, $specific) {
+            $passes[] = $seeds;
+            $this->assertSame('123', $id);
+            $this->assertSame('https://example.com/google-ads-setup', $url);
+            $this->assertSame('languageConstants/1000', $language);
+            $this->assertSame(['geoTargetConstants/1000567'], $geos);
+            $this->assertSame(36, $pageSize);
+            if ($seeds === array_slice($category, 0, 2)) {
+                return [...array_map(fn ($keyword) => ['keyword' => $keyword, 'avg_monthly_searches' => 10000,
+                    'competition_index' => 20], $category),
+                    ['keyword' => 'enterprise resource planning software', 'avg_monthly_searches' => 1000000]];
+            }
+            $this->assertSame($specific, $seeds);
+
+            return array_map(fn ($keyword) => ['keyword' => $keyword, 'avg_monthly_searches' => 20,
+                'competition_index' => 80], $specific);
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(),
+            [['text' => 'old selected term', 'match_type' => 'EXACT']]);
+
+        $this->assertCount(2, $passes);
+        $this->assertSame(['category', 'specific'], array_column($result['keyword_sets'], 'kind'));
+        $this->assertSame(['ready', 'ready'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame([true, true], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertCount(12, $result['keyword_sets'][0]['keywords']);
+        $this->assertSame($specific, array_column($result['keyword_sets'][1]['keywords'], 'text'));
+        $this->assertCount(12, $result['keywords']);
+        foreach ($specific as $keyword) {
+            $this->assertContains($keyword, array_column($result['keywords'], 'text'));
+        }
+        $this->assertNotContains('enterprise resource planning software', array_column($result['keywords'], 'text'));
+        $this->assertSame(['jobs'], $result['negative_keywords']);
+        $this->assertNotContains('BROAD', array_column($result['keywords'], 'match_type'));
+        foreach ($result['keyword_sets'] as $set) {
+            foreach ($set['keywords'] as $keyword) {
+                $this->assertNotEmpty($keyword['selection_reason']);
+            }
+        }
+    }
+
+    public function test_explicit_sparse_profiles_do_not_trigger_a_third_google_discovery_pass(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'category and buyer-synonym'))
+            ->once()->andReturn(['text' => '["google ads setup service"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent'))
+            ->once()->andReturn(['text' => '["small business google ads setup melbourne"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $passes = 0;
+        $this->fakePlanner(function ($id, $seeds) use (&$passes) {
+            $passes++;
+
+            return [['keyword' => $seeds[0], 'avg_monthly_searches' => 20]];
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(), []);
+
+        $this->assertSame(2, $passes);
+        $this->assertCount(2, $result['keywords']);
+        $this->assertFalse($result['discovery']['category_recovery_attempted']);
+        $this->assertSame(['category', 'specific'], $result['discovery']['profiles_attempted']);
+    }
+
+    public function test_one_unavailable_profile_does_not_erase_other_profile_or_invent_google_demand(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'category and buyer-synonym'))
+            ->once()->andReturn(['text' => '["google ads setup service"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent'))
+            ->once()->andReturn(['text' => '["small business google ads setup melbourne"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $passes = 0;
+        $this->fakePlanner(function ($id, $seeds) use (&$passes) {
+            $passes++;
+            if ($passes === 1) {
+                throw new \RuntimeException('Keyword Planner unavailable for category profile');
+            }
+
+            return [['keyword' => $seeds[0], 'avg_monthly_searches' => 20]];
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(), []);
+
+        $this->assertSame(2, $passes);
+        $this->assertSame(['needs_review', 'ready'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame([false, true], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertNull($result['keyword_sets'][0]['keywords'][0]['avg_monthly_searches']);
+        $this->assertStringContainsString('could not be verified', $result['keyword_sets'][0]['reason']);
+        $this->assertSame('small business google ads setup melbourne', $result['keyword_sets'][1]['keywords'][0]['text']);
+        $this->assertCount(2, $result['keywords']);
+    }
+
+    public function test_missing_platform_account_produces_both_semantic_profiles_without_claiming_measured_demand(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'category and buyer-synonym'))
+            ->once()->andReturn(['text' => '["google ads setup service"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent'))
+            ->once()->andReturn(['text' => '["small business google ads setup melbourne"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $this->fakePlanner(function () {
+            $this->fail('Missing account must not call Keyword Planner.');
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, [], []);
+
+        $this->assertSame('business_context_only', $result['source']);
+        $this->assertSame(['category', 'specific'], array_column($result['keyword_sets'], 'kind'));
+        $this->assertSame([false, false], array_column($result['keyword_sets'], 'demand_verified'));
+        $this->assertSame(['needs_review', 'needs_review'], array_column($result['keyword_sets'], 'status'));
+        $this->assertSame(['PHRASE', 'PHRASE'], array_column($result['keywords'], 'match_type'));
+        $this->assertSame([null, null], array_column($result['keywords'], 'avg_monthly_searches'));
+    }
+
+    public function test_specific_offer_seeds_with_zero_or_unknown_demand_are_not_ranked_away_by_generic_expansions(): void
+    {
+        $specific = ['small business google ads setup melbourne', 'one time ppc setup melbourne'];
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'category and buyer-synonym'))
+            ->once()->andReturn(['text' => '["google ads setup service"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent'))
+            ->once()->andReturn(['text' => json_encode($specific)]);
+        $reviews = array_map(fn ($id) => ['id' => $id, 'relevant' => true, 'commercial_intent' => true,
+            'reason' => 'A commercial Google Ads service relevant to the offer.'], range(1, 14));
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'Review keyword candidates'))
+            ->once()->andReturn(['text' => json_encode(['reviews' => $reviews])]);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))
+            ->once()->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $passes = 0;
+        $this->fakePlanner(function ($id, $seeds) use (&$passes, $specific) {
+            $passes++;
+            if ($passes === 1) {
+                return [['keyword' => $seeds[0], 'avg_monthly_searches' => 2000]];
+            }
+
+            return [['keyword' => $specific[0], 'avg_monthly_searches' => 0, 'competition_index' => 80],
+                ...array_map(fn ($index) => ['keyword' => 'commercial google ads service '.$index,
+                    'avg_monthly_searches' => 100000, 'competition_index' => 10], range(1, 14))];
+        });
+        [$campaign, $strategy] = $this->profileCampaign();
+        $result = (new CampaignKeywordResearch($this->customer()))->discover($campaign, $strategy, $this->profileContext(), []);
+
+        $this->assertSame(2, $passes);
+        $profile = $result['keyword_sets'][1];
+        $this->assertSame('specific', $profile['kind']);
+        $this->assertSame('needs_review', $profile['status']);
+        $this->assertFalse($profile['demand_verified']);
+        $this->assertCount(12, $profile['keywords']);
+        $this->assertSame($specific, array_column(array_slice($profile['keywords'], 0, 2), 'text'));
+        $this->assertSame(0, $profile['keywords'][0]['avg_monthly_searches']);
+        $this->assertNull($profile['keywords'][1]['avg_monthly_searches']);
+        $this->assertStringContainsString('unverified', $profile['keywords'][1]['selection_reason']);
+        $this->assertSame(['EXACT', 'PHRASE'], array_column(array_slice($profile['keywords'], 0, 2), 'match_type'));
+        foreach ($specific as $keyword) {
+            $this->assertContains($keyword, array_column($result['keywords'], 'text'));
+        }
+        $this->assertNotContains('BROAD', array_column($profile['keywords'], 'match_type'));
+    }
+
+    private function profileCampaign(): array
+    {
+        $campaign = new Campaign(['product_focus' => 'one-time Google Ads setup', 'target_market' => 'small businesses in Melbourne',
+            'landing_page_url' => 'https://example.com/google-ads-setup', 'geographic_targeting' => ['Melbourne']]);
+        $strategy = new Strategy(['platform' => 'Google Ads', 'campaign_type' => 'search']);
+        $strategy->setRelation('targetingConfig', null);
+
+        return [$campaign, $strategy];
+    }
+
+    private function profileContext(): array
+    {
+        return ['customer_id' => '123', 'language_constants' => ['languageConstants/1000'],
+            'geo_target_constants' => ['geoTargetConstants/1000567']];
     }
 }

@@ -50,6 +50,45 @@ describe('SearchDeliveryCard', () => {
         expect(container).toBeEmptyDOMElement();
     });
 
+    it('does not mistake pre-deployment market research for a stale delivery check or start delivery polling', () => {
+        const researchOnly = { market_research: { status: 'researching', request_id: 'draft-research' } };
+        const draft = { ...campaign, status: 'draft', google_ads_campaign_id: null,
+            strategies: [{ platform: 'Google Ads', campaign_type: 'search', deployment_status: null,
+                deployed_at: null, google_ads_campaign_id: null, execution_result: null }], search_delivery_state: researchOnly };
+        const { container } = render(<SearchDeliveryCard campaign={draft} />);
+
+        expect(container).toBeEmptyDOMElement();
+        expect(searchDeliveryStatus(researchOnly)).toBeNull();
+        expect(pollingRequests).toHaveBeenCalledWith(null, expect.objectContaining({ enabled: false }));
+        expect(screen.queryByText('Delivery needs review')).toBeNull();
+        expect(screen.queryByText('Not available')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
+    });
+
+    it('shows setup research for a new customer campaign without a delivery warning or missing live metrics', () => {
+        const draft = { ...campaign, status: 'draft', daily_budget: '5.00', currency_code: 'AUD',
+            google_ads_campaign_id: null, budget_confirmed_at: null, strategies: [],
+            search_delivery_state: { market_research: { status: 'researching', request_id: 'new-research', result: null } } };
+        render(<CampaignShow auth={{ user: {} }} campaign={draft} marketResearch={draft.search_delivery_state.market_research} />);
+
+        expect(screen.getByText('Researching your market')).toBeVisible();
+        expect(screen.getByText(/Saved daily budget:/)).toHaveTextContent('AUD 5.00');
+        expect(screen.queryByRole('region', { name: 'Google Search delivery diagnosis' })).toBeNull();
+        expect(screen.queryByText('Delivery needs review')).toBeNull();
+        expect(screen.queryByText(/This delivery check is out of date/)).toBeNull();
+        expect(screen.queryByText('Not available')).toBeNull();
+    });
+
+    it('retains a real paused diagnosis with unavailable metrics and research alongside platform evidence', () => {
+        render(<SearchDeliveryCard campaign={{ ...campaign, status: 'paused', google_ads_campaign_id: '123456',
+            search_delivery_state: { ...state, status: 'paused', measurement: {}, market_research: { status: 'ready' } } }} />);
+
+        expect(screen.getByText('Campaign is paused')).toBeVisible();
+        expect(screen.getByRole('region', { name: 'Google Search delivery diagnosis' })).toBeVisible();
+        expect(screen.getByText('Impressions').parentElement).toHaveTextContent('Not available');
+        expect(screen.queryByText('Ads are receiving traffic')).toBeNull();
+    });
+
     it('shows the actual period and measured zeros while holding trial changes for approval', () => {
         render(<SearchDeliveryCard campaign={campaign} />);
         const card = screen.getByRole('region', { name: 'Google Search delivery diagnosis' });
@@ -211,9 +250,9 @@ describe('SearchDeliveryCard', () => {
             expect.objectContaining({ restartKey: 1, immediate: true }));
     });
 
-    it('does not retain a green state when the latest campaign response has no diagnosis', () => {
+    it.each([null, { market_research: { status: 'ready' } }])('does not retain a green state when the latest campaign response has no diagnosis (%j)', latestState => {
         const { rerender } = render(<SearchDeliveryCard campaign={{ ...campaign, search_delivery_state: { ...state, status: 'delivering' } }} />);
-        polling.data = { ...campaign, search_delivery_state: null };
+        polling.data = { ...campaign, search_delivery_state: latestState };
         rerender(<SearchDeliveryCard campaign={{ ...campaign, search_delivery_state: { ...state, status: 'delivering' } }} />);
         expect(screen.getByText('Delivery check unavailable')).toBeVisible();
         expect(screen.queryByText('Ads are receiving traffic')).toBeNull();

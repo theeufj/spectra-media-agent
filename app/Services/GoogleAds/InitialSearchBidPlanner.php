@@ -212,9 +212,10 @@ class InitialSearchBidPlanner
                     && is_int($cost) && $cost > 0 && $cost <= $budget * $context['forecast_period_days']
                     && $this->matchesForecast($forecast, $proposed, $candidateContext);
                 $evidence['candidates'][] = ['cpc_bid_micros' => $bid, 'credible_reach' => $credible, 'forecast' => $forecast];
-                if (! $credible) {
-                    continue;
-                }
+            }
+            $chosen = self::bestForecast(array_values(array_filter($evidence['candidates'], fn ($candidate) => $candidate['credible_reach'])));
+            if ($chosen !== null) {
+                $forecast = $chosen['forecast'];
                 $evidence['forecast'] = $forecast;
                 $caveats = array_values(array_unique([...(array) ($forecast['caveats'] ?? []),
                     'Historical bids and forecast clicks are estimates, not minimum bids or guaranteed delivery.',
@@ -223,9 +224,9 @@ class InitialSearchBidPlanner
                     ...(count($context['language_constants']) > 1 ? ['Historical keyword costs do not model the complete multi-language selection; the reach forecast retains every selected language.'] : []),
                 ]));
 
-                return ['ready' => true, 'status' => 'estimated', 'cpc_bid_micros' => $bid,
+                return ['ready' => true, 'status' => 'estimated', 'cpc_bid_micros' => $chosen['cpc_bid_micros'],
                     'reason' => $exactBidMicros === null
-                        ? 'The lowest tested historical-cost candidate with credible forecast reach inside the approved spending limits.'
+                        ? 'The tested bid with the most useful forecast traffic within retained spending limits; similar traffic favors lower estimated cost and bid.'
                         : 'Fresh forecast reach at the exact researched bid and this proposed daily budget.',
                     'issues' => [], 'caveats' => $caveats, 'evidence' => $evidence, 'activation_ready' => false, 'auto_repair_safe' => false];
             }
@@ -236,6 +237,22 @@ class InitialSearchBidPlanner
 
             return $this->unavailable('Fresh keyword cost and reach estimates could not be verified. No fallback bid was chosen.', $evidence);
         }
+    }
+
+    /** All candidates must already have complete, credible forecasts for the same period and budget. */
+    public static function bestForecast(array $candidates): ?array
+    {
+        if ($candidates === []) {
+            return null;
+        }
+        $maximum = max(array_map(fn ($candidate) => $candidate['forecast']['clicks'], $candidates));
+        // Forecast noise must not justify a more expensive bid for a fractional
+        // click. Compare every candidate to the maximum to avoid pairwise ties.
+        $nearBest = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecast']['clicks'] >= $maximum - max(0.1, $maximum * 0.01)));
+        usort($nearBest, fn ($a, $b) => [$a['forecast']['cost_micros'], $a['cpc_bid_micros'], -$a['forecast']['clicks']]
+            <=> [$b['forecast']['cost_micros'], $b['cpc_bid_micros'], -$b['forecast']['clicks']]);
+
+        return $nearBest[0];
     }
 
     private function context(Campaign $campaign, array $snapshot, int $budget): array

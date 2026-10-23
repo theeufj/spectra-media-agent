@@ -21,7 +21,7 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-23 01:00:00', 'UTC'));
     }
 
-    public function test_it_uses_fresh_cost_and_complete_targeted_reach_to_choose_the_lowest_credible_bid(): void
+    public function test_it_compares_every_bounded_candidate_and_prefers_lower_bids_when_traffic_is_equivalent(): void
     {
         $snapshot = $this->snapshot();
         $snapshot['approved_cpc_ceiling_micros'] = null;
@@ -31,7 +31,7 @@ class InitialSearchBidPlannerTest extends TestCase
             ->willReturn($this->historical());
         $forecast = $this->createMock(GenerateKeywordForecast::class);
         $bids = [];
-        $forecast->expects($this->exactly(2))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
+        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
             $this->assertSame('1234567890', $id);
             $this->assertSame(['PHRASE', 'EXACT'], array_column($keywords, 'match_type'));
             $this->assertSame($snapshot['negative_keywords'], $context['negative_keywords']);
@@ -50,7 +50,7 @@ class InitialSearchBidPlannerTest extends TestCase
         $result = $this->planner($historical, $forecast)->plan($this->campaign(), $snapshot);
 
         $this->assertTrue($result['ready'], json_encode($result));
-        $this->assertSame([500_000, 1_000_000], $bids);
+        $this->assertSame([500_000, 1_000_000, 2_000_000, 3_000_000], $bids);
         $this->assertSame(1_000_000, $result['cpc_bid_micros']);
         $this->assertFalse($result['activation_ready']);
         $this->assertFalse($result['auto_repair_safe']);
@@ -68,24 +68,68 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->assertGreaterThan(10_000, $result['cpc_bid_micros']);
     }
 
+    public function test_a_later_cost_candidate_with_better_traffic_wins_without_blindly_choosing_the_highest_bid(): void
+    {
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->expects($this->once())->method('__invoke')->willReturn(['success' => true, 'keywords' => [
+            'paid search agency' => ['low_top_of_page_bid_micros' => 5_680_000, 'high_top_of_page_bid_micros' => 21_630_000],
+            'advertising agency' => ['low_top_of_page_bid_micros' => 29_690_000, 'high_top_of_page_bid_micros' => 62_500_000],
+        ]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+            [$clicks, $cost] = match ($context['cpc_bid_ceiling_micros']) {
+                5_680_000 => [5.0357, 17_582_940], 21_630_000 => [17.1228, 203_209_464],
+                29_690_000 => [20.5408, 329_220_000], default => [12.6964, 375_000_000],
+            };
+
+            return [...$this->forecast($keywords, $context, $days, $clicks), 'cost_micros' => $cost];
+        });
+        $campaign = $this->campaign()->forceFill(['approved_daily_budget' => '62.50', 'start_date' => '2026-10-25', 'end_date' => '2026-10-30']);
+        $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 62_500_000, 'authorized_daily_budget_micros' => 62_500_000];
+        $result = $this->planner($historical, $forecast)->plan($campaign, $snapshot);
+        $this->assertTrue($result['ready']);
+        $this->assertSame(29_690_000, $result['cpc_bid_micros']);
+        $this->assertSame(20.5408, $result['evidence']['forecast']['clicks']);
+        $this->assertCount(4, $result['evidence']['candidates']);
+        $this->assertSame(6, $result['evidence']['forecast']['period_days']);
+    }
+
+    public function test_near_equal_forecast_noise_prefers_lower_cost_then_lower_bid(): void
+    {
+        $candidates = [
+            ['cpc_bid_micros' => 500_000, 'forecast' => ['clicks' => 40, 'cost_micros' => 1_000_000]],
+            ['cpc_bid_micros' => 1_000_000, 'forecast' => ['clicks' => 40.1, 'cost_micros' => 2_000_000]],
+            ['cpc_bid_micros' => 2_000_000, 'forecast' => ['clicks' => 40.3, 'cost_micros' => 3_000_000]],
+        ];
+        $this->assertSame(500_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+        $candidates[2]['forecast']['clicks'] = 60;
+        $this->assertSame(2_000_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+    }
+
     public function test_budget_comparison_forecasts_the_exact_selected_bid_instead_of_choosing_a_cheaper_candidate(): void
     {
         $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
-        $historical->expects($this->once())->method('__invoke')->willReturn($this->historical());
+        $historical->expects($this->exactly(4))->method('__invoke')->willReturn($this->historical());
         $forecast = $this->createMock(GenerateKeywordForecast::class);
-        $forecast->expects($this->once())->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+        $budgets = [];
+        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$budgets) {
             $this->assertSame(1_000_000, $context['cpc_bid_ceiling_micros']);
-            $this->assertSame(10_000_000, $context['daily_budget_micros']);
+            $budgets[] = $context['daily_budget_micros'];
             $this->assertSame([1_000_000], array_values(array_unique(array_column($keywords, 'cpc_bid_micros'))));
 
             return $this->forecast($keywords, $context, $days, 98);
         });
         $context = [...$this->snapshot(), 'customer_id' => '1234567890'];
         $context['keywords'] = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => 0]), $context['keywords']);
-        $result = $this->planner($historical, $forecast)->forecastAtBid($this->campaign(), $context['keywords'], $context, 10_000_000, 1_000_000, 2_000_000);
-        $this->assertTrue($result['ready']);
-        $this->assertSame(1_000_000, $result['cpc_bid_micros']);
-        $this->assertCount(1, $result['evidence']['candidates']);
+        $planner = $this->planner($historical, $forecast);
+        foreach ([5_000_000, 10_000_000, 15_000_000, 50_000_000] as $budget) {
+            $result = $planner->forecastAtBid($this->campaign(), $context['keywords'], $context, $budget, 1_000_000, 2_000_000);
+            $this->assertTrue($result['ready']);
+            $this->assertSame(1_000_000, $result['cpc_bid_micros']);
+            $this->assertSame(98, $result['evidence']['forecast']['clicks']); // Genuine saturation is not linearly scaled.
+            $this->assertCount(1, $result['evidence']['candidates']);
+        }
+        $this->assertSame([5_000_000, 10_000_000, 15_000_000, 50_000_000], $budgets);
     }
 
     public function test_exact_bid_options_cannot_raise_keyword_or_strategy_limits_or_round_up_a_bid(): void
@@ -282,7 +326,7 @@ class InitialSearchBidPlannerTest extends TestCase
         ]];
     }
 
-    private function forecast(array $keywords, array $context, int $days, int $clicks = 40, array $caveats = []): array
+    private function forecast(array $keywords, array $context, int $days, int|float $clicks = 40, array $caveats = []): array
     {
         // Match the existing provider's normalized keyword shape and key order.
         $keywords = array_map(fn ($keyword) => ['text' => $keyword['text'], 'match_type' => $keyword['match_type'],

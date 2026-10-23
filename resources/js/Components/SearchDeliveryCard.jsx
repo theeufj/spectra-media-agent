@@ -101,6 +101,12 @@ function Time({ value }) {
     return validTime(value) ? <time dateTime={value}>{dateTime(value)}</time> : 'Not available';
 }
 
+function deliveryDiagnosis(state) {
+    // Pre-deployment research shares this storage field without creating a
+    // delivery diagnosis. Preserve the other fields used by legacy checks.
+    return state && typeof state === 'object' && Object.keys(state).some(key => key !== 'market_research') ? state : null;
+}
+
 function ForecastEvidence({ forecast, label, currency }) {
     if (!forecast || typeof forecast !== 'object' || !Object.keys(forecast).length) return null;
     return <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
@@ -121,7 +127,7 @@ function ForecastEvidence({ forecast, label, currency }) {
 }
 
 export function searchDeliveryStatus(state, now = Date.now()) {
-    if (!state) return null;
+    if (!deliveryDiagnosis(state)) return null;
     if (state.error || state.errors?.length || state.status === 'unavailable') return 'unavailable';
     const configuredHours = observedNumber(state.stale_after_hours);
     const staleHours = configuredHours > 0 ? configuredHours : 3;
@@ -135,7 +141,7 @@ export function searchDeliveryStatus(state, now = Date.now()) {
 }
 
 export default function SearchDeliveryCard({ campaign }) {
-    const initial = campaign?.search_delivery_state;
+    const initial = deliveryDiagnosis(campaign?.search_delivery_state);
     const [now, setNow] = useState(Date.now);
     const [refreshAttempt, setRefreshAttempt] = useState(0);
     const { data: refreshed, error: refreshError } = usePolling(
@@ -158,7 +164,7 @@ export default function SearchDeliveryCard({ campaign }) {
     }, [Boolean(initial)]);
     if (!initial) return null;
     const hasMatchingRefresh = Boolean(refreshed && campaign?.uuid && refreshed.uuid === campaign.uuid);
-    const latest = hasMatchingRefresh ? refreshed.search_delivery_state : initial;
+    const latest = hasMatchingRefresh ? deliveryDiagnosis(refreshed.search_delivery_state) : initial;
     // Inertia may return a newer state without remounting this card. Keep the
     // newest evidence rather than overwriting it with an older poll response.
     const initialIsNewer = validTime(initial?.checked_at) && validTime(latest?.checked_at) && Date.parse(initial.checked_at) > Date.parse(latest.checked_at);

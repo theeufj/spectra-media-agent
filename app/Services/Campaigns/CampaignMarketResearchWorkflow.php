@@ -150,7 +150,6 @@ class CampaignMarketResearchWorkflow
                 || ($option['proposal']['fingerprint'] ?? null) !== $fingerprint
                 || ($option['proposal']['strategies'][0]['status'] ?? null) !== 'ready'
                 || ($optionRow['strategy_id'] ?? null) !== ($baseRow['strategy_id'] ?? null)
-                || ($optionRow['cpc_bid_micros'] ?? null) !== ($baseRow['cpc_bid_micros'] ?? null)
                 || $this->keywordSelection($optionRow['proposed_keywords'] ?? []) !== $this->keywordSelection($baseRow['proposed_keywords'] ?? [])
                 || ($optionRow['forecast']['forecast_period'] ?? null) !== ($baseRow['forecast']['forecast_period'] ?? null)
                 || ($optionRow['forecast']['period_days'] ?? null) !== ($baseRow['forecast']['period_days'] ?? null)

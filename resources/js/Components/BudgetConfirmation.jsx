@@ -15,6 +15,11 @@ function budgetMicros(value) {
     return match ? Number(match[1]) * 1_000_000 + Number((match[2] || '').padEnd(2, '0')) * 10_000 : null;
 }
 
+function validResearchBudget(value) {
+    const micros = budgetMicros(value);
+    return Number.isSafeInteger(micros) && micros >= 5_000_000 && micros <= 10_000_000_000;
+}
+
 export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false, editing = false, onConfirmed, marketResearch = null, marketResearchStatusUrl = null, marketResearchRefreshUrl = null }) {
     const { data, setData, post, processing, errors } = useForm({ daily_budget: campaign.daily_budget ?? '', research_id: '', research_fingerprint: '', budget_option_id: null, accept_proposal: false });
     const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +53,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
     }, [research?.request_id, research?.expires_at]);
 
     const refresh = (requestedBudget = null) => {
+        if (requestedBudget !== null && !validResearchBudget(requestedBudget)) return;
         setRefreshError(null);
         router.post(marketResearchRefreshUrl || route('campaigns.market-research.refresh', { campaign: campaign.uuid }), requestedBudget === null ? {} : { daily_budget: requestedBudget }, {
             preserveScroll: true, onStart: () => setRefreshing(true), onFinish: () => setRefreshing(false),
@@ -92,13 +98,15 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
             <MarketResearchPanel research={displayedResearch} currency={currency} onRefresh={() => refresh()} refreshing={refreshing} now={now}
                 onSelectBudgetOption={fresh && options.length > 0 ? useOption : undefined} selectedBudgetOptionId={option?.id || null} selectingDisabled={processing || refreshing} />
             {(refreshError || poll.error) && <p role="alert" className="mt-3 text-sm text-red-700">{refreshError || 'The latest research status could not be checked. Refresh research before approving.'}</p>}
-            <form onSubmit={submit} className="mt-5 border-t border-gray-200 pt-5">
+            <form id="custom-budget-research" onSubmit={submit} className="mt-5 scroll-mt-6 border-t border-gray-200 pt-5">
+                <h4 className="text-base font-semibold text-gray-900">Research a custom daily budget</h4>
+                <p id="custom-budget-research-help" className="mt-1 mb-3 text-sm text-gray-600">Try an amount such as {currency} 50/day to see indicative traffic and spend estimates. Researching does not save your budget or activate ads.</p>
                 <p className="mb-3 text-sm text-gray-600">Saved daily budget: <strong>{currency} {Number(campaign.daily_budget || 0).toFixed(2)}</strong>. Your saved spend stays unchanged until you approve the researched plan.</p>
                 {fresh && options.length === 0 && <div className="mb-4 flex flex-wrap items-center gap-3"><p className="text-sm text-gray-700">Researched daily budget: <strong>{currency} {quote}</strong></p><button type="button" onClick={useQuote} disabled={processing || refreshing} className="rounded-md border border-brand-dark px-3 py-2 text-sm font-medium text-brand-dark">Use researched budget</button></div>}
                 <label htmlFor="daily_budget" className="block text-sm font-medium text-gray-700">Daily budget ({currency})</label>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
-                    <input id="daily_budget" type="number" min="5" step="0.01" value={data.daily_budget} onChange={(event) => setData('daily_budget', event.target.value)} aria-describedby="budget-research-approval" className="w-36 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary" />
-                    <button type="button" onClick={() => refresh(data.daily_budget)} disabled={refreshing || processing || isResearchPending(research) || !(budgetMicros(data.daily_budget) >= 5_000_000)} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">Research this budget</button>
+                    <input id="daily_budget" type="number" min="5" max="10000" step="0.01" value={data.daily_budget} onChange={(event) => setData('daily_budget', event.target.value)} aria-describedby="custom-budget-research-help budget-research-approval" className="w-36 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary" />
+                    <button type="button" onClick={() => refresh(data.daily_budget)} disabled={refreshing || processing || isResearchPending(research) || !validResearchBudget(data.daily_budget)} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">Research this budget</button>
                     <button type="submit" disabled={processing || !selected || refreshing || Boolean(refreshError) || Boolean(poll.error)} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600">{processing ? 'Saving…' : 'Approve researched plan'}</button>
                 </div>
                 <p id="budget-research-approval" className="mt-2 text-sm text-gray-600">Approval accepts the proposed keyword set, bids and budget shown above. A different amount needs matching fresh research before it can be approved.</p>

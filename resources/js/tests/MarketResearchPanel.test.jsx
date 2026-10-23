@@ -1,11 +1,12 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { post, refreshPost, polling, pollResponse } = vi.hoisted(() => ({
     post: vi.fn(), refreshPost: vi.fn(), polling: vi.fn(), pollResponse: { data: null, error: null },
 }));
 vi.mock('@inertiajs/react', () => ({
+    Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
     router: { post: refreshPost },
     useForm: (initial) => {
         const [data, update] = React.useState(initial);
@@ -323,6 +324,8 @@ describe('campaign market research', () => {
         expect(view.getByText('About 100 clicks')).toBeInTheDocument();
         expect(view.getByText('AUD 266.23 estimated ad spend')).toBeInTheDocument();
         expect(view.getByText('Little extra traffic for the higher budget')).toBeInTheDocument();
+        expect(view.getByText('Indicative estimates.')).toBeInTheDocument();
+        expect(view.queryByText('Higher budgets add little forecast traffic')).toBeNull();
         expect(view.getAllByRole('radio').every(radio => !radio.checked)).toBe(true);
         expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
 
@@ -339,6 +342,91 @@ describe('campaign market research', () => {
             daily_budget: '10.00', research_id: 'request-one', research_fingerprint: 'context-one',
             budget_option_id: 'b'.repeat(64), accept_proposal: true,
         });
+    });
+
+    it('shows each researched maximum CPC and submits only the explicitly selected budget and bid proposal', () => {
+        const research = withOptions();
+        const higher = research.result.budget_options[1];
+        higher.cpc_bid_micros = 8_000_000;
+        higher.proposal.strategies[0].cpc_bid_micros = 8_000_000;
+        const view = render(budget(research));
+        const baseChoice = view.getByRole('radio', { name: 'AUD 5.00 per day' });
+        const higherChoice = view.getByRole('radio', { name: 'AUD 10.00 per day' });
+
+        expect(within(baseChoice.closest('label')).getByText('Maximum CPC: AUD 5.00')).toBeVisible();
+        expect(within(higherChoice.closest('label')).getByText('Maximum CPC: AUD 8.00')).toBeVisible();
+        expect(view.getByText(/same keyword set, with a researched maximum CPC for each daily budget/)).toBeVisible();
+        expect(view.queryByText(/same keywords and bid/)).toBeNull();
+        expect(view.getByText('CPC limit: AUD 5.00')).toBeVisible();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+
+        fireEvent.click(higherChoice);
+
+        expect(higherChoice).toBeChecked();
+        expect(view.getByText('CPC limit: AUD 8.00')).toBeVisible();
+        expect(view.queryByText('CPC limit: AUD 5.00')).toBeNull();
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(10);
+        expect(view.getByText(/Saved daily budget:/)).toHaveTextContent('AUD 5.00');
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+
+        fireEvent.click(view.getByRole('button', { name: 'Approve researched plan' }));
+
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(post).toHaveBeenCalledWith(expect.stringContaining('campaigns.confirm-budget'), expect.any(Object), {
+            daily_budget: '10.00', research_id: 'request-one', research_fingerprint: 'context-one',
+            budget_option_id: higher.id, accept_proposal: true,
+        });
+        expect(refreshPost).not.toHaveBeenCalled();
+    });
+
+    it('explains flat forecasts without inventing more clicks for higher budgets', () => {
+        const research = withOptions();
+        [36.2869, 35.7197, 36.2152].forEach((estimate, index) => {
+            research.result.budget_options[index].forecast.clicks = estimate;
+            research.result.budget_options[index].cpc_bid_micros = [5, 8, 10][index] * 1_000_000;
+        });
+        const view = render(<MarketResearchPanel research={research} currency="AUD" customBudgetUrl="/campaign/review?budget=1#custom-budget-research" />);
+        expect(view.getAllByText('About 36 clicks')).toHaveLength(3);
+        expect(view.getByRole('note')).toHaveTextContent('Higher budgets add little forecast traffic');
+        expect(view.getByRole('note')).toHaveTextContent('A higher spending limit does not guarantee more clicks');
+        expect(view.getByRole('note')).toHaveTextContent('across these researched budgets and maximum CPC bids');
+        expect(view.getByRole('note')).not.toHaveTextContent('for this keyword plan and bid');
+        expect(view.getByText(/Click counts are rounded/)).toBeInTheDocument();
+        expect(view.getByRole('link', { name: 'Research a custom amount' })).toHaveAttribute('href', '/campaign/review?budget=1#custom-budget-research');
+        expect(view.getByText(/such as AUD 50/)).toBeInTheDocument();
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+    });
+
+    it('does not compare different forecast periods as flat traffic', () => {
+        const research = withOptions();
+        research.result.budget_options.forEach(option => { option.forecast.clicks = 36; });
+        research.result.budget_options[1].forecast.forecast_period = { from: '2026-11-25', through: '2026-12-23' };
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(view.queryByText('Higher budgets add little forecast traffic')).toBeNull();
+        expect(view.getAllByText('Different forecast dates')).toHaveLength(2);
+        expect(view.queryByText('More estimated traffic')).toBeNull();
+    });
+
+    it('keeps custom research accessible when earlier quotes have expired', () => {
+        const view = render(<MarketResearchPanel research={ready({ expires_at: '2000-01-01T00:00:00Z' })} currency="AUD" customBudgetUrl="/campaign/review?budget=1#custom-budget-research" />);
+        expect(view.getByText('This research needs refreshing')).toBeInTheDocument();
+        expect(view.getByRole('link', { name: 'Research a custom amount' })).toBeInTheDocument();
+        expect(view.queryByRole('radio')).toBeNull();
+    });
+
+    it('labels a requested custom amount as an estimate rather than a minimum budget', () => {
+        const research = withOptions();
+        const custom = research.result.budget_options[0];
+        custom.daily_budget_micros = custom.proposal.proposed_daily_budget_micros = 50_000_000;
+        research.requested_daily_budget_micros = 50_000_000;
+        research.result.budget_options = [custom];
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(view.getByText('Custom budget estimate')).toBeInTheDocument();
+        expect(view.queryByText('Lowest tested budget')).toBeNull();
+        expect(view.queryByText('Higher budgets add little forecast traffic')).toBeNull();
+        expect(view.getByText('About 53 clicks')).toBeInTheDocument();
     });
 
     it('requires another explicit choice when the options belong to a new research request', () => {

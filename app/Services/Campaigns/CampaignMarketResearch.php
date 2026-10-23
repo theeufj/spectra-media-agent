@@ -11,9 +11,13 @@ use App\Services\GoogleAds\InitialSearchBidPlanner;
 /** Automatic proposals only. Research never authorizes or changes spend, targeting or platform objects. */
 class CampaignMarketResearch
 {
+    // Unapproved quotes must be rerun when optimizer semantics change. This
+    // version deliberately does not enter durable customer approval hashes.
+    private const RESEARCH_VERSION = 2;
+
     public function fingerprint(Campaign $campaign, ?int $requestedDailyBudgetMicros = null): string
     {
-        return hash('sha256', json_encode([$this->inputFingerprint($campaign, true), $requestedDailyBudgetMicros], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([self::RESEARCH_VERSION, $this->inputFingerprint($campaign, true), $requestedDailyBudgetMicros], JSON_THROW_ON_ERROR));
     }
 
     public function approvalFingerprint(Campaign $campaign): string
@@ -47,13 +51,23 @@ class CampaignMarketResearch
         $shares = $missing->isEmpty() ? [] : CampaignBudgetService::split(intdiv($remaining, 10_000), array_fill_keys($missing->modelKeys(), 1));
         $requestedAllocations = [];
         $requestedIssue = null;
+        $only = $strategies->first();
+        $existingSearchQuote = $requestedDailyBudgetMicros !== null && $strategies->count() === 1
+            && $only instanceof Strategy && $this->isGoogleSearch($only) && $this->hasFootprint($campaign, $only);
         if ($requestedDailyBudgetMicros !== null) {
             $protected = $strategies->filter(fn (Strategy $strategy) => $strategy->hasDeploymentFootprint() || $this->hasFootprint($campaign, $strategy));
             $protectedTotal = $protected->sum(fn (Strategy $strategy) => CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget));
             if ($requestedDailyBudgetMicros < 5_000_000 || $requestedDailyBudgetMicros > 10_000_000_000 || $requestedDailyBudgetMicros % 10_000 !== 0
-                || $protected->contains(fn (Strategy $strategy) => CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget) <= 0)
-                || $requestedDailyBudgetMicros < $protectedTotal) {
+                || (! $existingSearchQuote && ($protected->contains(fn (Strategy $strategy) => CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget) <= 0)
+                    || $requestedDailyBudgetMicros < $protectedTotal))) {
                 $requestedIssue = 'The requested daily budget does not fit the supported range and existing platform allocations.';
+            } elseif ($existingSearchQuote) {
+                // A single existing Search campaign can be modelled at a
+                // hypothetical amount. Its real allocation is never rewritten
+                // or made approvable by this research-only projection.
+                $requestedAllocations['strategy:'.$only->id] = intdiv($requestedDailyBudgetMicros, 10_000);
+            } elseif (! $hasDrafts && $strategies->count() > 1 && $requestedDailyBudgetMicros !== $protectedTotal) {
+                $requestedIssue = 'A custom total for multiple existing placements needs per-placement allocations. Existing budgets were retained; no combined traffic forecast was produced.';
             } else {
                 $drafts = $strategies->reject(fn (Strategy $strategy) => $strategy->hasDeploymentFootprint() || $this->hasFootprint($campaign, $strategy));
                 $weights = $drafts->mapWithKeys(fn (Strategy $strategy) => ['strategy:'.$strategy->id => max(1, intdiv(CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget), 10_000))])->all();
@@ -63,7 +77,7 @@ class CampaignMarketResearch
         $results = [];
         foreach ($strategies as $strategy) {
             $budget = CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget) ?: (($shares[$strategy->id] ?? 0) * 10_000);
-            if ($requestedDailyBudgetMicros !== null && ! $strategy->hasDeploymentFootprint() && ! $this->hasFootprint($campaign, $strategy)) {
+            if ($requestedDailyBudgetMicros !== null && ($existingSearchQuote || (! $strategy->hasDeploymentFootprint() && ! $this->hasFootprint($campaign, $strategy)))) {
                 $budget = ($requestedAllocations['strategy:'.$strategy->id] ?? 0) * 10_000;
             }
             $row = ['strategy_id' => $strategy->id, 'platform' => $strategy->platform,
@@ -143,7 +157,7 @@ class CampaignMarketResearch
             'checked_at' => now()->toIso8601String(), 'strategies' => $results,
             'proposed_daily_budget_micros' => $total,
             'requested_daily_budget_micros' => $requestedDailyBudgetMicros,
-            'approval_scope' => 'unbuilt_strategies',
+            'approval_scope' => $existingSearchQuote ? 'existing_campaign_research_only' : 'unbuilt_strategies',
             'reasons' => $ready ? [] : ($results === [] ? ['Strategy generation must finish before market research can run.']
                 : (! $withinRange ? ['The combined proposed daily budget falls outside the supported approval range. Review the allocations; no amount was automatically reduced or approved.']
                     : ['One or more placements require market review before this proposal can be approved.'])),
@@ -176,27 +190,30 @@ class CampaignMarketResearch
             $optionRow = $row;
             if ($amount !== $budget) {
                 try {
-                    $estimate = $this->bidPlanner()->forecastAtBid($campaign, $row['proposed_keywords'], $row['evidence']['input_context'], $amount, $bid, $row['cpc_ceiling_micros'] ?? null);
+                    $estimate = $this->bidPlanner()->estimate($campaign, $row['proposed_keywords'], $row['evidence']['input_context'], $amount, $row['cpc_ceiling_micros'] ?? null);
                 } catch (\Throwable $e) {
                     report($e);
 
                     continue; // An unavailable optional quote cannot erase the viable base plan.
                 }
-                if (($estimate['ready'] ?? false) !== true || ($estimate['cpc_bid_micros'] ?? null) !== $bid
+                if (($estimate['ready'] ?? false) !== true || ! is_int($estimate['cpc_bid_micros'] ?? null) || $estimate['cpc_bid_micros'] <= 0
+                    || $estimate['cpc_bid_micros'] % 10_000 !== 0 || $estimate['cpc_bid_micros'] > $amount
+                    || (($row['cpc_ceiling_micros'] ?? null) !== null && $estimate['cpc_bid_micros'] > $row['cpc_ceiling_micros'])
                     || ! is_array($estimate['evidence']['forecast'] ?? null)) {
                     continue;
                 }
                 $optionRow['budget_micros'] = $amount;
+                $optionRow['cpc_bid_micros'] = $estimate['cpc_bid_micros'];
                 $optionRow['forecast'] = [...$estimate['evidence']['forecast'], 'auto_repair_safe' => false];
                 $optionRow['forecast_period'] = $optionRow['forecast']['forecast_period'] ?? null;
                 $optionRow['evidence']['budget_option_forecast'] = $estimate['evidence'];
                 $optionRow['caveats'] = array_values(array_unique([...$row['caveats'], ...$estimate['caveats']]));
-                $optionRow['reasons'] = ['Fresh traffic estimate for this daily budget using the same researched keywords and bid.'];
+                $optionRow['reasons'] = ['Fresh traffic estimate for this daily budget using the researched keywords and a bid tested within retained limits.'];
             }
             $optionProposal['proposed_daily_budget_micros'] = $amount;
             $optionProposal['strategies'] = [$optionRow];
             $id = hash('sha256', json_encode($optionProposal, JSON_THROW_ON_ERROR));
-            $result['budget_options'][] = ['id' => $id, 'daily_budget_micros' => $amount, 'cpc_bid_micros' => $bid,
+            $result['budget_options'][] = ['id' => $id, 'daily_budget_micros' => $amount, 'cpc_bid_micros' => $optionRow['cpc_bid_micros'],
                 'currency_code' => $row['currency_code'], 'time_zone' => $row['time_zone'],
                 'forecast' => $optionRow['forecast'], 'proposal' => $optionProposal];
         }
@@ -238,8 +255,26 @@ class CampaignMarketResearch
             $alternatives = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $keywordCap]), $alternatives);
         }
         $sets = [$selected];
+        $setKinds = ['selected'];
         if ($alternatives !== [] && $alternatives !== $selected) {
             $sets[] = $alternatives;
+            $setKinds[] = 'combined';
+        }
+        $profileKinds = [];
+        foreach (array_slice($business['keyword_sets'] ?? [], 0, 2) as $profile) {
+            $kind = $profile['kind'] ?? null;
+            if (! in_array($kind, ['category', 'specific'], true) || in_array($kind, $profileKinds, true)) {
+                continue;
+            }
+            $profileKinds[] = $kind;
+            $keywords = $this->keywords($profile['keywords'] ?? [], true);
+            if ($keywordCap !== null) {
+                $keywords = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $keywordCap]), $keywords);
+            }
+            if ($keywords !== []) {
+                $sets[] = $keywords;
+                $setKinds[] = $kind;
+            }
         }
         $planner = $this->bidPlanner();
         $testedSets = $candidates = $higher = [];
@@ -250,7 +285,7 @@ class CampaignMarketResearch
                 continue;
             }
             $estimate = $planner->estimate($campaign, $keywords, $context, $budget, $cap);
-            $testedSets[$set] = ['keywords' => $keywords, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
+            $testedSets[$set] = ['kind' => $setKinds[$set], 'keywords' => $keywords, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
             if (($estimate['ready'] ?? false) === true) {
                 $candidates[] = ['set' => $set, 'budget' => $budget, 'estimate' => $estimate];
             }
@@ -261,7 +296,7 @@ class CampaignMarketResearch
         // Recover ordinary buying vocabulary before recommending more spend,
         // even if discovery produced several niche terms. Every set competes
         // at the current budget first; higher-budget fallbacks remain intact.
-        if ($candidates === [] && ($business['discovery']['category_recovery_attempted'] ?? null) === false) {
+        if ($candidates === [] && ! array_key_exists('keyword_sets', $business) && ($business['discovery']['category_recovery_attempted'] ?? null) === false) {
             try {
                 $recovery = $this->businessResearchRecovery($campaign, $strategy, $context, $selected);
             } catch (\Throwable $e) {
@@ -276,9 +311,10 @@ class CampaignMarketResearch
             }
             if ($recovered !== [] && ! in_array($recovered, $sets, true)) {
                 $sets[] = $recovered;
+                $setKinds[] = 'category_recovery';
                 $set = array_key_last($sets);
                 $estimate = $planner->estimate($campaign, $recovered, $context, $budget, $cap);
-                $testedSets[$set] = ['keywords' => $recovered, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
+                $testedSets[$set] = ['kind' => $setKinds[$set], 'keywords' => $recovered, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
                 if (($estimate['ready'] ?? false) === true) {
                     $candidates[] = ['set' => $set, 'budget' => $budget, 'estimate' => $estimate];
                 }
@@ -300,9 +336,11 @@ class CampaignMarketResearch
         }
         $row['evidence']['tested_sets'] = array_values($testedSets);
         if ($candidates !== []) {
-            usort($candidates, fn ($a, $b) => [$a['budget'], $a['set'], $a['estimate']['cpc_bid_micros']]
-                <=> [$b['budget'], $b['set'], $b['estimate']['cpc_bid_micros']]);
-            $chosen = $candidates[0];
+            $minimumBudget = min(array_column($candidates, 'budget'));
+            $eligible = array_map(fn ($candidate) => [...$candidate,
+                'forecast' => $candidate['estimate']['evidence']['forecast'], 'cpc_bid_micros' => $candidate['estimate']['cpc_bid_micros']],
+                array_values(array_filter($candidates, fn ($candidate) => $candidate['budget'] === $minimumBudget)));
+            $chosen = InitialSearchBidPlanner::bestForecast($eligible);
             $estimate = $chosen['estimate'];
             $row['status'] = 'ready';
             $row['proposed_keywords'] = $sets[$chosen['set']];
@@ -314,7 +352,7 @@ class CampaignMarketResearch
             $row['forecast_period'] = $row['forecast']['forecast_period'] ?? null;
             $row['caveats'] = [...$estimate['caveats'],
                 'Google’s forecast does not model negative keywords. Retained or subsequently added negatives may reduce delivery; this proposal cannot establish their effect.'];
-            $row['reasons'] = ['The lowest tested cost-derived budget and bid combination with useful forecast traffic.'];
+            $row['reasons'] = ['The lowest tested viable budget, with useful traffic compared across researched bids and relevant keyword sets.'];
 
             return $row;
         }

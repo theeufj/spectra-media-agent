@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import { usePolling } from '@/hooks/usePolling';
 
 const pendingStatuses = ['queued', 'researching'];
@@ -70,7 +71,7 @@ function Forecast({ forecast, period, timezone, currency }) {
     const verified = forecast?.success === true;
     const dates = period || forecast?.forecast_period;
     return <div className="mt-3 border-t border-gray-100 pt-3">
-        <p className="text-xs font-semibold text-gray-500">Traffic estimate</p>
+        <p className="text-xs font-semibold text-gray-500">Indicative traffic estimate</p>
         <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
             <div><dt className="text-gray-500">Clicks for the period</dt><dd className="font-semibold text-gray-900">{verified ? clicks(forecast.clicks) : 'Not verified'}</dd></div>
             <div><dt className="text-gray-500">Estimated ad spend</dt><dd className="font-semibold text-gray-900">{verified ? money(forecast.cost_micros, currency) : 'Not verified'}</dd></div>
@@ -79,7 +80,7 @@ function Forecast({ forecast, period, timezone, currency }) {
     </div>;
 }
 
-export default function MarketResearchPanel({ research: initialResearch, statusUrl = null, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '', onSelectBudgetOption, selectedBudgetOptionId, selectingDisabled = false }) {
+export default function MarketResearchPanel({ research: initialResearch, statusUrl = null, customBudgetUrl = null, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '', onSelectBudgetOption, selectedBudgetOptionId, selectingDisabled = false }) {
     const poll = usePolling(statusUrl, {
         interval: 5000,
         enabled: Boolean(statusUrl) && isResearchPending(initialResearch),
@@ -98,6 +99,11 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
     const status = stale ? 'stale' : research?.status || 'queued';
     const result = research?.result;
     const options = researchBudgetOptions(research);
+    const lowestOption = options[0];
+    const littleBudgetGain = options.length > 1 && options.slice(1).every(option =>
+        option.forecast.forecast_period.from === lowestOption.forecast.forecast_period.from
+        && option.forecast.forecast_period.through === lowestOption.forecast.forecast_period.through
+        && option.forecast.clicks <= lowestOption.forecast.clicks * 1.1);
     const selectedOptionId = selectedBudgetOptionId === undefined ? result?.selected_budget_option_id : selectedBudgetOptionId;
     const existingRecommendation = status === 'needs_review' && asList(result?.strategies).some(strategy =>
         strategy.proposal_status === 'ready' && strategy.requires_live_review === true);
@@ -123,7 +129,11 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {reasons.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{[...new Set(reasons)].map(reason => <li key={reason}>{reason}</li>)}</ul>}
         {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
             <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>
-            <p className="mt-1 text-sm text-gray-600">Each option uses the same keywords and bid. Clicks and ad spend are estimates for the dates shown.</p>
+            <p className="mt-1 text-sm text-gray-600"><strong>Indicative estimates.</strong> Each option uses the same keyword set, with a researched maximum CPC for each daily budget. Google forecasts clicks and ad spend for the dates shown; actual results can vary. Click counts are rounded.</p>
+            {littleBudgetGain && <div role="note" className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                <p className="font-semibold">Higher budgets add little forecast traffic</p>
+                <p className="mt-1">Google forecasts little or no extra traffic across these researched budgets and maximum CPC bids for this keyword set. A higher spending limit does not guarantee more clicks.</p>
+            </div>}
             <div className="mt-3 grid gap-3 sm:grid-cols-3">{options.map((option, index) => {
                 const code = option.currency_code || currency;
                 const previous = options[index - 1];
@@ -135,16 +145,21 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                         {onSelectBudgetOption && <input type="radio" name="market-budget-option" value={option.id} checked={selectedOptionId === option.id} onChange={() => onSelectBudgetOption(option.id)} aria-label={`${money(option.daily_budget_micros, code)} per day`} className="text-brand-dark focus:ring-brand-dark" />}
                         <span className="font-semibold text-gray-900">{money(option.daily_budget_micros, code)} / day</span>
                     </span>
+                    <span className="mt-2 block text-sm text-gray-700">Maximum CPC: {money(option.cpc_bid_micros, code)}</span>
                     <span className="mt-3 block text-sm text-gray-700">About {Math.round(option.forecast.clicks)} clicks</span>
                     <span className="mt-1 block text-sm text-gray-700">{money(option.forecast.cost_micros, code)} estimated ad spend</span>
                     <span className="mt-1 block text-xs text-gray-500">{option.forecast.forecast_period?.from} to {option.forecast.forecast_period?.through}{option.forecast.period_days ? ` · ${option.forecast.period_days} days` : ''}</span>
-                    <span className="mt-2 block text-xs font-medium text-brand-dark">{index === 0 ? 'Lowest tested budget' : littleGain ? 'Little extra traffic for the higher budget' : 'More estimated traffic'}</span>
+                    <span className="mt-2 block text-xs font-medium text-brand-dark">{option.daily_budget_micros === research.requested_daily_budget_micros ? 'Custom budget estimate' : index === 0 ? 'Lowest tested budget' : !samePeriod ? 'Different forecast dates' : littleGain ? 'Little extra traffic for the higher budget' : 'More estimated traffic'}</span>
                 </>;
                 const style = `block rounded-lg border p-4 ${selectedOptionId === option.id ? 'border-brand-dark bg-gray-50' : 'border-gray-200'} ${onSelectBudgetOption ? 'cursor-pointer' : ''}`;
                 return onSelectBudgetOption ? <label key={option.id} className={style}>{content}</label> : <div key={option.id} className={style}>{content}</div>;
             })}</div>
             {onSelectBudgetOption && <p className="mt-2 text-xs text-gray-600">Choosing an option updates your proposal. Your saved budget changes only after you approve it.</p>}
         </fieldset>}
+        {customBudgetUrl && <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <Link href={customBudgetUrl} className="text-sm font-semibold text-brand-dark underline">Research a custom amount</Link>
+            <p className="mt-1 text-sm text-gray-600">Try another daily budget, such as {currency} 50, for an indicative forecast. Researching an amount does not change your saved budget or switch on ads.</p>
+        </div>}
         {!pending && !stale && asList(result?.strategies).map((strategy, index) => {
             const code = strategy.currency_code || currency;
             const caveats = [...asList(strategy.caveats), ...asList(strategy.forecast?.caveats)].map(message).filter(Boolean);
@@ -165,6 +180,6 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                 {caveats.length > 0 && <div className="mt-3 text-xs text-gray-600"><p className="font-semibold">Estimate limitations</p><ul className="mt-1 list-disc space-y-1 pl-5">{[...new Set(caveats)].map(caveat => <li key={caveat}>{caveat}</li>)}</ul></div>}
             </article>;
         })}
-        <p className="mt-4 text-xs text-gray-500">Forecast clicks and costs are totals for the dates shown, not guaranteed results. Research does not change your approved spend or switch on your ads.</p>
+        <p className="mt-4 text-xs text-gray-500">These forecasts are indicative estimates for the dates shown. Clicks, costs and purchases are not guaranteed. Research does not change your approved spend or switch on your ads.</p>
     </section>;
 }
