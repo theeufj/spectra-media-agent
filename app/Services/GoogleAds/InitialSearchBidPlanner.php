@@ -103,6 +103,17 @@ class InitialSearchBidPlanner
     /** Read-only pre-approval proposal: real account context, no platform resources or spend authorization. */
     public function estimate(Campaign $campaign, array $keywords, array $context, int $dailyBudgetMicros, ?int $cpcLimitMicros = null): array
     {
+        return $this->estimateProposal($campaign, $keywords, $context, $dailyBudgetMicros, $cpcLimitMicros);
+    }
+
+    /** Compare budgets at the already researched bid, never choose a different bid. */
+    public function forecastAtBid(Campaign $campaign, array $keywords, array $context, int $dailyBudgetMicros, int $bidMicros, ?int $cpcLimitMicros = null): array
+    {
+        return $this->estimateProposal($campaign, $keywords, $context, $dailyBudgetMicros, $cpcLimitMicros ?? $bidMicros, $bidMicros);
+    }
+
+    private function estimateProposal(Campaign $campaign, array $keywords, array $context, int $dailyBudgetMicros, ?int $cpcLimitMicros, ?int $exactBidMicros = null): array
+    {
         $evidence = ['checked_at' => now()->toIso8601String(), 'proposal_only' => true,
             'snapshot' => $context, 'keywords' => $keywords, 'historical' => null, 'candidates' => [], 'forecast' => null,
             'input_fingerprint' => hash('sha256', json_encode([$keywords, $context, $dailyBudgetMicros, $cpcLimitMicros], JSON_THROW_ON_ERROR))];
@@ -134,13 +145,16 @@ class InitialSearchBidPlanner
         if ($cap <= 0) {
             return $this->unavailable('The retained CPC limit does not permit a positive whole-cent proposal.', $evidence);
         }
+        if ($exactBidMicros !== null && ($exactBidMicros <= 0 || $exactBidMicros % 10_000 !== 0 || $exactBidMicros > $cap)) {
+            return $this->unavailable('The selected bid must fit the retained spending limits exactly.', $evidence);
+        }
         $evidence += ['forecast_daily_budget_micros' => $dailyBudgetMicros, 'max_cpc_bid_micros' => $cap];
         $context['research_max_bid_candidates'] = 4;
 
-        return $this->estimateFor($campaign, $customer, $keywords, $context, $dailyBudgetMicros, $cap, $evidence);
+        return $this->estimateFor($campaign, $customer, $keywords, $context, $dailyBudgetMicros, $cap, $evidence, $exactBidMicros);
     }
 
-    private function estimateFor(Campaign $campaign, Customer $customer, array $keywords, array $snapshot, int $budget, int $cap, array $evidence): array
+    private function estimateFor(Campaign $campaign, Customer $customer, array $keywords, array $snapshot, int $budget, int $cap, array $evidence, ?int $exactBidMicros = null): array
     {
         try {
             $context = $this->context($campaign, $snapshot, $budget);
@@ -171,6 +185,9 @@ class InitialSearchBidPlanner
             sort($bids, SORT_NUMERIC);
             if ($bids === []) {
                 return $this->unavailable('Google supplied no positive keyword cost estimates; the initial bid needs review.', $evidence);
+            }
+            if ($exactBidMicros !== null) {
+                $bids = [$exactBidMicros];
             }
             $limit = max(2, min(self::MAX_CANDIDATES, (int) ($snapshot['research_max_bid_candidates'] ?? self::MAX_CANDIDATES)));
             if (count($bids) > $limit) {
@@ -207,7 +224,9 @@ class InitialSearchBidPlanner
                 ]));
 
                 return ['ready' => true, 'status' => 'estimated', 'cpc_bid_micros' => $bid,
-                    'reason' => 'The lowest tested historical-cost candidate with credible forecast reach inside the approved spending limits.',
+                    'reason' => $exactBidMicros === null
+                        ? 'The lowest tested historical-cost candidate with credible forecast reach inside the approved spending limits.'
+                        : 'Fresh forecast reach at the exact researched bid and this proposed daily budget.',
                     'issues' => [], 'caveats' => $caveats, 'evidence' => $evidence, 'activation_ready' => false, 'auto_repair_safe' => false];
             }
 

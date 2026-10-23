@@ -32,6 +32,8 @@ class CampaignMarketResearchTest extends TestCase
         $this->assertSame('ready', $result['status']);
         $this->assertSame(5_000_000, $result['proposed_daily_budget_micros']);
         $this->assertFalse($result['activation_ready']);
+        $this->assertFalse($result['strategies'][0]['auto_repair_safe']);
+        $this->assertFalse($result['strategies'][0]['forecast']['auto_repair_safe']);
         $this->assertSame($campaign->strategies[0]->id, $result['strategies'][0]['strategy_id']);
         $this->assertSame('AUD', $result['strategies'][0]['currency_code']);
         $this->assertSame('Australia/Sydney', $result['strategies'][0]['time_zone']);
@@ -197,6 +199,138 @@ class CampaignMarketResearchTest extends TestCase
         $this->assertSame('customers/1234567890/campaigns/123', $campaign->strategies[0]->google_ads_campaign_id);
     }
 
+    public function test_failed_forecasts_recover_once_even_with_several_demand_backed_terms_while_preserving_caps_and_existing_objects(): void
+    {
+        foreach ([false, true] as $footprint) {
+            $campaign = $this->campaign();
+            $campaign->strategies[0]->bidding_strategy = ['keywords' => $this->selected(), 'parameters' => ['cpcBidCeilingMicros' => 250_000]];
+            if ($footprint) {
+                $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+            }
+            $before = $campaign->strategies[0]->getAttributes();
+            $seen = [];
+            $planner = $this->planner(function ($keywords, $budget, $cap) use (&$seen) {
+                $seen[] = [count($keywords), $keywords[0]['text'], $budget, $cap];
+
+                return $this->estimate($keywords[0]['text'] === 'ordinary core service', $budget);
+            });
+            $service = $this->service($planner, true);
+            $service->recoverCategories = true;
+            $service->alternativeKeywords = array_map(fn ($id) => ['text' => 'narrow niche '.$id, 'match_type' => 'PHRASE',
+                'selection_reason' => 'Relevant but narrow offer term'], [1, 2, 3]);
+            $result = $service->research($campaign);
+            $row = $result['strategies'][0];
+            $this->assertSame(1, $service->recoveryCalls);
+            $this->assertSame([250_000], array_values(array_unique(array_column($seen, 3))));
+            $this->assertContains(3, array_column($seen, 0));
+            $this->assertSame('ordinary core service', $row['proposed_keywords'][0]['text']);
+            $this->assertSame(5_000_000, $row['budget_micros']);
+            $this->assertSame($footprint ? 'needs_review' : 'ready', $result['status']);
+            if ($footprint) {
+                $this->assertSame('ready', $row['proposal_status']);
+                $this->assertTrue($row['requires_live_review']);
+            }
+            $this->assertSame($before, $campaign->strategies[0]->getAttributes());
+            $this->assertCount(3, $row['evidence']['tested_sets']);
+        }
+    }
+
+    public function test_category_recovery_is_bounded_when_its_forecasts_also_fail(): void
+    {
+        $service = $this->service($this->planner(fn ($keywords, $budget) => $this->estimate(false, $budget)), true);
+        $service->recoverCategories = true;
+        $result = $service->research($this->campaign());
+        $this->assertSame(1, $service->recoveryCalls);
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertFalse($result['activation_ready']);
+    }
+
+    public function test_category_terms_compete_at_current_budget_before_a_higher_budget_recommendation_and_do_not_lose_valid_fallbacks(): void
+    {
+        foreach ([false, true] as $recoveryWorks) {
+            $seen = [];
+            $service = $this->service($this->planner(function ($keywords, $budget) use (&$seen, $recoveryWorks) {
+                $recovered = $keywords[0]['text'] === 'ordinary core service';
+                $seen[] = [$recovered, $budget];
+
+                return $this->estimate($recovered ? $recoveryWorks : $budget >= 8_000_000, $budget);
+            }), true);
+            $service->recoverCategories = true;
+            $result = $service->research($this->campaign());
+            $this->assertSame('ready', $result['status']);
+            $this->assertSame(1, $service->recoveryCalls);
+            $this->assertSame([true, 5_000_000], $seen[2]);
+            $this->assertSame($recoveryWorks ? 5_000_000 : 8_000_000, $result['proposed_daily_budget_micros']);
+            $this->assertSame($recoveryWorks ? 'ordinary core service' : 'expensive original', $result['strategies'][0]['proposed_keywords'][0]['text']);
+        }
+    }
+
+    public function test_single_search_offers_fresh_budget_choices_with_identical_keywords_and_bid_without_scaling_forecasts(): void
+    {
+        $campaign = $this->campaign();
+        $planner = $this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget));
+        $calls = [];
+        $planner->method('forecastAtBid')->willReturnCallback(function ($current, $keywords, $context, $budget, $bid) use (&$calls) {
+            $calls[] = [$budget, $bid, $keywords];
+            $result = $this->estimate(true, $budget);
+            $result['evidence']['forecast']['clicks'] = $budget === 10_000_000 ? 98 : 100;
+
+            return $result;
+        });
+        $result = $this->service($planner)->research($campaign);
+        $options = $result['budget_options'];
+        $this->assertSame([5_000_000, 10_000_000, 15_000_000], array_column($options, 'daily_budget_micros'));
+        $this->assertSame([40, 98, 100], array_column(array_column($options, 'forecast'), 'clicks'));
+        $this->assertSame([500_000], array_values(array_unique(array_column($options, 'cpc_bid_micros'))));
+        $this->assertSame($options[0]['id'], $result['default_budget_option_id']);
+        $this->assertSame($options[0]['id'], $result['selected_budget_option_id']);
+        $this->assertCount(2, $calls);
+        foreach ($options as $option) {
+            $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $option['id']);
+            $this->assertSame(hash('sha256', json_encode($option['proposal'], JSON_THROW_ON_ERROR)), $option['id']);
+            $this->assertSame($option['daily_budget_micros'], $option['proposal']['strategies'][0]['budget_micros']);
+            $this->assertSame($options[0]['proposal']['strategies'][0]['proposed_keywords'], $option['proposal']['strategies'][0]['proposed_keywords']);
+            $this->assertArrayNotHasKey('budget_options', $option['proposal']);
+        }
+        $this->assertEquals('5.00', $campaign->daily_budget);
+    }
+
+    public function test_custom_budget_quotes_are_exact_and_existing_campaign_options_remain_review_only(): void
+    {
+        foreach ([false, true] as $footprint) {
+            $campaign = $this->campaign();
+            if ($footprint) {
+                $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+            }
+            $planner = $this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget));
+            $planner->expects($this->never())->method('forecastAtBid');
+            $result = $this->service($planner)->research($campaign, 5_000_000);
+            $this->assertCount(1, $result['budget_options']);
+            $this->assertSame(5_000_000, $result['budget_options'][0]['daily_budget_micros']);
+            $this->assertSame($footprint ? 'needs_review' : 'ready', $result['budget_options'][0]['proposal']['status']);
+            $this->assertSame($footprint ? 'needs_review' : 'ready', $result['status']);
+        }
+    }
+
+    public function test_unviable_or_changed_bid_options_are_omitted_and_multi_strategy_forecasts_are_not_combined(): void
+    {
+        foreach ([false, true] as $otherStrategy) {
+            $campaign = $this->campaign();
+            if ($otherStrategy) {
+                $campaign->strategies->push($this->strategy(20));
+            }
+            $planner = $this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget));
+            $planner->method('forecastAtBid')->willReturnCallback(function ($current, $keywords, $context, $budget) {
+                $result = $this->estimate($budget !== 10_000_000, $budget);
+                $result['cpc_bid_micros'] = 600_000;
+
+                return $result;
+            });
+            $result = $this->service($planner)->research($campaign);
+            $this->assertCount($otherStrategy ? 0 : 1, $result['budget_options']);
+        }
+    }
+
     public function test_fingerprint_binds_business_account_dates_caps_keywords_and_full_targeting_but_approval_survives_lifecycle_changes(): void
     {
         $campaign = $this->campaign();
@@ -343,7 +477,7 @@ class CampaignMarketResearchTest extends TestCase
         ]];
     }
 
-    private function planner(\Closure $callback): InitialSearchBidPlanner
+    private function planner(\Closure $callback): InitialSearchBidPlanner&\PHPUnit\Framework\MockObject\MockObject
     {
         $planner = $this->createMock(InitialSearchBidPlanner::class);
         $planner->method('estimate')->willReturnCallback(fn ($campaign, $keywords, $context, $budget, $cap) => $callback($keywords, $budget, $cap));
@@ -361,6 +495,12 @@ class CampaignMarketResearchFixture extends CampaignMarketResearch
 {
     public array $businessCalls = [];
 
+    public array $alternativeKeywords = [];
+
+    public bool $recoverCategories = false;
+
+    public int $recoveryCalls = 0;
+
     public function __construct(private InitialSearchBidPlanner $planner, private bool $alternatives) {}
 
     protected function accountContext(Customer $customer): array
@@ -373,9 +513,19 @@ class CampaignMarketResearchFixture extends CampaignMarketResearch
     {
         $this->businessCalls[] = $strategy->id;
 
-        return ['source' => 'google_keyword_planner_and_business_relevance', 'keywords' => $this->alternatives
-            ? [['text' => 'relevant alternative', 'match_type' => 'PHRASE', 'selection_reason' => 'Same actual offer and buying intent']]
-            : $selected];
+        return ['source' => 'google_keyword_planner_and_business_relevance',
+            ...($this->recoverCategories ? ['discovery' => ['category_recovery_attempted' => false]] : []),
+            'keywords' => $this->alternatives
+                ? ($this->alternativeKeywords ?: [['text' => 'relevant alternative', 'match_type' => 'PHRASE', 'selection_reason' => 'Same actual offer and buying intent']])
+                : $selected];
+    }
+
+    protected function businessResearchRecovery(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
+    {
+        $this->recoveryCalls++;
+
+        return ['keywords' => [['text' => 'ordinary core service', 'match_type' => 'PHRASE', 'selection_reason' => 'Same reviewed service in ordinary buyer language']],
+            'discovery' => ['category_recovery_attempted' => true, 'category_only' => true]];
     }
 
     protected function bidPlanner(): InitialSearchBidPlanner

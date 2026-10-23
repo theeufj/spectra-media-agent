@@ -164,6 +164,8 @@ Route::middleware(['auth'])->group(function () {
 |
 */
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/purchase-tracking/pending', [App\Http\Controllers\PurchaseTrackingController::class, 'pending'])->middleware('throttle:60,1')->name('purchase-tracking.pending');
+    Route::post('/purchase-tracking/{receipt}/invoked', [App\Http\Controllers\PurchaseTrackingController::class, 'invoked'])->whereNumber('receipt')->middleware('throttle:30,1')->name('purchase-tracking.invoked');
     // Route to display brand guidelines.
     // GET /brand-guidelines
     Route::get('/brand-guidelines', [App\Http\Controllers\BrandGuidelineController::class, 'index'])->name('brand-guidelines.index');

@@ -106,6 +106,122 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertTrue($this->workflow->status($this->campaign)['approved']);
     }
 
+    private function researchedOptions(): array
+    {
+        $this->customer->update(['currency_code' => 'AUD']);
+        $status = $this->researched();
+        $base = $status['result'];
+        $options = [];
+        foreach ([5_000_000, 10_000_000, 15_000_000] as $index => $budget) {
+            $row = $base['strategies'][0];
+            $input = ['geo_target_constants' => ['geoTargetConstants/2036'], 'language_constants' => [], 'negative_keywords' => []];
+            $row['budget_micros'] = $budget;
+            $row['currency_code'] = 'AUD';
+            $row['time_zone'] = 'Australia/Sydney';
+            $row['evidence']['input_context'] = $input;
+            $from = \Carbon\CarbonImmutable::now('Australia/Sydney')->addDay()->startOfDay();
+            $forecast = ['success' => true, 'source' => 'google_keyword_forecast', 'checked_at' => now()->toIso8601String(),
+                'clicks' => [53, 98, 100][$index], 'cost_micros' => [145_000_000, 266_000_000, 269_000_000][$index],
+                'period_days' => 30, 'forecast_period' => ['from' => $from->toDateString(), 'through' => $from->addDays(29)->toDateString()],
+                'context' => [...$input, 'bidding_strategy' => 'MANUAL_CPC', 'daily_budget_micros' => $budget,
+                    'cpc_bid_ceiling_micros' => 2_000_000, 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney',
+                    'keywords' => array_map(fn ($keyword) => [...$keyword, 'cpc_bid_micros' => 2_000_000], $row['proposed_keywords'])]];
+            $row['forecast'] = $forecast;
+            $proposal = [...$base, 'strategies' => [$row], 'proposed_daily_budget_micros' => $budget];
+            $options[] = ['id' => hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)), 'daily_budget_micros' => $budget,
+                'cpc_bid_micros' => 2_000_000, 'forecast' => $forecast, 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'proposal' => $proposal];
+        }
+        $result = [...$options[0]['proposal'], 'budget_options' => $options,
+            'default_budget_option_id' => $options[0]['id'], 'selected_budget_option_id' => $options[0]['id']];
+        $stored = $this->campaign->fresh()->search_delivery_state;
+        $stored['market_research']['result'] = $result;
+        $this->campaign->update(['search_delivery_state' => $stored]);
+
+        return $this->workflow->status($this->campaign);
+    }
+
+    public function test_approval_adopts_only_the_selected_budget_option_and_persists_its_actual_forecast(): void
+    {
+        $status = $this->researchedOptions();
+        $selected = $status['result']['budget_options'][1];
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00', 'budget_option_id' => $selected['id'],
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'], 'accept_proposal' => true])->assertSessionHasNoErrors();
+        $this->assertEquals('10.00', $this->campaign->fresh()->approved_daily_budget);
+        $this->assertEquals('10.00', $this->strategy->fresh()->daily_budget);
+        $approved = $this->workflow->status($this->campaign);
+        $this->assertTrue($approved['approved']);
+        $this->assertSame($selected['id'], $approved['result']['selected_budget_option_id']);
+        $this->assertSame(10_000_000, $approved['result']['proposed_daily_budget_micros']);
+        $this->assertSame(98, $approved['result']['strategies'][0]['forecast']['clicks']);
+        $this->assertCount(3, $approved['result']['budget_options']);
+        $this->assertSame(3_000_000, $this->strategy->fresh()->bidding_strategy['parameters']['cpcBidCeilingMicros']);
+        $this->workflow->assertApproved($this->campaign);
+    }
+
+    public static function invalidBudgetOptions(): array
+    {
+        return array_map(fn ($case) => [$case], ['unknown_id', 'wrong_amount', 'expired', 'wrong_request', 'changed_inputs',
+            'failed_forecast', 'insufficient_clicks', 'missing_cost', 'overspend', 'different_keywords', 'different_keyword_bid', 'past_dates', 'stale_forecast',
+            'live_review', 'platform_footprint', 'custom_budget_mismatch', 'different_proposed_selection', 'different_option_bid']);
+    }
+
+    #[DataProvider('invalidBudgetOptions')]
+    public function test_unavailable_stale_unviable_or_nonapproved_options_cannot_authorize_a_daily_budget(string $case): void
+    {
+        $status = $this->researchedOptions();
+        $stored = $this->campaign->fresh()->search_delivery_state;
+        $option = $stored['market_research']['result']['budget_options'][1];
+        $body = ['daily_budget' => '10.00', 'budget_option_id' => $option['id'],
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'], 'accept_proposal' => true];
+        if ($case === 'unknown_id') {
+            $body['budget_option_id'] = str_repeat('a', 64);
+        } elseif ($case === 'wrong_amount') {
+            $body['daily_budget'] = '15.00';
+        } elseif ($case === 'expired') {
+            $this->travel(16)->minutes();
+        } elseif ($case === 'wrong_request') {
+            $body['research_id'] = (string) \Illuminate\Support\Str::uuid();
+        } elseif ($case === 'changed_inputs') {
+            $this->strategy->update(['daily_budget' => '6.00']);
+        } elseif ($case === 'live_review') {
+            $stored['market_research']['status'] = $stored['market_research']['result']['status'] = 'needs_review';
+        } elseif ($case === 'platform_footprint') {
+            $this->strategy->recordGoogleCampaignId('customers/123/campaigns/61');
+        } elseif ($case === 'custom_budget_mismatch') {
+            $stored['market_research']['result']['requested_daily_budget_micros'] = 5_000_000;
+        } else {
+            $forecast = $option['forecast'];
+            match ($case) {
+                'failed_forecast' => $forecast['success'] = false,
+                'insufficient_clicks' => $forecast['clicks'] = 29,
+                'missing_cost' => $forecast['cost_micros'] = null,
+                'overspend' => $forecast['cost_micros'] = 300_000_001,
+                'different_keywords' => $forecast['context']['keywords'][0]['text'] = 'unresearched traffic',
+                'different_keyword_bid' => $forecast['context']['keywords'][0]['cpc_bid_micros'] = 1_000_000,
+                'past_dates' => $forecast['forecast_period']['from'] = now()->subDay()->toDateString(),
+                'stale_forecast' => $forecast['checked_at'] = now()->subMinutes(16)->toIso8601String(),
+                'different_proposed_selection' => $forecast['context']['keywords'][0]['text'] = 'other proposed service',
+                'different_option_bid' => $forecast['context']['cpc_bid_ceiling_micros'] = 2_500_000,
+                default => throw new \LogicException('Unhandled option case'),
+            };
+            if ($case === 'different_proposed_selection') {
+                $option['proposal']['strategies'][0]['proposed_keywords'][0]['text'] = 'other proposed service';
+            } elseif ($case === 'different_option_bid') {
+                $option['cpc_bid_micros'] = $option['proposal']['strategies'][0]['cpc_bid_micros'] = 2_500_000;
+                $forecast['context']['keywords'][0]['cpc_bid_micros'] = 2_500_000;
+            }
+            $option['forecast'] = $option['proposal']['strategies'][0]['forecast'] = $forecast;
+            $option['id'] = hash('sha256', json_encode($option['proposal'], JSON_THROW_ON_ERROR));
+            $body['budget_option_id'] = $option['id'];
+            $stored['market_research']['result']['budget_options'][1] = $option;
+        }
+        $this->campaign->update(['search_delivery_state' => $stored]);
+        $this->post(route('campaigns.confirm-budget', $this->campaign), $body)->assertSessionHasErrors('daily_budget');
+        $this->assertNull($this->campaign->fresh()->approved_daily_budget);
+        $this->assertNull($this->campaign->fresh()->budget_confirmed_at);
+        $this->assertEquals($case === 'changed_inputs' ? '6.00' : '5.00', $this->strategy->fresh()->daily_budget);
+    }
+
     public static function refusedApproval(): array
     {
         return [['missing_research'], ['wrong_request'], ['wrong_fingerprint'], ['wrong_amount'], ['not_accepted'], ['expired'], ['changed_keywords'], ['provider_unknown']];

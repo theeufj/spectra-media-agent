@@ -9,8 +9,9 @@ use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 /** Business relevance research is distinct from a platform-specific cost/reach forecast. */
 class CampaignKeywordResearch extends KeywordResearchService
 {
-    public function discover(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
+    public function discover(Campaign $campaign, Strategy $strategy, array $context, array $selected, bool $categoryOnly = false): array
     {
+        $this->categoryOnly = $categoryOnly;
         $business = ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
             'goals' => $campaign->goals, 'platform' => $strategy->platform, 'channel' => $strategy->campaign_type,
             'reviewed_business_profile' => $this->customer->brandGuideline?->only(['brand_voice', 'unique_selling_propositions', 'target_audience', 'service_lines']),

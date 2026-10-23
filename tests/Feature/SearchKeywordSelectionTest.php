@@ -188,4 +188,55 @@ class SearchKeywordSelectionTest extends TestCase
         $this->assertSame(['PHRASE', 'PHRASE'], array_column($actual['keywords'], 'match_type'));
         $this->assertSame([], $actual['negative_keywords']);
     }
+
+    public function test_sparse_demand_discovery_recovers_ordinary_buying_terms_without_admitting_unrelated_volume(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific commercial-intent')
+            && str_contains($prompt, 'ordinary commercial product/service category terms'))->once()
+            ->andReturn(['text' => '["ai paid search management"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'Recover commercial product/service category')
+            && str_contains($prompt, 'Managed paid search advertising'))->once()
+            ->andReturn(['text' => '["paid search management","ppc management services"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'Review keyword candidates'))->once()
+            ->andReturn(['text' => '{"reviews":[{"id":2,"relevant":false,"commercial_intent":true,"reason":"ERP is not sold"}]}']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))->once()
+            ->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $service = new class($this->customer()) extends KeywordResearchService
+        {
+            public int $passes = 0;
+
+            protected function expandWithKeywordPlanner(string $customerId, array $seedKeywords, ?string $url, ?string $language, array $geoTargets, int $maxResults): array
+            {
+                $this->passes++;
+
+                return $this->passes === 1
+                    ? [['keyword' => 'ai paid search management', 'avg_monthly_searches' => 20]]
+                    : [['keyword' => 'paid search management', 'avg_monthly_searches' => 1900],
+                        ['keyword' => 'ppc management services', 'avg_monthly_searches' => 1900],
+                        ['keyword' => 'enterprise resource planning', 'avg_monthly_searches' => 100000]];
+            }
+        };
+        $result = $service->research('123', 'SiteToSpend');
+        $this->assertSame(2, $service->passes);
+        $this->assertCount(3, $result['keywords']);
+        $this->assertContains('paid search management', array_column($result['keywords'], 'text'));
+        $this->assertNotContains('enterprise resource planning', array_column($result['keywords'], 'text'));
+        $this->assertNotContains('BROAD', array_column($result['keywords'], 'match_type'));
+        $this->assertTrue($result['discovery']['category_recovery_attempted']);
+    }
+
+    public function test_unavailable_planner_does_not_trigger_additional_discovery_api_retries(): void
+    {
+        $ai = Mockery::mock(GeminiService::class);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific commercial-intent'))->once()
+            ->andReturn(['text' => '["paid search management"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords'))->once()
+            ->andReturn(['text' => '[]']);
+        $this->app->instance(GeminiService::class, $ai);
+        $result = $this->researchService($this->customer(), [])->research('123', 'SiteToSpend');
+        $this->assertFalse($result['discovery']['category_recovery_attempted']);
+        $this->assertSame('paid search management', $result['keywords'][0]['text']);
+    }
 }

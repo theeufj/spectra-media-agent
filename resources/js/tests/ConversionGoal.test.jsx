@@ -49,6 +49,25 @@ beforeEach(() => {
 });
 
 describe('Campaign conversion goal setup', () => {
+    it('describes Google action reporting without claiming that a new paid test transaction was performed', () => {
+        render(<ConversionGoal {...props} conversionVerification={{ verified: true, source: 'google_reported_selected_action' }} />);
+        expect(screen.getByText('Google conversions observed')).toBeVisible();
+        expect(screen.getByText('Google reports conversions for this campaign’s selected action.')).toBeVisible();
+        expect(screen.queryByText(/successful test conversion has been verified/)).toBeNull();
+    });
+    it('shows an exact native paid checkout connection separately from legacy GTM and unverified real conversions', () => {
+        render(<ConversionGoal {...props} goal={{ objective: 'purchase', trigger: 'prepare_only' }}
+            configuration={{ status: 'configured', request_id: 'current-request', message: 'Connect website tracking next.' }}
+            nativeTracking={{ connected: true, method: 'native_verified_checkout', message: 'Verified checkout receipts are connected.' }} />);
+        expect(screen.getByText('Paid checkout connected')).toBeVisible();
+        expect(screen.getByText('Verified checkout receipts are connected.')).toBeVisible();
+        expect(screen.getByText(/actual amount, currency and unique transaction ID/)).toBeVisible();
+        expect(screen.queryByText('Website event not connected')).toBeNull();
+        expect(screen.queryByText('Connect website tracking next.')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Set up your website tag' })).toBeNull();
+        expect(screen.getByText('Not yet verified')).toBeVisible();
+        expect(screen.queryByText('Google conversions observed')).toBeNull();
+    });
     it('saves the chosen business outcome and precise completion page through Inertia', () => {
         render(<ConversionGoal {...props} />);
         fireEvent.change(screen.getByLabelText('Confirmation page URL'), { target: { value: 'https://example.com/enquiry-sent' } });
@@ -93,7 +112,7 @@ describe('Campaign conversion goal setup', () => {
         expect(screen.getByText('Website event not connected')).toBeVisible();
         expect(screen.getByText(/Its website event still needs connecting/)).toBeVisible();
         expect(screen.getByText('Test conversion needed')).toBeVisible();
-        expect(screen.queryByText('Test conversion verified')).toBeNull();
+        expect(screen.queryByText('Google conversions observed')).toBeNull();
     });
 
     it('shows server validation next to the field without claiming configuration success', () => {
@@ -113,7 +132,7 @@ describe('Campaign conversion goal setup', () => {
         expect(within(progress).getByText('Configuration checked')).toBeVisible();
         expect(within(progress).getByText('Installation not verified')).toBeVisible();
         expect(within(progress).getByText('Test conversion needed')).toBeVisible();
-        expect(within(progress).queryByText('Test conversion verified')).toBeNull();
+        expect(within(progress).queryByText('Google conversions observed')).toBeNull();
         expect(screen.getByText(/Your goal settings are configured. Your campaign remains paused/)).toBeVisible();
     });
 

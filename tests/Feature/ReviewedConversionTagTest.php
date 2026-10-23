@@ -19,6 +19,10 @@ class ReviewedConversionTagTest extends TestCase
 
     private array $tags = [];
 
+    private array $variables = [];
+
+    private bool $tamperLiveVariable = false;
+
     private array $writes = [];
 
     private bool $createCompilerError = false;
@@ -58,6 +62,15 @@ class ReviewedConversionTagTest extends TestCase
 
                 return Http::response($this->triggers[$id]);
             }
+            if (str_ends_with($url, '/variables')) {
+                if ($method === 'GET') {
+                    return Http::response(['variable' => array_values($this->variables)]);
+                }
+                $id = (string) (301 + count($this->variables));
+                $this->variables[$id] = $request->data() + ['variableId' => $id];
+
+                return Http::response($this->variables[$id]);
+            }
             if (preg_match('#/tags(?:/(\d+))?$#', $url, $matches)) {
                 if ($method === 'GET') {
                     return Http::response(['tag' => array_values($this->tags)]);
@@ -88,6 +101,9 @@ class ReviewedConversionTagTest extends TestCase
                 if ($this->tamperLiveTag) {
                     $version['tag'][0]['firingTriggerId'] = ['2147479553'];
                 }
+                if ($this->tamperLiveVariable && isset($version['variable'][0])) {
+                    $version['variable'][0]['parameter'][0]['value'] = 'unrelated.transaction_id';
+                }
                 if ($this->reorderLiveFields) {
                     $version['tag'][0]['parameter'] = array_reverse($version['tag'][0]['parameter']);
                     $version['trigger'][0]['filter'] = array_reverse($version['trigger'][0]['filter']);
@@ -115,7 +131,7 @@ class ReviewedConversionTagTest extends TestCase
     private function version(): array
     {
         return ['path' => 'accounts/111/containers/222/versions/7', 'containerVersionId' => '7',
-            'tag' => array_values($this->tags), 'trigger' => array_values($this->triggers)];
+            'tag' => array_values($this->tags), 'trigger' => array_values($this->triggers), 'variable' => array_values($this->variables)];
     }
 
     private function customer(array $attributes = []): Customer
@@ -155,6 +171,29 @@ class ReviewedConversionTagTest extends TestCase
         $this->assertSame('reviewed-label', collect($tag['parameter'])->firstWhere('key', 'conversionLabel')['value']);
         $this->assertFalse($customer->fresh()->gtm_installed);
         $this->assertNull($customer->fresh()->conversion_tracking_verified_at);
+    }
+
+    public function test_purchase_tag_requires_positive_actual_amount_currency_and_unique_transaction_and_verifies_live_variables(): void
+    {
+        $customer = $this->customer();
+        $goal = ['objective' => 'purchase', 'trigger' => 'event', 'event_name' => 'purchase_completed'];
+        $this->assertTrue($this->configure($customer, $goal)['success']);
+        $this->assertTrue($this->configure($customer, $goal)['success']);
+        $this->assertCount(3, $this->variables);
+        $parameters = collect(array_values($this->tags)[0]['parameter'])->pluck('value', 'key')->all();
+        $this->assertSame('{{Site to Spend '.self::STRATEGY.' purchase transaction_id}}', $parameters['orderId']);
+        $this->assertSame('{{Site to Spend '.self::STRATEGY.' purchase value}}', $parameters['conversionValue']);
+        $this->assertSame('{{Site to Spend '.self::STRATEGY.' purchase currency}}', $parameters['currencyCode']);
+        $trigger = array_values($this->triggers)[0];
+        $this->assertSame('purchase_completed', $trigger['customEventFilter'][0]['parameter'][1]['value']);
+        $this->assertCount(5, $trigger['filter']);
+        $this->assertSame('greater', $trigger['filter'][4]['type']);
+        $this->assertSame('0', $trigger['filter'][4]['parameter'][1]['value']);
+        $this->assertSame(['ecommerce.transaction_id', 'ecommerce.value', 'ecommerce.currency'], array_map(fn ($variable) => $variable['parameter'][0]['value'], array_values($this->variables)));
+        $this->assertFalse($customer->fresh()->gtm_installed);
+        $this->assertNull($customer->fresh()->conversion_tracking_verified_at);
+        $this->tamperLiveVariable = true;
+        $this->assertFalse($this->configure($customer, $goal)['success']);
     }
 
     public function test_confirmation_page_is_exact_and_does_not_add_any_form_or_broad_url_trigger(): void

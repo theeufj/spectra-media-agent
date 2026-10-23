@@ -129,7 +129,7 @@ class CampaignMarketResearchWorkflow
             'expires_at' => isset($stored['checked_at']) ? \Carbon\CarbonImmutable::parse($stored['checked_at'])->addMinutes(15)->toIso8601String() : null];
     }
 
-    public function proposalForApproval(Campaign $campaign, int $dailyCents, ?string $requestId, bool $acceptProposal, ?string $fingerprint = null): array
+    public function proposalForApproval(Campaign $campaign, int $dailyCents, ?string $requestId, bool $acceptProposal, ?string $fingerprint = null, ?string $budgetOptionId = null): array
     {
         $status = $this->status($campaign);
         $result = $status['result'] ?? [];
@@ -138,6 +138,30 @@ class CampaignMarketResearchWorkflow
             || ! ($status['approvable'] ?? false) || ($result['status'] ?? null) !== 'ready'
             || ($result['fingerprint'] ?? null) !== ($status['input_fingerprint'] ?? null)) {
             throw ValidationException::withMessages(['daily_budget' => 'Review the current agent research before approving its campaign proposal and daily budget.']);
+        }
+        $options = $result['budget_options'] ?? [];
+        if ($options !== []) {
+            $selectedId = $budgetOptionId ?? $result['default_budget_option_id'] ?? null;
+            $option = collect($options)->first(fn ($option) => ($option['id'] ?? null) === $selectedId);
+            $baseRow = $result['strategies'][0] ?? [];
+            $optionRow = $option['proposal']['strategies'][0] ?? [];
+            if (! is_array($option) || ! $this->validBudgetOption($option)
+                || ($option['proposal']['status'] ?? null) !== 'ready'
+                || ($option['proposal']['fingerprint'] ?? null) !== $fingerprint
+                || ($option['proposal']['strategies'][0]['status'] ?? null) !== 'ready'
+                || ($optionRow['strategy_id'] ?? null) !== ($baseRow['strategy_id'] ?? null)
+                || ($optionRow['cpc_bid_micros'] ?? null) !== ($baseRow['cpc_bid_micros'] ?? null)
+                || $this->keywordSelection($optionRow['proposed_keywords'] ?? []) !== $this->keywordSelection($baseRow['proposed_keywords'] ?? [])
+                || ($optionRow['forecast']['forecast_period'] ?? null) !== ($baseRow['forecast']['forecast_period'] ?? null)
+                || ($optionRow['forecast']['period_days'] ?? null) !== ($baseRow['forecast']['period_days'] ?? null)
+                || ($option['currency_code'] ?? null) !== strtoupper((string) $campaign->customer->currency_code)
+                || (isset($result['requested_daily_budget_micros']) && $option['daily_budget_micros'] !== $result['requested_daily_budget_micros'])) {
+                throw ValidationException::withMessages(['daily_budget' => 'Choose a current, fully researched budget option before approving.']);
+            }
+            $result = [...$option['proposal'], 'budget_options' => $options,
+                'default_budget_option_id' => $result['default_budget_option_id'] ?? null, 'selected_budget_option_id' => $selectedId];
+        } elseif ($budgetOptionId !== null) {
+            throw ValidationException::withMessages(['daily_budget' => 'This budget option is no longer available. Research the campaign again.']);
         }
         if (($result['proposed_daily_budget_micros'] ?? null) !== $dailyCents * 10_000) {
             throw ValidationException::withMessages(['daily_budget' => 'Approve the researched daily budget shown with this proposal. A different amount needs new research.']);
@@ -224,7 +248,7 @@ class CampaignMarketResearchWorkflow
             || $total !== CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget)) {
             throw ValidationException::withMessages(['daily_budget' => 'The researched strategy allocations do not match the approved daily budget.']);
         }
-        $this->write($campaign, [...$this->stored($campaign), 'approved_at' => now()->toIso8601String(),
+        $this->write($campaign, [...$this->stored($campaign), 'result' => $proposal, 'approved_at' => now()->toIso8601String(),
             'approved_request_id' => $this->stored($campaign)['request_id'],
             'approved_fingerprint' => $this->research->approvalFingerprint($campaign->fresh())]);
     }
@@ -250,6 +274,79 @@ class CampaignMarketResearchWorkflow
     private function stored(Campaign $campaign): array
     {
         return $campaign->search_delivery_state['market_research'] ?? [];
+    }
+
+    private function validBudgetOption(array $option): bool
+    {
+        try {
+            $proposal = $option['proposal'] ?? [];
+            $row = $proposal['strategies'][0] ?? [];
+            $budget = $option['daily_budget_micros'] ?? null;
+            $bid = $option['cpc_bid_micros'] ?? null;
+            $forecast = $option['forecast'] ?? [];
+            $days = $forecast['period_days'] ?? null;
+            $clicks = $forecast['clicks'] ?? null;
+            $cost = $forecast['cost_micros'] ?? null;
+            $context = $forecast['context'] ?? [];
+            if (! is_string($option['id'] ?? null) || ! hash_equals(hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)), $option['id'])
+                || count($proposal['strategies'] ?? []) !== 1 || ! str_contains(strtolower($row['platform'] ?? ''), 'google') || ($row['channel'] ?? null) !== 'search'
+                || ! is_int($budget) || $budget < 5_000_000 || $budget > 10_000_000_000 || $budget % 10_000 !== 0
+                || ! is_int($bid) || $bid <= 0 || $bid % 10_000 !== 0 || $bid > $budget
+                || ($proposal['proposed_daily_budget_micros'] ?? null) !== $budget || ($row['budget_micros'] ?? null) !== $budget
+                || ($row['cpc_bid_micros'] ?? null) !== $bid || ($row['bidding_strategy'] ?? null) !== 'MANUAL_CPC'
+                || ($row['forecast'] ?? null) !== $forecast || ($forecast['success'] ?? null) !== true || ($forecast['source'] ?? null) !== 'google_keyword_forecast'
+                || ! is_int($days) || $days < 1 || $days > 30 || ! is_numeric($clicks) || ! is_finite((float) $clicks) || $clicks < 1
+                || $clicks * 30 < max(1, (int) config('optimization.search_delivery.min_forecast_clicks', 30)) * $days
+                || ! is_int($cost) || $cost <= 0 || $cost > $budget * $days
+                || ($context['daily_budget_micros'] ?? null) !== $budget || ($context['cpc_bid_ceiling_micros'] ?? null) !== $bid
+                || ($context['bidding_strategy'] ?? null) !== 'MANUAL_CPC'
+                || ($context['currency_code'] ?? null) !== ($row['currency_code'] ?? null) || ($option['currency_code'] ?? null) !== ($row['currency_code'] ?? null)
+                || ! preg_match('/^[A-Z]{3}$/', $row['currency_code'] ?? '')
+                || ($context['time_zone'] ?? null) !== ($row['time_zone'] ?? null) || ($option['time_zone'] ?? null) !== ($row['time_zone'] ?? null)
+                || ! in_array($row['time_zone'] ?? null, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)) {
+                return false;
+            }
+            $from = \Carbon\CarbonImmutable::createFromFormat('!Y-m-d', $forecast['forecast_period']['from'] ?? '', $row['time_zone']);
+            if ($from->format('Y-m-d') !== ($forecast['forecast_period']['from'] ?? null) || $from->lte(\Carbon\CarbonImmutable::now($row['time_zone'])->startOfDay())
+                || $from->addDays($days - 1)->format('Y-m-d') !== ($forecast['forecast_period']['through'] ?? null)) {
+                return false;
+            }
+            $checked = \Carbon\CarbonImmutable::parse($forecast['checked_at'] ?? '1970-01-01');
+            if ($checked->lt(now()->subMinutes(15)) || $checked->gt(now()->addMinute())) {
+                return false;
+            }
+            foreach (['geo_target_constants', 'language_constants', 'negative_keywords'] as $field) {
+                if (! is_array($context[$field] ?? null) || $context[$field] !== ($row['evidence']['input_context'][$field] ?? null)) {
+                    return false;
+                }
+            }
+            foreach ($row['proposed_keywords'] ?? [] as $keyword) {
+                $limit = $keyword['cpc_bid_micros'] ?? null;
+                if (! is_array($keyword) || ! is_string($keyword['text'] ?? null) || trim($keyword['text']) === ''
+                    || ! in_array($keyword['match_type'] ?? null, ['EXACT', 'PHRASE', 'BROAD'], true)
+                    || ($limit !== null && $limit !== 0 && $limit !== '0'
+                        && ((! is_int($limit) && (! is_string($limit) || ! preg_match('/^\d{1,16}$/', $limit))) || (int) $limit < $bid))) {
+                    return false;
+                }
+            }
+            $normalize = function (array $keywords, bool $setBid = false) use ($bid): array {
+                $keys = array_map(function ($keyword) use ($bid, $setBid): array {
+                    $key = array_intersect_key($setBid ? array_replace($keyword, ['cpc_bid_micros' => $bid]) : $keyword,
+                        array_flip(['text', 'match_type', 'ad_group_resource', 'cpc_bid_micros']));
+                    ksort($key);
+
+                    return $key;
+                }, $keywords);
+                usort($keys, fn ($a, $b) => strcmp(json_encode($a), json_encode($b)));
+
+                return $keys;
+            };
+
+            return ! empty($row['proposed_keywords']) && ! empty($context['geo_target_constants'])
+                && is_array($context['keywords'] ?? null) && $normalize($context['keywords']) === $normalize($row['proposed_keywords'], true);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function write(Campaign $campaign, array $research): void

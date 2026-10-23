@@ -28,6 +28,17 @@ beforeEach(() => {
     visitMock.mockReset();
 });
 
+it('shows the current native purchase connection instead of asking for the legacy signup container', () => {
+    const campaign = { id: 7, uuid: 'native-campaign', name: 'Native purchases', strategies: [],
+        daily_budget: '5.00', budget_confirmed_at: '2026-10-23', currency_code: 'AUD' };
+    const { getByText, queryByText, getByRole } = render(<CampaignShow auth={{ user: {} }} campaign={campaign}
+        conversionTracking={{ container_id: 'GTM-OLD-SIGNUP', installed: false, native: { connected: true }, setup_url: '/campaigns/native-campaign/conversion-goal' }} />);
+    expect(getByText('Paid checkout tracking is connected')).toBeVisible();
+    expect(queryByText('GTM-OLD-SIGNUP')).toBeNull();
+    expect(queryByText('Install your tracking snippet before launch')).toBeNull();
+    expect(getByRole('link', { name: 'Review purchase tracking' })).toHaveAttribute('href', '/campaigns/native-campaign/conversion-goal');
+});
+
 it('opens the confirmed budget form from Change and returns to review after reconfirmation', () => {
     const campaign = {
         id: 7, uuid: 'test-campaign', name: 'Setup campaign', strategies: [],

@@ -119,6 +119,7 @@ class StripeWebhookController extends CashierController
                 $customer = \App\Models\Customer::find($metadata['customer_id'] ?? null);
 
                 if ($customer && $user->customers()->where('customers.id', $customer->id)->exists()) {
+                    app(\App\Services\OwnSitePurchaseTracking::class)->recordSetupPurchase($user, $customer, $session, is_int($payload['created'] ?? null) ? $payload['created'] : null);
                     if (app(\App\Services\SetupFeeService::class)->recordPayment($customer, $user)) {
                         Log::info('💰 Setup fee recorded via webhook', [
                             'customer_id' => $customer->id,
@@ -171,6 +172,11 @@ class StripeWebhookController extends CashierController
         // work was done: every checkout.session.completed webhook returned
         // 500 and was retried by Stripe.
         return $this->successMethod();
+    }
+
+    protected function handleCheckoutSessionAsyncPaymentSucceeded(array $payload)
+    {
+        return $this->handleCheckoutSessionCompleted($payload);
     }
 
     /**

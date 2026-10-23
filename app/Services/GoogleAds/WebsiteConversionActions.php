@@ -20,7 +20,7 @@ class WebsiteConversionActions extends BaseGoogleAdsService
             throw new \LogicException('A customer Google Ads account is required.');
         }
         $actions = [];
-        $query = "SELECT conversion_action.resource_name, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.origin, conversion_action.status, conversion_action.primary_for_goal FROM conversion_action WHERE conversion_action.status = 'ENABLED' AND conversion_action.type = 'WEBPAGE'";
+        $query = "SELECT conversion_action.resource_name, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.origin, conversion_action.status, conversion_action.primary_for_goal, conversion_action.value_settings.always_use_default_value FROM conversion_action WHERE conversion_action.status = 'ENABLED' AND conversion_action.type = 'WEBPAGE'";
         foreach ($this->searchQuery($id, $query)->iterateAllElements() as $row) {
             $action = $row->getConversionAction();
             $category = ConversionActionCategory::name($action->getCategory());
@@ -30,6 +30,7 @@ class WebsiteConversionActions extends BaseGoogleAdsService
             }
             $actions[] = ['resource' => $action->getResourceName(), 'name' => $action->getName(),
                 'objective' => $objective, 'category' => $category,
+                'always_use_default_value' => $action->getValueSettings()?->getAlwaysUseDefaultValue(),
                 'primary_for_goal' => $action->hasPrimaryForGoal() ? $action->getPrimaryForGoal() : null];
         }
 

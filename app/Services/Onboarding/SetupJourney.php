@@ -65,6 +65,8 @@ class SetupJourney
         $trackingTarget = $googleStrategies->first(fn (Strategy $s, int $key) => ($goalSetups->get($key)['goal']['trigger'] ?? null) === 'prepare_only');
         $trackingGoal = $trackingTarget?->execution_result['metadata']['setup_conversion_goal']['goal'] ?? [];
         $purchaseTracking = ($trackingGoal['objective'] ?? null) === 'purchase';
+        $nativeTracking = $trackingTarget ? app(\App\Services\OwnSitePurchaseTracking::class)->statusForStrategy($trackingTarget) : ['connected' => false];
+        $trackingVerified = $googleStrategies->isNotEmpty() && $googleStrategies->every(fn (Strategy $s) => SetupConversionGoal::conversionVerificationFor($s)['verified']);
         $trackingSetupUrl = $campaign && $trackingTarget
             ? route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $trackingTarget->uuid])
             : ($customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null);
@@ -138,12 +140,14 @@ class SetupJourney
                     'detail' => 'Add or confirm your payment method in Google Ads. Billing readiness is not verified here.'],
                 // conversion_tracking_verified_at is also set when configuration is merely published.
                 // It cannot prove that a website tag is installed or that a test conversion fired.
-                ['title' => 'Conversion tracking', 'done' => false,
-                    'detail' => $trackingTarget
+                ['title' => 'Conversion tracking', 'done' => $trackingVerified,
+                    'detail' => $trackingVerified ? 'Google reports attributed conversions for the current campaign and its selected goal. This reporting is checked separately from website installation.' : (($nativeTracking['connected'] ?? false)
+                        ? 'Paid checkout tracking is connected to this Purchase goal with actual amounts and unique transaction IDs. Google delivery and attribution are not yet verified; no additional payment is needed to check the connection.'
+                        : ($trackingTarget
                         ? ($purchaseTracking ? 'Connect a completed purchase on your website to this goal using a confirmation page, success event or existing action. Then install or update the website tag and test a real purchase before switching on ads.'
                             : 'Connect the chosen customer action to this goal using a confirmation page, success event or existing action. Then install or update the website tag and test a real conversion before switching on ads.')
-                        : ($customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.'),
-                    'url' => $trackingSetupUrl, 'action_text' => $trackingTarget ? ($purchaseTracking ? 'Connect purchase tracking' : 'Connect tracking') : 'Set up tracking'],
+                        : ($customer->gtm_installed ? 'Website tag detected. Confirm a successful test conversion in Google Ads before launching.' : 'Install your website tag, then test a conversion before launching.'))),
+                    'url' => $trackingSetupUrl, 'action_text' => ($nativeTracking['connected'] ?? false) ? 'Review purchase tracking' : ($trackingTarget ? ($purchaseTracking ? 'Connect purchase tracking' : 'Connect tracking') : 'Set up tracking')],
                 ...($goalSetupUrl ? [['title' => 'Campaign conversion goal', 'done' => $goalConfigured,
                     'detail' => $goalDetail, 'url' => $goalSetupUrl,
                     'action_text' => $goalConfiguring ? 'View goal setup' : ($goalSaved || $goalConfigured ? 'Edit goal' : 'Set up goal')]] : []),

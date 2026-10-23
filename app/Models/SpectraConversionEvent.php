@@ -31,6 +31,9 @@ class SpectraConversionEvent extends Model
         'google_processing_checked_at',
         'google_processing_attempts',
         'google_processing_details',
+        'browser_invoked_at',
+        'browser_target_resource',
+        'browser_binding_fingerprint',
     ];
 
     protected $casts = [
@@ -42,6 +45,7 @@ class SpectraConversionEvent extends Model
         'google_processing_checked_at' => 'immutable_datetime',
         'google_processing_attempts' => 'integer',
         'google_processing_details' => 'array',
+        'browser_invoked_at' => 'immutable_datetime',
     ];
 
     public function user(): BelongsTo
@@ -57,6 +61,9 @@ class SpectraConversionEvent extends Model
     /** A provider receipt proves acceptance for processing, never ad attribution. */
     public function googleDeliveryStatus(): string
     {
+        if ($this->mode === 'verified_purchase') {
+            return $this->browser_invoked_at ? 'browser_invoked' : 'awaiting_browser';
+        }
         if ($this->mode !== 'server_google') {
             return $this->mode === 'client' ? 'browser_recorded' : 'other_platform';
         }

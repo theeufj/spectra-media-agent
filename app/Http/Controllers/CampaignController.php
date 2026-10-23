@@ -311,13 +311,14 @@ class CampaignController extends Controller
             'daily_budget' => ['required', 'numeric', 'min:5', 'max:10000', 'regex:/^\d{1,5}(?:\.\d{1,2})?$/'],
             'research_id' => 'nullable|uuid',
             'research_fingerprint' => ['nullable', 'regex:/^[a-f0-9]{64}$/'],
+            'budget_option_id' => ['nullable', 'regex:/^[a-f0-9]{64}$/'],
             'accept_proposal' => 'sometimes|boolean',
         ]);
 
         [$whole, $fraction] = array_pad(explode('.', (string) $validated['daily_budget'], 2), 2, '');
         $dailyCents = (int) $whole * 100 + (int) str_pad($fraction, 2, '0');
         $campaign = app(CampaignBudgetConfirmation::class)->confirm($campaign, $dailyCents,
-            $validated['research_id'] ?? null, (bool) ($validated['accept_proposal'] ?? false), $validated['research_fingerprint'] ?? null);
+            $validated['research_id'] ?? null, (bool) ($validated['accept_proposal'] ?? false), $validated['research_fingerprint'] ?? null, $validated['budget_option_id'] ?? null);
 
         ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $campaign->daily_budget, 'budget_confirmed' => true]);
 
@@ -548,6 +549,9 @@ class CampaignController extends Controller
         // The budget panel states what will be charged, so it needs the
         // currency. Sent as a scalar rather than loading the whole customer.
         $campaignData['currency_code'] = $customer->currency_code ?? 'USD';
+        $searchStrategies = $campaign->strategies->filter(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google') && $strategy->campaign_type === 'search');
+        $nativeStrategy = $searchStrategies->count() === 1 ? $searchStrategies->first() : null;
+        $nativeTracking = $nativeStrategy ? app(\App\Services\OwnSitePurchaseTracking::class)->statusForStrategy($nativeStrategy) : ['connected' => false];
 
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaignData,
@@ -563,7 +567,10 @@ class CampaignController extends Controller
             'conversionTracking' => [
                 'container_id' => $customer->gtm_container_id,
                 'installed' => (bool) $customer->gtm_installed,
-                'setup_url' => route('customers.gtm.setup', $customer, false),
+                'native' => $nativeTracking,
+                'setup_url' => ($nativeTracking['connected'] ?? false)
+                    ? route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $nativeStrategy->uuid], false)
+                    : route('customers.gtm.setup', $customer, false),
             ],
             /*
                Whether we are the ones who bill for the ad spend.

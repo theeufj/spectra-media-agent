@@ -665,7 +665,13 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                 previously only reachable from an email. */}
             {! budgetStage && conversionTracking && (
                 <div className="mx-auto max-w-7xl">
-                    {conversionTracking.installed ? (
+                    {conversionTracking.native?.connected ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800">
+                            <p className="font-semibold">Paid checkout tracking is connected</p>
+                            <p className="mt-1">Confirmed paid purchases send their actual amount, currency and transaction ID to this campaign’s Purchase goal. Google delivery and attribution are separate checks.</p>
+                            <Link href={conversionTracking.setup_url} className="mt-2 inline-block font-semibold underline">Review purchase tracking</Link>
+                        </div>
+                    ) : conversionTracking.installed ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
                             <span aria-hidden="true">✓</span>
                             Tracking setup is installed. Confirm that a real signup or purchase reaches Google before relying on conversion results.

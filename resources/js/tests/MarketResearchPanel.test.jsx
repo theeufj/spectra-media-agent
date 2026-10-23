@@ -36,6 +36,28 @@ const ready = (overrides = {}) => ({
         }], reasons: [] }, ...overrides,
 });
 const budget = (research, props = {}) => <BudgetConfirmation campaign={campaign} currency="AUD" marketResearch={research} {...props} />;
+const withOptions = () => {
+    const research = ready();
+    research.result.proposed_daily_budget_micros = 5_000_000;
+    research.result.budget_options = [
+        [5, 53.26, 145_000_000], [10, 97.9, 266_230_000], [15, 99.66, 269_290_000],
+    ].map(([daily, estimate, cost], index) => {
+        const proposal = JSON.parse(JSON.stringify(research.result));
+        delete proposal.budget_options;
+        proposal.proposed_daily_budget_micros = daily * 1_000_000;
+        const forecast = { success: true, clicks: estimate, cost_micros: cost, period_days: 29,
+            forecast_period: { from: '2026-10-25', through: '2026-11-22' } };
+        Object.assign(proposal.strategies[0], {
+            budget_micros: daily * 1_000_000, cpc_bid_micros: 5_000_000, forecast, forecast_period: forecast.forecast_period,
+        });
+        return { id: 'abc'[index].repeat(64), daily_budget_micros: daily * 1_000_000, cpc_bid_micros: 5_000_000,
+            currency_code: 'AUD', time_zone: 'Australia/Sydney', forecast, proposal };
+    });
+    research.result.strategies = research.result.budget_options[0].proposal.strategies;
+    research.result.default_budget_option_id = research.result.budget_options[0].id;
+    research.result.selected_budget_option_id = research.result.default_budget_option_id;
+    return research;
+};
 
 beforeEach(() => {
     post.mockReset(); refreshPost.mockReset(); polling.mockReset();
@@ -74,7 +96,7 @@ describe('campaign market research', () => {
         expect(post).not.toHaveBeenCalled();
         fireEvent.click(view.getByRole('button', { name: 'Approve researched plan' }));
         expect(post).toHaveBeenCalledWith(expect.stringContaining('campaigns.confirm-budget'), expect.any(Object),
-            { daily_budget: '20.00', research_id: 'request-one', research_fingerprint: 'context-one', accept_proposal: true });
+            { daily_budget: '20.00', research_id: 'request-one', research_fingerprint: 'context-one', budget_option_id: null, accept_proposal: true });
     });
 
     it('does not linearly scale traffic or approve an arbitrary edited amount', () => {
@@ -210,5 +232,83 @@ describe('campaign market research', () => {
         const view = render(<MarketResearchPanel research={research} currency="AUD" />);
         expect(view.getAllByText('Not verified').length).toBeGreaterThanOrEqual(2);
         expect(view.queryByText('Conversions')).toBeNull();
+    });
+
+    it('distinguishes a viable recommendation for an existing campaign from failed traffic research', () => {
+        const research = ready({ status: 'needs_review', approvable: false });
+        research.result.status = 'needs_review';
+        Object.assign(research.result.strategies[0], {
+            status: 'needs_review', proposal_status: 'ready', requires_live_review: true,
+        });
+        const view = render(budget(research));
+        expect(view.getByText('A researched recommendation needs review')).toBeInTheDocument();
+        expect(view.getByText(/found a recommendation with useful forecast traffic/)).toBeInTheDocument();
+        expect(view.queryByText(/have not found a plan/)).toBeNull();
+        expect(view.getByText('31.25')).toBeInTheDocument();
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(5);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(view.queryByRole('button', { name: 'Use researched budget' })).toBeNull();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('retains the traffic warning when an existing campaign has no viable recommendation', () => {
+        const research = ready({ status: 'needs_review', approvable: false });
+        research.result.status = 'needs_review';
+        Object.assign(research.result.strategies[0], {
+            status: 'needs_review', proposal_status: 'needs_review', requires_live_review: true,
+        });
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+        expect(view.getByText('The campaign plan needs review')).toBeInTheDocument();
+        expect(view.getByText(/have not found a plan with enough verified traffic/)).toBeInTheDocument();
+        expect(view.queryByText('A researched recommendation needs review')).toBeNull();
+    });
+
+    it('lets the customer compare exact forecast options and approve only the explicitly selected proposal', () => {
+        const view = render(budget(withOptions()));
+        expect(view.getAllByRole('radio')).toHaveLength(3);
+        expect(view.getByText('About 53 clicks')).toBeInTheDocument();
+        expect(view.getByText('About 98 clicks')).toBeInTheDocument();
+        expect(view.getByText('About 100 clicks')).toBeInTheDocument();
+        expect(view.getByText('AUD 266.23 estimated ad spend')).toBeInTheDocument();
+        expect(view.getByText('Little extra traffic for the higher budget')).toBeInTheDocument();
+        expect(view.getAllByRole('radio').every(radio => !radio.checked)).toBe(true);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+
+        fireEvent.click(view.getByRole('radio', { name: 'AUD 10.00 per day' }));
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(10);
+        expect(view.getByText(/Saved daily budget:/)).toHaveTextContent('AUD 5.00');
+        expect(view.getByText('97.9')).toBeInTheDocument();
+        expect(view.getByText('CPC limit: AUD 5.00')).toBeInTheDocument();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeEnabled();
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+        fireEvent.click(view.getByRole('button', { name: 'Approve researched plan' }));
+        expect(post).toHaveBeenCalledWith(expect.stringContaining('campaigns.confirm-budget'), expect.any(Object), {
+            daily_budget: '10.00', research_id: 'request-one', research_fingerprint: 'context-one',
+            budget_option_id: 'b'.repeat(64), accept_proposal: true,
+        });
+    });
+
+    it('requires another explicit choice when the options belong to a new research request', () => {
+        const view = render(budget(withOptions()));
+        fireEvent.click(view.getByRole('radio', { name: 'AUD 10.00 per day' }));
+        const replacement = withOptions();
+        replacement.request_id = 'new-request';
+        view.rerender(budget(replacement));
+        expect(view.getAllByRole('radio').every(radio => !radio.checked)).toBe(true);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('holds mismatched or missing option forecasts and does not infer traffic from a budget multiplier', () => {
+        const research = withOptions();
+        research.result.budget_options[1].proposal.fingerprint = 'different-inputs';
+        research.result.budget_options[2].forecast = null;
+        const view = render(budget(research));
+        expect(view.queryByText('About 98 clicks')).toBeNull();
+        expect(view.queryByText('About 100 clicks')).toBeNull();
+        expect(view.queryByRole('radio')).toBeNull();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(post).not.toHaveBeenCalled();
     });
 });

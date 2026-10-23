@@ -76,7 +76,7 @@ class SubscriptionController extends Controller
         if ($deploymentEnabled) {
             // Full subscription flow - charge immediately
             $checkoutOptions = [
-                'success_url' => route('dashboard'),
+                'success_url' => route('dashboard', ['purchase' => 'success']),
                 'cancel_url' => route('subscription.pricing'),
             ];
 

@@ -68,6 +68,41 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->assertGreaterThan(10_000, $result['cpc_bid_micros']);
     }
 
+    public function test_budget_comparison_forecasts_the_exact_selected_bid_instead_of_choosing_a_cheaper_candidate(): void
+    {
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->expects($this->once())->method('__invoke')->willReturn($this->historical());
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->expects($this->once())->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+            $this->assertSame(1_000_000, $context['cpc_bid_ceiling_micros']);
+            $this->assertSame(10_000_000, $context['daily_budget_micros']);
+            $this->assertSame([1_000_000], array_values(array_unique(array_column($keywords, 'cpc_bid_micros'))));
+
+            return $this->forecast($keywords, $context, $days, 98);
+        });
+        $context = [...$this->snapshot(), 'customer_id' => '1234567890'];
+        $context['keywords'] = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => 0]), $context['keywords']);
+        $result = $this->planner($historical, $forecast)->forecastAtBid($this->campaign(), $context['keywords'], $context, 10_000_000, 1_000_000, 2_000_000);
+        $this->assertTrue($result['ready']);
+        $this->assertSame(1_000_000, $result['cpc_bid_micros']);
+        $this->assertCount(1, $result['evidence']['candidates']);
+    }
+
+    public function test_exact_bid_options_cannot_raise_keyword_or_strategy_limits_or_round_up_a_bid(): void
+    {
+        foreach (['keyword', 'strategy', 'fractional_cent'] as $limit) {
+            $context = [...$this->snapshot(), 'customer_id' => '1234567890'];
+            $keywords = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => 0]), $context['keywords']);
+            if ($limit === 'keyword') {
+                $keywords[0]['cpc_bid_micros'] = 500_000;
+            }
+            $result = $this->neverEstimate()->forecastAtBid($this->campaign(), $keywords, $context, 10_000_000,
+                $limit === 'fractional_cent' ? 1_000_001 : 1_000_000, $limit === 'strategy' ? 500_000 : 2_000_000);
+            $this->assertFalse($result['ready']);
+            $this->assertSame([], $result['evidence']['candidates']);
+        }
+    }
+
     public function test_unknown_and_zero_costs_require_review_without_calling_forecast(): void
     {
         foreach ([[], ['paid search agency' => ['low_top_of_page_bid_micros' => 0, 'high_top_of_page_bid_micros' => null]]] as $metrics) {

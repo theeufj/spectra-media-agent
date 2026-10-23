@@ -48,6 +48,8 @@ const deliveryLabels = {
     awaiting_upload: ['Awaiting upload', 'gray'],
     no_click_identifier: ['No Google click identifier', 'gray'],
     browser_recorded: ['Browser event logged', 'gray'],
+    awaiting_browser: ['Paid receipt; browser pending', 'amber'],
+    browser_invoked: ['Browser invoked; Google unverified', 'blue'],
     other_platform: ['Other platform', 'gray'],
 };
 

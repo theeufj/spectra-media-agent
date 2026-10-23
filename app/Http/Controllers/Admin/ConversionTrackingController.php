@@ -66,7 +66,7 @@ class ConversionTrackingController extends Controller
             ->with('user:id,name,email')
             ->orderByDesc('created_at')
             ->limit(50)
-            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at', 'ad_identifiers', 'google_conversion_resource', 'google_accepted_at', 'google_processing_status', 'google_processing_checked_at', 'google_processing_details'])
+            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at', 'ad_identifiers', 'google_conversion_resource', 'google_accepted_at', 'google_processing_status', 'google_processing_checked_at', 'google_processing_details', 'browser_invoked_at', 'browser_target_resource'])
             ->map(function ($event) {
                 $data = $event->toArray();
                 $data['google_delivery_status'] = $event->googleDeliveryStatus();

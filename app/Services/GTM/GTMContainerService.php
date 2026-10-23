@@ -332,8 +332,27 @@ HTML;
             ['type' => 'template', 'key' => 'arg0', 'value' => '{{'.$variable.'}}'],
             ['type' => 'template', 'key' => 'arg1', 'value' => $value],
         ]];
-        $trigger = ['name' => 'Site to Spend '.$strategyUuid.' '.substr(hash('sha256', json_encode($goal)), 0, 16),
+        $purchaseVariables = [];
+        if (($goal['objective'] ?? null) === 'purchase') {
+            foreach (['transaction_id', 'value', 'currency'] as $field) {
+                $purchaseVariables[] = ['name' => 'Site to Spend '.$strategyUuid.' purchase '.$field, 'type' => 'v', 'parameter' => [
+                    ['key' => 'name', 'type' => 'template', 'value' => 'ecommerce.'.$field],
+                    ['key' => 'dataLayerVersion', 'type' => 'integer', 'value' => '2'],
+                ]];
+            }
+        }
+        $trigger = ['name' => 'Site to Spend '.$strategyUuid.' '.substr(hash('sha256', json_encode([$goal, $purchaseVariables])), 0, 16),
             'filter' => [$condition('Page Hostname', $host)]];
+        if ($purchaseVariables !== []) {
+            foreach (['transaction_id' => '^[A-Za-z0-9][A-Za-z0-9:_.-]{0,127}$', 'currency' => '^[A-Z]{3}$', 'value' => '^\\d+(\\.\\d{1,2})?$'] as $field => $pattern) {
+                $check = $condition('Site to Spend '.$strategyUuid.' purchase '.$field, $pattern);
+                $check['type'] = 'matchRegex';
+                $trigger['filter'][] = $check;
+            }
+            $check = $condition('Site to Spend '.$strategyUuid.' purchase value', '0');
+            $check['type'] = 'greater';
+            $trigger['filter'][] = $check;
+        }
         if (($goal['trigger'] ?? '') === 'thank_you_url') {
             $url = parse_url($goal['thank_you_url'] ?? '');
             if (! $url || ($url['scheme'] ?? '') !== 'https' || ($url['host'] ?? '') !== $host || in_array($url['path'] ?? '/', ['', '/'], true)) {
@@ -364,6 +383,9 @@ HTML;
             if (! $variables['success']) {
                 return ['success' => false, 'error' => 'The reviewed trigger variables could not be enabled.'];
             }
+            if ($purchaseVariables !== [] && ! $this->ensureReviewedVariables($workspace, $token, $purchaseVariables, $authorize)) {
+                return ['success' => false, 'error' => 'The purchase amount, currency and transaction variables could not be verified.'];
+            }
             $existing = collect($listed['data']['trigger'] ?? [])->firstWhere('name', $trigger['name']);
             if ($existing) {
                 foreach (['type', 'filter', 'customEventFilter'] as $key) {
@@ -392,6 +414,11 @@ HTML;
                 ['key' => 'conversionId', 'type' => 'template', 'value' => substr($conversionId, 3)],
                 ['key' => 'conversionLabel', 'type' => 'template', 'value' => $label],
             ], 'firingTriggerId' => [(string) $triggerId]];
+            if ($purchaseVariables !== []) {
+                foreach (['orderId' => 'transaction_id', 'conversionValue' => 'value', 'currencyCode' => 'currency'] as $key => $field) {
+                    $tag['parameter'][] = ['key' => $key, 'type' => 'template', 'value' => '{{Site to Spend '.$strategyUuid.' purchase '.$field.'}}'];
+                }
+            }
             $endpoint = "/{$workspace}/tags".($existingTag ? '/'.$existingTag['tagId'] : '');
             if ($authorize) {
                 $authorize();
@@ -404,7 +431,7 @@ HTML;
                 return ['success' => false, 'error' => 'The reviewed conversion tag could not be saved.'];
             }
 
-            return $this->publishReviewedWorkspace($customer, $workspace, $token, $tag, $trigger + ['triggerId' => (string) $triggerId], $authorize);
+            return $this->publishReviewedWorkspace($customer, $workspace, $token, $tag, $trigger + ['triggerId' => (string) $triggerId], $authorize, $purchaseVariables);
         }
 
         return ['success' => false, 'error' => 'A writable managed tag workspace is required.'];
@@ -461,7 +488,7 @@ HTML;
     }
 
     /** Publish exactly our reviewed version, then inspect its actual live tag and trigger. */
-    private function publishReviewedWorkspace(Customer $customer, string $workspace, string $token, array $tag, ?array $trigger, ?callable $authorize): array
+    private function publishReviewedWorkspace(Customer $customer, string $workspace, string $token, array $tag, ?array $trigger, ?callable $authorize, array $variables = []): array
     {
         if ($authorize) {
             $authorize();
@@ -472,7 +499,7 @@ HTML;
         $container = $customer->gtm_config['container_path'];
         if (! $created['success'] || ($created['data']['compilerError'] ?? false)
             || ! preg_match('#^'.preg_quote($container, '#').'/versions/\d+$#', $path)
-            || ! $this->reviewedVersionMatches($version, $tag, $trigger)) {
+            || ! $this->reviewedVersionMatches($version, $tag, $trigger, $variables)) {
             return ['success' => false, 'error' => 'The reviewed tag version could not be compiled and verified.'];
         }
         if ($authorize) {
@@ -484,14 +511,14 @@ HTML;
             return ['success' => false, 'error' => 'The exact reviewed tag version could not be published.'];
         }
         $live = $this->makeApiCall('GET', "/{$container}/versions:live", $token);
-        if (! $live['success'] || ($live['data']['path'] ?? null) !== $path || ! $this->reviewedVersionMatches($live['data'], $tag, $trigger)) {
+        if (! $live['success'] || ($live['data']['path'] ?? null) !== $path || ! $this->reviewedVersionMatches($live['data'], $tag, $trigger, $variables)) {
             return ['success' => false, 'error' => 'The live tag does not match the reviewed conversion configuration.'];
         }
 
         return ['success' => true, 'version_path' => $path];
     }
 
-    private function reviewedVersionMatches(array $version, array $tag, ?array $trigger): bool
+    private function reviewedVersionMatches(array $version, array $tag, ?array $trigger, array $variables = []): bool
     {
         $actualTag = collect($version['tag'] ?? [])->firstWhere('name', $tag['name']);
         if ($trigger === null) {
@@ -509,6 +536,38 @@ HTML;
         foreach (['type', 'filter', 'customEventFilter'] as $key) {
             if (! $this->reviewedEqual($actualTrigger[$key] ?? [], $trigger[$key] ?? [])) {
                 return false;
+            }
+        }
+        foreach ($variables as $variable) {
+            $actual = collect($version['variable'] ?? [])->firstWhere('name', $variable['name']);
+            if (! $actual || ($actual['type'] ?? null) !== $variable['type'] || ! $this->reviewedEqual($actual['parameter'] ?? [], $variable['parameter'])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function ensureReviewedVariables(string $workspace, string $token, array $variables, ?callable $authorize): bool
+    {
+        $listed = $this->makeApiCall('GET', "/{$workspace}/variables", $token);
+        if (! $listed['success']) {
+            return false;
+        }
+        foreach ($variables as $definition) {
+            $existing = collect($listed['data']['variable'] ?? [])->firstWhere('name', $definition['name']);
+            if ($existing) {
+                if (($existing['type'] ?? null) !== $definition['type'] || ! $this->reviewedEqual($existing['parameter'] ?? [], $definition['parameter'])) {
+                    return false;
+                }
+            } else {
+                if ($authorize) {
+                    $authorize();
+                }
+                $created = $this->makeApiCall('POST', "/{$workspace}/variables", $token, $definition);
+                if (! $created['success']) {
+                    return false;
+                }
             }
         }
 

@@ -60,7 +60,30 @@ class SetupConversionGoal
         return ['configuration' => $configuration,
             'installation' => ['tag_detected' => (bool) $customer->gtm_installed,
                 'setup_url' => route('customers.gtm.setup', $customer)],
-            'conversionVerification' => ['verified' => false]];
+            'nativeTracking' => $strategy ? app(\App\Services\OwnSitePurchaseTracking::class)->statusForStrategy($strategy) : ['connected' => false],
+            'conversionVerification' => self::conversionVerificationFor($strategy)];
+    }
+
+    /** Only current Google reporting for this campaign and selected action can prove attribution. */
+    public static function conversionVerificationFor(?Strategy $strategy): array
+    {
+        $configuration = self::configurationFor($strategy);
+        $health = $strategy?->execution_result['metadata']['conversion_tracking_health'] ?? [];
+        $resource = $strategy?->reusableGoogleCampaignId();
+        if ($resource && ctype_digit($resource)) {
+            $resource = 'customers/'.$strategy->campaign->customer->cleanGoogleCustomerId().'/campaigns/'.$resource;
+        }
+        $checked = strtotime($health['checked_at'] ?? '');
+        $count = $health['selected_action_activity']['all_conversions'] ?? null;
+        $verified = ($configuration['status'] ?? null) === 'configured' && ($health['status'] ?? null) === 'conversions_observed'
+            && $resource && ($health['campaign_resource'] ?? null) === $resource
+            && ! empty($configuration['action_resource']) && ($health['intent']['action_resource'] ?? null) === $configuration['action_resource']
+            && $checked !== false && $checked <= now()->timestamp && $checked >= now()->subDay()->timestamp
+            && $checked >= strtotime($configuration['requested_at'] ?? '1970-01-01')
+            && is_numeric($count) && is_finite((float) $count) && $count > 0;
+
+        return ['verified' => (bool) $verified, 'source' => $verified ? 'google_reported_selected_action' : null,
+            'checked_at' => $verified ? $health['checked_at'] : null];
     }
 
     public static function configurationFor(?Strategy $strategy): array

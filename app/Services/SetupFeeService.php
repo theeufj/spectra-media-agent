@@ -92,6 +92,7 @@ class SetupFeeService
             return false;
         }
 
+        app(OwnSitePurchaseTracking::class)->recordSetupPurchase($user, $customer, method_exists($session, 'toArray') ? $session->toArray() : (array) $session);
         $this->recordPayment($customer, $user);
 
         return true;
@@ -155,7 +156,7 @@ class SetupFeeService
      */
     protected function retrieveSession(string $sessionId): object
     {
-        return \Stripe\Checkout\Session::retrieve($sessionId, [
+        return \Stripe\Checkout\Session::retrieve(['id' => $sessionId, 'expand' => ['payment_intent.latest_charge']], [
             'api_key' => config('services.stripe.secret'),
         ]);
     }

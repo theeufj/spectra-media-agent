@@ -2,14 +2,33 @@ const pendingStatuses = ['queued', 'researching'];
 
 export const isResearchPending = (research) => pendingStatuses.includes(research?.status);
 
+export function researchBudgetOptions(research) {
+    return (Array.isArray(research?.result?.budget_options) ? research.result.budget_options : []).filter(option =>
+        /^[a-f0-9]{64}$/.test(option?.id || '')
+        && Number.isSafeInteger(option.daily_budget_micros) && option.daily_budget_micros >= 5_000_000
+        && option.daily_budget_micros <= 10_000_000_000 && option.daily_budget_micros % 10_000 === 0
+        && Number.isSafeInteger(option.cpc_bid_micros) && option.cpc_bid_micros > 0
+        && option.proposal?.proposed_daily_budget_micros === option.daily_budget_micros
+        && option.proposal?.fingerprint === research.input_fingerprint
+        && option.forecast?.success === true
+        && Number.isFinite(option.forecast.clicks) && option.forecast.clicks > 0
+        && Number.isSafeInteger(option.forecast.cost_micros) && option.forecast.cost_micros >= 0
+        && Number.isSafeInteger(option.forecast.period_days) && option.forecast.period_days > 0
+        && /^\d{4}-\d{2}-\d{2}$/.test(option.forecast.forecast_period?.from || '')
+        && /^\d{4}-\d{2}-\d{2}$/.test(option.forecast.forecast_period?.through || '')
+    ).sort((a, b) => a.daily_budget_micros - b.daily_budget_micros);
+}
+
 export function researchCanBeApproved(research, now = Date.now()) {
+    const options = research?.result?.budget_options;
     return research?.status === 'ready' && research?.result?.status === 'ready'
         && research.current === true && research.approvable === true && research.approved !== true
         && typeof research.request_id === 'string' && research.request_id.length > 0
         && research.result.fingerprint === research.input_fingerprint
         && Number.isFinite(Date.parse(research.expires_at)) && Date.parse(research.expires_at) > now
         && Number.isSafeInteger(research.result.proposed_daily_budget_micros)
-        && research.result.proposed_daily_budget_micros > 0;
+        && research.result.proposed_daily_budget_micros > 0
+        && (!Array.isArray(options) || options.length === researchBudgetOptions(research).length);
 }
 
 // A response from an earlier request cannot replace the new research shown by Inertia.
@@ -57,29 +76,59 @@ function Forecast({ forecast, period, timezone, currency }) {
     </div>;
 }
 
-export default function MarketResearchPanel({ research, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '' }) {
+export default function MarketResearchPanel({ research, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '', onSelectBudgetOption, selectedBudgetOptionId, selectingDisabled = false }) {
     const pending = isResearchPending(research);
     const expired = research?.approved !== true && research?.expires_at && Date.parse(research.expires_at) <= now;
     const stale = research?.status === 'stale' || research?.current === false || expired;
     const status = stale ? 'stale' : research?.status || 'queued';
     const result = research?.result;
+    const options = researchBudgetOptions(research);
+    const selectedOptionId = selectedBudgetOptionId === undefined ? result?.selected_budget_option_id : selectedBudgetOptionId;
+    const existingRecommendation = status === 'needs_review' && asList(result?.strategies).some(strategy =>
+        strategy.proposal_status === 'ready' && strategy.requires_live_review === true);
     const titles = { not_requested: 'Preparing your campaign for research', queued: 'Researching your market', researching: 'Researching your market', ready: research?.approved ? 'Approved market plan' : 'Your researched campaign plan', needs_review: 'The campaign plan needs review', unknown: 'Market research could not be verified', stale: 'This research needs refreshing' };
     const reasons = [...asList(research?.reasons), ...asList(result?.reasons), ...(!pending && research?.message ? [research.message] : [])].map(message).filter(Boolean);
 
     return <section aria-label="Campaign market research" className={`rounded-lg border border-gray-200 bg-white p-5 ${className}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h3 className="text-base font-semibold text-gray-900">{titles[status] || titles.unknown}</h3>
+                <h3 className="text-base font-semibold text-gray-900">{existingRecommendation ? 'A researched recommendation needs review' : titles[status] || titles.unknown}</h3>
                 {(pending || !research) && <p role="status" className="mt-1 text-sm text-gray-600">The agents are checking keyword demand, click costs and traffic at a suitable budget before asking you to approve a plan.</p>}
                 {status === 'not_requested' && <p role="status" className="mt-1 text-sm text-gray-600">Research starts automatically once your campaign draft and platform account are ready.</p>}
                 {stale && <p role="status" className="mt-1 text-sm text-gray-600">Your campaign or the research validity changed. Refresh the evidence before approving a plan.</p>}
-                {status === 'needs_review' && <p className="mt-1 text-sm text-gray-600">The agents have not found a plan with enough verified traffic. Review the findings below; a higher budget alone may not help.</p>}
+                {status === 'needs_review' && <p className="mt-1 text-sm text-gray-600">{existingRecommendation
+                    ? 'The agents found a recommendation with useful forecast traffic. Changes to an existing campaign need a separate review before they can be applied.'
+                    : 'The agents have not found a plan with enough verified traffic. Review the findings below; a higher budget alone may not help.'}</p>}
                 {status === 'unknown' && <p className="mt-1 text-sm text-gray-600">The agents could not complete a reliable check. Your saved budget has not changed.</p>}
                 {numeric(research?.requested_daily_budget_micros) && <p className="mt-2 text-sm text-gray-600">Requested research budget: {money(research.requested_daily_budget_micros, currency)} a day</p>}
             </div>
             {onRefresh && <button type="button" onClick={onRefresh} disabled={pending || refreshing} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">{refreshing ? 'Requesting research…' : pending ? 'Research in progress' : status === 'unknown' ? 'Retry research' : 'Refresh research'}</button>}
         </div>
         {reasons.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{[...new Set(reasons)].map(reason => <li key={reason}>{reason}</li>)}</ul>}
+        {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
+            <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>
+            <p className="mt-1 text-sm text-gray-600">Each option uses the same keywords and bid. Clicks and ad spend are estimates for the dates shown.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">{options.map((option, index) => {
+                const code = option.currency_code || currency;
+                const previous = options[index - 1];
+                const samePeriod = previous?.forecast?.forecast_period?.from === option.forecast.forecast_period?.from
+                    && previous?.forecast?.forecast_period?.through === option.forecast.forecast_period?.through;
+                const littleGain = previous && samePeriod && option.forecast.clicks <= previous.forecast.clicks * 1.1;
+                const content = <>
+                    <span className="flex items-center gap-2">
+                        {onSelectBudgetOption && <input type="radio" name="market-budget-option" value={option.id} checked={selectedOptionId === option.id} onChange={() => onSelectBudgetOption(option.id)} aria-label={`${money(option.daily_budget_micros, code)} per day`} className="text-brand-dark focus:ring-brand-dark" />}
+                        <span className="font-semibold text-gray-900">{money(option.daily_budget_micros, code)} / day</span>
+                    </span>
+                    <span className="mt-3 block text-sm text-gray-700">About {Math.round(option.forecast.clicks)} clicks</span>
+                    <span className="mt-1 block text-sm text-gray-700">{money(option.forecast.cost_micros, code)} estimated ad spend</span>
+                    <span className="mt-1 block text-xs text-gray-500">{option.forecast.forecast_period?.from} to {option.forecast.forecast_period?.through}{option.forecast.period_days ? ` · ${option.forecast.period_days} days` : ''}</span>
+                    <span className="mt-2 block text-xs font-medium text-brand-dark">{index === 0 ? 'Lowest tested budget' : littleGain ? 'Little extra traffic for the higher budget' : 'More estimated traffic'}</span>
+                </>;
+                const style = `block rounded-lg border p-4 ${selectedOptionId === option.id ? 'border-brand-dark bg-gray-50' : 'border-gray-200'} ${onSelectBudgetOption ? 'cursor-pointer' : ''}`;
+                return onSelectBudgetOption ? <label key={option.id} className={style}>{content}</label> : <div key={option.id} className={style}>{content}</div>;
+            })}</div>
+            {onSelectBudgetOption && <p className="mt-2 text-xs text-gray-600">Choosing an option updates your proposal. Your saved budget changes only after you approve it.</p>}
+        </fieldset>}
         {!pending && !stale && asList(result?.strategies).map((strategy, index) => {
             const code = strategy.currency_code || currency;
             const caveats = [...asList(strategy.caveats), ...asList(strategy.forecast?.caveats)].map(message).filter(Boolean);

@@ -85,6 +85,7 @@ class HandleInertiaRequests extends Middleware
             // account id that did not own them, so every conversion was
             // silently discarded by Google.
             'conversionTargets' => fn () => \App\Support\ConversionTargets::forClient(),
+            'purchaseTracking' => fn () => $user ? app(\App\Services\OwnSitePurchaseTracking::class)->forBrowser($user, $request) : null,
         ];
     }
 }

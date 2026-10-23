@@ -7,6 +7,7 @@ import ImpersonationBanner from '@/Components/ImpersonationBanner';
 import OnboardingTour, { startTour } from '@/Components/OnboardingTour';
 import TenantTheme from '@/Components/TenantTheme';
 import SupportChat from '@/Components/SupportChat';
+import VerifiedPurchaseTracking from '@/Components/VerifiedPurchaseTracking';
 import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -155,6 +156,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <VerifiedPurchaseTracking />
             {/*
               First focusable thing on every authenticated page. The header
               carries up to 30 links before the content starts, so without this
