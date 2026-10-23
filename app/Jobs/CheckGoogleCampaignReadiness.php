@@ -67,7 +67,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             if (! $campaign || ! $campaign->customer) {
                 return;
             }
-            foreach ($campaign->strategies as $strategy) {
+            foreach ($campaign->strategies->sortBy('id') as $strategy) {
                 if (! str_contains(strtolower($strategy->platform ?? ''), 'google')) {
                     continue;
                 }
