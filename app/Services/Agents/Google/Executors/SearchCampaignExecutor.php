@@ -21,6 +21,7 @@ use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
+use App\Services\GoogleAds\InitialSearchBidSetup;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
@@ -194,6 +195,14 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
 
         // 3.5 Add Audience Targeting
         $this->audiences->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
+
+        // Configure an explicit initial bid for every Search build, including
+        // managed accounts and the Manual CPC fallback for Smart Bidding.
+        // The estimator never changes a running campaign or authorizes launch.
+        if (! $result->success || ! app(InitialSearchBidSetup::class, ['customer' => $this->customer])
+            ->configure($campaign, $strategy, $customerId, $campaignResourceName, $adGroupResourceName, $result)) {
+            return;
+        }
 
         // Stage the effective bidding settings before forecasting, while there
         // are no serving RSAs. A suggested market bid is not the approved bid.

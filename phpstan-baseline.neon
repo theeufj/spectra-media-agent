@@ -1230,18 +1230,6 @@ parameters:
 			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
 
 		-
-			message: '#^Method App\\Services\\Deployment\\GoogleAdsDeploymentStrategy\:\:deployDisplayCampaign\(\) never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
-			message: '#^Method App\\Services\\Deployment\\GoogleAdsDeploymentStrategy\:\:deploySearchCampaign\(\) never returns null so it can be removed from the return type\.$#'
-			identifier: return.unusedType
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
 			message: '#^PHPDoc tag @param references unknown parameter\: \$billingEvent$#'
 			identifier: parameter.notFound
 			count: 1

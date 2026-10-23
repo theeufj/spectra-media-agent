@@ -59,6 +59,7 @@ class CampaignBuilderV26ContractTest extends TestCase
             $this->assertSame('customers/1234567890/campaigns/61', $service('1234567890', [
                 'businessName' => 'Contract test', 'budget' => 10.0, 'merchantId' => 123,
                 'startDate' => '2026-11-01', 'endDate' => '2026-11-30',
+                'biddingStrategyType' => 'MAXIMIZE_CONVERSIONS',
             ]), $class);
         }
     }

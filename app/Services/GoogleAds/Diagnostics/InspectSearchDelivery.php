@@ -152,6 +152,7 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                     iterator_to_array($criterion->getPrimaryStatusReasons())
                 ),
                 'cpc_bid_micros' => (int) ($criterion->getCpcBidMicros() ?: $row->getAdGroup()->getCpcBidMicros()),
+                'keyword_cpc_bid_micros' => (int) $criterion->getCpcBidMicros(),
                 'ad_group_cpc_bid_micros' => (int) $row->getAdGroup()->getCpcBidMicros(),
             ];
             if ($criterion->getStatus() === AdGroupCriterionStatus::ENABLED

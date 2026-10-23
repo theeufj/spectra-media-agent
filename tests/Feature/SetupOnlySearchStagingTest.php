@@ -18,6 +18,7 @@ use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\GoogleAds\CommonServices\ApplyConversionValueRules;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
+use App\Services\GoogleAds\InitialSearchBidSetup;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
@@ -36,6 +37,8 @@ class SetupOnlySearchStagingTest extends TestCase
     private array $statuses = [];
 
     private string $remoteBidding = 'MANUAL_CPC';
+
+    private bool $bidReady = true;
 
     private function fixture(array $customerAttributes = [], ?string $existing = null): array
     {
@@ -102,8 +105,18 @@ class SetupOnlySearchStagingTest extends TestCase
             return 'customers/123/adGroupAds/789~101';
         });
         $this->app->bind(CreateResponsiveSearchAd::class, fn () => $ad);
+        $initialBid = $this->createMock(InitialSearchBidSetup::class);
+        $initialBid->method('configure')->willReturnCallback(function ($campaign, $strategy, $id, $resource, $group, $result) {
+            $this->writes['initial_bid'][] = [$id, $resource, $group];
+            if (! $this->bidReady) {
+                $result->addError('initial_search_bid_needs_review', 'Fresh cost and reach estimates are unavailable.');
+            }
+
+            return $this->bidReady;
+        });
+        $this->app->bind(InitialSearchBidSetup::class, fn () => $initialBid);
         $valueRules = $this->createMock(ApplyConversionValueRules::class);
-        $valueRules->expects($this->never())->method('__invoke');
+        $valueRules->expects($customer->isPaidSetupOnly() ? $this->never() : $this->any())->method('__invoke');
         $this->app->bind(ApplyConversionValueRules::class, fn () => $valueRules);
         $geo = $this->createMock(GeoTargetResolver::class);
         $geo->method('addLocationTargeting')->willReturnCallback(function ($id, $resource, $campaign, $strategy, $plan, $result) use ($stepError) {
@@ -119,7 +132,7 @@ class SetupOnlySearchStagingTest extends TestCase
         $urls = $this->createMock(LandingUrlBuilder::class);
         $urls->method('getFinalUrl')->willReturn('https://example.test/');
         $bidding = $this->createMock(BiddingStrategyApplier::class);
-        $bidding->expects($this->never())->method('applyBiddingStrategy');
+        $bidding->expects($customer->isPaidSetupOnly() ? $this->never() : $this->any())->method('applyBiddingStrategy');
         $keywords = $this->createMock(SearchKeywordBuilder::class);
         $selected = [['text' => 'campaign setup', 'match_type' => 'EXACT']];
         $keywords->method('getKeywords')->willReturn($selected);
@@ -127,7 +140,7 @@ class SetupOnlySearchStagingTest extends TestCase
         $keywords->method('addKeywords')->willReturnCallback(function () {
             $this->writes['keywords'][] = true;
         });
-        $keywords->expects($this->never())->method('preflightReach');
+        $keywords->expects($customer->isPaidSetupOnly() ? $this->never() : $this->any())->method('preflightReach')->willReturn(true);
         $audiences = $this->createMock(AudienceTargeter::class);
 
         return new SearchCampaignExecutor($customer, $geo, $extensions, $urls, $bidding, $keywords, $audiences);
@@ -144,6 +157,7 @@ class SetupOnlySearchStagingTest extends TestCase
         $this->assertSame('PAUSED', $this->writes['campaign'][0]['status']);
         $this->assertCount(1, $this->writes['ad_group']);
         $this->assertCount(1, $this->writes['keywords']);
+        $this->assertSame([['123', 'customers/123/campaigns/456', 'customers/123/adGroups/789']], $this->writes['initial_bid']);
         $this->assertCount(1, $this->writes['ad']);
         $this->assertSame('setup_only_paused_handover', $result->metadata['google_search_staging']['mode']);
         $this->assertFalse($result->metadata['google_search_staging']['enable_after_success']);
@@ -168,6 +182,39 @@ class SetupOnlySearchStagingTest extends TestCase
         $this->assertSame('MANUAL_CPC', $result->metadata['google_search_baseline']['bidding']);
         $this->assertFalse($result->metadata['google_search_staging']['enable_after_success']);
         $this->assertFalse($result->metadata['search_reach_preflight']['gate']['ready']);
+    }
+
+    public function test_managed_search_creation_also_configures_an_initial_bid_before_its_ads(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture(['service_type' => 'managed']);
+        $result = ExecutionResult::success();
+
+        $this->executor($customer, goalsReady: true)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $this->assertTrue($result->success, $result->errorMessage());
+        $this->assertCount(1, $this->writes['initial_bid']);
+        $keys = array_keys($this->writes);
+        $this->assertLessThan(array_search('ad', $keys, true), array_search('initial_bid', $keys, true));
+    }
+
+    #[DataProvider('bidCustomers')]
+    public function test_unavailable_bid_estimates_block_ads_for_both_managed_and_setup_campaigns(string $service): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture(['service_type' => $service]);
+        $this->bidReady = false;
+        $result = ExecutionResult::success();
+
+        $this->executor($customer, goalsReady: true)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $this->assertFalse($result->success);
+        $this->assertArrayNotHasKey('ad', $this->writes);
+        $this->assertArrayNotHasKey('google_search_baseline', $result->metadata);
+        $this->assertSame('initial_search_bid_needs_review', $result->errors[0]->code);
+    }
+
+    public static function bidCustomers(): array
+    {
+        return ['managed' => ['managed'], 'one-time setup' => ['setup_only']];
     }
 
     #[DataProvider('strictCustomers')]

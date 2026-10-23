@@ -3,7 +3,6 @@
 namespace App\Services\GoogleAds\SearchServices;
 
 use App\Models\Customer;
-use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
@@ -11,6 +10,7 @@ use Google\Ads\GoogleAds\V26\Common\ManualCpc;
 use Google\Ads\GoogleAds\V26\Common\TargetCpa;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 use Google\Ads\GoogleAds\V26\Resources\Campaign;
 use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
@@ -58,11 +58,9 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             'name' => $campaignName,
             'advertising_channel_type' => AdvertisingChannelType::SEARCH,
             'campaign_budget' => $campaignBudgetResourceName,
-            // Callers may force a status; otherwise testing mode / config decides.
-            // Without this there was no way to ask for a campaign that does not
-            // start serving the moment it is created, which any verification or
-            // staged rollout needs.
-            'status' => CampaignStatusHelper::getGoogleAdsStatus($campaignData['status'] ?? null, $this->customer),
+            // Every caller stages Search paused. Only the separate verified
+            // activation path may enable it after bids, ads and goals are checked.
+            'status' => CampaignStatus::PAUSED,
             'start_date_time' => CampaignDateTimes::startOfDay($campaignData['startDate']),
             'end_date_time' => CampaignDateTimes::endOfDay($campaignData['endDate']),
             'manual_cpc' => new ManualCpc, // Default for search campaigns

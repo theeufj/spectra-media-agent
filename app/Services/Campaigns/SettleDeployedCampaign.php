@@ -62,6 +62,22 @@ class SettleDeployedCampaign
             return $this->settleSetupOnly($campaign, $customer);
         }
 
+        $pausedDisplay = $campaign->strategies()->where('campaign_type', 'display')->get()
+            ->contains(fn (Strategy $strategy) => ($strategy->execution_result['metadata']['display_initial_bidding']['verified_platform_status'] ?? null) === 'PAUSED'
+                && ($strategy->execution_result['metadata']['display_initial_bidding']['activation_ready'] ?? null) === false);
+        if ($pausedDisplay) {
+            // A verified paused Display build is not a verified launch. Do not
+            // emit campaign_live or silently enable another stage around it.
+            // Existing live campaigns retain their lifecycle during additions.
+            if (! in_array($campaign->status, [CampaignStatus::Active, CampaignStatus::Paused], true)) {
+                $campaign->update(['status' => CampaignStatus::Paused]);
+
+                return true;
+            }
+
+            return false;
+        }
+
         $previousStatus = $campaign->status;
         $staged = $campaign->strategies()->where('campaign_type', 'search')->orderBy('id')->get()
             ->filter(fn ($strategy) => ! empty($strategy->execution_result['metadata']['google_search_staging']));

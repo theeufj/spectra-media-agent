@@ -27,6 +27,13 @@ class CreateDisplayAdGroup extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $adGroupName): ?string
     {
+        $actual = app(DisplayBiddingConfiguration::class, ['customer' => $this->customer])->read($customerId, $campaignResourceName);
+        if (! DisplayBiddingConfiguration::isPausedAutomated($actual)
+            || ($actual['campaign_resource'] ?? null) !== $campaignResourceName) {
+            $this->logError('Display ad group creation is on hold: a paused campaign with verified automated bidding is required.');
+
+            return null;
+        }
         $this->ensureClient();
 
         // Check if ad group already exists
@@ -86,6 +93,7 @@ class CreateDisplayAdGroup extends BaseGoogleAdsService
             }
         } catch (GoogleAdsException $e) {
             $this->logError("Error fetching ad group by name for customer $customerId: ".$e->getMessage(), $e);
+            throw $e;
         }
 
         return null;

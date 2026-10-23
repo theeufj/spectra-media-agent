@@ -3,14 +3,15 @@
 namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Models\Customer;
-use App\Services\CampaignStatusHelper;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
-use Google\Ads\GoogleAds\V26\Common\ManualCpc;
+use Google\Ads\GoogleAds\V26\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V26\Common\TargetCpa;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 use Google\Ads\GoogleAds\V26\Resources\Campaign;
 use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
@@ -33,6 +34,20 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, array $campaignData): ?string
     {
+        $bidding = DisplayBiddingConfiguration::desired(['name' => $campaignData['biddingStrategyType'] ?? null,
+            'parameters' => ['targetCpaMicros' => $campaignData['targetCpaMicros'] ?? null]]);
+        if ($bidding === null) {
+            $this->logError('Display creation needs a supported explicit bidding strategy. Manual CPC requires a separate reviewed Display estimate.');
+
+            return null;
+        }
+        $budgetMicros = CampaignSpendGuardrails::moneyToMicros($campaignData['budget'] ?? null);
+        if ($budgetMicros <= 0) {
+            $this->logError('A positive daily budget is required for Display creation.');
+
+            return null;
+        }
+        $this->ensureClient();
         // Check if a campaign with the same name already exists.
         $campaignName = $campaignData['businessName'].' Display Campaign';
         $existingCampaign = $this->getCampaignByName($customerId, $campaignName);
@@ -43,7 +58,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         }
 
         // 1. Create Campaign Budget
-        $campaignBudgetResourceName = $this->createCampaignBudget($customerId, $campaignData['budget']);
+        $campaignBudgetResourceName = $this->createCampaignBudget($customerId, $budgetMicros);
         if (is_null($campaignBudgetResourceName)) {
             $this->logError("Failed to create campaign budget for customer $customerId.");
 
@@ -55,18 +70,18 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             'name' => $campaignName,
             'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer), // Status based on testing mode config
+            'status' => CampaignStatus::PAUSED,
             'start_date_time' => CampaignDateTimes::startOfDay($campaignData['startDate']),
             'end_date_time' => CampaignDateTimes::endOfDay($campaignData['endDate']),
-            'manual_cpc' => new ManualCpc, // Default for display campaigns
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
 
-        // Apply bidding strategy (example: TargetCpa)
-        if (isset($campaignData['biddingStrategyType']) && $campaignData['biddingStrategyType'] === 'TARGET_CPA') {
+        if ($bidding['type'] === 'TARGET_CPA') {
             $campaign->setTargetCpa(new TargetCpa([
-                'target_cpa_micros' => $campaignData['targetCpaMicros'] ?? null,
+                'target_cpa_micros' => $bidding['target_cpa_micros'],
             ]));
+        } else {
+            $campaign->setMaximizeConversions(new MaximizeConversions);
         }
 
         $campaignOperation = new CampaignOperation;
@@ -96,14 +111,14 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
      * Creates a campaign budget for a new campaign.
      *
      * @param  string  $customerId  The Google Ads customer ID.
-     * @param  float  $budgetAmount  The daily budget amount.
+     * @param  int  $budgetMicros  The daily budget in integer micros.
      * @return string|null The resource name of the created campaign budget, or null on failure.
      */
-    private function createCampaignBudget(string $customerId, float $budgetAmount): ?string
+    private function createCampaignBudget(string $customerId, int $budgetMicros): ?string
     {
         $campaignBudget = new CampaignBudget([
             'name' => 'Daily Budget - '.uniqid(),
-            'amount_micros' => (int) ($budgetAmount * 1_000_000), // Convert to micros
+            'amount_micros' => $budgetMicros,
             'delivery_method' => BudgetType::STANDARD,
             'explicitly_shared' => false,
         ]);
@@ -148,6 +163,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             }
         } catch (GoogleAdsException $e) {
             $this->logError("Error fetching campaign by name for customer $customerId: ".$e->getMessage(), $e);
+            throw $e;
         }
 
         return null;

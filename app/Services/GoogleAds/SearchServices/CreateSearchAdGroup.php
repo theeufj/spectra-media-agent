@@ -7,6 +7,8 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Resources\AdGroup;
 use Google\Ads\GoogleAds\V26\Services\AdGroupOperation;
 
@@ -28,10 +30,23 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
     public function __invoke(string $customerId, string $campaignResourceName, string $adGroupName): ?string
     {
         $this->ensureClient();
+        if (! $this->pausedSearchParent($customerId, $campaignResourceName)) {
+            return null;
+        }
 
         // Check if ad group already exists
         $existingAdGroup = $this->getAdGroupByName($customerId, $campaignResourceName, $adGroupName);
+        // The lookup is a remote call: do not rely on an earlier PAUSED read
+        // when creating a group with a temporary provider-default bid.
+        if (! $this->pausedSearchParent($customerId, $campaignResourceName)) {
+            return null;
+        }
         if ($existingAdGroup) {
+            if (! preg_match('#^customers/'.preg_quote($customerId, '#').'/adGroups/\d+$#', $existingAdGroup->getResourceName())) {
+                $this->logError('The existing Search ad group does not belong to this customer account.');
+
+                return null;
+            }
             $this->logInfo("Ad Group '{$adGroupName}' already exists. Skipping creation.");
 
             return $existingAdGroup->getResourceName();
@@ -65,6 +80,44 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
 
             return null;
         }
+    }
+
+    /** @phpstan-impure Fresh Google status can change between calls. */
+    private function pausedSearchParent(string $customerId, string $resource): bool
+    {
+        if (! $this->matchesCustomer($customerId, $resource)) {
+            $this->logError('Search ad group staging requires an exact customer campaign resource.');
+
+            return false;
+        }
+        $query = 'SELECT campaign.resource_name, campaign.status, campaign.advertising_channel_type '
+            ."FROM campaign WHERE campaign.resource_name = '{$resource}'";
+        try {
+            foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                $campaign = $row->getCampaign();
+                if ($campaign->getResourceName() === $resource && $campaign->getStatus() === CampaignStatus::PAUSED
+                    && $campaign->getAdvertisingChannelType() === AdvertisingChannelType::SEARCH
+                    && $this->matchesCustomer($customerId, $resource)) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logError('The Search campaign’s paused staging status could not be verified.', $e);
+
+            return false;
+        }
+        $this->logError('Search ad group staging requires a freshly verified paused Search campaign.');
+
+        return false;
+    }
+
+    /** @phpstan-impure The customer account pointer is reloaded from the database. */
+    private function matchesCustomer(string $customerId, string $resource): bool
+    {
+        $customer = $this->customer?->exists ? $this->customer->fresh() : $this->customer;
+
+        return ctype_digit($customerId) && $customer?->cleanGoogleCustomerId() === $customerId
+            && preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#', $resource) === 1;
     }
 
     /**
