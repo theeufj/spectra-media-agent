@@ -32,6 +32,24 @@ describe('BudgetConfirmation', () => {
         expect(queryByText('Confirm budget')).toBeNull();
     });
 
+    it('allows an existing budget to be edited or reconfirmed when explicitly requested', () => {
+        const onConfirmed = vi.fn();
+        const campaign = { id: 7, uuid: 'test-campaign', daily_budget: '5.00', budget_confirmed_at: '2026-10-23' };
+        const { getByLabelText, getByText } = render(
+            <BudgetConfirmation campaign={campaign} currency="AUD" editing onConfirmed={onConfirmed} />
+        );
+
+        expect(getByLabelText('Daily budget (AUD)')).toHaveValue(5);
+        fireEvent.click(getByText('Confirm budget'));
+        expect(postMock).toHaveBeenCalledWith(
+            route('campaigns.confirm-budget', { campaign: campaign.uuid }),
+            expect.objectContaining({ onSuccess: expect.any(Function) })
+        );
+        expect(onConfirmed).not.toHaveBeenCalled();
+        postMock.mock.calls[0][1].onSuccess();
+        expect(onConfirmed).toHaveBeenCalledTimes(1);
+    });
+
     it('states the seven-day upfront charge before the user agrees to it', () => {
         const { getByText } = render(
             <BudgetConfirmation

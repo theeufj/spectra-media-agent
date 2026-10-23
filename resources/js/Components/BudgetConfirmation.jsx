@@ -14,7 +14,7 @@ import ForecastPanel from '@/Components/ForecastPanel';
  * rationale is shown, the field is editable, and confirming is an explicit act
  * rather than a side effect of deploying.
  */
-export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false }) {
+export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false, editing = false, onConfirmed }) {
     const { data, setData, post, processing, errors } = useForm({
         daily_budget: campaign.daily_budget ?? '',
     });
@@ -24,10 +24,13 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('campaigns.confirm-budget', { campaign: campaign.uuid }), { preserveScroll: true });
+        post(route('campaigns.confirm-budget', { campaign: campaign.uuid }), {
+            preserveScroll: true,
+            ...(onConfirmed ? { onSuccess: onConfirmed } : {}),
+        });
     };
 
-    if (confirmed) {
+    if (confirmed && !editing) {
         return (
             <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
                 <p className="text-sm text-green-900">

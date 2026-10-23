@@ -598,7 +598,20 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         currency={campaign.currency_code || 'USD'}
                         selfFunded={selfFunded}
                         setupOnly={setupOnly}
+                        editing={revisitingBudget}
+                        onConfirmed={revisitingBudget
+                            ? () => router.visit(route('campaigns.show', { campaign: campaign.uuid }), { preserveScroll: true })
+                            : undefined}
                     />
+
+                    {revisitingBudget && campaign.budget_confirmed_at && (
+                        <Link
+                            href={route('campaigns.show', { campaign: campaign.uuid })}
+                            className="text-sm font-medium text-gray-600 underline hover:text-gray-900"
+                        >
+                            Cancel budget change
+                        </Link>
+                    )}
 
                     <p className="mt-4 text-sm text-gray-500">
                         Next: the campaign and ads we wrote, for you to read and approve.
