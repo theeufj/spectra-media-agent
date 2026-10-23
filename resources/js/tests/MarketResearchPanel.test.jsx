@@ -77,6 +77,58 @@ describe('campaign market research', () => {
         expect(post).not.toHaveBeenCalled();
     });
 
+    it('updates existing-campaign recommendations when queued research finishes without changing spend', () => {
+        const initial = ready({ status: 'queued', result: null, checked_at: null, approvable: false });
+        const view = render(<MarketResearchPanel research={initial} statusUrl="/market-research-status" currency="AUD" />);
+        expect(view.getByText('Researching your market')).toBeInTheDocument();
+        const settings = polling.mock.calls.at(-1)[1];
+        expect(settings.enabled).toBe(true);
+        expect(settings.restartKey).toBe('request-one');
+        expect(() => settings.parse({})).toThrow('Invalid market research status');
+
+        const completed = withOptions();
+        completed.status = 'needs_review';
+        completed.approvable = false;
+        Object.assign(completed.result.strategies[0], { proposal_status: 'ready', requires_live_review: true });
+        pollResponse.data = { marketResearch: completed };
+        view.rerender(<MarketResearchPanel research={initial} statusUrl="/market-research-status" currency="AUD" />);
+        expect(view.getByText('A researched recommendation needs review')).toBeInTheDocument();
+        expect(view.getByText('About 53 clicks')).toBeInTheDocument();
+        expect(view.getByText('About 98 clicks')).toBeInTheDocument();
+        expect(view.queryByRole('radio')).toBeNull();
+        expect(view.queryByText('Researching your market')).toBeNull();
+        expect(settings.until(pollResponse.data)).toBe(true);
+        expect(settings.until({ marketResearch: { ...completed, request_id: 'older-request' } })).toBe(false);
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+    });
+
+    it('keeps another request out of the existing-campaign panel and reports lost status checks', () => {
+        const initial = ready({ status: 'queued', result: null, checked_at: null });
+        pollResponse.data = { marketResearch: ready({ request_id: 'older-request' }) };
+        pollResponse.error = new Error('Disconnected');
+        const view = render(<MarketResearchPanel research={initial} statusUrl="/market-research-status" currency="AUD" />);
+        expect(view.getByText('Researching your market')).toBeInTheDocument();
+        expect(view.getByRole('alert')).toHaveTextContent('your saved budget has not changed');
+        expect(view.queryByText('new relevant phrase')).toBeNull();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('preserves a newly approved budget option over a cached unapproved poll for the same request', () => {
+        const initial = withOptions();
+        pollResponse.data = { marketResearch: initial };
+        const view = render(<MarketResearchPanel research={initial} statusUrl="/market-research-status" currency="AUD" />);
+        const selected = initial.result.budget_options[1];
+        const approved = { ...initial, approved: true, approvable: false,
+            result: { ...selected.proposal, budget_options: initial.result.budget_options, selected_budget_option_id: selected.id } };
+        view.rerender(<MarketResearchPanel research={approved} statusUrl="/market-research-status" currency="AUD" />);
+        expect(view.getByText('Approved market plan')).toBeInTheDocument();
+        expect(view.getByText('Daily budget: AUD 10.00')).toBeInTheDocument();
+        expect(view.getByText('97.9')).toBeInTheDocument();
+        expect(view.queryByText('Your researched campaign plan')).toBeNull();
+        expect(post).not.toHaveBeenCalled();
+    });
+
     it('shows exact current/proposed context and period totals before explicit selection and approval', () => {
         const view = render(budget(ready()));
         expect(view.getByText('old selected phrase')).toBeInTheDocument();

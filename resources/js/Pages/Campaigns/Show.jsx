@@ -654,6 +654,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         <MarketResearchPanel
                             className="mt-3"
                             research={marketResearch || campaign.search_delivery_state?.market_research}
+                            statusUrl={marketResearchStatusUrl}
                             currency={campaign.currency_code || 'USD'}
                         />
                     )}

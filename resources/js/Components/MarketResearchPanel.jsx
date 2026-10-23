@@ -1,3 +1,5 @@
+import { usePolling } from '@/hooks/usePolling';
+
 const pendingStatuses = ['queued', 'researching'];
 
 export const isResearchPending = (research) => pendingStatuses.includes(research?.status);
@@ -35,6 +37,7 @@ export function researchCanBeApproved(research, now = Date.now()) {
 export function latestMarketResearch(initial, polled) {
     if (!polled?.request_id || (initial?.request_id && initial.request_id !== polled.request_id)) return initial;
     if (!initial?.request_id) return polled;
+    if (initial.approved === true) return initial;
     const initialTime = Date.parse(initial.checked_at || initial.requested_at || '') || 0;
     const polledTime = Date.parse(polled.checked_at || polled.requested_at || '') || 0;
     if (initialTime > polledTime) return initial;
@@ -76,7 +79,19 @@ function Forecast({ forecast, period, timezone, currency }) {
     </div>;
 }
 
-export default function MarketResearchPanel({ research, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '', onSelectBudgetOption, selectedBudgetOptionId, selectingDisabled = false }) {
+export default function MarketResearchPanel({ research: initialResearch, statusUrl = null, currency = 'USD', onRefresh, refreshing = false, now = Date.now(), className = '', onSelectBudgetOption, selectedBudgetOptionId, selectingDisabled = false }) {
+    const poll = usePolling(statusUrl, {
+        interval: 5000,
+        enabled: Boolean(statusUrl) && isResearchPending(initialResearch),
+        restartKey: initialResearch?.request_id || '',
+        parse: response => {
+            if (typeof response?.marketResearch?.status !== 'string') throw new Error('Invalid market research status');
+            return response;
+        },
+        until: response => response.marketResearch?.request_id === initialResearch?.request_id
+            && !isResearchPending(response.marketResearch),
+    });
+    const research = statusUrl ? latestMarketResearch(initialResearch, poll.data?.marketResearch) : initialResearch;
     const pending = isResearchPending(research);
     const expired = research?.approved !== true && research?.expires_at && Date.parse(research.expires_at) <= now;
     const stale = research?.status === 'stale' || research?.current === false || expired;
@@ -104,6 +119,7 @@ export default function MarketResearchPanel({ research, currency = 'USD', onRefr
             </div>
             {onRefresh && <button type="button" onClick={onRefresh} disabled={pending || refreshing} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">{refreshing ? 'Requesting research…' : pending ? 'Research in progress' : status === 'unknown' ? 'Retry research' : 'Refresh research'}</button>}
         </div>
+        {statusUrl && poll.error && pending && <p role="alert" className="mt-3 text-sm text-amber-800">We cannot confirm the latest research status. Reload this page to check again; your saved budget has not changed.</p>}
         {reasons.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{[...new Set(reasons)].map(reason => <li key={reason}>{reason}</li>)}</ul>}
         {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
             <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>

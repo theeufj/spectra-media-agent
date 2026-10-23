@@ -62,8 +62,12 @@ describe('Campaign conversion goal setup', () => {
         expect(screen.getByText('Paid checkout connected')).toBeVisible();
         expect(screen.getByText('Verified checkout receipts are connected.')).toBeVisible();
         expect(screen.getByText(/actual amount, currency and unique transaction ID/)).toBeVisible();
+        expect(screen.getByText('Your Purchase goal is configured in Google Ads and connected to paid checkout. Google delivery and attribution are separate checks.')).toBeVisible();
+        expect(screen.getByText(/Saving this goal requires the paid checkout connection to be reviewed again/)).toBeVisible();
         expect(screen.queryByText('Website event not connected')).toBeNull();
         expect(screen.queryByText('Connect website tracking next.')).toBeNull();
+        expect(screen.queryByText(/Website installation and a real conversion still need their own checks/)).toBeNull();
+        expect(screen.queryByText(/Website tracking still needs connecting/)).toBeNull();
         expect(screen.queryByRole('link', { name: 'Set up your website tag' })).toBeNull();
         expect(screen.getByText('Not yet verified')).toBeVisible();
         expect(screen.queryByText('Google conversions observed')).toBeNull();
