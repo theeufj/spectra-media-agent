@@ -9,9 +9,11 @@ use App\Models\AdSpendCredit;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AdSpendBillingController extends Controller
@@ -385,6 +387,18 @@ class AdSpendBillingController extends Controller
             }
             if (abs((float) $request->daily_budget - (float) $campaign->daily_budget) > 0.005) {
                 return response()->json(['success' => false, 'error' => 'This campaign budget has changed. Reload the campaign and review the current daily budget before funding.'], 422);
+            }
+            $newStrategies = $approved->filter(function ($strategy) use ($campaign) {
+                $strategy->setRelation('campaign', $campaign);
+
+                return $strategy->requiresInitialMarketResearch();
+            });
+            if ($newStrategies->isNotEmpty()) {
+                try {
+                    app(CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
+                } catch (ValidationException $e) {
+                    return response()->json(['success' => false, 'error' => $e->validator->errors()->first(), 'requires_market_research' => true], 422);
+                }
             }
             $needsGoogle = $approved->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'));
             if ($needsGoogle && (empty($customer->google_ads_customer_id) || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true))) {

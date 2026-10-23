@@ -10,6 +10,7 @@ use App\Models\Strategy;
 use App\Models\User;
 use App\Services\AdSpendBillingService;
 use App\Services\Billing\AdSpendPaymentGateway;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
 use Stripe\ApiRequestor;
@@ -127,6 +128,8 @@ class BillingPayerSelectionTest extends TestCase
 
     private function campaignFor(Customer $customer): array
     {
+        // Payer selection runs after the separate market-consent boundary.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->andReturnNull());
         Setting::set('deployment_enabled', true, 'boolean');
         BrandGuideline::create(['customer_id' => $customer->id, 'brand_voice' => [], 'tone_attributes' => [], 'writing_patterns' => [], 'color_palette' => [], 'typography' => [], 'visual_style' => [], 'messaging_themes' => [], 'unique_selling_propositions' => [], 'target_audience' => [], 'competitor_differentiation' => [], 'brand_personality' => [], 'do_not_use' => [], 'user_verified' => true, 'extracted_at' => now()]);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'daily_budget' => 20]);

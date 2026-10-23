@@ -8,6 +8,7 @@ use App\Mail\FirstCampaignReady;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\User;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -248,6 +249,12 @@ class GenerateFirstCampaignTest extends TestCase
 
     public function test_confirming_the_budget_records_who_accepted_what(): void
     {
+        // This test isolates the money persisted after the prior research
+        // stage. Actual evidence acceptance is covered by the workflow suite.
+        $workflow = $this->createMock(CampaignMarketResearchWorkflow::class);
+        $workflow->expects($this->once())->method('proposalForApproval')->willReturn([]);
+        $workflow->expects($this->once())->method('applyApprovedProposal');
+        $this->app->instance(CampaignMarketResearchWorkflow::class, $workflow);
         $campaign = Campaign::factory()->create([
             'customer_id' => $this->customer->id,
             'auto_generated_at' => now(),
@@ -323,6 +330,11 @@ class GenerateFirstCampaignTest extends TestCase
     public function test_confirming_from_the_review_screen_unblocks_deployment(): void
     {
         Queue::fake();
+        // Enter this numeric-budget regression after provider-backed research.
+        $workflow = $this->createMock(CampaignMarketResearchWorkflow::class);
+        $workflow->expects($this->once())->method('proposalForApproval')->willReturn([]);
+        $workflow->expects($this->once())->method('applyApprovedProposal');
+        $this->app->instance(CampaignMarketResearchWorkflow::class, $workflow);
 
         $subscriber = User::factory()->create([
             'email_verified_at' => now(),

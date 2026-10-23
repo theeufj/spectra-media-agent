@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,11 +44,11 @@ class StrategyController extends Controller
             return redirect()->route('quick-start');
         }
 
-        if ($campaign->customer_id !== $customer->id) {
-            abort(403);
-        }
+        $this->authorize('update', $campaign);
+        abort_unless($campaign->customer_id === $customer->id, 404);
 
         $strategy = Strategy::create($validated);
+        app(CampaignMarketResearchWorkflow::class)->request($campaign);
 
         return redirect()->route('campaigns.show', $campaign)
             ->with('success', 'Strategy created successfully.');
@@ -78,6 +79,9 @@ class StrategyController extends Controller
     {
         $this->authorize('update', $strategy);
 
+        if ($strategy->requiresInitialMarketResearch()) {
+            app(CampaignMarketResearchWorkflow::class)->assertApproved($strategy->campaign);
+        }
         $strategy->update(['status' => 'approved']);
 
         return back()->with('success', 'Strategy approved!');
@@ -108,6 +112,7 @@ class StrategyController extends Controller
         }
 
         $strategy->update($validated);
+        app(CampaignMarketResearchWorkflow::class)->request($strategy->campaign);
 
         // If this strategy was already signed off, its collateral is now stale.
         // Delete existing ad copies and images and re-queue generation.
@@ -144,6 +149,7 @@ class StrategyController extends Controller
 
         $campaign = $strategy->campaign;
         $strategy->delete();
+        app(CampaignMarketResearchWorkflow::class)->request($campaign);
 
         return redirect()->route('campaigns.show', $campaign)
             ->with('success', 'Strategy deleted.');

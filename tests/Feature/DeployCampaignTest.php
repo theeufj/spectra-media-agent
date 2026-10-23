@@ -11,14 +11,15 @@ use App\Models\User;
 use App\Notifications\DeploymentCompleted;
 use App\Notifications\DeploymentFailed;
 use App\Services\AdSpendBillingService;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\DeploymentService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class DeployCampaignTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected User $user;
 
@@ -66,7 +67,13 @@ class DeployCampaignTest extends TestCase
             'customer_id' => $this->customer->id,
         ]);
 
-        Strategy::factory()->create(['campaign_id' => $this->campaign->id]);
+        Strategy::factory()->create(['campaign_id' => $this->campaign->id, 'platform' => 'Google Ads',
+            'campaign_type' => 'search', 'signed_off_at' => now()]);
+        // The campaign has passed proposal approval; this regression begins
+        // at the next boundary, where an unpaid credit account still refuses.
+        $workflow = $this->createMock(CampaignMarketResearchWorkflow::class);
+        $workflow->expects($this->once())->method('assertApproved');
+        $this->app->instance(CampaignMarketResearchWorkflow::class, $workflow);
 
         $job = new DeployCampaign($this->campaign);
         $billingService = $this->app->make(AdSpendBillingService::class);

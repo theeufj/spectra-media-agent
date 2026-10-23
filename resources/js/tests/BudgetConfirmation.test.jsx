@@ -5,6 +5,7 @@ import { render, fireEvent } from '@testing-library/react';
 const postMock = vi.fn();
 
 vi.mock('@inertiajs/react', () => ({
+    router: { post: vi.fn() },
     useForm: (initial) => {
         const [data, setDataState] = React.useState(initial);
 
@@ -17,8 +18,16 @@ vi.mock('@inertiajs/react', () => ({
         };
     },
 }));
+vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null, error: null }) }));
 
-import BudgetConfirmation from '@/Components/BudgetConfirmation';
+import BudgetConfirmationComponent from '@/Components/BudgetConfirmation';
+
+function BudgetConfirmation(props) {
+    const marketResearch = { request_id: 'fresh-research', input_fingerprint: 'context', status: 'ready',
+        current: true, approvable: true, approved: false, expires_at: '2099-01-01T00:00:00Z',
+        result: { status: 'ready', fingerprint: 'context', proposed_daily_budget_micros: Number(props.campaign.daily_budget) * 1_000_000, strategies: [] } };
+    return <BudgetConfirmationComponent marketResearch={marketResearch} {...props} />;
+}
 
 describe('BudgetConfirmation', () => {
     beforeEach(() => postMock.mockReset());
@@ -29,7 +38,7 @@ describe('BudgetConfirmation', () => {
         );
 
         expect(getByText(/Budget confirmed/)).toBeInTheDocument();
-        expect(queryByText('Confirm budget')).toBeNull();
+        expect(queryByText('Approve researched plan')).toBeNull();
     });
 
     it('allows an existing budget to be edited or reconfirmed when explicitly requested', () => {
@@ -40,7 +49,8 @@ describe('BudgetConfirmation', () => {
         );
 
         expect(getByLabelText('Daily budget (AUD)')).toHaveValue(5);
-        fireEvent.click(getByText('Confirm budget'));
+        fireEvent.click(getByText('Use researched budget'));
+        fireEvent.click(getByText('Approve researched plan'));
         expect(postMock).toHaveBeenCalledWith(
             route('campaigns.confirm-budget', { campaign: campaign.uuid }),
             expect.objectContaining({ onSuccess: expect.any(Function) })
@@ -58,12 +68,11 @@ describe('BudgetConfirmation', () => {
             />
         );
 
-        expect(getByText('Enough clicks to learn.')).toBeInTheDocument();
         // 45 × 7 — the number that actually leaves their account.
         expect(getByText('AUD 315.00')).toBeInTheDocument();
     });
 
-    it('recomputes the upfront charge as the user edits, and submits the confirmation', () => {
+    it('recomputes the charge while edits remain unapproved until the researched amount is selected', () => {
         const { getByLabelText, getByText } = render(
             <BudgetConfirmation campaign={{ id: 7, daily_budget: 45, budget_confirmed_at: null }} currency="USD" />
         );
@@ -71,7 +80,10 @@ describe('BudgetConfirmation', () => {
         fireEvent.change(getByLabelText(/Daily budget/), { target: { value: '60' } });
         expect(getByText('USD 420.00')).toBeInTheDocument();
 
-        fireEvent.click(getByText('Confirm budget'));
+        expect(getByText('Approve researched plan')).toBeDisabled();
+        expect(postMock).not.toHaveBeenCalled();
+        fireEvent.click(getByText('Use researched budget'));
+        fireEvent.click(getByText('Approve researched plan'));
         expect(postMock).toHaveBeenCalledTimes(1);
         expect(postMock.mock.calls[0][0]).toContain('campaigns.confirm-budget');
     });
@@ -82,7 +94,7 @@ describe('BudgetConfirmation', () => {
         );
 
         fireEvent.change(getByLabelText(/Daily budget/), { target: { value: '' } });
-        expect(getByText('Confirm budget')).toBeDisabled();
+        expect(getByText('Approve researched plan')).toBeDisabled();
     });
 
     it('never promises a charge to a customer whose ads we do not fund', () => {
@@ -108,7 +120,7 @@ describe('BudgetConfirmation', () => {
         expect(queryByText(/You'll be charged/)).toBeNull();
         expect(queryByText(/seven days up front/)).toBeNull();
         expect(queryByText(/top up as you spend/)).toBeNull();
-        expect(getByText(/Google bills you directly/)).toBeInTheDocument();
+        expect(getByText(/the ad platform bills you directly/)).toBeInTheDocument();
         expect(getByText(/US\$999 was the whole engagement/)).toBeInTheDocument();
     });
 

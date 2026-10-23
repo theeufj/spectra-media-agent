@@ -1,134 +1,93 @@
-import { useForm } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import { router, useForm } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
-import ForecastPanel from '@/Components/ForecastPanel';
+import MarketResearchPanel, { isResearchPending, latestMarketResearch, researchCanBeApproved } from '@/Components/MarketResearchPanel';
+import { usePolling } from '@/hooks/usePolling';
 
-/**
- * Accept the budget on a campaign we generated for the customer.
- *
- * The daily figure came from a language model, and it is not a display value:
- * deploying charges seven days of it up front. DeploymentController refuses to
- * deploy until this is confirmed, so without this panel a customer would click
- * Deploy and be told to confirm a budget with nowhere to do it.
- *
- * The number is presented as ours to justify and theirs to change — the
- * rationale is shown, the field is editable, and confirming is an explicit act
- * rather than a side effect of deploying.
- */
-export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false, editing = false, onConfirmed }) {
-    const { data, setData, post, processing, errors } = useForm({
-        daily_budget: campaign.daily_budget ?? '',
+function budgetAmount(micros) {
+    const cents = micros / 10_000;
+    if (!Number.isSafeInteger(cents) || cents <= 0) return null;
+    return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+}
+
+function budgetMicros(value) {
+    const match = String(value).match(/^(\d+)(?:\.(\d{1,2}))?$/);
+    return match ? Number(match[1]) * 1_000_000 + Number((match[2] || '').padEnd(2, '0')) * 10_000 : null;
+}
+
+export default function BudgetConfirmation({ campaign, currency = 'USD', selfFunded = false, setupOnly = false, editing = false, onConfirmed, marketResearch = null, marketResearchStatusUrl = null, marketResearchRefreshUrl = null }) {
+    const { data, setData, post, processing, errors } = useForm({ daily_budget: campaign.daily_budget ?? '', research_id: '', research_fingerprint: '', accept_proposal: false });
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshError, setRefreshError] = useState(null);
+    const [now, setNow] = useState(Date.now());
+    const initial = marketResearch || campaign.search_delivery_state?.market_research || null;
+    const poll = usePolling(marketResearchStatusUrl, {
+        interval: 5000, enabled: Boolean(marketResearchStatusUrl) && isResearchPending(initial),
+        restartKey: initial?.request_id || campaign.uuid, until: (response) => !isResearchPending(response?.marketResearch),
     });
-
+    const research = latestMarketResearch(initial, poll.data?.marketResearch);
+    const quote = budgetAmount(research?.result?.proposed_daily_budget_micros);
+    const fresh = researchCanBeApproved(research, now) && quote !== null;
+    const selected = fresh && data.research_id === research.request_id && data.research_fingerprint === research.input_fingerprint && data.accept_proposal === true
+        && budgetMicros(data.daily_budget) === research.result.proposed_daily_budget_micros;
     const confirmed = Boolean(campaign.budget_confirmed_at);
     const weekly = Number(data.daily_budget || 0) * 7;
 
-    const submit = (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        setNow(Date.now());
+        const expiry = Date.parse(research?.expires_at || '');
+        if (!Number.isFinite(expiry) || expiry <= Date.now()) return undefined;
+        const timer = setTimeout(() => setNow(Date.now()), Math.min(expiry - Date.now() + 5, 2_147_000_000));
+        return () => clearTimeout(timer);
+    }, [research?.request_id, research?.expires_at]);
+
+    const refresh = (requestedBudget = null) => {
+        setRefreshError(null);
+        router.post(marketResearchRefreshUrl || route('campaigns.market-research.refresh', { campaign: campaign.uuid }), requestedBudget === null ? {} : { daily_budget: requestedBudget }, {
+            preserveScroll: true, onStart: () => setRefreshing(true), onFinish: () => setRefreshing(false),
+            onError: () => setRefreshError('Research could not be requested. Try again; your budget has not changed.'),
+        });
+    };
+    const useQuote = () => {
+        if (!fresh) return;
+        setData('daily_budget', quote);
+        setData('research_id', research.request_id);
+        setData('research_fingerprint', research.input_fingerprint);
+        setData('accept_proposal', true);
+    };
+    const submit = (event) => {
+        event.preventDefault();
+        if (!selected || processing || refreshing || refreshError || poll.error) return;
         post(route('campaigns.confirm-budget', { campaign: campaign.uuid }), {
-            preserveScroll: true,
-            ...(onConfirmed ? { onSuccess: onConfirmed } : {}),
+            preserveScroll: true, ...(onConfirmed ? { onSuccess: onConfirmed } : {}),
         });
     };
 
     if (confirmed && !editing) {
-        return (
-            <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
-                <p className="text-sm text-green-900">
-                    <span className="font-semibold">Budget confirmed</span> —{' '}
-                    {currency} {Number(campaign.daily_budget).toFixed(2)} a day. You can deploy whenever you're ready.
-                </p>
-            </div>
-        );
+        return <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3"><p className="text-sm text-green-900"><span className="font-semibold">Budget confirmed</span> — {currency} {Number(campaign.daily_budget).toFixed(2)} a day. {setupOnly ? 'Your ads are built paused.' : 'Launch readiness is checked separately.'}</p></div>;
     }
-
-    return (
-        <div className="mb-6 overflow-hidden rounded-lg border-2 bg-white shadow-sm" style={{ borderColor: brandTint(50) }}>
-            <div className="border-b px-6 py-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
-                {/* "Before going live" is the managed promise. A setup-only
-                    campaign never goes live here: it is created paused in the
-                    customer's own account and they start it themselves. */}
-                <h3 className="text-base font-semibold text-gray-900">
-                    {setupOnly ? 'Set the daily budget for your account' : 'Confirm your budget before going live'}
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">
-                    {setupOnly
-                        ? "We built this campaign from your website, including a suggested budget. Your ads arrive paused — this is the number they'll run at once you switch them on."
-                        : "We built this campaign from your website, including a suggested budget. Your ads are not live yet. Confirm your daily ad spend below; this is separate from your monthly subscription."}
-                </p>
-            </div>
-
-            <form onSubmit={submit} className="p-6">
-                {campaign.budget_rationale && (
-                    <div className="mb-4 rounded-md bg-gray-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Why we suggested this</p>
-                        <p className="mt-1 text-sm text-gray-700">{campaign.budget_rationale}</p>
-                    </div>
-                )}
-
-                <label htmlFor="daily_budget" className="block text-sm font-medium text-gray-700">
-                    Daily budget ({currency})
-                </label>
-
+    return <div className="mb-6 overflow-hidden rounded-lg border-2 bg-white shadow-sm" style={{ borderColor: brandTint(50) }}>
+        <div className="border-b px-6 py-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
+            <h3 className="text-base font-semibold text-gray-900">Review the researched plan and budget</h3>
+            <p className="mt-1 text-sm text-gray-600">{setupOnly ? 'Your ads arrive paused. The agents research the market before proposing the keywords, bids and budget for your account.' : 'The agents research keyword demand and click costs before proposing changes. Your current campaign stays as it is until a reviewed update is applied.'}</p>
+        </div>
+        <div className="p-6">
+            <MarketResearchPanel research={research} currency={currency} onRefresh={() => refresh()} refreshing={refreshing} now={now} />
+            {(refreshError || poll.error) && <p role="alert" className="mt-3 text-sm text-red-700">{refreshError || 'The latest research status could not be checked. Refresh research before approving.'}</p>}
+            <form onSubmit={submit} className="mt-5 border-t border-gray-200 pt-5">
+                <p className="mb-3 text-sm text-gray-600">Saved daily budget: <strong>{currency} {Number(campaign.daily_budget || 0).toFixed(2)}</strong>. Your saved spend stays unchanged until you approve the researched plan.</p>
+                {fresh && <div className="mb-4 flex flex-wrap items-center gap-3"><p className="text-sm text-gray-700">Researched daily budget: <strong>{currency} {quote}</strong></p><button type="button" onClick={useQuote} disabled={processing || refreshing} className="rounded-md border border-brand-dark px-3 py-2 text-sm font-medium text-brand-dark">Use researched budget</button></div>}
+                <label htmlFor="daily_budget" className="block text-sm font-medium text-gray-700">Daily budget ({currency})</label>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
-                    <input
-                        id="daily_budget"
-                        type="number"
-                        min="5"
-                        step="1"
-                        value={data.daily_budget}
-                        onChange={(e) => setData('daily_budget', e.target.value)}
-                        className="w-36 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
-                    />
-
-                    <button
-                        type="submit"
-                        disabled={processing || !data.daily_budget}
-                        className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
-                    >
-                        {processing ? 'Saving…' : 'Confirm budget'}
-                    </button>
+                    <input id="daily_budget" type="number" min="5" step="0.01" value={data.daily_budget} onChange={(event) => setData('daily_budget', event.target.value)} aria-describedby="budget-research-approval" className="w-36 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary" />
+                    <button type="button" onClick={() => refresh(data.daily_budget)} disabled={refreshing || processing || isResearchPending(research) || !(budgetMicros(data.daily_budget) >= 5_000_000)} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">Research this budget</button>
+                    <button type="submit" disabled={processing || !selected || refreshing || Boolean(refreshError) || Boolean(poll.error)} className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600">{processing ? 'Saving…' : 'Approve researched plan'}</button>
                 </div>
-
-                {errors.daily_budget && (
-                    <p className="mt-2 text-sm text-red-600">{errors.daily_budget}</p>
-                )}
-
-                {/*
-                    What the number buys, before they are asked to agree to it.
-                    Re-frames as they type: the figures are already in the
-                    browser, so editing the budget costs no Keyword Planner
-                    quota.
-                */}
-                <ForecastPanel
-                    className="mt-4"
-                    campaignId={campaign.id}
-                    monthlyBudget={Number(data.daily_budget || 0) * 30}
-                />
-
-                {/* The number that actually leaves their account, stated before
-                    they agree to it rather than after — which means saying
-                    nothing leaves it when nothing does. A self-funded account
-                    has its own card on Google and DeployCampaign skips ad-spend
-                    credit for it, so the prepay sentence was describing a
-                    charge that never arrives. On the one-time setup it
-                    contradicted the thing they were sold outright. */}
-                {selfFunded ? (
-                    <p className="mt-3 text-sm text-gray-600">
-                        We won't charge you for this. The budget goes on your own Google Ads
-                        account and Google bills you directly{setupOnly ? ' — your US$999 was the whole engagement' : ''}.
-                        You can change or pause it at any time.
-                    </p>
-                ) : (
-                    <p className="mt-3 text-sm text-gray-600">
-                        You'll be charged{' '}
-                        <strong>
-                            {currency} {weekly.toFixed(2)}
-                        </strong>{' '}
-                        when you deploy — seven days up front. After that we top up as you spend, and you can
-                        change or pause the budget at any time.
-                    </p>
-                )}
+                <p id="budget-research-approval" className="mt-2 text-sm text-gray-600">Approval accepts the proposed keyword set, bids and budget shown above. A different amount needs matching fresh research before it can be approved.</p>
+                {[errors.daily_budget, errors.research_id, errors.research_fingerprint, errors.accept_proposal].filter(Boolean).map((error, index) => <p key={index} role="alert" className="mt-2 text-sm text-red-600">{error}</p>)}
+                {selfFunded ? <p className="mt-3 text-sm text-gray-600">We won't charge you for this. The budget goes on your own ad platform account and the ad platform bills you directly{setupOnly ? ' — your US$999 was the whole engagement' : ''}. You can change or pause it at any time.</p>
+                    : <p className="mt-3 text-sm text-gray-600">You'll be charged <strong>{currency} {weekly.toFixed(2)}</strong> when you deploy — seven days up front. After that we top up as you spend, and you can change or pause the budget at any time.</p>}
             </form>
         </div>
-    );
+    </div>;
 }

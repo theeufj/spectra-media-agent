@@ -11,11 +11,13 @@ use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\MicrosoftAdsExecutionAgent;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class DeploymentService
 {
@@ -34,6 +36,28 @@ class DeploymentService
         Customer $customer,
         bool $useAgents = true
     ): array {
+        // Both execution paths share this boundary. Queuing a job, calling the
+        // service directly or choosing the legacy adapter cannot approve an
+        // unresearched new strategy. Existing platform repairs keep their
+        // independent live safety checks and do not acquire a new spend grant.
+        $current = $campaign->fresh();
+        $target = $strategy->fresh();
+        if (! $current || ! $target || $target->campaign_id !== $current->id
+            || $current->customer_id !== $customer->id) {
+            return ['success' => false, 'error' => 'The strategy and advertising account do not belong to this campaign.'];
+        }
+        $target->setRelation('campaign', $current);
+        if ($target->requiresInitialMarketResearch()) {
+            try {
+                app(CampaignMarketResearchWorkflow::class)->assertApproved($current);
+            } catch (ValidationException $e) {
+                return ['success' => false, 'error' => $e->validator->errors()->first(), 'requires_market_research' => true];
+            }
+        }
+        $campaign = $current;
+        $strategy = $target;
+        $customer = $current->customer;
+
         // Check feature flag from environment
         $useAgentsFlag = config('app.use_execution_agents', true);
         $useAgents = $useAgents && $useAgentsFlag;

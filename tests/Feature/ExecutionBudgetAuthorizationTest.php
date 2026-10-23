@@ -16,6 +16,7 @@ use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\MicrosoftAdsExecutionAgent;
 use App\Services\Agents\PlatformExecutionAgent;
 use App\Services\Agents\ValidationResult;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
@@ -31,6 +32,8 @@ class ExecutionBudgetAuthorizationTest extends TestCase
     {
         parent::setUp();
         $this->app->instance(GeminiService::class, Mockery::mock(GeminiService::class));
+        // Budget authorization remains a separate gate after market consent.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->andReturnNull());
         Http::fake([]);
     }
 

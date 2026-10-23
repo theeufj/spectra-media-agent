@@ -269,6 +269,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // because it is part of deciding whether to pay at all.
     // POST /campaigns/{campaign}/confirm-budget
     Route::post('/campaigns/{campaign}/confirm-budget', [App\Http\Controllers\CampaignController::class, 'confirmBudget'])->name('campaigns.confirm-budget');
+    Route::get('/campaigns/{campaign}/market-research', [App\Http\Controllers\CampaignController::class, 'marketResearchStatus'])->name('campaigns.market-research.status');
+    Route::post('/campaigns/{campaign}/market-research', [App\Http\Controllers\CampaignController::class, 'refreshMarketResearch'])
+        ->middleware('throttle:3,10')->name('campaigns.market-research.refresh');
 
     // Recover a failed first build; this cannot replace an existing strategy.
     Route::post('/campaigns/{campaign}/retry-generation', [App\Http\Controllers\CampaignController::class, 'retryGeneration'])

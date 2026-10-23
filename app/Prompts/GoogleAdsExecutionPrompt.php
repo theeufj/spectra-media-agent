@@ -126,6 +126,7 @@ INSTRUCTION;
         $biddingStrategy = is_array($strategy->bidding_strategy)
             ? json_encode($strategy->bidding_strategy, JSON_PRETTY_PRINT)
             : 'Not provided';
+        $reviewedCampaignType = $strategy->campaign_type;
 
         $landingPageUrl = $campaign->landing_page_url
             ?? $strategy->bidding_strategy['landing_page_url']
@@ -237,7 +238,9 @@ The Strategy Agent has already analyzed this campaign and provided the following
 **Video Strategy:**
 {$videoStrategy}
 
-**Bidding Strategy Recommendations:**
+**Reviewed Campaign Type:** {$reviewedCampaignType}
+
+**Approved Bidding Strategy and Limits:**
 {$biddingStrategy}
 
 # YOUR TASK
@@ -246,21 +249,20 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Go
 
 {$verticalGuidance}**BUYER PERSPECTIVE RULE:** Throughout this plan — keywords, ad copy, targeting — think like the customer, not like the product. Ask: what does someone type into Google when they are ready to PAY for this? They search for the outcome they want ("google ads agency", "hire ppc manager") not the technology behind the product ("automation software", "AI tool"). Every keyword and headline must reflect buyer intent, not product features.
 
-1. **Select Optimal Campaign Type**
-   - Choose between: Search, Display, Performance Max, Video
-   - Consider: available assets, budget, conversion tracking, business objectives
-   - Justify your choice based on asset availability and budget
+1. **Implement the Reviewed Campaign Type**
+   - Use exactly `{$reviewedCampaignType}` for campaign_structure.type.
+   - Do not replace the reviewed placement or automatically upgrade it to Performance Max.
+   - Another placement requires a separately researched proposal and customer approval.
 
 2. **Define Campaign Structure**
    - Campaign settings (network, locations, languages, scheduling)
    - Ad group structure and organization
    - Budget allocation and pacing strategy
 
-3. **Specify Bidding Strategy**
-   - Choose appropriate bidding strategy (Manual CPC, Target CPA, Target ROAS, Maximize Conversions, etc.)
-   - Consider: budget size, conversion tracking availability, business goals
-   - Set bid amounts or targets if applicable
-   - **Smart Bidding warm-up rule:** If the account or campaign has fewer than 50 recorded conversions, use `MAXIMIZE_CONVERSIONS` for the first 4 weeks to build signal. Only switch to `TARGET_CPA` or `TARGET_ROAS` once 50+ conversions are recorded. Never launch a brand-new campaign with `TARGET_CPA` — Google's algorithm cannot set sensible bids without historical data.
+3. **Implement the Approved Bidding Strategy**
+   - Preserve the reviewed bidding mode, strategy allocation, initial CPC and any lower owner limits shown above.
+   - A researched Manual CPC proposal must remain MANUAL_CPC. Missing conversion history does not authorize changing it to automated conversion bidding.
+   - Do not invent bids, raise spending limits or treat a model recommendation as customer consent.
 
 4. **Design Creative Strategy**
    - Specify which assets to use and how
@@ -307,8 +309,8 @@ Provide your response as a valid JSON object with the following structure:
 ```json
 {
   "campaign_structure": {
-    "type": "search|display|performance_max|video",
-    "justification": "Why this campaign type was selected",
+    "type": "{$reviewedCampaignType}",
+    "justification": "How this plan implements the reviewed placement",
     "network_settings": {
       "search_network": true,
       "display_network": false,

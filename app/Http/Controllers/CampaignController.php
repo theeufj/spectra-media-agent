@@ -308,11 +308,16 @@ class CampaignController extends Controller
         $this->authorize('update', $campaign);
 
         $validated = $request->validate([
-            'daily_budget' => 'required|numeric|min:5|max:10000',
+            'daily_budget' => ['required', 'numeric', 'min:5', 'max:10000', 'regex:/^\d{1,5}(?:\.\d{1,2})?$/'],
+            'research_id' => 'nullable|uuid',
+            'research_fingerprint' => ['nullable', 'regex:/^[a-f0-9]{64}$/'],
+            'accept_proposal' => 'sometimes|boolean',
         ]);
 
-        $dailyCents = (int) round((float) $validated['daily_budget'] * 100);
-        $campaign = app(CampaignBudgetConfirmation::class)->confirm($campaign, $dailyCents);
+        [$whole, $fraction] = array_pad(explode('.', (string) $validated['daily_budget'], 2), 2, '');
+        $dailyCents = (int) $whole * 100 + (int) str_pad($fraction, 2, '0');
+        $campaign = app(CampaignBudgetConfirmation::class)->confirm($campaign, $dailyCents,
+            $validated['research_id'] ?? null, (bool) ($validated['accept_proposal'] ?? false), $validated['research_fingerprint'] ?? null);
 
         ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $campaign->daily_budget, 'budget_confirmed' => true]);
 
@@ -323,8 +328,29 @@ class CampaignController extends Controller
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => 'Budget confirmed. You can deploy whenever you\'re ready.',
+            'message' => 'Campaign proposal and daily budget approved. Launch checks still apply before ads run.',
         ]);
+    }
+
+    public function marketResearchStatus(Campaign $campaign): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('view', $campaign);
+
+        return response()->json(['marketResearch' => app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->status($campaign)]);
+    }
+
+    public function refreshMarketResearch(Request $request, Campaign $campaign): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $campaign);
+        $validated = $request->validate(['daily_budget' => ['nullable', 'numeric', 'min:5', 'max:10000', 'regex:/^\d{1,5}(?:\.\d{1,2})?$/']]);
+        $cents = null;
+        if (isset($validated['daily_budget'])) {
+            [$whole, $fraction] = array_pad(explode('.', (string) $validated['daily_budget'], 2), 2, '');
+            $cents = (int) $whole * 100 + (int) str_pad($fraction, 2, '0');
+        }
+        app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->request($campaign, force: true, prepareAccount: true, dailyCents: $cents);
+
+        return back()->with('flash', ['type' => 'info', 'message' => 'Our agents are checking your selected markets, campaign and budget. Your spending limits have not changed.']);
     }
 
     public function store(StoreCampaignRequest $request)
@@ -375,7 +401,9 @@ class CampaignController extends Controller
             $validated['daily_budget'] = round($validated['total_budget'] / $days, 2);
         }
 
-        $validated['approved_daily_budget'] = $validated['daily_budget'] ?? null;
+        // The wizard saves the customer's draft limit. Approval follows the
+        // automatically researched plan, shared with generated campaigns.
+        $validated['approved_daily_budget'] = null;
         $campaign = $customer->campaigns()->create($validated);
 
         // The activity log knew 22 action types and only ever recorded two:
@@ -497,6 +525,11 @@ class CampaignController extends Controller
         $campaign->load(['strategies' => function ($query) {
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }]);
+        $marketWorkflow = app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class);
+        $marketResearch = $marketWorkflow->status($campaign);
+        if ($campaign->strategies->isNotEmpty() && in_array($marketResearch['status'], ['not_requested', 'stale'], true)) {
+            $marketResearch = $marketWorkflow->request($campaign);
+        }
 
         // Calculate total collateral counts
         $totalAdCopies = $campaign->strategies->sum('ad_copies_count');
@@ -518,6 +551,8 @@ class CampaignController extends Controller
 
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaignData,
+            'marketResearch' => $marketResearch,
+            'marketResearchStatusUrl' => route('campaigns.market-research.status', $campaign),
             'policyStatus' => \App\Services\Agents\CampaignAlertService::policyStatus($campaign),
             // Regeneration is a paid action; the page needs to say so instead
             // of letting a free user click into an unexplained pricing
@@ -560,6 +595,10 @@ class CampaignController extends Controller
         if ($campaign->customer_id !== $customer->id || $strategy->campaign_id !== $campaign->id) {
             abort(403);
         }
+        $this->authorize('update', $campaign);
+        if ($strategy->requiresInitialMarketResearch()) {
+            app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
+        }
 
         $strategy->update(['signed_off_at' => now()]);
 
@@ -586,6 +625,10 @@ class CampaignController extends Controller
         }
         if ($campaign->customer_id !== $customer->id) {
             abort(403);
+        }
+        $this->authorize('update', $campaign);
+        if ($campaign->strategies()->get()->contains(fn ($strategy) => $strategy->requiresInitialMarketResearch())) {
+            app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
         }
 
         $campaign->strategies()->whereNull('signed_off_at')->update(['signed_off_at' => now()]);

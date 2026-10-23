@@ -190,8 +190,15 @@ class InitialSearchBidSetup
         if ($cap !== null && (! is_numeric($cap) || (int) $cap <= 0 || (string) (int) $cap !== (string) $cap)) {
             throw new \RuntimeException('The saved CPC ceiling is invalid and needs review.');
         }
+        $initial = $strategy->bidding_strategy['parameters']['initialCpcBidMicros'] ?? null;
+        if ($initial !== null && (! is_int($initial) || $initial <= 0 || $initial % 10_000 !== 0)) {
+            throw new \RuntimeException('The approved initial CPC proposal is invalid and needs review.');
+        }
+        // A new observation may justify a lower starting bid. It cannot grant
+        // more than either the accepted initial proposal or the owner's cap.
+        $cap = $cap === null ? $initial : ($initial === null ? (int) $cap : min((int) $cap, $initial));
 
-        return [$approved, $cap === null ? null : (int) $cap];
+        return [$approved, $cap];
     }
 
     private function reviewedSettings(Campaign $campaign, Strategy $strategy): string

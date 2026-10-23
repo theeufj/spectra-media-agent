@@ -9,6 +9,7 @@ use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\PlatformExecutionAgent;
 use App\Services\Agents\ValidationResult;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Mockery;
@@ -29,6 +30,14 @@ class PlatformExecutionAgentTest extends TestCase
     // these tests were committing cost rows that leaked into the suite and
     // broke AiCostControllerTest's totals.
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // These tests exercise the execution template after customer consent.
+        // The real approval boundary and planning races have feature coverage.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->andReturnNull());
+    }
 
     private function customer(): Customer
     {

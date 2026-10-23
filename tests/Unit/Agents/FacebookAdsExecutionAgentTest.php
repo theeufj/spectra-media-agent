@@ -10,6 +10,7 @@ use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
@@ -73,6 +74,9 @@ class FacebookAdsExecutionAgentTest extends TestCase
     public function test_execute_creates_campaign_and_returns_success(): void
     {
         [$customer, $campaign, $strategy, $context] = $this->createContext();
+
+        // This fixture exercises execution after the owner's researched-plan consent.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->with($campaign)->andReturnNull());
 
         $agent = Mockery::mock(FacebookAdsExecutionAgent::class, [$customer])
             ->makePartial()
@@ -162,6 +166,9 @@ class FacebookAdsExecutionAgentTest extends TestCase
     public function test_execute_handles_api_errors_during_execution(): void
     {
         [$customer, $campaign, $strategy, $context] = $this->createContext();
+
+        // This fixture exercises execution after the owner's researched-plan consent.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->with($campaign)->andReturnNull());
 
         $agent = Mockery::mock(FacebookAdsExecutionAgent::class, [$customer])
             ->makePartial()

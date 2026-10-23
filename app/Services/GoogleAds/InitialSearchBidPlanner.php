@@ -96,13 +96,59 @@ class InitialSearchBidPlanner
         if ($cap <= 0) {
             return $this->unavailable('The approved spending limits do not permit a positive initial CPC bid.', $evidence);
         }
+
+        return $this->estimateFor($campaign, $customer, $keywords, $snapshot, $budget, $cap, $evidence);
+    }
+
+    /** Read-only pre-approval proposal: real account context, no platform resources or spend authorization. */
+    public function estimate(Campaign $campaign, array $keywords, array $context, int $dailyBudgetMicros, ?int $cpcLimitMicros = null): array
+    {
+        $evidence = ['checked_at' => now()->toIso8601String(), 'proposal_only' => true,
+            'snapshot' => $context, 'keywords' => $keywords, 'historical' => null, 'candidates' => [], 'forecast' => null,
+            'input_fingerprint' => hash('sha256', json_encode([$keywords, $context, $dailyBudgetMicros, $cpcLimitMicros], JSON_THROW_ON_ERROR))];
+        $customer = $campaign->customer;
+        if (! $customer || ! ctype_digit($customer->cleanGoogleCustomerId()) || $dailyBudgetMicros <= 0
+            || $dailyBudgetMicros % 10_000 !== 0 || ($cpcLimitMicros !== null && $cpcLimitMicros <= 0)
+            || ($context['customer_id'] ?? null) !== $customer->cleanGoogleCustomerId()
+            || ($context['account_time_zone_verified'] ?? false) !== true
+            || ! in_array($context['time_zone'] ?? null, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+            || ($context['currency_code'] ?? null) !== strtoupper((string) $customer->currency_code)
+            || empty($context['geo_target_constants']) || ! is_array($context['language_constants'] ?? null)
+            || ! is_array($context['negative_keywords'] ?? null) || $keywords === [] || count($keywords) > 100) {
+            return $this->unavailable('Real account currency, timezone, target markets, selected keywords and a positive proposed budget are required.', $evidence);
+        }
+        foreach ($keywords as $keyword) {
+            if (! is_array($keyword) || ! is_string($keyword['text'] ?? null) || trim($keyword['text']) === ''
+                || ! in_array($keyword['match_type'] ?? null, ['EXACT', 'PHRASE', 'BROAD'], true)) {
+                return $this->unavailable('The proposed keyword set has an unknown match type or empty keyword.', $evidence);
+            }
+            $limit = $keyword['cpc_bid_micros'] ?? null;
+            if ($limit !== null && $limit !== 0 && $limit !== '0') {
+                if ((! is_int($limit) && (! is_string($limit) || ! preg_match('/^\d{1,16}$/', $limit))) || (int) $limit <= 0) {
+                    return $this->unavailable('An existing keyword CPC limit is invalid and cannot be discarded by research.', $evidence);
+                }
+                $cpcLimitMicros = min($cpcLimitMicros ?? (int) $limit, (int) $limit);
+            }
+        }
+        $cap = intdiv(min($dailyBudgetMicros, $cpcLimitMicros ?? $dailyBudgetMicros), 10_000) * 10_000;
+        if ($cap <= 0) {
+            return $this->unavailable('The retained CPC limit does not permit a positive whole-cent proposal.', $evidence);
+        }
+        $evidence += ['forecast_daily_budget_micros' => $dailyBudgetMicros, 'max_cpc_bid_micros' => $cap];
+        $context['research_max_bid_candidates'] = 4;
+
+        return $this->estimateFor($campaign, $customer, $keywords, $context, $dailyBudgetMicros, $cap, $evidence);
+    }
+
+    private function estimateFor(Campaign $campaign, Customer $customer, array $keywords, array $snapshot, int $budget, int $cap, array $evidence): array
+    {
         try {
             $context = $this->context($campaign, $snapshot, $budget);
             if ($context['forecast_period_days'] < 1) {
                 return $this->unavailable('No complete future serving day remains within the approved campaign dates.', $evidence);
             }
             // Deliberately bypass diagnostic caches: these observations precede an initial write.
-            $historical = ($this->historicalProvider($customer))($customerId, array_column($keywords, 'text'),
+            $historical = ($this->historicalProvider($customer))($customer->cleanGoogleCustomerId(), array_column($keywords, 'text'),
                 $context['geo_target_constants'], count($context['language_constants']) === 1 ? $context['language_constants'][0] : null);
             $evidence['historical'] = $historical;
             if (! ($historical['success'] ?? false)) {
@@ -126,11 +172,12 @@ class InitialSearchBidPlanner
             if ($bids === []) {
                 return $this->unavailable('Google supplied no positive keyword cost estimates; the initial bid needs review.', $evidence);
             }
-            if (count($bids) > self::MAX_CANDIDATES) {
+            $limit = max(2, min(self::MAX_CANDIDATES, (int) ($snapshot['research_max_bid_candidates'] ?? self::MAX_CANDIDATES)));
+            if (count($bids) > $limit) {
                 $all = $bids;
                 $bids = [];
-                for ($index = 0; $index < self::MAX_CANDIDATES; $index++) {
-                    $bids[] = $all[intdiv($index * (count($all) - 1), self::MAX_CANDIDATES - 1)];
+                for ($index = 0; $index < $limit; $index++) {
+                    $bids[] = $all[intdiv($index * (count($all) - 1), $limit - 1)];
                 }
             }
             $evidence['keywords_with_unknown_costs'] = $unknownCosts;
@@ -139,7 +186,7 @@ class InitialSearchBidPlanner
                 $proposed = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $bid]), $keywords);
                 $candidateContext = $context + ['cpc_bid_ceiling_micros' => $bid];
                 // The existing provider takes currency units; exact money limits remain integer micros in context.
-                $forecast = ($this->forecastProvider($customer))($customerId, $proposed, $bid / 1_000_000, null,
+                $forecast = ($this->forecastProvider($customer))($customer->cleanGoogleCustomerId(), $proposed, $bid / 1_000_000, null,
                     $context['forecast_period_days'], $candidateContext);
                 $clicks = $forecast['clicks'] ?? null;
                 $cost = $forecast['cost_micros'] ?? null;

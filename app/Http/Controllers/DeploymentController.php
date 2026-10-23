@@ -8,9 +8,11 @@ use App\Jobs\DeployCampaign;
 use App\Models\ActivityLog;
 use App\Models\Campaign;
 use App\Models\Setting;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class DeploymentController extends Controller
 {
@@ -295,6 +297,19 @@ class DeploymentController extends Controller
             return redirect()->route('billing.ad-spend')->with('flash', [
                 'type' => 'error', 'message' => 'Update your ad spend payment method before creating ads. Your billing account needs attention.',
             ]);
+        }
+
+        $newStrategies = $selected()->whereNotNull('signed_off_at')->get()->filter(function ($strategy) use ($campaign) {
+            $strategy->setRelation('campaign', $campaign);
+
+            return $strategy->requiresInitialMarketResearch();
+        });
+        if ($newStrategies->isNotEmpty()) {
+            try {
+                app(CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
+            } catch (ValidationException $e) {
+                return back()->with('flash', ['type' => 'error', 'message' => $e->validator->errors()->first()]);
+            }
         }
 
         $queued = DB::transaction(function () use ($campaign, $selected) {

@@ -3,8 +3,11 @@
 namespace App\Services\Agents;
 
 use App\Models\Customer;
+use App\Services\Campaigns\CampaignMarketResearch;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Abstract base class for platform-specific execution agents.
@@ -61,6 +64,9 @@ abstract class PlatformExecutionAgent
         ]);
 
         try {
+            $requiresMarketApproval = $context->strategy->requiresInitialMarketResearch();
+            $planningInputs = $requiresMarketApproval
+                ? app(CampaignMarketResearch::class)->approvalFingerprint($context->campaign) : null;
             $this->bootPlatformServices($context);
 
             $validation = $this->validatePrerequisites($context);
@@ -82,6 +88,26 @@ abstract class PlatformExecutionAgent
             $budget = (new ExecutionBudgetGuard)->validate($plan, $context, $this->getPlatformName());
             if (! $budget->passed) {
                 return ExecutionResult::failure($budget->errors, ['budget_validation' => $budget->toArray()], $validation->warnings);
+            }
+            // The model can work for minutes. A changed offer, keyword set,
+            // targeting or account must not inherit the earlier approval just
+            // because the fresh budget still fits. Transient 'deploying' is
+            // intent, not evidence that platform objects already existed.
+            if ($requiresMarketApproval || $context->strategy->requiresInitialMarketResearch()) {
+                try {
+                    app(CampaignMarketResearchWorkflow::class)->assertApproved($context->campaign);
+                } catch (ValidationException $e) {
+                    return ExecutionResult::failure(
+                        [new AgentIssue('campaign_market_research_not_approved', $e->validator->errors()->first())],
+                        ['requires_market_research' => true], $validation->warnings,
+                    );
+                }
+                if ($planningInputs !== null && $planningInputs !== app(CampaignMarketResearch::class)->approvalFingerprint($context->campaign)) {
+                    return ExecutionResult::failure(
+                        [new AgentIssue('campaign_market_research_plan_changed', 'The approved campaign changed during planning. Generate a plan for the current approved settings before creating ads.')],
+                        ['requires_market_research' => true], $validation->warnings,
+                    );
+                }
             }
             $result = $this->executePlan($plan, $context);
 

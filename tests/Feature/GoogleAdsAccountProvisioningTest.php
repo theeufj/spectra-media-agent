@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProvisionGoogleAdsAccount;
+use App\Jobs\ResearchCampaignMarket;
 use App\Models\Customer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Strategy;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -21,7 +24,7 @@ use Tests\TestCase;
  */
 class GoogleAdsAccountProvisioningTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_signup_alone_provisions_nothing(): void
     {
@@ -39,9 +42,9 @@ class GoogleAdsAccountProvisioningTest extends TestCase
         Queue::assertNotPushed(ProvisionGoogleAdsAccount::class);
     }
 
-    public function test_budget_confirmation_is_the_deploy_intent_that_provisions(): void
+    public function test_explicit_research_prepares_the_account_before_budget_approval(): void
     {
-        Queue::fake();
+        Bus::fake();
         $user = \App\Models\User::factory()->create();
         $customer = Customer::factory()->create([
             'google_ads_customer_id' => null,
@@ -49,13 +52,18 @@ class GoogleAdsAccountProvisioningTest extends TestCase
             'is_sandbox' => false,
         ]);
         $customer->users()->attach($user->id, ['role' => 'owner']);
-        $campaign = \App\Models\Campaign::factory()->create(['customer_id' => $customer->id]);
+        $campaign = \App\Models\Campaign::factory()->create(['customer_id' => $customer->id,
+            'daily_budget' => '45.00', 'approved_daily_budget' => null, 'budget_confirmed_at' => null]);
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'campaign_type' => 'search', 'daily_budget' => '45.00']);
 
         $this->actingAs($user)
             ->withSession(['active_customer_id' => $customer->id])
-            ->post(route('campaigns.confirm-budget', $campaign), ['daily_budget' => 45]);
+            ->post(route('campaigns.market-research.refresh', $campaign))->assertSessionHasNoErrors();
 
-        Queue::assertPushed(ProvisionGoogleAdsAccount::class);
+        Bus::assertChained([ProvisionGoogleAdsAccount::class, ResearchCampaignMarket::class]);
+        $this->assertNull($campaign->fresh()->budget_confirmed_at);
+        $this->assertNull($campaign->fresh()->approved_daily_budget);
+        $this->assertEquals('45.00', $campaign->fresh()->daily_budget);
     }
 
     public function test_a_customer_bringing_their_own_account_is_left_alone(): void

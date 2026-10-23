@@ -17,6 +17,7 @@ use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\SupportTicket;
 use App\Models\User;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -64,6 +65,11 @@ class OperationsJourneyTest extends TestCase
         $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertSessionHas('flash.type', 'error');
         Queue::assertNotPushed(DeployCampaign::class);
         $campaign->update(['budget_confirmed_at' => now()]);
+        // A confirmed amount alone cannot skip the market-consent boundary;
+        // this test continues downstream to check single-target queueing.
+        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertSessionHas('flash.type', 'error');
+        Queue::assertNotPushed(DeployCampaign::class);
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->andReturnNull());
         $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertRedirect(route('campaigns.deployment-status', $campaign, absolute: false));
         $this->assertSame('queued', $target->fresh()->deployment_status);
         $this->assertNull($other->fresh()->deployment_status);

@@ -1,0 +1,385 @@
+<?php
+
+namespace Tests\Unit;
+
+use App\Models\BrandGuideline;
+use App\Models\Campaign;
+use App\Models\Customer;
+use App\Models\Strategy;
+use App\Models\TargetingConfig;
+use App\Services\Campaigns\CampaignMarketResearch;
+use App\Services\Campaigns\SearchMarketInputs;
+use App\Services\GoogleAds\InitialSearchBidPlanner;
+use Illuminate\Database\Eloquent\Collection;
+use Tests\TestCase;
+
+class CampaignMarketResearchTest extends TestCase
+{
+    public function test_research_is_automatic_proposal_only_and_never_changes_approval_spend_keywords_or_status(): void
+    {
+        $campaign = $this->campaign();
+        $before = [$campaign->getAttributes(), $campaign->strategies[0]->getAttributes(), $campaign->customer->getAttributes()];
+        $calls = [];
+        $planner = $this->planner(function ($keywords, $budget, $cap) use (&$calls) {
+            $calls[] = [$keywords, $budget, $cap];
+
+            return $this->estimate(true, $budget);
+        });
+        $service = $this->service($planner);
+
+        $result = $service->research($campaign);
+
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame(5_000_000, $result['proposed_daily_budget_micros']);
+        $this->assertFalse($result['activation_ready']);
+        $this->assertSame($campaign->strategies[0]->id, $result['strategies'][0]['strategy_id']);
+        $this->assertSame('AUD', $result['strategies'][0]['currency_code']);
+        $this->assertSame('Australia/Sydney', $result['strategies'][0]['time_zone']);
+        $this->assertNotEmpty($service->businessCalls);
+        $this->assertSame($before, [$campaign->getAttributes(), $campaign->strategies[0]->getAttributes(), $campaign->customer->getAttributes()]);
+        $this->assertStringContainsString('do not guarantee purchases', implode(' ', $result['strategies'][0]['caveats']));
+        $this->assertNotEmpty($calls);
+    }
+
+    public function test_relevant_alternatives_are_tested_at_current_budget_before_an_expensive_original_set_even_with_campaign_keywords(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->keywords = [['text' => 'expensive original', 'match_type' => 'EXACT']];
+        $seen = [];
+        $planner = $this->planner(function ($keywords, $budget) use (&$seen) {
+            $seen[] = [$keywords[0]['text'], $budget];
+
+            return $this->estimate($keywords[0]['text'] === 'relevant alternative' || $budget >= 10_000_000, $budget);
+        });
+
+        $result = $this->service($planner, true)->research($campaign);
+
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame([['expensive original', 5_000_000], ['relevant alternative', 5_000_000]], $seen);
+        $this->assertSame(5_000_000, $result['strategies'][0]['budget_micros']);
+        $this->assertSame('relevant alternative', $result['strategies'][0]['proposed_keywords'][0]['text']);
+        $this->assertSame('expensive original', $campaign->keywords[0]['text']);
+    }
+
+    public function test_higher_budget_proposals_are_cost_derived_bounded_and_choose_the_lowest_tested_viable_amount(): void
+    {
+        $seen = [];
+        $planner = $this->planner(function ($keywords, $budget) use (&$seen) {
+            $seen[] = $budget;
+
+            return $this->estimate($budget >= 8_000_000, $budget);
+        });
+
+        $result = $this->service($planner)->research($this->campaign());
+
+        $this->assertSame([5_000_000, 8_000_000], $seen);
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame(8_000_000, $result['proposed_daily_budget_micros']);
+        $this->assertSame(5_000_000, $result['strategies'][0]['current_budget_micros']);
+    }
+
+    public function test_existing_cpc_caps_are_retained_in_every_candidate_and_never_replaced_by_a_large_budget(): void
+    {
+        $campaign = $this->campaign();
+        $strategy = $campaign->strategies[0];
+        $strategy->bidding_strategy = ['keywords' => $this->selected(), 'parameters' => ['cpcBidCeilingMicros' => 250_000]];
+        $seen = [];
+        $planner = $this->planner(function ($keywords, $budget, $cap) use (&$seen) {
+            $seen[] = $cap;
+
+            return $this->estimate(false, $budget);
+        });
+
+        $result = $this->service($planner, true)->research($campaign);
+
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertNotEmpty($seen);
+        $this->assertSame([250_000], array_values(array_unique($seen)));
+        $this->assertLessThanOrEqual(6, count($seen));
+        $this->assertSame(250_000, $strategy->bidding_strategy['parameters']['cpcBidCeilingMicros']);
+    }
+
+    public function test_lower_selected_keyword_cpc_limits_survive_research_and_bound_original_and_alternative_proposals(): void
+    {
+        foreach ([false, true] as $chooseAlternative) {
+            $campaign = $this->campaign();
+            $campaign->keywords = [[...$this->selected()[0], 'cpc_bid_micros' => 250_000]];
+            $strategy = $campaign->strategies[0];
+            $strategy->bidding_strategy = ['parameters' => ['cpcBidCeilingMicros' => 1_000_000]];
+            $seen = [];
+            $planner = $this->planner(function ($keywords, $budget, $cap) use (&$seen, $chooseAlternative) {
+                $seen[] = $cap;
+                $ready = ! $chooseAlternative || $keywords[0]['text'] === 'relevant alternative';
+
+                return array_replace($this->estimate($ready, $budget), ['cpc_bid_micros' => 200_000]);
+            });
+
+            $result = $this->service($planner, true)->research($campaign);
+
+            $this->assertSame('ready', $result['status']);
+            $this->assertSame([250_000], array_values(array_unique($seen)));
+            $this->assertSame(250_000, $result['strategies'][0]['current_keywords'][0]['cpc_bid_micros']);
+            $this->assertSame(250_000, $result['strategies'][0]['proposed_keywords'][0]['cpc_bid_micros']);
+            $this->assertSame(250_000, $result['strategies'][0]['cpc_ceiling_micros']);
+            $this->assertLessThanOrEqual(250_000, $result['strategies'][0]['cpc_bid_micros']);
+            $this->assertSame($chooseAlternative ? 'relevant alternative' : 'expensive original', $result['strategies'][0]['proposed_keywords'][0]['text']);
+            $this->assertSame(250_000, $campaign->keywords[0]['cpc_bid_micros']);
+            $this->assertSame(1_000_000, $strategy->bidding_strategy['parameters']['cpcBidCeilingMicros']);
+        }
+    }
+
+    public function test_invalid_selected_keyword_cpc_limits_require_review_instead_of_being_stripped(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->keywords = [[...$this->selected()[0], 'cpc_bid_micros' => 'unknown']];
+        $planner = $this->createMock(InitialSearchBidPlanner::class);
+        $planner->expects($this->never())->method('estimate');
+
+        $result = $this->service($planner, true)->research($campaign);
+
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertSame('unknown', $result['strategies'][0]['current_keywords'][0]['cpc_bid_micros']);
+        $this->assertStringContainsString('keyword CPC limit is invalid', implode(' ', $result['strategies'][0]['reasons']));
+    }
+
+    public function test_every_platform_gets_business_research_but_google_proxy_data_cannot_prove_social_reach(): void
+    {
+        $campaign = $this->campaign();
+        $strategies = [];
+        foreach (['Facebook Ads', 'Microsoft Ads', 'LinkedIn Ads', 'Google Ads'] as $index => $platform) {
+            $strategy = $this->strategy($index + 1);
+            $strategy->platform = $platform;
+            $strategy->campaign_type = 'display';
+            $strategies[] = $strategy;
+        }
+        $campaign->setRelation('strategies', new Collection($strategies));
+        $planner = $this->createMock(InitialSearchBidPlanner::class);
+        $planner->expects($this->never())->method('estimate');
+        $service = $this->service($planner);
+
+        $result = $service->research($campaign);
+
+        $this->assertCount(4, $service->businessCalls);
+        $this->assertCount(4, $result['strategies']);
+        $this->assertSame('needs_review', $result['status']);
+        foreach ($result['strategies'] as $row) {
+            $this->assertSame('needs_review', $row['status']);
+            $this->assertSame('platform_cost_and_reach_unverified', $row['evidence']['coverage']);
+            $this->assertNull($row['forecast']);
+        }
+    }
+
+    public function test_missing_customer_account_still_attempts_business_research_but_never_fabricates_forecast_identity(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->customer->google_ads_customer_id = null;
+        $planner = $this->createMock(InitialSearchBidPlanner::class);
+        $planner->expects($this->never())->method('estimate');
+        $service = $this->service($planner);
+
+        $result = $service->research($campaign);
+
+        $this->assertCount(1, $service->businessCalls);
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertSame([], $result['strategies'][0]['evidence']['account']);
+        $this->assertStringContainsString('real customer Google Ads account', implode(' ', $result['strategies'][0]['reasons']));
+    }
+
+    public function test_existing_footprint_can_receive_recommendations_but_cannot_be_adopted_as_a_new_draft(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+        $result = $this->service($this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget)))->research($campaign);
+
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertSame('ready', $result['strategies'][0]['proposal_status']);
+        $this->assertTrue($result['strategies'][0]['requires_live_review']);
+        $this->assertSame('customers/1234567890/campaigns/123', $campaign->strategies[0]->google_ads_campaign_id);
+    }
+
+    public function test_fingerprint_binds_business_account_dates_caps_keywords_and_full_targeting_but_approval_survives_lifecycle_changes(): void
+    {
+        $campaign = $this->campaign();
+        $service = new CampaignMarketResearch;
+        $original = $service->fingerprint($campaign);
+        $approval = $service->approvalFingerprint($campaign);
+        $campaign->search_delivery_state = ['market_research' => ['status' => 'researching']];
+        $this->assertSame($original, $service->fingerprint($campaign));
+        $campaign->strategies[0]->signed_off_at = now();
+        $campaign->strategies[0]->deployment_status = 'deployed';
+        $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+        $this->assertNotSame($original, $service->fingerprint($campaign));
+        $this->assertSame($approval, $service->approvalFingerprint($campaign));
+
+        foreach (['account', 'timezone', 'geo', 'cap', 'date', 'brand'] as $field) {
+            $campaign = $this->campaign();
+            $before = $service->approvalFingerprint($campaign);
+            match ($field) {
+                'account' => $campaign->customer->setRawAttributes([...$campaign->customer->getAttributes(), 'google_ads_customer_id' => '9876543210']),
+                'timezone' => $campaign->customer->timezone = 'America/New_York',
+                'geo' => $campaign->strategies[0]->targetingConfig->google_options = ['excluded_locations' => ['2840']],
+                'cap' => $campaign->strategies[0]->bidding_strategy = ['parameters' => ['cpcBidCeilingMicros' => 100_000]],
+                'date' => $campaign->setAttribute('end_date', '2027-01-01'),
+                'brand' => $campaign->customer->brandGuideline->service_lines = ['different offer'],
+            };
+            $this->assertNotSame($before, $service->approvalFingerprint($campaign), $field);
+        }
+    }
+
+    public function test_draft_inputs_share_executor_precedence_and_refuse_partial_or_unknown_markets(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->keywords = [['text' => 'owner phrase', 'match_type' => 'EXACT']];
+        $inputs = (new SearchMarketInputs($campaign->customer))->forStrategy($campaign, $campaign->strategies[0]);
+        $this->assertSame('owner phrase', $inputs['keywords'][0]['text']);
+        $this->assertSame(['geoTargetConstants/2036'], $inputs['geo_target_constants']);
+
+        $campaign->strategies[0]->targetingConfig->geo_locations = ['Australia', 'Not a real location'];
+        $this->expectException(\RuntimeException::class);
+        (new SearchMarketInputs($campaign->customer))->forStrategy($campaign, $campaign->strategies[0]);
+    }
+
+    public function test_custom_budget_is_a_hypothetical_quote_that_does_not_save_or_exceed_the_requested_total(): void
+    {
+        $campaign = $this->campaign();
+        $seen = [];
+        $service = $this->service($this->planner(function ($keywords, $budget) use (&$seen) {
+            $seen[] = $budget;
+
+            return $this->estimate(true, $budget);
+        }));
+
+        $result = $service->research($campaign, 20_000_000);
+
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame([20_000_000], $seen);
+        $this->assertSame(20_000_000, $result['proposed_daily_budget_micros']);
+        $this->assertSame('5.00', $campaign->daily_budget);
+        $this->assertSame('5.00', $campaign->strategies[0]->daily_budget);
+        $this->assertSame('MANUAL_CPC', $result['strategies'][0]['bidding_strategy']);
+        $this->assertNotSame($service->fingerprint($campaign, 5_000_000), $service->fingerprint($campaign, 20_000_000));
+    }
+
+    public function test_requested_projection_reserves_footprint_allocation_and_splits_only_unbuilt_remainder(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+        $campaign->strategies->push($this->strategy(2));
+        $result = $this->service($this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget)))->research($campaign, 15_000_000);
+
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame([5_000_000, 10_000_000], array_column($result['strategies'], 'budget_micros'));
+        $this->assertSame('preserved', $result['strategies'][0]['status']);
+        $this->assertNull($result['strategies'][0]['forecast']);
+        $this->assertNull($result['strategies'][0]['cpc_bid_micros']);
+        $this->assertSame('unbuilt_strategies', $result['approval_scope']);
+        $this->assertSame('5.00', $campaign->strategies[0]->daily_budget);
+        $this->assertSame('5.00', $campaign->strategies[1]->daily_budget);
+    }
+
+    public function test_aggregate_recommendations_outside_confirmation_range_are_never_ready(): void
+    {
+        foreach (['2.00', '10001.00'] as $budget) {
+            $campaign = $this->campaign();
+            $campaign->strategies[0]->daily_budget = $budget;
+            $result = $this->service($this->planner(fn ($keywords, $amount) => $this->estimate(true, $amount)))->research($campaign);
+
+            $this->assertSame('needs_review', $result['status']);
+            $this->assertStringContainsString('supported approval range', implode(' ', $result['reasons']));
+        }
+    }
+
+    public function test_new_alternatives_that_would_change_a_live_siblings_shared_keyword_scope_are_not_approvable(): void
+    {
+        $campaign = $this->campaign();
+        $campaign->keywords = $this->selected();
+        $campaign->strategies[0]->google_ads_campaign_id = 'customers/1234567890/campaigns/123';
+        $campaign->strategies->push($this->strategy(2));
+        $planner = $this->planner(fn ($keywords, $amount) => $this->estimate($keywords[0]['text'] === 'relevant alternative', $amount));
+
+        $result = $this->service($planner, true)->research($campaign, 10_000_000);
+
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertSame('preserved', $result['strategies'][0]['status']);
+        $this->assertSame('ready', $result['strategies'][1]['proposal_status']);
+        $this->assertSame('needs_review', $result['strategies'][1]['status']);
+        $this->assertTrue($result['strategies'][1]['requires_shared_keyword_review']);
+        $this->assertSame($this->selected(), $campaign->keywords);
+    }
+
+    private function campaign(): Campaign
+    {
+        $customer = (new Customer(['name' => 'Real offer', 'website' => 'https://example.test', 'business_type' => 'Agency',
+            'description' => 'Paid search services', 'currency_code' => 'AUD', 'timezone' => 'Australia/Sydney']))
+            ->setRelation('brandGuideline', new BrandGuideline(['service_lines' => ['Paid search services']]));
+        $customer->setRawAttributes([...$customer->getAttributes(), 'google_ads_customer_id' => '1234567890']);
+        $customer->id = 2;
+
+        return (new Campaign(['customer_id' => 2, 'daily_budget' => '5.00', 'status' => 'draft',
+            'start_date' => now()->toDateString(), 'end_date' => now()->addDays(30)->toDateString()]))
+            ->setRelation('customer', $customer)->setRelation('strategies', new Collection([$this->strategy(1)]));
+    }
+
+    private function strategy(int $id): Strategy
+    {
+        $strategy = new Strategy(['platform' => 'Google Ads', 'campaign_type' => 'search', 'daily_budget' => '5.00',
+            'generation_id' => 'generation-one', 'bidding_strategy' => ['keywords' => $this->selected()]]);
+        $strategy->id = $id;
+
+        return $strategy->setRelation('targetingConfig', new TargetingConfig(['geo_locations' => ['Australia']]));
+    }
+
+    private function selected(): array
+    {
+        return [['text' => 'expensive original', 'match_type' => 'EXACT', 'selection_reason' => 'Matches the reviewed offer']];
+    }
+
+    private function estimate(bool $ready, int $budget): array
+    {
+        return ['ready' => $ready, 'cpc_bid_micros' => 500_000, 'caveats' => [], 'evidence' => [
+            'historical' => ['keywords' => ['expensive original' => ['low_top_of_page_bid_micros' => 8_000_000, 'high_top_of_page_bid_micros' => 12_000_000]]],
+            'forecast' => $ready ? ['success' => true, 'clicks' => 40, 'cost_micros' => $budget,
+                'forecast_period' => ['from' => now()->addDay()->toDateString(), 'through' => now()->addDays(30)->toDateString()]] : null,
+        ]];
+    }
+
+    private function planner(\Closure $callback): InitialSearchBidPlanner
+    {
+        $planner = $this->createMock(InitialSearchBidPlanner::class);
+        $planner->method('estimate')->willReturnCallback(fn ($campaign, $keywords, $context, $budget, $cap) => $callback($keywords, $budget, $cap));
+
+        return $planner;
+    }
+
+    private function service(InitialSearchBidPlanner $planner, bool $alternatives = false): CampaignMarketResearchFixture
+    {
+        return new CampaignMarketResearchFixture($planner, $alternatives);
+    }
+}
+
+class CampaignMarketResearchFixture extends CampaignMarketResearch
+{
+    public array $businessCalls = [];
+
+    public function __construct(private InitialSearchBidPlanner $planner, private bool $alternatives) {}
+
+    protected function accountContext(Customer $customer): array
+    {
+        return ['customer_id' => $customer->cleanGoogleCustomerId(), 'currency_code' => 'AUD',
+            'time_zone' => 'Australia/Sydney', 'account_time_zone_verified' => true];
+    }
+
+    protected function businessResearch(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
+    {
+        $this->businessCalls[] = $strategy->id;
+
+        return ['source' => 'google_keyword_planner_and_business_relevance', 'keywords' => $this->alternatives
+            ? [['text' => 'relevant alternative', 'match_type' => 'PHRASE', 'selection_reason' => 'Same actual offer and buying intent']]
+            : $selected];
+    }
+
+    protected function bidPlanner(): InitialSearchBidPlanner
+    {
+        return $this->planner;
+    }
+}

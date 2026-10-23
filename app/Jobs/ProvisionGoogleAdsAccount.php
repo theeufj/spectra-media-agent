@@ -10,6 +10,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
@@ -41,6 +42,13 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
     public $backoff = [60, 300];
 
     public function __construct(public Customer $customer) {}
+
+    public function middleware(): array
+    {
+        // Two campaign research chains may need the same customer account.
+        // The second worker must re-read the first one's stored account ID.
+        return [(new WithoutOverlapping('provision-google-account:'.$this->customer->id))->shared()->releaseAfter(30)->expireAfter(3900)];
+    }
 
     /**
      * Provision at deploy-intent, not at signup. Dispatching from customer

@@ -57,6 +57,14 @@ class Strategy extends Model
             || ! empty($this->facebook_campaign_id) || ! empty($this->execution_result['platform_ids']);
     }
 
+    /** Queue/deploy intent reserves money, but cannot substitute for approval of new ads. */
+    public function requiresInitialMarketResearch(): bool
+    {
+        return ! $this->isDeployed() && $this->deployed_at === null
+            && empty($this->google_ads_campaign_id) && empty($this->facebook_campaign_id)
+            && empty($this->execution_result['platform_ids']) && $this->reusableGoogleCampaignId() === null;
+    }
+
     /** A plan restriction does not establish that an existing platform campaign stopped. */
     public function reservesDeploymentBudget(): bool
     {

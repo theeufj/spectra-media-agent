@@ -2,8 +2,11 @@
 
 namespace App\Services\Campaigns;
 
+use App\Models\BrandGuideline;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Models\Strategy;
+use App\Models\TargetingConfig;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -11,16 +14,23 @@ use Illuminate\Validation\ValidationException;
 /** A customer's approval supersedes unbuilt suggestions, never existing platform spend. */
 class CampaignBudgetConfirmation
 {
-    public function confirm(Campaign $campaign, int $dailyCents): Campaign
+    public function confirm(Campaign $campaign, int $dailyCents, ?string $researchId = null, bool $acceptProposal = false, ?string $researchFingerprint = null): Campaign
     {
-        return DB::transaction(function () use ($campaign, $dailyCents) {
+        return DB::transaction(function () use ($campaign, $dailyCents, $researchId, $acceptProposal, $researchFingerprint) {
             // Match the allocator's lock order so approval and allocation cannot
             // observe different campaign envelopes halfway through an update.
             $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
             $strategies = $current->strategies()->orderBy('id')->lockForUpdate()->get();
+            // Quote provenance cannot change while its reviewed proposal is
+            // adopted. No provider calls occur while these short locks are held.
+            Customer::whereKey($current->customer_id)->lockForUpdate()->firstOrFail();
+            BrandGuideline::where('customer_id', $current->customer_id)->orderBy('id')->lockForUpdate()->get();
+            TargetingConfig::whereIn('strategy_id', $strategies->modelKeys())->orderBy('id')->lockForUpdate()->get();
             if ($strategies->contains(fn (Strategy $strategy) => in_array($strategy->deployment_status, ['queued', 'deploying'], true))) {
                 throw ValidationException::withMessages(['daily_budget' => 'Wait for the current deployment to finish before changing its budget.']);
             }
+            $workflow = app(CampaignMarketResearchWorkflow::class);
+            $proposal = $workflow->proposalForApproval($current, $dailyCents, $researchId, $acceptProposal, $researchFingerprint);
 
             $remaining = $dailyCents;
             $drafts = collect();
@@ -55,6 +65,7 @@ class CampaignBudgetConfirmation
                 'total_budget' => $this->decimal($dailyCents * 7),
                 'budget_confirmed_at' => now(),
             ]);
+            $workflow->applyApprovedProposal($current, $strategies, $proposal);
 
             return $current;
         });

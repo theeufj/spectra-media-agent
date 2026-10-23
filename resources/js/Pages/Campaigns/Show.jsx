@@ -10,7 +10,7 @@ import PolicyStatusCard from '@/Components/PolicyStatusCard';
 import CampaignSpendSafetyCard from '@/Components/CampaignSpendSafetyCard';
 import SearchDeliveryCard from '@/Components/SearchDeliveryCard';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
-import ForecastPanel from '@/Components/ForecastPanel';
+import MarketResearchPanel from '@/Components/MarketResearchPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
 import { useJobWatch } from '@/hooks/useJobWatch';
 import { usePolling } from '@/hooks/usePolling';
@@ -96,7 +96,7 @@ const CollateralSummaryCard = ({ campaign }) => {
    only renders once a strategy has been signed off, so the crash arrived at
    the exact moment the customer approved their campaign and never before.
 */
-export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
+export const StrategyCard = ({ strategy, campaignUuid, onSignOff, approvalAllowed = true }) => {
     const [isEditing, setIsEditing] = useState(false);
     const { data, setData, put, processing, errors, reset } = useForm({
         ad_copy_strategy: strategy.ad_copy_strategy,
@@ -112,7 +112,7 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
     };
 
     const handleSignOff = () => {
-        onSignOff(strategy);
+        if (approvalAllowed) onSignOff(strategy);
     };
 
     const isSignedOff = !!strategy.signed_off_at;
@@ -238,13 +238,14 @@ export const StrategyCard = ({ strategy, campaignUuid, onSignOff }) => {
                 <div className="mt-6 pt-5 border-t border-gray-100">
                     <button
                         onClick={handleSignOff}
-                        disabled={processing}
+                        title={!approvalAllowed ? 'Approve the researched plan and budget first.' : undefined}
+                        disabled={processing || !approvalAllowed}
                         className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                         {processing ? 'Signing off…' : 'Approve direction & prepare ads'}
                     </button>
-                    <p className="mt-2 text-center text-xs text-gray-500">Locks the strategy and starts generating your ad creative — you can edit it first.</p>
+                    <p className="mt-2 text-center text-xs text-gray-500">{approvalAllowed ? 'Locks the strategy and starts generating your ad creative — you can edit it first.' : 'Approve the researched plan and budget before preparing ads. You can review and edit this direction first.'}</p>
                 </div>
             )}
         </div>
@@ -261,7 +262,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => (
     </section>
 );
 
-export default function Show({ auth, campaign, policyStatus = campaign?.policy_checks, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false }) {
+export default function Show({ auth, campaign, policyStatus = campaign?.policy_checks, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false, marketResearch = null, marketResearchStatusUrl = null, marketResearchRefreshUrl = null }) {
     const [campaigns, setCampaign] = useState(campaign);
     // Saves return fresh Inertia props without remounting this page. Keep the
     // review card in sync so it shows the brief that was actually saved.
@@ -545,11 +546,10 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
        one line with a way back — ?budget=1 returns here deliberately, so
        changing your mind is a link rather than a dead end.
     */
-    const [showForecast, setShowForecast] = useState(false);
+    const [showResearch, setShowResearch] = useState(false);
     const pageUrl = usePage().url;
     const revisitingBudget = pageUrl.includes('budget=1');
-    const budgetStage = Boolean(campaign.auto_generated_at)
-        && (! campaign.budget_confirmed_at || revisitingBudget);
+    const budgetStage = !campaign.budget_confirmed_at || revisitingBudget;
 
     return (
         <AuthenticatedLayout
@@ -598,6 +598,9 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         currency={campaign.currency_code || 'USD'}
                         selfFunded={selfFunded}
                         setupOnly={setupOnly}
+                        marketResearch={marketResearch}
+                        marketResearchStatusUrl={marketResearchStatusUrl}
+                        marketResearchRefreshUrl={marketResearchRefreshUrl}
                         editing={revisitingBudget}
                         onConfirmed={revisitingBudget
                             ? () => router.visit(route('campaigns.show', { campaign: campaign.uuid }), { preserveScroll: true })
@@ -622,7 +625,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             {/* The answered question, kept visible but out of the way. The
                 forecast lives with it: it is a framing of the budget, so it
                 belongs to that decision rather than to the strategy review. */}
-            {! budgetStage && campaign.auto_generated_at && campaign.budget_confirmed_at && (
+            {! budgetStage && campaign.budget_confirmed_at && (
                 <div className="mx-auto max-w-7xl mb-6">
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-5 py-3">
                         <p className="text-sm text-gray-700">
@@ -633,10 +636,10 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         <div className="flex items-center gap-4">
                             <button
                                 type="button"
-                                onClick={() => setShowForecast(v => ! v)}
+                                onClick={() => setShowResearch(v => !v)}
                                 className="text-sm font-medium text-gray-600 underline hover:text-gray-900"
                             >
-                                {showForecast ? 'Hide forecast' : 'What this buys'}
+                                {showResearch ? 'Hide market research' : 'Review market research'}
                             </button>
                             <Link
                                 href={`${route('campaigns.show', { campaign: campaigns.uuid })}?budget=1`}
@@ -647,11 +650,11 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         </div>
                     </div>
 
-                    {showForecast && (
-                        <ForecastPanel
+                    {showResearch && (
+                        <MarketResearchPanel
                             className="mt-3"
-                            campaignId={campaign.id}
-                            monthlyBudget={Number(campaign.daily_budget || 0) * 30}
+                            research={marketResearch || campaign.search_delivery_state?.market_research}
+                            currency={campaign.currency_code || 'USD'}
                         />
                     )}
                 </div>
@@ -707,7 +710,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             {/* Step 2. Not merely hidden on the budget screen — unmounted, so
                 the strategy cards and their collateral polling do not run
                 behind a decision that has not been made yet. */}
-            {! budgetStage && (
+            {(!budgetStage || isPolling || pollingError || !campaign.auto_generated_at) && (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
                     {isPolling && (
@@ -769,7 +772,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                     {/* Collateral Summary */}
                     <CollateralSummaryCard campaign={campaigns} />
 
-                    {campaigns.strategies && campaigns.strategies.length > 0 && (
+                    {!budgetStage && campaigns.strategies && campaigns.strategies.length > 0 && (
                         <div className="mb-8 flex justify-end gap-3">
                             {!anyStrategiesSignedOff && (
                                 <button
@@ -811,6 +814,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                                     strategy={strategy}
                                     campaignUuid={campaigns.uuid}
                                     onSignOff={handleSignOffStrategy}
+                                    approvalAllowed={!budgetStage}
                                 />
                             ))}
                         </div>

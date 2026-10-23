@@ -367,6 +367,10 @@ class GenerateStrategy implements ShouldQueue
             $this->campaign->update([
                 'strategy_generation_completed_at' => now(),
             ]);
+            // Both manual and automatically generated campaigns arrive here.
+            // Research is queued after the new strategy transaction commits;
+            // it proposes a plan without authorizing any customer's spending.
+            app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->request($this->campaign);
 
             /*
              * Tell them it is ready.

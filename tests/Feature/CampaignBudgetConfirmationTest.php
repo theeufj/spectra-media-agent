@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Agents\ExecutionBudgetGuard;
 use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionPlan;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Deployment\StrategyBudgetAllocator;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -30,6 +31,12 @@ class CampaignBudgetConfirmationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // These regressions isolate allocation reconciliation. Provider-backed
+        // approval enforcement is exercised by CampaignMarketResearchWorkflowTest.
+        $workflow = $this->createMock(CampaignMarketResearchWorkflow::class);
+        $workflow->method('proposalForApproval')->willReturn([]);
+        $workflow->method('request')->willReturn([]);
+        $this->app->instance(CampaignMarketResearchWorkflow::class, $workflow);
         $this->owner = User::factory()->create(['email_verified_at' => now()]);
         $customer = Customer::factory()->create(['is_sandbox' => true]);
         $customer->users()->attach($this->owner, ['role' => 'owner']);

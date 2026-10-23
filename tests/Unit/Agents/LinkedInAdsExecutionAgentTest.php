@@ -10,6 +10,7 @@ use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
@@ -178,6 +179,9 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         ]);
 
         [$customer, $campaign, $strategy, $context] = $this->createContext();
+
+        // This fixture exercises execution after the owner's researched-plan consent.
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->with($campaign)->andReturnNull());
 
         $agent = Mockery::mock(LinkedInAdsExecutionAgent::class, [$customer])
             ->makePartial()

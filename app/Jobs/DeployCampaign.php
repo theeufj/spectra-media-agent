@@ -11,6 +11,7 @@ use App\Notifications\DeploymentFailed;
 use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Campaigns\SettleDeployedCampaign;
 use App\Services\Customers\HandOverAccount;
 use App\Services\Deployment\StrategyBudgetAllocator;
@@ -25,6 +26,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 
 class DeployCampaign implements ShouldBeUnique, ShouldQueue
 {
@@ -55,6 +57,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
 
     public function handle(AdSpendBillingService $billingService): void
     {
+        $this->campaign->refresh()->load(['customer', 'strategies']);
         Log::info("Starting deployment job for Campaign ID: {$this->campaign->id}", [
             'campaign_name' => $this->campaign->name,
             'total_budget' => $this->campaign->total_budget,
@@ -67,6 +70,32 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
 
             return;
+        }
+
+        $selected = $this->campaign->strategies->filter(fn ($strategy) => $strategy->signed_off_at !== null
+            && ($this->strategyId === null || $strategy->id === $this->strategyId));
+        if ($selected->isEmpty()) {
+            $message = 'Approve a researched strategy before creating or funding new ads.';
+            $this->failPendingStrategies($message);
+            $this->notifyUsers(new DeploymentFailed($this->campaign, $message));
+
+            return;
+        }
+        $hasNewStrategy = $selected->contains(function ($strategy): bool {
+            $strategy->setRelation('campaign', $this->campaign);
+
+            return $strategy->requiresInitialMarketResearch();
+        });
+        if ($hasNewStrategy) {
+            try {
+                app(CampaignMarketResearchWorkflow::class)->assertApproved($this->campaign);
+            } catch (ValidationException $e) {
+                $message = $e->validator->errors()->first();
+                $this->failPendingStrategies($message);
+                $this->notifyUsers(new DeploymentFailed($this->campaign, $message));
+
+                return;
+            }
         }
 
         // Auto-provision Facebook ad account on first Facebook deployment.
@@ -216,9 +245,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         // what the budget is split across. Deploying every strategy meant an
         // unreviewed one could go live AND halve the budget of the one the
         // user actually approved.
-        $strategies = $this->strategyId
-            ? $this->campaign->strategies->where('id', $this->strategyId)
-            : $this->campaign->strategies->whereNotNull('signed_off_at');
+        $strategies = $selected;
 
         /*
            Filter strategies to the platforms this account's plan allows.

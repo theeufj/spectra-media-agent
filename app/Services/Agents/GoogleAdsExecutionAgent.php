@@ -362,7 +362,23 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             // Check the exact selected destination, including its attribution
             // query string, before creating campaign or ad objects.
             $campaignStructure = $plan->getCampaignStructure();
-            $campaignType = $campaignStructure['type'] ?? 'search';
+            $current = $strategy->exists ? $strategy->fresh() : $strategy;
+            $campaignType = $current?->campaign_type;
+            $supported = ['search', 'display', 'performance_max', 'video', 'demand_gen', 'shopping', 'local_services'];
+            if (! is_string($campaignType) || ! in_array($campaignType, $supported, true)
+                || $campaignType !== $strategy->campaign_type) {
+                $result->addError('google_reviewed_campaign_type_unverified', 'The reviewed Google campaign placement is missing or changed. Review its proposal before retrying.');
+
+                return $result;
+            }
+            $plannedType = $campaignStructure['type'] ?? $campaignType;
+            if (! is_string($plannedType) || strtolower(trim($plannedType)) !== $campaignType) {
+                $result->addMetadata('campaign_type_check', ['reviewed' => $campaignType, 'planned' => $plannedType]);
+                $result->addError('google_reviewed_campaign_type_mismatch', 'The execution plan changed the reviewed Google campaign placement. A different placement needs a separately researched and approved proposal.');
+
+                return $result;
+            }
+            $result->addMetadata('reviewed_campaign_type', $campaignType);
             $finalUrl = (new LandingUrlBuilder($this->customer))->getFinalUrl($campaign, $strategy, $plan);
             if ($finalUrl || in_array($campaignType, ['search', 'display', 'performance_max', 'demand_gen'], true)) {
                 $destination = app(\App\Services\Deployment\AdDestinationCheck::class)->check($finalUrl);
@@ -378,94 +394,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             // Setup Conversion Tracking (Best Effort)
             $this->setupConversionTracking($customerId, $result, $campaign);
+            $current = $strategy->exists ? $strategy->fresh() : $strategy;
+            if ($current?->campaign_type !== $campaignType) {
+                $result->addError('google_reviewed_campaign_type_changed', 'The reviewed placement changed during setup. No campaign or ad objects were created; review the new proposal before retrying.');
 
-            // Prefer Performance Max over plain Search when assets are ready AND
-            // the account has enough conversion history for PMax to bid sensibly.
-            //
-            // This gate used to test only whether PMax was possible — three
-            // correctly-sized images and A$10/day. It never asked whether it was
-            // wise. PMax chooses its own inventory and needs conversion volume to
-            // choose well; with none it reliably chases the cheapest impressions
-            // available, which is how a B2B advertiser ended up spending 89% of
-            // its impressions inside mobile games while Maximize Conversions bid
-            // on a history of zero.
-            if (in_array($campaignType, ['search', 'display'], true)) {
-                $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
-                $minBudget = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0))
-                    >= config('optimization.pmax_upgrade.min_daily_budget', 10);
-                $hasConversionSignal = $this->hasConversionSignalForPmax($campaign);
-
-                if (! $hasConversionSignal) {
-                    $required = config('optimization.pmax_upgrade.min_conversions', 30);
-                    Log::info("GoogleAdsExecutionAgent: Keeping {$campaignType} — account has too little conversion history for Performance Max", [
-                        'campaign_id' => $campaign->id,
-                        'required_conversions' => $required,
-                    ]);
-                    $result->addWarning(
-                        'pmax_upgrade_declined',
-                        "Kept this as a {$campaignType} campaign. Performance Max needs about {$required} conversions a month to choose where to show your ads well; below that it tends to spend on cheap, low-intent placements. It becomes available automatically once the account has that history."
-                    );
-                }
-
-                $validPmaxImages = 0;
-                if ($hasAdCopy && $minBudget && $hasConversionSignal) {
-                    $images = ImageCollateral::forStrategy($strategy)
-                        ->where('is_active', true)
-                        ->where('should_deploy', true)
-                        ->get();
-
-                    foreach ($images as $img) {
-                        $url = $img->cloudfront_url ?? $img->s3_path ?? null;
-                        if (! $url) {
-                            continue;
-                        }
-                        try {
-                            $size = @getimagesize($url);
-                            if (! $size || $size[0] === 0 || $size[1] === 0) {
-                                continue;
-                            }
-                            $ratio = $size[0] / $size[1];
-                            // PMax requires 1.91:1 (±5%) or 1:1 (±5%)
-                            $is191 = $ratio >= 1.8145 && $ratio <= 2.0055;
-                            $is1x1 = $ratio >= 0.95 && $ratio <= 1.05;
-                            if ($is191 || $is1x1) {
-                                $validPmaxImages++;
-                            }
-                        } catch (\Throwable $e) {
-                            // skip unreadable images
-                        }
-                    }
-                }
-
-                if ($validPmaxImages >= config('optimization.pmax_upgrade.min_images', 3) && $hasAdCopy && $minBudget && $hasConversionSignal) {
-                    Log::info("GoogleAdsExecutionAgent: Upgrading {$campaignType} → performance_max (assets ready)", [
-                        'campaign_id' => $campaign->id,
-                        'valid_pmax_images' => $validPmaxImages,
-                    ]);
-                    $campaignType = 'performance_max';
-                    $result->addWarning('campaign_type_upgraded', 'Campaign type upgraded to Performance Max — all Google surfaces will be targeted using your uploaded assets.');
-
-                    // Persist it. The upgrade previously lived only in this
-                    // warning and a log line, so a worker that died before
-                    // returning left the strategy claiming a type it had not
-                    // deployed — which is exactly what happened to strategy 736,
-                    // recorded as 'display' while running as PMax.
-                    $strategy->forceFill(['campaign_type' => 'performance_max'])->save();
-
-                    AgentActivity::record(
-                        'deployment',
-                        'campaign_type_upgraded',
-                        'Deployed "'.$campaign->name.'" as Performance Max rather than '.$campaignStructure['type'].' — assets and conversion history both met the threshold',
-                        $campaign->customer_id,
-                        $campaign->id,
-                        ['from' => $campaignStructure['type'] ?? null, 'to' => 'performance_max', 'strategy_id' => $strategy->id]
-                    );
-                } else {
-                    Log::info("GoogleAdsExecutionAgent: Keeping {$campaignType} campaign type (PMax requires ≥3 valid-ratio images, found {$validPmaxImages})", [
-                        'campaign_id' => $campaign->id,
-                    ]);
-                }
+                return $result;
             }
+
+            // Execution cannot broaden the placement that was researched and
+            // approved. Asset readiness and conversion history can inform a
+            // future PMax proposal, never change this deployment's channel.
 
             // Every executor's idempotency guard reuses an existing Google
             // campaign and skips creation — which is the only call that ever

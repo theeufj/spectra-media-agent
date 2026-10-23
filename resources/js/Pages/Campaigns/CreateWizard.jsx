@@ -787,8 +787,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         </div>
                         
                         {data.total_budget && data.start_date && data.end_date && (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                <p className="text-sm text-green-700">
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <p className="mb-1 text-xs font-semibold text-gray-500">Draft spending limit</p>
+                                <p className="text-sm text-gray-700">
                                     <strong>Daily Budget:</strong> ~
                                     {money(
                                         data.total_budget / Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24)) + 1),
@@ -796,6 +797,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     )}
                                     /day over {Math.max(1, Math.ceil((new Date(data.end_date) - new Date(data.start_date)) / (1000 * 60 * 60 * 24)) + 1)} days
                                 </p>
+                                <p className="mt-2 text-sm text-gray-600">After you save this draft, the agents research keyword demand, click costs and traffic before asking you to approve a campaign plan and budget. This amount does not approve ad spend.</p>
                             </div>
                         )}
                     </div>

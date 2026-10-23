@@ -321,6 +321,51 @@ class InitialSearchBidSetupTest extends TestCase
         return ['over daily budget' => [6_000_000], 'over approved CPC ceiling' => [2_010_000], 'fractional cent' => [1_200_001]];
     }
 
+    public function test_an_initial_proposal_cannot_exceed_the_bid_accepted_before_campaign_creation(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $bidding = $strategy->bidding_strategy;
+        $bidding['parameters']['initialCpcBidMicros'] = 1_000_000;
+        $strategy->update(['bidding_strategy' => $bidding]);
+        // The fresh estimate is below the owner's 2.00 ceiling, but above the
+        // 1.00 starting bid they actually accepted in the researched proposal.
+        $this->proposal['cpc_bid_micros'] = 1_200_000;
+
+        $this->assertFalse($this->configure($customer, $campaign, $strategy, $result));
+
+        $this->assertSame([], $this->writes);
+        $this->assertSame(2_000_000, $strategy->fresh()->bidding_strategy['parameters']['cpcBidCeilingMicros']);
+    }
+
+    public function test_a_lower_fresh_estimate_preserves_the_accepted_initial_and_owner_limits(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $bidding = $strategy->bidding_strategy;
+        $bidding['parameters']['initialCpcBidMicros'] = 1_500_000;
+        $strategy->update(['bidding_strategy' => $bidding]);
+
+        $this->assertTrue($this->configure($customer, $campaign, $strategy, $result), $result->errorMessage());
+
+        $this->assertSame(self::BID, $this->writes[0]['bid']);
+        $this->assertSame(1_500_000, $strategy->fresh()->bidding_strategy['parameters']['initialCpcBidMicros']);
+        $this->assertSame(2_000_000, $strategy->fresh()->bidding_strategy['parameters']['cpcBidCeilingMicros']);
+        $this->assertSame(GoogleStatus::PAUSED, $this->remote['status']);
+        $this->assertSame(5_000_000, $this->remote['daily_budget_micros']);
+    }
+
+    public function test_a_changed_initial_proposal_during_the_final_status_read_stops_the_write(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $this->afterStatus = function () use ($strategy): void {
+            $bidding = $strategy->fresh()->bidding_strategy;
+            $bidding['parameters']['initialCpcBidMicros'] = 1_000_000;
+            $strategy->update(['bidding_strategy' => $bidding]);
+        };
+
+        $this->assertFalse($this->configure($customer, $campaign, $strategy, $result));
+        $this->assertSame([], $this->writes);
+    }
+
     #[DataProvider('writeFailures')]
     public function test_failed_mutation_or_wrong_readback_never_records_verified_evidence(bool $accepted, bool $apply): void
     {

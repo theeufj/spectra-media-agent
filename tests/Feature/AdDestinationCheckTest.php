@@ -77,7 +77,7 @@ class AdDestinationCheckTest extends TestCase
         $this->mock(GeminiService::class);
         $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'landing_page_url' => 'https://public.example/home']);
-        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'campaign_type' => 'search',
             'bidding_strategy' => ['landing_page_url' => 'https://public.example/offer']]);
         $agent = new class($customer) extends GoogleAdsExecutionAgent
         {
