@@ -24,7 +24,7 @@ use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;

@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Common\AudienceInfo;
-use Google\Ads\GoogleAds\V22\Common\SearchThemeInfo;
-use Google\Ads\GoogleAds\V22\Resources\AssetGroupSignal;
-use Google\Ads\GoogleAds\V22\Services\AssetGroupSignalOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupSignalsRequest;
+use Google\Ads\GoogleAds\V26\Common\AudienceInfo;
+use Google\Ads\GoogleAds\V26\Common\SearchThemeInfo;
+use Google\Ads\GoogleAds\V26\Resources\AssetGroupSignal;
+use Google\Ads\GoogleAds\V26\Services\AssetGroupSignalOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetGroupSignalsRequest;
 use Illuminate\Support\Facades\Log;
 
 /**

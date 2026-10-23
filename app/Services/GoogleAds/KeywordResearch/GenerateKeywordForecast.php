@@ -4,20 +4,17 @@ namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Common\DateRange;
-use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
-use Google\Ads\GoogleAds\V22\Services\BiddableKeyword;
-use Google\Ads\GoogleAds\V22\Services\CampaignToForecast;
-use Google\Ads\GoogleAds\V22\Services\CampaignToForecast\CampaignBiddingStrategy;
-use Google\Ads\GoogleAds\V22\Services\CriterionBidModifier;
-use Google\Ads\GoogleAds\V22\Services\ForecastAdGroup;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordForecastMetricsRequest;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordForecastMetricsResponse;
-use Google\Ads\GoogleAds\V22\Services\ManualCpcBiddingStrategy;
-use Google\Ads\GoogleAds\V22\Services\MaximizeClicksBiddingStrategy;
+use Google\Ads\GoogleAds\V26\Common\DateRange;
+use Google\Ads\GoogleAds\V26\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Services\CampaignToForecast;
+use Google\Ads\GoogleAds\V26\Services\CampaignToForecast\CampaignBiddingStrategy;
+use Google\Ads\GoogleAds\V26\Services\ForecastAdGroup;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordForecastMetricsRequest;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordForecastMetricsResponse;
+use Google\Ads\GoogleAds\V26\Services\ManualCpcBiddingStrategy;
+use Google\Ads\GoogleAds\V26\Services\MaximizeClicksBiddingStrategy;
 
 /** Read-only keyword reach estimates; no campaign or keyword is created. */
 class GenerateKeywordForecast extends BaseGoogleAdsService
@@ -103,57 +100,27 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $groups = [];
             foreach ($keywords as $keyword) {
                 $group = $keyword['ad_group_resource'] ?? 'forecast';
-                $value = new BiddableKeyword(['keyword' => $this->keywordInfo($keyword)]);
-                if ($forecastStrategy === 'MANUAL_CPC' && isset($keyword['cpc_bid_micros'])) {
-                    $value->setMaxCpcBidMicros($keyword['cpc_bid_micros']);
-                }
-                $groups[$group][] = $value;
+                $groups[$group][] = $this->keywordInfo($keyword);
             }
-            $campaignNegatives = [];
-            $groupNegatives = [];
-            foreach ($context['negative_keywords'] ?? [] as $negative) {
-                $normalized = $this->normalizeKeywords([$negative]);
-                if ($normalized === []) {
-                    continue;
-                }
-                $info = $this->keywordInfo($normalized[0]);
-                if (is_array($negative) && ($negative['scope'] ?? 'campaign') === 'ad_group') {
-                    $group = $negative['ad_group_resource'] ?? null;
-                    if (! is_string($group) || $group === '') {
-                        $caveats[] = 'An ad-group negative could not be assigned to its live ad group.';
-                    } elseif (array_key_exists($group, $groups)) {
-                        $groupNegatives[$group][] = $info;
+            // v26 accepts only a uniform Manual CPC bid. Keeping a lower live
+            // keyword bid in metadata cannot make an aggregate-cap forecast faithful.
+            if ($forecastStrategy === 'MANUAL_CPC') {
+                foreach ($keywords as $keyword) {
+                    if (($keyword['cpc_bid_micros'] ?? null) !== $bidMicros) {
+                        $caveats[] = 'Google’s forecast cannot reproduce missing or unequal Manual CPC keyword bids.';
+                        break;
                     }
-                } else {
-                    $campaignNegatives[] = $info;
                 }
             }
-            $adGroups = [];
-            foreach ($groups as $group => $biddable) {
-                $data = ['biddable_keywords' => $biddable, 'negative_keywords' => $groupNegatives[$group] ?? []];
-                // Keyword/ad-group bid overrides would defeat the campaign-level
-                // Maximize Clicks cap being evaluated, so only use them for CPC.
-                if ($forecastStrategy === 'MANUAL_CPC') {
-                    $data['max_cpc_bid_micros'] = $bidMicros;
-                }
-                $adGroups[] = new ForecastAdGroup($data);
+            if (! empty($context['negative_keywords'])) {
+                $caveats[] = 'Google’s forecast no longer supports negative keywords; live campaign or ad-group negatives are not modeled.';
             }
             $campaign = new CampaignToForecast([
-                'keyword_plan_network' => ($context['search_partners_enabled'] ?? false)
-                    ? KeywordPlanNetwork::GOOGLE_SEARCH_AND_PARTNERS : KeywordPlanNetwork::GOOGLE_SEARCH,
                 'bidding_strategy' => $bidding,
-                'ad_groups' => $adGroups,
-                'negative_keywords' => $campaignNegatives,
-                // v22 uses geo_modifiers, not the newer geo_target_constants.
-                'geo_modifiers' => array_map(fn ($resource) => new CriterionBidModifier(['geo_target_constant' => $resource]),
-                    $this->constants($context['geo_target_constants'] ?? [], 'geoTargetConstants')),
+                'ad_groups' => array_map(fn (array $keywords) => new ForecastAdGroup(['keywords' => $keywords]), array_values($groups)),
+                'geo_target_constants' => $this->constants($context['geo_target_constants'] ?? [], 'geoTargetConstants'),
                 'language_constants' => $this->constants($context['language_constants'] ?? [], 'languageConstants'),
             ]);
-            if ($conversionRate !== null) {
-                // Existing onboarding callers explicitly pass a disclosed
-                // assumption. Delivery diagnostics supply only observed rates.
-                $campaign->setConversionRate($conversionRate);
-            }
             $request = new GenerateKeywordForecastMetricsRequest([
                 'customer_id' => $customerId,
                 'campaign' => $campaign,
@@ -164,18 +131,22 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             if (! $metrics) {
                 return ['success' => false, 'auto_repair_safe' => false, 'error' => 'Google returned no forecast metrics', 'caveats' => $caveats];
             }
+            if (! $metrics->hasClicks() || ! $metrics->hasCostMicros()) {
+                $caveats[] = 'Google did not return both click and cost forecast metrics.';
+            }
             $caveats = array_values(array_unique($caveats));
             $result = [
                 'success' => true,
                 'source' => 'google_keyword_forecast',
                 'checked_at' => now()->toIso8601String(),
-                'impressions' => $metrics->getImpressions(),
-                'clicks' => $metrics->getClicks(),
-                'cost_micros' => (int) $metrics->getCostMicros(),
-                'cost' => $metrics->getCostMicros() / 1_000_000,
-                'average_cpc_micros' => (int) $metrics->getAverageCpcMicros(),
-                'average_cpc' => $metrics->getAverageCpcMicros() / 1_000_000,
-                'ctr' => $metrics->getClickThroughRate(),
+                // v26 no longer returns impressions or CTR; absence is not zero.
+                'impressions' => null,
+                'clicks' => $metrics->hasClicks() ? $metrics->getClicks() : null,
+                'cost_micros' => $metrics->hasCostMicros() ? (int) $metrics->getCostMicros() : null,
+                'cost' => $metrics->hasCostMicros() ? $metrics->getCostMicros() / 1_000_000 : null,
+                'average_cpc_micros' => $metrics->hasAverageCpcMicros() ? (int) $metrics->getAverageCpcMicros() : null,
+                'average_cpc' => $metrics->hasAverageCpcMicros() ? $metrics->getAverageCpcMicros() / 1_000_000 : null,
+                'ctr' => null,
                 'period_days' => $days,
                 'forecast_period' => ['from' => $start->toDateString(), 'through' => $end->toDateString()],
                 'caveats' => $caveats,
@@ -188,7 +159,11 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                     'negative_keywords' => $context['negative_keywords'] ?? []],
             ];
             if ($conversionRate !== null) {
-                $result['conversions'] = $metrics->getConversions();
+                // This caller-supplied assumption is separate from Google's CPC
+                // forecast, which does not return conversions in v26.
+                $result['conversions'] = $metrics->hasClicks() ? $metrics->getClicks() * $conversionRate : null;
+                $result['conversion_rate_assumption'] = $conversionRate;
+                $result['conversions_source'] = 'click_forecast_times_supplied_assumption';
                 $result['conversion_rate_source'] = $context['conversion_rate_source'] ?? 'supplied_assumption';
             }
 
@@ -295,7 +270,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             $caveats[] = 'Additional device or targeting restrictions are not represented by this keyword forecast.';
         }
         if ($context['search_partners_enabled'] ?? false) {
-            $caveats[] = 'The forecast combines Google Search and partners; it cannot certify Google Search-only reach.';
+            $caveats[] = 'Google’s forecast no longer offers network selection; it cannot reproduce a campaign with Search partners enabled.';
         }
         if (empty($context['currency_code'])) {
             $caveats[] = 'Account currency is not supplied; amounts use the target Google Ads account\'s currency.';

@@ -10,7 +10,7 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

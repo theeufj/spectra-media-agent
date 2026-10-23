@@ -4,7 +4,8 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 
 /** Fresh critical evidence for PAUSED staging; never substitutes for activation verification. */
 class ReadCreativeStagingSafety extends BaseGoogleAdsService
@@ -17,7 +18,7 @@ class ReadCreativeStagingSafety extends BaseGoogleAdsService
             throw new \RuntimeException('Creative staging requires an exact customer campaign resource.');
         }
         $query = 'SELECT campaign.resource_name, campaign.campaign_budget, campaign_budget.resource_name, campaign_budget.amount_micros, '
-            .'customer.time_zone, customer.currency_code, campaign.status, campaign.start_date, campaign.end_date, '
+            .'customer.time_zone, customer.currency_code, campaign.status, campaign.start_date_time, campaign.end_date_time, '
             .'campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.bidding_strategy, '
             .'campaign.target_spend.cpc_bid_ceiling_micros, campaign.network_settings.target_google_search, '
             .'campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, '
@@ -35,8 +36,10 @@ class ReadCreativeStagingSafety extends BaseGoogleAdsService
             }
             $snapshot = ['campaign_resource' => $resource, 'budget_resource' => $budget->getResourceName(),
                 'status' => $remote->getStatus(), 'channel' => $remote->getAdvertisingChannelType(),
-                'start_date' => $this->calendarDate($remote->getStartDate()),
-                'end_date' => $remote->getEndDate() === '' ? null : $this->calendarDate($remote->getEndDate()),
+                'start_date' => $this->calendarDate($remote->getStartDateTime()),
+                'start_date_time' => $remote->getStartDateTime(),
+                'end_date' => $remote->getEndDateTime() === '' ? null : $this->calendarDate($remote->getEndDateTime()),
+                'end_date_time' => $remote->getEndDateTime(),
                 'bidding_strategy' => $remote->getBiddingStrategyType(), 'portfolio_bidding_strategy' => $remote->getBiddingStrategy(),
                 'actual_cpc_ceiling_micros' => (int) ($remote->getTargetSpend()?->getCpcBidCeilingMicros() ?? 0),
                 'daily_budget_micros' => (int) $budget->getAmountMicros(), 'cost_micros' => (int) $metrics->getCostMicros(),
@@ -87,11 +90,7 @@ class ReadCreativeStagingSafety extends BaseGoogleAdsService
 
     private function calendarDate(string $value): string
     {
-        if (! preg_match('/^(\d{4})-?(\d{2})-?(\d{2})$/', $value, $date)
-            || ! checkdate((int) $date[2], (int) $date[3], (int) $date[1])) {
-            throw new \RuntimeException('The live creative staging campaign calendar could not be verified.');
-        }
-
-        return "{$date[1]}-{$date[2]}-{$date[3]}";
+        return CampaignDateTimes::calendarDate($value)
+            ?? throw new \RuntimeException('The live creative staging campaign calendar could not be verified.');
     }
 }

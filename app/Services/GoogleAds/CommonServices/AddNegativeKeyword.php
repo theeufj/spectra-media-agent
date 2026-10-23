@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
-use Google\Ads\GoogleAds\V22\Services\CampaignCriterionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignCriteriaRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V26\Services\CampaignCriterionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignCriteriaRequest;
 
 class AddNegativeKeyword extends BaseGoogleAdsService
 {

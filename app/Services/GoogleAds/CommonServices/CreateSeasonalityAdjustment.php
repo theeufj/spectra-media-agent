@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\SeasonalityEventScopeEnum\SeasonalityEventScope;
-use Google\Ads\GoogleAds\V22\Resources\BiddingSeasonalityAdjustment;
-use Google\Ads\GoogleAds\V22\Services\BiddingSeasonalityAdjustmentOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateBiddingSeasonalityAdjustmentsRequest;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\SeasonalityEventScopeEnum\SeasonalityEventScope;
+use Google\Ads\GoogleAds\V26\Resources\BiddingSeasonalityAdjustment;
+use Google\Ads\GoogleAds\V26\Services\BiddingSeasonalityAdjustmentOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateBiddingSeasonalityAdjustmentsRequest;
 use Illuminate\Support\Facades\Log;
 
 /**

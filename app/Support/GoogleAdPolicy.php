@@ -2,9 +2,9 @@
 
 namespace App\Support;
 
-use Google\Ads\GoogleAds\V22\Common\PolicyTopicEntry;
-use Google\Ads\GoogleAds\V22\Enums\PolicyTopicEvidenceDestinationNotWorkingDeviceEnum\PolicyTopicEvidenceDestinationNotWorkingDevice;
-use Google\Ads\GoogleAds\V22\Enums\PolicyTopicEvidenceDestinationNotWorkingDnsErrorTypeEnum\PolicyTopicEvidenceDestinationNotWorkingDnsErrorType;
+use Google\Ads\GoogleAds\V26\Common\PolicyTopicEntry;
+use Google\Ads\GoogleAds\V26\Enums\PolicyTopicEvidenceDestinationNotWorkingDeviceEnum\PolicyTopicEvidenceDestinationNotWorkingDevice;
+use Google\Ads\GoogleAds\V26\Enums\PolicyTopicEvidenceDestinationNotWorkingDnsErrorTypeEnum\PolicyTopicEvidenceDestinationNotWorkingDnsErrorType;
 
 /** Keeps Google's policy evidence intact from the API through diagnostics and alerts. */
 class GoogleAdPolicy

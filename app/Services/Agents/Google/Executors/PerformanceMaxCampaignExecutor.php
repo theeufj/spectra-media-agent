@@ -21,7 +21,7 @@ use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\StorageHelper;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Support\Facades\Log;
 
 /**

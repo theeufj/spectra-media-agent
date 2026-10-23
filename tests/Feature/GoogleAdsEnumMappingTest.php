@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Jobs\MonitorCampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
-use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Support\Facades\Log;
 use Microsoft\MsAds\Rest\Model\CampaignManagementService\CampaignStatus as MicrosoftCampaignStatus;
 use Tests\TestCase;

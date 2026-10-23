@@ -2,13 +2,18 @@
 
 namespace Tests\Feature;
 
-use Google\Ads\GoogleAds\V22\Services\Client\BiddingSeasonalityAdjustmentServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\ConversionValueRuleServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\ConversionValueRuleSetServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\ExperimentServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\OfflineUserDataJobServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\UserListServiceClient;
-use Google\Ads\GoogleAds\V22\Services\MutateBillingSetupRequest;
+use Google\Ads\GoogleAds\V26\Services\Client\AdGroupCriterionServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\BiddingSeasonalityAdjustmentServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\CampaignBudgetServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\CampaignServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\ConversionValueRuleServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\ConversionValueRuleSetServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\CustomerClientLinkServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\ExperimentServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\OfflineUserDataJobServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\UserListServiceClient;
+use Google\Ads\GoogleAds\V26\Services\MutateBillingSetupRequest;
 use Tests\TestCase;
 
 /**
@@ -19,11 +24,11 @@ use Tests\TestCase;
  *    really rewrote the campaign budget, because twelve services never read
  *    $this->dryRun. GoogleAdsDryRunTest's sweep missed them: its regex matches
  *    `new MutateCampaignsRequest(` but not the fully-qualified
- *    `new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest(` these
+ *    `new \Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest(` these
  *    files use, and it skips a file entirely when no request object is built —
  *    which is exactly the shape bug 2 leaves behind.
  *
- * 2. It uses the removed positional-argument API. Every v22 client method takes
+ * 2. It uses the removed positional-argument API. Every v26 client method takes
  *    one request object; `mutateUserLists($customerId, [$op])` is a TypeError,
  *    an \Error that `catch (GoogleAdsException|ApiException)` does not catch.
  *    Customer Match, experiments, seasonality adjustments and conversion-value
@@ -48,12 +53,12 @@ class GoogleAdsMutationCallShapeTest extends TestCase
         .'|CreateOfflineUserDataJobRequest'
         .'|AddOfflineUserDataJobOperationsRequest'
         .'|RunOfflineUserDataJobRequest'
-        .'|ScheduleExperimentRequest)\s*\(\s*\[/';
+        .'|ScheduleExperimentRequest|PromoteExperimentRequest)\s*\(\s*\[/';
 
     /** Client methods that apply a change and must be handed a request object. */
     private const MUTATING_CALL = '/->(mutate[A-Za-z]+|createOfflineUserDataJob'
         .'|addOfflineUserDataJobOperations|runOfflineUserDataJob'
-        .'|scheduleExperiment)\s*\(\s*/';
+        .'|scheduleExperiment|promoteExperiment(?:Async)?)\s*\(\s*/';
 
     /**
      * A handful of Google's mutate endpoints have no validate_only field at
@@ -66,7 +71,7 @@ class GoogleAdsMutationCallShapeTest extends TestCase
      */
     private static function cannotValidateOnly(string $requestClass): bool
     {
-        foreach (['Google\\Ads\\GoogleAds\\V22\\Services\\'.$requestClass, $requestClass] as $fqcn) {
+        foreach (['Google\\Ads\\GoogleAds\\V26\\Services\\'.$requestClass, $requestClass] as $fqcn) {
             if (class_exists($fqcn)) {
                 return ! method_exists($fqcn, 'setValidateOnly');
             }
@@ -138,7 +143,7 @@ class GoogleAdsMutationCallShapeTest extends TestCase
     {
         $positional = [];
 
-        foreach ($this->googleAdsSources() as $relative => $source) {
+        foreach ($this->googleAdsSources(allApplicationCode: true) as $relative => $source) {
             preg_match_all(self::MUTATING_CALL, $source, $matches, PREG_OFFSET_CAPTURE);
 
             foreach ($matches[0] as $i => [$match, $offset]) {
@@ -159,7 +164,7 @@ class GoogleAdsMutationCallShapeTest extends TestCase
         }
 
         $this->assertSame([], $positional, implode("\n", [
-            'The v22 client methods take a single request object. A positional',
+            'The v26 client methods take a single request object. A positional',
             'call throws a TypeError — an \Error, which the GoogleAdsException',
             'catches around these calls do not catch — so the feature never runs',
             'and the failure surfaces as a fatal, not a logged API error.',
@@ -168,14 +173,20 @@ class GoogleAdsMutationCallShapeTest extends TestCase
         ]));
     }
 
-    public function test_the_v22_clients_reject_the_positional_argument_api(): void
+    public function test_the_v26_clients_require_a_request_from_the_same_api_version(): void
     {
         // Pins the reason for the rule above against the vendored SDK, so a
         // reader does not have to take the previous test's word for it.
         $methods = [
+            [GoogleAdsServiceClient::class, 'search'],
+            [CampaignServiceClient::class, 'mutateCampaigns'],
+            [CampaignBudgetServiceClient::class, 'mutateCampaignBudgets'],
+            [AdGroupCriterionServiceClient::class, 'mutateAdGroupCriteria'],
+            [CustomerClientLinkServiceClient::class, 'mutateCustomerClientLink'],
             [UserListServiceClient::class, 'mutateUserLists'],
             [ExperimentServiceClient::class, 'mutateExperiments'],
             [ExperimentServiceClient::class, 'scheduleExperiment'],
+            [ExperimentServiceClient::class, 'promoteExperiment'],
             [OfflineUserDataJobServiceClient::class, 'createOfflineUserDataJob'],
             [OfflineUserDataJobServiceClient::class, 'addOfflineUserDataJobOperations'],
             [OfflineUserDataJobServiceClient::class, 'runOfflineUserDataJob'],
@@ -197,12 +208,17 @@ class GoogleAdsMutationCallShapeTest extends TestCase
                 (string) $first->getType(),
                 "{$class}::{$method}() first argument is not a request message."
             );
+            $this->assertStringStartsWith(
+                'Google\\Ads\\GoogleAds\\V26\\Services\\',
+                (string) $first->getType(),
+                "{$class}::{$method}() expects a request from a different API version."
+            );
         }
     }
 
     public function test_billing_setup_skips_its_mutate_under_dry_run(): void
     {
-        // MutateBillingSetupRequest is the one mutate request in v22 with no
+        // MutateBillingSetupRequest is a mutate request in v26 with no
         // validate_only field, so BillingSetupService cannot honour dry run by
         // setting a flag — it has to not send the request at all.
         $this->assertFalse(
@@ -226,18 +242,29 @@ class GoogleAdsMutationCallShapeTest extends TestCase
     /**
      * @return array<string, string> relative path => source
      */
-    private function googleAdsSources(): array
+    private function googleAdsSources(bool $allApplicationCode = false): array
     {
         $sources = [];
         $base = base_path().'/';
 
         $files = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator(app_path('Services/GoogleAds'))
+            new \RecursiveDirectoryIterator($allApplicationCode ? app_path() : app_path('Services/GoogleAds'))
         );
 
         foreach ($files as $file) {
             if ($file->getExtension() === 'php') {
-                $sources[str_replace($base, '', $file->getPathname())] = file_get_contents($file->getPathname());
+                $source = '';
+                foreach (token_get_all(file_get_contents($file->getPathname())) as $token) {
+                    if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                        $source .= str_repeat("\n", substr_count($token[1], "\n"));
+                    } else {
+                        $source .= is_array($token) ? $token[1] : $token;
+                    }
+                }
+
+                if (! $allApplicationCode || str_contains($source, 'Google\\Ads\\GoogleAds\\')) {
+                    $sources[str_replace($base, '', $file->getPathname())] = $source;
+                }
             }
         }
 

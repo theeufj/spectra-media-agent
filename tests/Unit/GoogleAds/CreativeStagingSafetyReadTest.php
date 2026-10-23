@@ -5,14 +5,14 @@ namespace Tests\Unit\GoogleAds;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\ReadCreativeStagingSafety;
-use Google\Ads\GoogleAds\V22\Common\Metrics;
-use Google\Ads\GoogleAds\V22\Common\TargetSpend;
-use Google\Ads\GoogleAds\V22\Resources\Campaign as GoogleCampaign;
-use Google\Ads\GoogleAds\V22\Resources\Campaign\GeoTargetTypeSetting;
-use Google\Ads\GoogleAds\V22\Resources\Campaign\NetworkSettings;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Resources\Customer as GoogleCustomer;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Common\Metrics;
+use Google\Ads\GoogleAds\V26\Common\TargetSpend;
+use Google\Ads\GoogleAds\V26\Resources\Campaign as GoogleCampaign;
+use Google\Ads\GoogleAds\V26\Resources\Campaign\GeoTargetTypeSetting;
+use Google\Ads\GoogleAds\V26\Resources\Campaign\NetworkSettings;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Resources\Customer as GoogleCustomer;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 use Tests\TestCase;
 
 class CreativeStagingSafetyReadTest extends TestCase
@@ -24,7 +24,7 @@ class CreativeStagingSafetyReadTest extends TestCase
         $campaign->setRelation('customer', $customer);
         $row = new GoogleAdsRow(['campaign' => new GoogleCampaign(['resource_name' => $campaign->googleAdsResourceName(),
             'campaign_budget' => 'customers/1234567890/campaignBudgets/90', 'status' => 2, 'advertising_channel_type' => 2,
-            'bidding_strategy_type' => 9, 'start_date' => '20261004', 'end_date' => '',
+            'bidding_strategy_type' => 9, 'start_date_time' => '2026-10-04 15:30:00', 'end_date_time' => '',
             'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
             'network_settings' => new NetworkSettings(['target_google_search' => true]),
             'geo_target_type_setting' => new GeoTargetTypeSetting(['positive_geo_target_type' => 7])]),
@@ -67,11 +67,11 @@ class CreativeStagingSafetyReadTest extends TestCase
     {
         [$campaign, $reader] = $this->fixture();
         $reader->modifierRows = [
-            'campaign_criterion' => new GoogleAdsRow(['campaign_criterion' => new \Google\Ads\GoogleAds\V22\Resources\CampaignCriterion([
+            'campaign_criterion' => new GoogleAdsRow(['campaign_criterion' => new \Google\Ads\GoogleAds\V26\Resources\CampaignCriterion([
                 'resource_name' => 'customers/1234567890/campaignCriteria/61~1', 'bid_modifier' => 1.2])]),
-            'ad_group_bid_modifier' => new GoogleAdsRow(['ad_group_bid_modifier' => new \Google\Ads\GoogleAds\V22\Resources\AdGroupBidModifier([
+            'ad_group_bid_modifier' => new GoogleAdsRow(['ad_group_bid_modifier' => new \Google\Ads\GoogleAds\V26\Resources\AdGroupBidModifier([
                 'resource_name' => 'customers/1234567890/adGroupBidModifiers/7~2', 'bid_modifier' => 1.3])]),
-            'ad_group_criterion' => new GoogleAdsRow(['ad_group_criterion' => new \Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion([
+            'ad_group_criterion' => new GoogleAdsRow(['ad_group_criterion' => new \Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion([
                 'resource_name' => 'customers/1234567890/adGroupCriteria/7~3', 'bid_modifier' => 1.4])]),
         ];
         $proof = $reader->forCampaign($campaign);

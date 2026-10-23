@@ -749,12 +749,6 @@ parameters:
 			path: app/Jobs/SyncProductFeed.php
 
 		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionActionCategoryEnum\\ConversionActionCategory\:\:DEFAULT\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Jobs/UploadOfflineConversions.php
-
-		-
 			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -1314,76 +1308,10 @@ parameters:
 			path: app/Services/GeminiService.php
 
 		-
-			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: app/Services/GoogleAds/BaseGoogleAdsService.php
-
-		-
-			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withRefreshToken\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: app/Services/GoogleAds/BaseGoogleAdsService.php
-
-		-
 			message: '#^Property App\\Services\\GoogleAds\\BaseGoogleAdsService\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
 			count: 1
 			path: app/Services/GoogleAds/BaseGoogleAdsService.php
-
-		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\UserListLogicalRuleOperatorEnum\\UserListLogicalRuleOperator\:\:PBAND\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateCombinedAudience.php
-
-		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionActionCategoryEnum\\ConversionActionCategory\:\:DEFAULT\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionAction.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\ValueRuleAction not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\ValueRuleAudienceCondition not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\ValueRuleDeviceCondition not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\ValueRuleGeoLocationCondition not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
-
-		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionValueRulePrimaryDimensionEnum\\ConversionValueRulePrimaryDimension\:\:NO_CONDITION\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRuleSet.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ExperimentServiceClient\:\:promoteExperimentAsync\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\PromoteExperimentRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/PromoteCampaignExperiment.php
-
-		-
-			message: '#^PHPDoc tag @var for variable \$campaignBudgetServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CampaignBudgetServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaignBudget.php
 
 		-
 			message: '#^Ternary operator condition is always true\.$#'
@@ -1398,48 +1326,6 @@ parameters:
 			path: app/Services/GoogleAds/CreateCampaignBudget.php
 
 		-
-			message: '#^Call to method createCustomerClient\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateManagedAccount.php
-
-		-
-			message: '#^PHPDoc tag @var for variable \$customerServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateManagedAccount.php
-
-		-
-			message: '#^PHPDoc tag @var with type Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient is not subtype of native type Google\\Ads\\GoogleAds\\V22\\Services\\Client\\CustomerServiceClient\.$#'
-			identifier: varTag.nativeType
-			count: 1
-			path: app/Services/GoogleAds/CreateManagedAccount.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\DynamicSearchAdsSetting not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/DSAServices/CreateDSACampaign.php
-
-		-
-			message: '#^Call to method listAccessibleCustomers\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/ListAccessibleCustomers.php
-
-		-
-			message: '#^PHPDoc tag @var for variable \$customerServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/ListAccessibleCustomers.php
-
-		-
-			message: '#^PHPDoc tag @var with type Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient is not subtype of native type Google\\Ads\\GoogleAds\\V22\\Services\\Client\\CustomerServiceClient\.$#'
-			identifier: varTag.nativeType
-			count: 1
-			path: app/Services/GoogleAds/ListAccessibleCustomers.php
-
-		-
 			message: '#^Parameter \#3 \$dailyBudgetMicros of callable App\\Services\\GoogleAds\\CreateCampaignBudget expects int, float given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1450,24 +1336,6 @@ parameters:
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/GoogleAds/PerformanceMaxServices/GetAssetGroupPerformance.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Common\\ResponsiveVideoAdInfo not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/VideoServices/CreateResponsiveVideoAd.php
-
-		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\AdGroupTypeEnum\\AdGroupType\:\:VIDEO_RESPONSIVE_AD_GROUP\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/GoogleAds/VideoServices/CreateVideoAdGroup.php
-
-		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\AdvertisingChannelSubTypeEnum\\AdvertisingChannelSubType\:\:VIDEO_RESPONSIVE\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/GoogleAds/VideoServices/CreateVideoCampaign.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'

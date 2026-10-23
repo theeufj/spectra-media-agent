@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
-use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
-use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
+use Google\Ads\GoogleAds\V26\Resources\Customer;
+use Google\Ads\GoogleAds\V26\Services\Client\CustomerServiceClient;
+use Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest;
 use Illuminate\Support\Facades\Log;
 
 class CreateManagedAccount extends BaseGoogleAdsService

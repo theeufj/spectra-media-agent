@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Carbon\CarbonImmutable;
 
 /** Read-only pacing evidence in the Google account's currency and calendar. */
@@ -17,13 +18,14 @@ class GetCampaignBudgetPacing extends BaseGoogleAdsService
         if (! $resource || ! $customerId || ! str_starts_with($resource, "customers/{$customerId}/campaigns/")) {
             throw new \RuntimeException('Budget pacing requires a valid customer campaign resource.');
         }
-        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.resource_name, campaign.campaign_budget, campaign.start_date, campaign.status, campaign_budget.amount_micros '
+        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.resource_name, campaign.campaign_budget, campaign.start_date_time, campaign.status, campaign_budget.amount_micros '
             ."FROM campaign WHERE campaign.resource_name = '{$resource}'";
         $snapshot = null;
         foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
             $snapshot = ['campaign_resource' => $row->getCampaign()->getResourceName(), 'budget_resource' => $row->getCampaign()->getCampaignBudget(),
                 'account_timezone' => $row->getCustomer()->getTimeZone(), 'currency_code' => $row->getCustomer()->getCurrencyCode(),
-                'status' => $row->getCampaign()->getStatus(), 'campaign_start_date' => $row->getCampaign()->getStartDate(),
+                'status' => $row->getCampaign()->getStatus(), 'campaign_start_date' => CampaignDateTimes::fullServingDay($row->getCampaign()->getStartDateTime(), true),
+                'campaign_start_date_time' => $row->getCampaign()->getStartDateTime(),
                 'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros()];
         }
         if (! $snapshot || $snapshot['campaign_resource'] !== $resource
@@ -40,13 +42,10 @@ class GetCampaignBudgetPacing extends BaseGoogleAdsService
         if (! $trial) {
             $from = max($from, $today->startOfMonth()->toDateString());
         }
-        if (preg_match('/^(\d{4})-?(\d{2})-?(\d{2})$/', $snapshot['campaign_start_date'], $parts)) {
-            $snapshot['campaign_start_date'] = "{$parts[1]}-{$parts[2]}-{$parts[3]}";
-        }
-        $start = CarbonImmutable::createFromFormat('!Y-m-d', $snapshot['campaign_start_date'], $snapshot['account_timezone']);
-        if ($start === null || $start->toDateString() !== $snapshot['campaign_start_date']) {
+        if ($snapshot['campaign_start_date'] === null) {
             throw new \RuntimeException('Google campaign start date is unavailable for pacing.');
         }
+        $start = CarbonImmutable::parse($snapshot['campaign_start_date'], $snapshot['account_timezone']);
         $from = max($from, $start->toDateString());
         $through = $today->subDay()->toDateString();
         $snapshot += ['from' => $from, 'through' => $through, 'checked_at' => now()->toIso8601String(),

@@ -5,16 +5,17 @@ namespace App\Services\GoogleAds\DisplayServices;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\ManualCpc;
-use Google\Ads\GoogleAds\V22\Common\TargetCpa;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\ManualCpc;
+use Google\Ads\GoogleAds\V26\Common\TargetCpa;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
 
 class CreateDisplayCampaign extends BaseGoogleAdsService
 {
@@ -55,8 +56,8 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
             'campaign_budget' => $campaignBudgetResourceName,
             'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer), // Status based on testing mode config
-            'start_date' => $campaignData['startDate'],
-            'end_date' => $campaignData['endDate'],
+            'start_date_time' => CampaignDateTimes::startOfDay($campaignData['startDate']),
+            'end_date_time' => CampaignDateTimes::endOfDay($campaignData['endDate']),
             'manual_cpc' => new ManualCpc, // Default for display campaigns
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
@@ -74,7 +75,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
             // Fix: Use MutateCampaignsRequest object
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignOperation],
@@ -113,7 +114,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
             // Fix: Use MutateCampaignBudgetsRequest object
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignBudgetOperation],
@@ -136,7 +137,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
             // Fix: Use SearchGoogleAdsRequest object instead of passing arguments directly
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]);

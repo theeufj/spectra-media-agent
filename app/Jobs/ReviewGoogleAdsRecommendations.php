@@ -11,7 +11,7 @@ use App\Services\GoogleAds\CommonServices\ApplyRecommendation;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
 use App\Services\NotificationService;
-use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
+use Google\Ads\GoogleAds\V26\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

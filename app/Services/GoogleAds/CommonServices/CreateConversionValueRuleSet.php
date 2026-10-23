@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\ConversionValueRulePrimaryDimensionEnum\ConversionValueRulePrimaryDimension;
-use Google\Ads\GoogleAds\V22\Resources\ConversionValueRuleSet;
-use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleSetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionValueRuleSetsRequest;
+use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetDimensionEnum\ValueRuleSetDimension;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRuleSet;
+use Google\Ads\GoogleAds\V26\Services\ConversionValueRuleSetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateConversionValueRuleSetsRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -20,12 +20,14 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
     /**
      * @param  string  $campaignResourceName  e.g. "customers/123/campaigns/456"
      * @param  string[]  $ruleResourceNames  Array of ConversionValueRule resource names
+     * @param  int[]  $dimensions  Condition dimensions shared by the included rules
      * @return string|null Resource name of the created rule set, or null on failure
      */
     public function __invoke(
         string $customerId,
         string $campaignResourceName,
-        array $ruleResourceNames
+        array $ruleResourceNames,
+        array $dimensions = [ValueRuleSetDimension::NO_CONDITION]
     ): ?string {
         $this->ensureClient();
 
@@ -33,7 +35,7 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
             $ruleSet = new ConversionValueRuleSet([
                 'conversion_value_rules' => $ruleResourceNames,
                 'campaign' => $campaignResourceName,
-                'dimensions' => [ConversionValueRulePrimaryDimension::NO_CONDITION],
+                'dimensions' => $dimensions,
             ]);
 
             $operation = new ConversionValueRuleSetOperation;

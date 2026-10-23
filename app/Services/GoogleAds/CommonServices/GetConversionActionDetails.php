@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 
 class GetConversionActionDetails extends BaseGoogleAdsService
 {
@@ -63,7 +63,7 @@ class GetConversionActionDetails extends BaseGoogleAdsService
                 $conversionId = null;
 
                 foreach ($conversionAction->getTagSnippets() as $snippet) {
-                    if ($snippet->getType() === \Google\Ads\GoogleAds\V22\Enums\TrackingCodeTypeEnum\TrackingCodeType::WEBPAGE) {
+                    if ($snippet->getType() === \Google\Ads\GoogleAds\V26\Enums\TrackingCodeTypeEnum\TrackingCodeType::WEBPAGE) {
                         $eventSnippet = $snippet->getEventSnippet();
                         if (preg_match("/'send_to': '([^']+)'/", $eventSnippet, $matches)) {
                             $sendTo = $matches[1];

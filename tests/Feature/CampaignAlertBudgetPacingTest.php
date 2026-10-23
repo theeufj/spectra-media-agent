@@ -12,7 +12,7 @@ use App\Services\Agents\CampaignAlertService;
 use App\Services\Campaigns\GoogleBudgetPacingHistory;
 use App\Services\GoogleAds\CommonServices\GetCampaignBudgetPacing;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;

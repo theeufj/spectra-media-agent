@@ -4,8 +4,9 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 
 /** Read-only decision: verified reach is required; unknown evidence never authorizes serving ads. */
 class GoogleSearchReachGate
@@ -14,7 +15,7 @@ class GoogleSearchReachGate
     public static function settingsFingerprint(array $snapshot): string
     {
         $settings = array_intersect_key($snapshot, array_flip([
-            'status', 'start_date', 'end_date', 'channel', 'bidding_strategy', 'portfolio_bidding_strategy', 'target_cpa_micros',
+            'status', 'start_date', 'end_date', 'start_date_time', 'end_date_time', 'channel', 'bidding_strategy', 'portfolio_bidding_strategy', 'target_cpa_micros',
             'google_search_enabled', 'search_partners_enabled', 'display_enabled', 'positive_geo_target_type',
             'negative_geo_target_type', 'daily_budget_micros', 'actual_cpc_ceiling_micros', 'cpc_bid_ceiling_micros',
             'currency_code', 'time_zone', 'approved_ads', 'negative_keywords', 'geo_target_constants',
@@ -142,7 +143,16 @@ class GoogleSearchReachGate
         }
         $liveDates = [];
         foreach (['start_date', 'end_date'] as $field) {
+            $timestamp = $snapshot[$field.'_time'] ?? null;
             $value = $snapshot[$field] ?? null;
+            if ($timestamp !== null && $timestamp !== '') {
+                $value = is_string($timestamp) ? CampaignDateTimes::fullServingDay($timestamp, $field === 'start_date') : null;
+                if ($value === null) {
+                    $add('search_reach_live_dates_unverified', 'Google’s campaign serving timestamp could not be verified.', true);
+
+                    continue;
+                }
+            }
             // Google can have no end-date constraint, but its start date must
             // be observed. Missing evidence cannot imply a tomorrow start.
             if ($field === 'end_date' && ($value === null || $value === '')) {
@@ -164,7 +174,8 @@ class GoogleSearchReachGate
             && ($forecast['source'] ?? null) === 'google_keyword_forecast' && isset($forecast['caveats']) && $forecast['caveats'] === []
             && $this->recent($forecast['checked_at'] ?? null, 6 * 60)
             && is_int($period) && $period > 0 && $period <= 365
-            && $this->number($clicks) && $this->number($forecast['impressions'] ?? null)
+            && $this->number($clicks)
+            && (($forecast['impressions'] ?? null) === null || $this->number($forecast['impressions']))
             && is_int($cost) && $cost >= 0 && $this->period($forecast['forecast_period'] ?? [], $period, $snapshot['time_zone'] ?? 'UTC');
         if (! $forecastValid) {
             $add('search_reach_forecast_unverified', 'A fresh, uncaveated Google traffic forecast with its period and actual spending settings is required.', true);
@@ -190,7 +201,7 @@ class GoogleSearchReachGate
             $metadata += ['forecast_period' => $forecast['forecast_period'], 'forecast_period_days' => $period,
                 'forecast_clicks' => $clicks, 'forecast_clicks_per_30_days' => $monthlyClicks,
                 'forecast_cost_micros' => $cost, 'forecast_note' => 'Forecast totals are estimates for the stated period, not guaranteed traffic or a hard billing cap.'];
-            if ($forecast['impressions'] <= 0) {
+            if (isset($forecast['impressions']) && $forecast['impressions'] <= 0) {
                 $add('search_reach_no_forecast_impressions', 'No impressions are forecast at the staged Search settings. Review the keyword set, bid and targeting before launching.');
             }
             if ($monthlyClicks < $metadata['min_forecast_clicks_per_30_days']) {

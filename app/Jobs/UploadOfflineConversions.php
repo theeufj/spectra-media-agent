@@ -9,7 +9,7 @@ use App\Services\FacebookAds\ConversionsApiService;
 use App\Services\GoogleAds\DataManagerService;
 use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -419,7 +419,7 @@ class UploadOfflineConversions implements ShouldQueue
                 .'LIMIT 1';
 
             $response = $googleAdsServiceClient->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $query,
                 ])
@@ -433,13 +433,13 @@ class UploadOfflineConversions implements ShouldQueue
             }
 
             // No existing action found — create one
-            $conversionActionService = new \App\Services\GoogleAds\CommonServices\CreateConversionAction(
-                Customer::find($this->customerId)
-            );
+            $conversionActionService = app(\App\Services\GoogleAds\CommonServices\CreateConversionAction::class, [
+                'customer' => Customer::find($this->customerId),
+            ]);
             $resourceName = $conversionActionService(
                 $customerId,
                 'Offline Conversion',
-                \Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory::DEFAULT
+                \Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory::PBDEFAULT
             );
 
             if ($resourceName) {
@@ -456,7 +456,7 @@ class UploadOfflineConversions implements ShouldQueue
         }
     }
 
-    protected function buildGoogleAdsClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    protected function buildGoogleAdsClient(): ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
     {
         try {
             $configPath = storage_path('app/google_ads_php.ini');

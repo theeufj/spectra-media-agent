@@ -5,13 +5,14 @@ namespace App\Services\GoogleAds\PerformanceMaxServices;
 use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CreateCampaignBudget;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest;
 
 class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 {
@@ -52,7 +53,7 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
             // 'advertising_channel_sub_type' => AdvertisingChannelSubType::UNKNOWN, // Removed as it causes INVALID_ENUM_VALUE
             'campaign_budget' => $budgetResourceName,
-            'start_date' => $startDate,
+            'start_date_time' => CampaignDateTimes::startOfDay($startDate),
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
             'brand_guidelines_enabled' => false, // Disable Brand Guidelines to avoid CampaignAsset requirements
             // 'url_expansion_opt_out' => false, // Removed as it's not a direct property of Campaign in V22 or handled differently
@@ -61,11 +62,11 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         // Set Bidding Strategy (PMax defaults to Maximize Conversions or Maximize Conversion Value)
         // For simplicity, we'll use Maximize Conversions with optional Target CPA
         if (isset($campaignData['targetCpaMicros'])) {
-            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V22\Common\MaximizeConversions([
+            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V26\Common\MaximizeConversions([
                 'target_cpa_micros' => $campaignData['targetCpaMicros'],
             ]));
         } else {
-            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V22\Common\MaximizeConversions);
+            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V26\Common\MaximizeConversions);
         }
 
         $campaignOperation = new CampaignOperation;

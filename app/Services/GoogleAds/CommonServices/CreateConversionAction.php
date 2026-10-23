@@ -3,13 +3,13 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionTypeEnum\ConversionActionType;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionStatusEnum\ConversionActionStatus;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionTypeEnum\ConversionActionType;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Services\ConversionActionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateConversionActionsRequest;
 
 class CreateConversionAction extends BaseGoogleAdsService
 {
@@ -20,7 +20,7 @@ class CreateConversionAction extends BaseGoogleAdsService
      * @param  int  $category  ConversionActionCategory enum value
      * @return string|null Resource name of the created Conversion Action
      */
-    public function __invoke(string $customerId, string $name, int $category = ConversionActionCategory::DEFAULT): ?string
+    public function __invoke(string $customerId, string $name, int $category = ConversionActionCategory::PBDEFAULT): ?string
     {
         $this->ensureClient();
 
@@ -39,7 +39,7 @@ class CreateConversionAction extends BaseGoogleAdsService
             'status' => ConversionActionStatus::ENABLED,
             'view_through_lookback_window_days' => 1,
             'click_through_lookback_window_days' => 30,
-            'value_settings' => new \Google\Ads\GoogleAds\V22\Resources\ConversionAction\ValueSettings([
+            'value_settings' => new \Google\Ads\GoogleAds\V26\Resources\ConversionAction\ValueSettings([
                 'default_value' => 1.0,
                 'default_currency_code' => 'USD',
                 'always_use_default_value' => true, // Simplified for now

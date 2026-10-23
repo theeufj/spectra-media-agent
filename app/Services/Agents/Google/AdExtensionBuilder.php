@@ -15,9 +15,9 @@ use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\GetAndLinkLocationAssets;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Enums\PriceExtensionPriceQualifierEnum\PriceExtensionPriceQualifier;
-use Google\Ads\GoogleAds\V22\Enums\PriceExtensionTypeEnum\PriceExtensionType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\PriceExtensionPriceQualifierEnum\PriceExtensionPriceQualifier;
+use Google\Ads\GoogleAds\V26\Enums\PriceExtensionTypeEnum\PriceExtensionType;
 use Illuminate\Support\Facades\Log;
 
 /**

@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\KeywordQualityScore;
 use App\Services\GoogleAds\AccountStructureService;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

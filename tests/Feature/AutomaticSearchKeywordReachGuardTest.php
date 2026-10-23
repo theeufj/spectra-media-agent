@@ -22,7 +22,7 @@ use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;

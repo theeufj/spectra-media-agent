@@ -8,9 +8,9 @@ use App\Models\Campaign;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -207,7 +207,7 @@ class GoogleCampaignSpendSafety
 
     protected function snapshot(Campaign $campaign): array
     {
-        return (new GetCampaignSpendSafety($campaign->customer))->forCampaign($campaign);
+        return app()->makeWith(GetCampaignSpendSafety::class, ['customer' => $campaign->customer])->forCampaign($campaign);
     }
 
     private function recordDelayedSpend(Campaign $campaign, array $snapshot): void
@@ -240,12 +240,14 @@ class GoogleCampaignSpendSafety
 
     protected function pause(Campaign $campaign): bool
     {
-        return (new UpdateCampaignStatus($campaign->customer))->pause($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName())['success'];
+        return app()->makeWith(UpdateCampaignStatus::class, ['customer' => $campaign->customer])
+            ->pause($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName())['success'];
     }
 
     protected function isPaused(Campaign $campaign): bool
     {
-        $status = (new GetCampaignStatus($campaign->customer))($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName());
+        $reader = app()->makeWith(GetCampaignStatus::class, ['customer' => $campaign->customer]);
+        $status = $reader($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName());
 
         return ($status['status'] ?? null) === GoogleStatus::PAUSED;
     }

@@ -4,12 +4,12 @@ namespace App\Services\GoogleAds\VideoServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V26\Resources\AdGroup;
+use Google\Ads\GoogleAds\V26\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupsRequest;
 
 class CreateVideoAdGroup extends BaseGoogleAdsService
 {
@@ -32,7 +32,7 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
             'name' => $adGroupName,
             'campaign' => $campaignResourceName,
             'status' => AdGroupStatus::ENABLED,
-            'type' => AdGroupType::VIDEO_RESPONSIVE_AD_GROUP, // Specific type for video campaigns
+            'type' => AdGroupType::VIDEO_RESPONSIVE,
         ]);
 
         $adGroupOperation = new AdGroupOperation;

@@ -3,13 +3,13 @@
 namespace App\Services\GoogleAds\DSAServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\ExpandedDynamicSearchAdInfo;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\ExpandedDynamicSearchAdInfo;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V26\Resources\Ad;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V26\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAdsRequest;
 use Google\ApiCore\ApiException;
 
 class CreateExpandedDynamicSearchAd extends BaseGoogleAdsService

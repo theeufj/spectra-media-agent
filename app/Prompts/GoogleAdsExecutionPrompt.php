@@ -77,7 +77,7 @@ GUIDANCE;
     public static function getSystemInstruction(): string
     {
         return <<<'INSTRUCTION'
-You are an expert Google Ads campaign strategist and technical implementation specialist with deep knowledge of the Google Ads API v22.
+You are an expert Google Ads campaign strategist and technical implementation specialist with deep knowledge of the Google Ads API v26.
 
 Your expertise includes:
 - Campaign structure optimization (Search, Display, Performance Max, Video, Shopping)

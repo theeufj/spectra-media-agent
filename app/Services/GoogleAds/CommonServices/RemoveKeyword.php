@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupCriteriaRequest;
 use Google\ApiCore\ApiException;
 
 class RemoveKeyword extends BaseGoogleAdsService

@@ -12,7 +12,7 @@ use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\CampaignStatusHelper;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -284,9 +284,9 @@ class PlatformActivationFollowUpsTest extends TestCase
 
         // There is no auction-insight resource and no GoogleAdsRow::getAuctionInsight():
         // the report is the campaign resource segmented by auction_insight_domain.
-        $row = new \ReflectionClass(\Google\Ads\GoogleAds\V22\Services\GoogleAdsRow::class);
-        $segments = new \ReflectionClass(\Google\Ads\GoogleAds\V22\Common\Segments::class);
-        $metrics = new \ReflectionClass(\Google\Ads\GoogleAds\V22\Common\Metrics::class);
+        $row = new \ReflectionClass(\Google\Ads\GoogleAds\V26\Services\GoogleAdsRow::class);
+        $segments = new \ReflectionClass(\Google\Ads\GoogleAds\V26\Common\Segments::class);
+        $metrics = new \ReflectionClass(\Google\Ads\GoogleAds\V26\Common\Metrics::class);
 
         $this->assertFalse($row->hasMethod('getAuctionInsight'));
         $this->assertTrue($segments->hasMethod('getAuctionInsightDomain'));

@@ -4,21 +4,21 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\AgeRangeInfo;
-use Google\Ads\GoogleAds\V22\Common\AudienceInfo;
-use Google\Ads\GoogleAds\V22\Common\GenderInfo;
-use Google\Ads\GoogleAds\V22\Common\IncomeRangeInfo;
-use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V22\Common\ParentalStatusInfo;
-use Google\Ads\GoogleAds\V22\Common\PlacementInfo;
-use Google\Ads\GoogleAds\V22\Common\TopicInfo;
-use Google\Ads\GoogleAds\V22\Common\UserInterestInfo;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\AgeRangeInfo;
+use Google\Ads\GoogleAds\V26\Common\AudienceInfo;
+use Google\Ads\GoogleAds\V26\Common\GenderInfo;
+use Google\Ads\GoogleAds\V26\Common\IncomeRangeInfo;
+use Google\Ads\GoogleAds\V26\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V26\Common\ParentalStatusInfo;
+use Google\Ads\GoogleAds\V26\Common\PlacementInfo;
+use Google\Ads\GoogleAds\V26\Common\TopicInfo;
+use Google\Ads\GoogleAds\V26\Common\UserInterestInfo;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V26\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupCriteriaRequest;
 
 class AddAdGroupCriterion extends BaseGoogleAdsService
 {

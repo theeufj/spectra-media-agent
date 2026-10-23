@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\V22\Enums\ManagerLinkStatusEnum\ManagerLinkStatus;
-use Google\Ads\GoogleAds\V22\Resources\CustomerClientLink;
-use Google\Ads\GoogleAds\V22\Services\Client\CustomerClientLinkServiceClient;
-use Google\Ads\GoogleAds\V22\Services\CustomerClientLinkOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCustomerClientLinkRequest;
+use Google\Ads\GoogleAds\V26\Enums\ManagerLinkStatusEnum\ManagerLinkStatus;
+use Google\Ads\GoogleAds\V26\Resources\CustomerClientLink;
+use Google\Ads\GoogleAds\V26\Services\Client\CustomerClientLinkServiceClient;
+use Google\Ads\GoogleAds\V26\Services\CustomerClientLinkOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCustomerClientLinkRequest;
 
 /**
  * Invite a customer's existing Google Ads account to be managed by the MCC.

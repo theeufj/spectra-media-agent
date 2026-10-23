@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\Setting;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 
 class CampaignStatusHelper
 {

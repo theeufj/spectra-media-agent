@@ -98,6 +98,26 @@ describe('frameForBudget', () => {
     it('is null-safe', () => {
         expect(frameForBudget(null, 1000)).toBeNull();
     });
+
+    it('preserves unavailable impressions and CTR while scaling known clicks and spend', () => {
+        const forecast = { ...RAW, impressions: null, ctr: null, unconstrained: { ...RAW.unconstrained, impressions: null } };
+
+        for (const budget of [750, 99999]) {
+            const framed = frameForBudget(forecast, budget);
+            expect(framed.impressions).toBeNull();
+            expect(framed.ctr).toBeNull();
+            expect(framed.clicks).toBe(budget === 750 ? 500 : 2000);
+            expect(framed.cost).toBe(budget === 750 ? 750 : 3000);
+        }
+    });
+
+    it('retains an explicit zero for impressions and CTR', () => {
+        const forecast = { ...RAW, impressions: 0, ctr: 0, unconstrained: { ...RAW.unconstrained, impressions: 0 } };
+        const framed = frameForBudget(forecast, 750);
+
+        expect(framed.impressions).toBe(0);
+        expect(framed.ctr).toBe(0);
+    });
 });
 
 describe('ForecastPanel', () => {

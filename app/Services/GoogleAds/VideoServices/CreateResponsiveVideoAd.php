@@ -4,15 +4,16 @@ namespace App\Services\GoogleAds\VideoServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V22\Common\AdVideoAsset;
-use Google\Ads\GoogleAds\V22\Common\ResponsiveVideoAdInfo;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\AdImageAsset;
+use Google\Ads\GoogleAds\V26\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V26\Common\AdVideoAsset;
+use Google\Ads\GoogleAds\V26\Common\VideoResponsiveAdInfo;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V26\Resources\Ad;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V26\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAdsRequest;
 
 class CreateResponsiveVideoAd extends BaseGoogleAdsService
 {
@@ -31,6 +32,10 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $adData): ?string
     {
+        if (trim($adData['businessName'] ?? '') === '' || empty($adData['logoAssets'])) {
+            throw new \InvalidArgumentException('A responsive video ad requires a business name and square logo assets.');
+        }
+
         // Prepare headline text assets
         $headlines = [];
         foreach ($adData['headlines'] as $headlineText) {
@@ -49,20 +54,24 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
             $videoAssets[] = new AdVideoAsset(['asset' => $videoAssetResourceName]);
         }
 
-        // Create ResponsiveVideoAdInfo
-        $responsiveVideoAdInfo = new ResponsiveVideoAdInfo([
+        $logoAssets = array_map(static fn (string $asset): AdImageAsset => new AdImageAsset(['asset' => $asset]), $adData['logoAssets']);
+        $longHeadlines = array_map(static fn (string $text): AdTextAsset => new AdTextAsset(['text' => $text]), $adData['longHeadlines'] ?? []);
+        $callToActions = array_map(static fn (string $text): AdTextAsset => new AdTextAsset(['text' => $text]), $adData['callToActions'] ?? []);
+
+        $responsiveVideoAdInfo = new VideoResponsiveAdInfo([
             'headlines' => $headlines,
             'descriptions' => $descriptions,
             'videos' => $videoAssets,
-            'final_urls' => $adData['finalUrls'],
-            'long_headlines' => $adData['longHeadlines'] ?? [], // Optional
-            'call_to_actions' => $adData['callToActions'] ?? [], // Optional
-            'business_name' => $adData['businessName'] ?? null,
+            'long_headlines' => $longHeadlines,
+            'call_to_actions' => $callToActions,
+            'business_name' => new AdTextAsset(['text' => $adData['businessName']]),
+            'logo_images' => $logoAssets,
         ]);
 
         // Create Ad
         $ad = new Ad([
-            'responsive_video_ad' => $responsiveVideoAdInfo,
+            'video_responsive_ad' => $responsiveVideoAdInfo,
+            'final_urls' => $adData['finalUrls'],
         ]);
 
         // Create AdGroupAd

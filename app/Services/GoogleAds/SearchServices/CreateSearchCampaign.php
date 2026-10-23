@@ -5,16 +5,17 @@ namespace App\Services\GoogleAds\SearchServices;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\ManualCpc;
-use Google\Ads\GoogleAds\V22\Common\TargetCpa;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\ManualCpc;
+use Google\Ads\GoogleAds\V26\Common\TargetCpa;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
 
 class CreateSearchCampaign extends BaseGoogleAdsService
 {
@@ -62,11 +63,11 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             // start serving the moment it is created, which any verification or
             // staged rollout needs.
             'status' => CampaignStatusHelper::getGoogleAdsStatus($campaignData['status'] ?? null, $this->customer),
-            'start_date' => $campaignData['startDate'],
-            'end_date' => $campaignData['endDate'],
+            'start_date_time' => CampaignDateTimes::startOfDay($campaignData['startDate']),
+            'end_date_time' => CampaignDateTimes::endOfDay($campaignData['endDate']),
             'manual_cpc' => new ManualCpc, // Default for search campaigns
             'geo_target_type_setting' => new Campaign\GeoTargetTypeSetting([
-                'positive_geo_target_type' => \Google\Ads\GoogleAds\V22\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType::PRESENCE,
+                'positive_geo_target_type' => \Google\Ads\GoogleAds\V26\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType::PRESENCE,
             ]),
             'network_settings' => new Campaign\NetworkSettings([
                 'target_google_search' => true,
@@ -89,7 +90,7 @@ class CreateSearchCampaign extends BaseGoogleAdsService
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
             // Fix: Use MutateCampaignsRequest object
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignOperation],
@@ -133,7 +134,7 @@ class CreateSearchCampaign extends BaseGoogleAdsService
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
             // Fix: Use MutateCampaignBudgetsRequest object
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignBudgetOperation],
@@ -161,7 +162,7 @@ class CreateSearchCampaign extends BaseGoogleAdsService
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
             // Fix: Use SearchGoogleAdsRequest object instead of passing arguments directly
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]);

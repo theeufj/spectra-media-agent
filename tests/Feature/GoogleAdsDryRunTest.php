@@ -83,7 +83,7 @@ class GoogleAdsDryRunTest extends TestCase
      */
     private static function cannotValidateOnly(string $requestClass): bool
     {
-        $fqcn = 'Google\\Ads\\GoogleAds\\V22\\Services\\'.$requestClass;
+        $fqcn = 'Google\\Ads\\GoogleAds\\V26\\Services\\'.$requestClass;
 
         return class_exists($fqcn) && ! method_exists($fqcn, 'setValidateOnly');
     }
@@ -119,7 +119,7 @@ class GoogleAdsDryRunTest extends TestCase
                A guard that prose can pass is not a guard.
             */
             $source = self::withoutComments(file_get_contents($file->getPathname()));
-            preg_match_all('/new (Mutate[A-Za-z]*Request)\(/', $source, $matches);
+            preg_match_all('/new\s+(?:\\\\?[A-Za-z_][A-Za-z0-9_]*\\\\)*(Mutate[A-Za-z]*Request)\s*\(/', $source, $matches);
 
             $requests = array_values(array_filter(
                 $matches[1],

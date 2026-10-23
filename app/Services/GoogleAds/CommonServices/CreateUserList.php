@@ -3,23 +3,23 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\CrmBasedUserListInfo;
-use Google\Ads\GoogleAds\V22\Common\CustomerMatchUserListMetadata;
-use Google\Ads\GoogleAds\V22\Common\OfflineUserAddressInfo;
-use Google\Ads\GoogleAds\V22\Common\UserData;
-use Google\Ads\GoogleAds\V22\Common\UserIdentifier;
-use Google\Ads\GoogleAds\V22\Enums\CustomerMatchUploadKeyTypeEnum\CustomerMatchUploadKeyType;
-use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
-use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
-use Google\Ads\GoogleAds\V22\Resources\OfflineUserDataJob;
-use Google\Ads\GoogleAds\V22\Resources\UserList;
-use Google\Ads\GoogleAds\V22\Services\AddOfflineUserDataJobOperationsRequest;
-use Google\Ads\GoogleAds\V22\Services\CreateOfflineUserDataJobRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
-use Google\Ads\GoogleAds\V22\Services\OfflineUserDataJobOperation;
-use Google\Ads\GoogleAds\V22\Services\RunOfflineUserDataJobRequest;
-use Google\Ads\GoogleAds\V22\Services\UserListOperation;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\CrmBasedUserListInfo;
+use Google\Ads\GoogleAds\V26\Common\CustomerMatchUserListMetadata;
+use Google\Ads\GoogleAds\V26\Common\OfflineUserAddressInfo;
+use Google\Ads\GoogleAds\V26\Common\UserData;
+use Google\Ads\GoogleAds\V26\Common\UserIdentifier;
+use Google\Ads\GoogleAds\V26\Enums\CustomerMatchUploadKeyTypeEnum\CustomerMatchUploadKeyType;
+use Google\Ads\GoogleAds\V26\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
+use Google\Ads\GoogleAds\V26\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
+use Google\Ads\GoogleAds\V26\Resources\OfflineUserDataJob;
+use Google\Ads\GoogleAds\V26\Resources\UserList;
+use Google\Ads\GoogleAds\V26\Services\AddOfflineUserDataJobOperationsRequest;
+use Google\Ads\GoogleAds\V26\Services\CreateOfflineUserDataJobRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateUserListsRequest;
+use Google\Ads\GoogleAds\V26\Services\OfflineUserDataJobOperation;
+use Google\Ads\GoogleAds\V26\Services\RunOfflineUserDataJobRequest;
+use Google\Ads\GoogleAds\V26\Services\UserListOperation;
 use Google\ApiCore\ApiException;
 
 class CreateUserList extends BaseGoogleAdsService

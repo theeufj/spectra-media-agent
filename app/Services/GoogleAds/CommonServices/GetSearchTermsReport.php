@@ -4,7 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Contracts\Ads\SearchTermSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 
 class GetSearchTermsReport extends BaseGoogleAdsService implements SearchTermSource
 {

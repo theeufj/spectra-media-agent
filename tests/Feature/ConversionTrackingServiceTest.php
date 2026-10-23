@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\ConversionTrackingService;
-use Google\Ads\GoogleAds\V22\Common\Metrics;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
-use Google\Ads\GoogleAds\V22\Resources\Campaign as GoogleCampaign;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Common\Metrics;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionStatusEnum\ConversionActionStatus;
+use Google\Ads\GoogleAds\V26\Resources\Campaign as GoogleCampaign;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 use Google\ApiCore\PagedListResponse;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;

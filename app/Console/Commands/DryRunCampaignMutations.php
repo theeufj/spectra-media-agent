@@ -6,7 +6,7 @@ use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\GoogleAds\CreateCampaignBudget;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Console\Command;
 
 /**

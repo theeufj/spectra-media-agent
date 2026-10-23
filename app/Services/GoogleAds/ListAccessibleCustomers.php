@@ -3,8 +3,8 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\V26\Services\Client\CustomerServiceClient;
+use Google\Ads\GoogleAds\V26\Services\ListAccessibleCustomersRequest;
 
 class ListAccessibleCustomers extends BaseGoogleAdsService
 {

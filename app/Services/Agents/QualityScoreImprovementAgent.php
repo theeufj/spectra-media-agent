@@ -491,7 +491,7 @@ PROMPT;
                         'strength_before' => $ad['ad_strength'], 'verification' => 'pending', 'attempt_id' => $attempt->id] + $copy;
                     $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => 'verification_pending'];
                     \App\Jobs\VerifyGoogleAdImprovement::dispatch($campaign, $ad['resource_name'],
-                        \Google\Ads\GoogleAds\V22\Enums\AdStrengthEnum\AdStrength::value($ad['ad_strength']),
+                        \Google\Ads\GoogleAds\V26\Enums\AdStrengthEnum\AdStrength::value($ad['ad_strength']),
                         $copy['headlines'], $copy['descriptions'], $attempt->id)->delay(now()->addHour());
                 } catch (\Throwable $e) {
                     report($e);

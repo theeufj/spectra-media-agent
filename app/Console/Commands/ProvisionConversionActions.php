@@ -5,17 +5,17 @@ namespace App\Console\Commands;
 use App\Models\MccAccount;
 use App\Models\Setting;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionCountingTypeEnum\ConversionActionCountingType;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionTypeEnum\ConversionActionType;
-use Google\Ads\GoogleAds\V22\Enums\TrackingCodeTypeEnum\TrackingCodeType;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction\ValueSettings;
-use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCountingTypeEnum\ConversionActionCountingType;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionStatusEnum\ConversionActionStatus;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionTypeEnum\ConversionActionType;
+use Google\Ads\GoogleAds\V26\Enums\TrackingCodeTypeEnum\TrackingCodeType;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction\ValueSettings;
+use Google\Ads\GoogleAds\V26\Services\ConversionActionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateConversionActionsRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Google\Protobuf\FieldMask;
 use Illuminate\Console\Command;
 
@@ -310,7 +310,7 @@ class ProvisionConversionActions extends Command
         }
     }
 
-    private function buildClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    private function buildClient(): ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
     {
         $configPath = storage_path('app/google_ads_php.ini');
         if (! file_exists($configPath)) {

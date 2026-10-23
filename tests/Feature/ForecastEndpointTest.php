@@ -40,14 +40,14 @@ class ForecastEndpointTest extends TestCase
         return [$user, $customer];
     }
 
-    private function seedForecast(Customer $customer): void
+    private function seedForecast(Customer $customer, array $metrics = []): void
     {
-        Cache::put(sprintf('market_forecast:%d:%s', $customer->id, md5(self::SITE)), [
+        Cache::put(sprintf('market_forecast:v26:%d:%s', $customer->id, md5(self::SITE)), array_replace([
             'keywords' => [['keyword' => 'emergency plumber', 'monthly_searches' => 2400, 'cpc' => 4.10]],
             'max_cpc' => 4.10, 'days' => 30, 'conversion_rate' => 0.03,
             'impressions' => 40000, 'clicks' => 1000, 'cost' => 1000.0,
             'conversions' => 30.0, 'average_cpc' => 1.0, 'ctr' => 0.025,
-        ], now()->addHour());
+        ], $metrics), now()->addHour());
     }
 
     public function test_a_guest_cannot_read_a_forecast(): void
@@ -71,6 +71,30 @@ class ForecastEndpointTest extends TestCase
             ->assertJsonPath('forecast.clicks', 1000)
             ->assertJsonPath('forecast.currency', 'USD')
             ->assertJsonPath('forecast.has_order_value', false);
+    }
+
+    public function test_onboarding_forecast_keeps_v26_unknown_metrics_null_after_budget_scaling(): void
+    {
+        [, $customer] = $this->signedIn();
+        $this->seedForecast($customer, ['impressions' => null, 'ctr' => null]);
+
+        $this->getJson(route('api.forecast.show', ['monthly_budget' => 500]))
+            ->assertOk()
+            ->assertJsonPath('forecast.clicks', 500)
+            ->assertJsonPath('forecast.cost', 500)
+            ->assertJsonPath('forecast.impressions', null)
+            ->assertJsonPath('forecast.ctr', null)
+            ->assertJsonPath('forecast.unconstrained.impressions', null);
+    }
+
+    public function test_onboarding_hides_a_forecast_without_required_click_or_cost_evidence(): void
+    {
+        [, $customer] = $this->signedIn();
+        foreach (['clicks', 'cost'] as $metric) {
+            $this->seedForecast($customer, [$metric => null]);
+            $this->getJson(route('api.forecast.show', ['monthly_budget' => 500]))
+                ->assertOk()->assertJsonPath('forecast', null);
+        }
     }
 
     public function test_recording_an_order_value_returns_the_revenue_it_unlocks(): void

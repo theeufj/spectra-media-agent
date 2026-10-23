@@ -54,10 +54,9 @@ class CustomerMarketForecast
             return null;
         }
 
-        return $this->withRevenue(
-            ForecastFrame::apply($raw, $monthlyBudget),
-            $customer
-        );
+        $forecast = ForecastFrame::apply($raw, $monthlyBudget);
+
+        return $forecast === null ? null : $this->withRevenue($forecast, $customer);
     }
 
     /**
@@ -79,7 +78,7 @@ class CustomerMarketForecast
         }
 
         return Cache::remember(
-            sprintf('market_forecast:%d:%s', $customer->id, md5($url)),
+            sprintf('market_forecast:v26:%d:%s', $customer->id, md5($url)),
             now()->addHours(24),
             fn () => $this->builder($customer)->forUrl($url)
         );

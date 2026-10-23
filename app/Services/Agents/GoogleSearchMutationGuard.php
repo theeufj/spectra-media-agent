@@ -8,7 +8,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 
 /** Demand and affordable reach for the complete proposed Search portfolio, never authorization by itself. */
 class GoogleSearchMutationGuard

@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\InviteCustomerUser;
-use Google\Ads\GoogleAds\V22\Enums\AccessRoleEnum\AccessRole;
+use Google\Ads\GoogleAds\V26\Enums\AccessRoleEnum\AccessRole;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

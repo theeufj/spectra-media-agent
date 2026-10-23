@@ -8,7 +8,7 @@ use App\Models\VideoCollateral;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Console\Command;
 
 /**

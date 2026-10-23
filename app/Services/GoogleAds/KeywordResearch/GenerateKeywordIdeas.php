@@ -4,11 +4,11 @@ namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordIdeasRequest;
-use Google\Ads\GoogleAds\V22\Services\KeywordAndUrlSeed;
-use Google\Ads\GoogleAds\V22\Services\KeywordSeed;
-use Google\Ads\GoogleAds\V22\Services\UrlSeed;
+use Google\Ads\GoogleAds\V26\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordIdeasRequest;
+use Google\Ads\GoogleAds\V26\Services\KeywordAndUrlSeed;
+use Google\Ads\GoogleAds\V26\Services\KeywordSeed;
+use Google\Ads\GoogleAds\V26\Services\UrlSeed;
 use Google\ApiCore\ApiException;
 use Illuminate\Support\Facades\Cache;
 

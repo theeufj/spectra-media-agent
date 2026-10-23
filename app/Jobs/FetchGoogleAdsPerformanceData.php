@@ -8,7 +8,7 @@ use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
 use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\RecommendationGenerationService;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

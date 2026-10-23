@@ -2,14 +2,12 @@
 
 namespace App\Services\GoogleAds;
 
-use App\Features\PerUserGoogleToken;
 use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
 use Illuminate\Support\Facades\Log;
-use Laravel\Pennant\Feature;
 
 abstract class BaseGoogleAdsService
 {
@@ -17,7 +15,7 @@ abstract class BaseGoogleAdsService
 
     protected string $platform = 'google_ads';
 
-    protected ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient $client = null;
+    protected ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient $client = null;
 
     protected ?Customer $customer = null;
 
@@ -43,7 +41,6 @@ abstract class BaseGoogleAdsService
     {
         $this->customer = $customer;
         $this->client = $this->buildClient();
-        $this->maybeUseUserCredentials();
     }
 
     /**
@@ -73,68 +70,12 @@ abstract class BaseGoogleAdsService
         if ($this->client === null) {
             throw new \Exception(
                 "Google Ads client not initialized for customer {$this->customer->id}. ".
-                'Please check: 1) OAuth credentials are valid, '.
-                '2) Customer has connected their Google Ads account via OAuth'
+                'Please check the platform MCC account, developer token and OAuth credentials.'
             );
         }
     }
 
-    /**
-     * If the PerUserGoogleToken feature flag is active for this customer's user,
-     * rebuild the Google Ads client using that user's stored OAuth refresh token
-     * instead of the platform MCC credentials. Falls back silently on any error.
-     */
-    private function maybeUseUserCredentials(): void
-    {
-        $user = $this->customer?->users()->first();
-
-        if (! $user || ! Feature::for($user)->active(PerUserGoogleToken::class)) {
-            return;
-        }
-
-        $connection = $user->connections()
-            ->where('platform', 'google_ads')
-            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->first();
-
-        if (! $connection?->refresh_token) {
-            Log::warning('[GoogleAds] PerUserGoogleToken flag active but no valid connection found, using MCC credentials', [
-                'customer_id' => $this->customer->id,
-                'user_id' => $user->id,
-            ]);
-
-            return;
-        }
-
-        try {
-            $configPath = storage_path('app/google_ads_php.ini');
-
-            $oAuth2Credential = (new OAuth2TokenBuilder)
-                ->fromFile($configPath)
-                ->withRefreshToken($connection->refresh_token)
-                ->build();
-
-            $this->client = (new GoogleAdsClientBuilder)
-                ->fromFile($configPath)
-                ->withOAuth2Credential($oAuth2Credential)
-                ->build();
-
-            Log::info('[GoogleAds] Using per-user OAuth token', [
-                'customer_id' => $this->customer->id,
-                'user_id' => $user->id,
-                'connection_id' => $connection->id,
-            ]);
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('[GoogleAds] Failed to build per-user client, retaining MCC credentials', [
-                'customer_id' => $this->customer->id,
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    protected function buildClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    protected function buildClient(): ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
     {
         try {
             $configPath = storage_path('app/google_ads_php.ini');
@@ -159,15 +100,20 @@ abstract class BaseGoogleAdsService
             // Strip dashes — Google Ads API requires plain numeric IDs (e.g. 8701023448 not 870-102-3448)
             $mccCustomerId = preg_replace('/[^0-9]/', '', $mccAccount->google_customer_id);
 
-            $oAuth2Credential = (new OAuth2TokenBuilder)
-                ->fromFile($configPath)
-                ->withRefreshToken($mccRefreshToken)
-                ->build();
+            $oAuth2Builder = new OAuth2TokenBuilder;
+            $oAuth2Builder->fromFile($configPath);
+            $oAuth2Credential = $oAuth2Builder->withRefreshToken($mccRefreshToken)->build();
 
-            $builder = (new GoogleAdsClientBuilder)
-                ->fromFile($configPath)
-                ->withOAuth2Credential($oAuth2Credential)
-                ->withLoginCustomerId($mccCustomerId);
+            $builder = new GoogleAdsClientBuilder;
+            $builder->fromFile($configPath);
+            $builder->withOAuth2Credential($oAuth2Credential)
+                ->withLoginCustomerId((int) $mccCustomerId);
+
+            // SDK 35 no longer rejects an absent developer token during build.
+            // Retain that prerequisite before a client can issue any requests.
+            if (trim((string) $builder->getDeveloperToken()) === '') {
+                throw new \RuntimeException('Google Ads developer token is missing from the platform configuration.');
+            }
 
             return $builder->build();
         } catch (\Throwable $e) {
@@ -213,14 +159,14 @@ abstract class BaseGoogleAdsService
     }
 
     /**
-     * Execute a GAQL search query using the V22 SearchGoogleAdsRequest pattern.
+     * Execute a GAQL search query using the V26 SearchGoogleAdsRequest pattern.
      */
     protected function searchQuery(string $customerId, string $query): \Google\ApiCore\PagedListResponse
     {
         $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
         return $googleAdsServiceClient->search(
-            new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]),
@@ -233,7 +179,7 @@ abstract class BaseGoogleAdsService
     /**
      * Get the underlying GoogleAdsClient instance.
      */
-    public function getClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    public function getClient(): ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
     {
         return $this->client;
     }

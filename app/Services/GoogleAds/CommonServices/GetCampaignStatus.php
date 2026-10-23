@@ -3,8 +3,8 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
 use Google\ApiCore\ApiException;
 
 class GetCampaignStatus extends BaseGoogleAdsService

@@ -8,6 +8,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -238,13 +239,21 @@ class GoogleSearchReachPlanner
             $today = CarbonImmutable::now($timezone)->startOfDay();
             $start = $today->addDay();
             $end = $today->addYear();
-            foreach ([$campaign->getAttribute('start_date'), $snapshot['start_date'] ?? null] as $date) {
+            foreach (['start_date_time', 'end_date_time'] as $field) {
+                if (isset($snapshot[$field]) && $snapshot[$field] !== ''
+                    && (! is_string($snapshot[$field]) || CampaignDateTimes::calendarDate($snapshot[$field]) === null)) {
+                    throw new \InvalidArgumentException('A live campaign serving timestamp is invalid.');
+                }
+            }
+            foreach ([$campaign->getAttribute('start_date'), isset($snapshot['start_date_time'])
+                ? CampaignDateTimes::fullServingDay($snapshot['start_date_time'], true) : ($snapshot['start_date'] ?? null)] as $date) {
                 $date = $this->servingDate($date, $timezone);
                 if ($date !== null && $date->gt($start)) {
                     $start = $date;
                 }
             }
-            foreach ([$campaign->getAttribute('end_date'), $snapshot['end_date'] ?? null] as $date) {
+            foreach ([$campaign->getAttribute('end_date'), isset($snapshot['end_date_time'])
+                ? CampaignDateTimes::fullServingDay($snapshot['end_date_time'], false) : ($snapshot['end_date'] ?? null)] as $date) {
                 $date = $this->servingDate($date, $timezone);
                 if ($date !== null && $date->lt($end)) {
                     $end = $date;
@@ -330,7 +339,7 @@ class GoogleSearchReachPlanner
 
     private function forecastKey(Customer $customer, array $keywords, int $ceiling, array $context): string
     {
-        return 'search_reach:forecast:'.$customer->id.':'.hash('sha256', json_encode([$keywords, $ceiling, $context, now($context['time_zone'] ?? 'UTC')->toDateString()]));
+        return 'search_reach:forecast:v26:'.$customer->id.':'.hash('sha256', json_encode([$keywords, $ceiling, $context, now($context['time_zone'] ?? 'UTC')->toDateString()]));
     }
 
     protected function historicalProvider(Customer $customer): GenerateKeywordHistoricalMetrics

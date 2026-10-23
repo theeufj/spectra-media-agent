@@ -4,9 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Services\ConversionActionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateConversionActionsRequest;
 use Google\Protobuf\FieldMask;
 use Illuminate\Console\Command;
 

@@ -9,7 +9,7 @@ use App\Models\Customer;
 use App\Models\Keyword;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 

@@ -5,12 +5,12 @@ namespace App\Services\GoogleAds;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Setting;
-use Google\Ads\GoogleAds\V22\Resources\CampaignConversionGoal;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
-use Google\Ads\GoogleAds\V22\Services\CampaignConversionGoalOperation;
-use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateGoogleAdsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateOperation;
+use Google\Ads\GoogleAds\V26\Resources\CampaignConversionGoal;
+use Google\Ads\GoogleAds\V26\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V26\Services\CampaignConversionGoalOperation;
+use Google\Ads\GoogleAds\V26\Services\ConversionActionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateOperation;
 use Google\Protobuf\FieldMask;
 
 /** Explicitly dispatched for an owner-approved campaign, never a scheduled sweep. */

@@ -3,14 +3,14 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\ExperimentTypeEnum\ExperimentType;
-use Google\Ads\GoogleAds\V22\Resources\Experiment;
-use Google\Ads\GoogleAds\V22\Resources\ExperimentArm;
-use Google\Ads\GoogleAds\V22\Services\ExperimentArmOperation;
-use Google\Ads\GoogleAds\V22\Services\ExperimentOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateExperimentArmsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateExperimentsRequest;
-use Google\Ads\GoogleAds\V22\Services\ScheduleExperimentRequest;
+use Google\Ads\GoogleAds\V26\Enums\ExperimentTypeEnum\ExperimentType;
+use Google\Ads\GoogleAds\V26\Resources\Experiment;
+use Google\Ads\GoogleAds\V26\Resources\ExperimentArm;
+use Google\Ads\GoogleAds\V26\Services\ExperimentArmOperation;
+use Google\Ads\GoogleAds\V26\Services\ExperimentOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateExperimentArmsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateExperimentsRequest;
+use Google\Ads\GoogleAds\V26\Services\ScheduleExperimentRequest;
 use Illuminate\Support\Facades\Log;
 
 /**

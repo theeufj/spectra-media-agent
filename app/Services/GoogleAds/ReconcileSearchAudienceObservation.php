@@ -4,17 +4,17 @@ namespace App\Services\GoogleAds;
 
 use App\Models\Strategy;
 use App\Services\Agents\AgentIssue;
-use Google\Ads\GoogleAds\V22\Common\TargetingSetting;
-use Google\Ads\GoogleAds\V22\Common\TargetRestriction;
-use Google\Ads\GoogleAds\V22\Common\TargetRestrictionOperation;
-use Google\Ads\GoogleAds\V22\Common\TargetRestrictionOperation\Operator;
-use Google\Ads\GoogleAds\V22\Enums\TargetingDimensionEnum\TargetingDimension;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateGoogleAdsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateOperation;
+use Google\Ads\GoogleAds\V26\Common\TargetingSetting;
+use Google\Ads\GoogleAds\V26\Common\TargetRestriction;
+use Google\Ads\GoogleAds\V26\Common\TargetRestrictionOperation;
+use Google\Ads\GoogleAds\V26\Common\TargetRestrictionOperation\Operator;
+use Google\Ads\GoogleAds\V26\Enums\TargetingDimensionEnum\TargetingDimension;
+use Google\Ads\GoogleAds\V26\Resources\AdGroup;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateOperation;
 use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Cache;
 

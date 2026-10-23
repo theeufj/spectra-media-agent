@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionStatusEnum\ConversionActionStatus;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 
 class ConversionTrackingService extends BaseGoogleAdsService
 {

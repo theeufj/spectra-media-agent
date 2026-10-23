@@ -8,10 +8,10 @@ use App\Models\Customer;
 use App\Services\Agents\CampaignAlertService;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
-use Google\Ads\GoogleAds\V22\Enums\PolicyReviewStatusEnum\PolicyReviewStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Google\Ads\GoogleAds\V26\Enums\PolicyReviewStatusEnum\PolicyReviewStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 

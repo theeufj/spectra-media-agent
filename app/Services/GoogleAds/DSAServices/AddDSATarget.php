@@ -3,13 +3,13 @@
 namespace App\Services\GoogleAds\DSAServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\WebpageConditionInfo;
-use Google\Ads\GoogleAds\V22\Common\WebpageInfo;
-use Google\Ads\GoogleAds\V22\Enums\WebpageConditionOperandEnum\WebpageConditionOperand;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\WebpageConditionInfo;
+use Google\Ads\GoogleAds\V26\Common\WebpageInfo;
+use Google\Ads\GoogleAds\V26\Enums\WebpageConditionOperandEnum\WebpageConditionOperand;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V26\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupCriteriaRequest;
 use Google\ApiCore\ApiException;
 
 class AddDSATarget extends BaseGoogleAdsService

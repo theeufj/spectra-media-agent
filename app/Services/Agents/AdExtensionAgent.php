@@ -11,7 +11,7 @@ use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\GetExtensionPerformance;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Support\Facades\Log;
 
 /**

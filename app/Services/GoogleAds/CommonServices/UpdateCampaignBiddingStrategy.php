@@ -4,15 +4,15 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V22\Common\MaximizeConversionValue;
-use Google\Ads\GoogleAds\V22\Common\TargetCpa;
-use Google\Ads\GoogleAds\V22\Common\TargetRoas;
-use Google\Ads\GoogleAds\V22\Common\TargetSpend;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V26\Common\MaximizeConversionValue;
+use Google\Ads\GoogleAds\V26\Common\TargetCpa;
+use Google\Ads\GoogleAds\V26\Common\TargetRoas;
+use Google\Ads\GoogleAds\V26\Common\TargetSpend;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest;
 use Google\ApiCore\ApiException;
 use Google\Protobuf\FieldMask;
 
@@ -48,7 +48,7 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
 
         switch (strtoupper($strategy)) {
             case 'ENHANCED_CPC':
-                $campaign->setManualCpc(new \Google\Ads\GoogleAds\V22\Common\ManualCpc(['enhanced_cpc_enabled' => true]));
+                $campaign->setManualCpc(new \Google\Ads\GoogleAds\V26\Common\ManualCpc(['enhanced_cpc_enabled' => true]));
                 $updateMask->setPaths(['manual_cpc.enhanced_cpc_enabled']);
                 break;
 

@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetDimensionEnum\ValueRuleSetDimension;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -26,7 +27,8 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
 
         try {
             $ruleResourceNames = [];
-            $createRule = new CreateConversionValueRule($this->customer);
+            $dimensions = [];
+            $createRule = app(CreateConversionValueRule::class, ['customer' => $this->customer]);
 
             // Always create a MOBILE device rule (1.2× multiplier)
             $mobileRuleResource = ($createRule)($customerId, [
@@ -36,6 +38,7 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
 
             if ($mobileRuleResource) {
                 $ruleResourceNames[] = $mobileRuleResource;
+                $dimensions[] = ValueRuleSetDimension::DEVICE;
                 Log::info('ApplyConversionValueRules: Created mobile device rule', [
                     'rule' => $mobileRuleResource,
                 ]);
@@ -51,6 +54,7 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
 
                 if ($audienceRuleResource) {
                     $ruleResourceNames[] = $audienceRuleResource;
+                    $dimensions[] = ValueRuleSetDimension::AUDIENCE;
                     Log::info('ApplyConversionValueRules: Created audience rule', [
                         'rule' => $audienceRuleResource,
                         'user_list' => $userListId,
@@ -65,8 +69,8 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
             }
 
             // Bundle into a ConversionValueRuleSet and attach to the campaign
-            $createRuleSet = new CreateConversionValueRuleSet($this->customer);
-            $ruleSetResource = ($createRuleSet)($customerId, $campaignResourceName, $ruleResourceNames);
+            $createRuleSet = app(CreateConversionValueRuleSet::class, ['customer' => $this->customer]);
+            $ruleSetResource = ($createRuleSet)($customerId, $campaignResourceName, $ruleResourceNames, $dimensions);
 
             if (! $ruleSetResource) {
                 Log::warning('ApplyConversionValueRules: Failed to create rule set for campaign', [

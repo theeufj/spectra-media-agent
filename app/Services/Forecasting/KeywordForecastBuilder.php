@@ -67,8 +67,8 @@ class KeywordForecastBuilder
      * @return array{
      *     keywords: list<array{keyword: string, monthly_searches: int, cpc: float}>,
      *     max_cpc: float, days: int, conversion_rate: float,
-     *     impressions: int, clicks: int, cost: float, conversions: float,
-     *     average_cpc: float, ctr: float
+     *     impressions: int|null, clicks: int, cost: float, conversions: float,
+     *     average_cpc: float|null, ctr: float|null
      * }|null
      */
     public function forUrl(string $url): ?array
@@ -84,7 +84,8 @@ class KeywordForecastBuilder
         $mccId = preg_replace('/[^0-9]/', '', $mcc->google_customer_id);
 
         try {
-            $ideas = (new GenerateKeywordIdeas($this->houseCustomer()))(
+            $ideasProvider = app()->makeWith(GenerateKeywordIdeas::class, ['customer' => $this->houseCustomer()]);
+            $ideas = $ideasProvider(
                 $mccId,
                 [],                        // no seed terms — the URL is the seed
                 $url,
@@ -103,12 +104,14 @@ class KeywordForecastBuilder
 
             $maxCpc = $this->bid($chosen);
 
-            $forecast = (new GenerateKeywordForecast($this->houseCustomer()))(
+            $forecastProvider = app()->makeWith(GenerateKeywordForecast::class, ['customer' => $this->houseCustomer()]);
+            $forecast = $forecastProvider(
                 $mccId,
                 array_column($chosen, 'keyword'),
                 $maxCpc,
                 $this->conversionRate,
                 $this->forecastDays,
+                ['geo_target_constants' => [$this->geoTarget], 'language_constants' => [$this->language]],
             );
 
             if (! $forecast['success']) {
@@ -120,6 +123,17 @@ class KeywordForecastBuilder
                 return null;
             }
 
+            $clicks = $this->number($forecast['clicks'] ?? null);
+            $cost = $this->number($forecast['cost'] ?? null);
+            if ($clicks === null || $cost === null) {
+                Log::info('KeywordForecastBuilder: click or cost forecast is unavailable', ['url' => $url]);
+
+                return null;
+            }
+            $impressions = $this->number($forecast['impressions'] ?? null);
+            $averageCpc = $this->number($forecast['average_cpc'] ?? null);
+            $ctr = $this->number($forecast['ctr'] ?? null);
+
             return [
                 'keywords' => $chosen,
                 'max_cpc' => round($maxCpc, 2),
@@ -127,13 +141,13 @@ class KeywordForecastBuilder
                 'conversion_rate' => $this->conversionRate,
                 // Unscaled: ForecastFrame applies a budget after the cache, so
                 // changing the budget costs arithmetic rather than API quota.
-                'impressions' => (int) round((float) ($forecast['impressions'] ?? 0)),
-                'clicks' => (int) round((float) ($forecast['clicks'] ?? 0)),
-                'cost' => round((float) ($forecast['cost'] ?? 0), 2),
-                'conversions' => round((float) ($forecast['conversions'] ?? 0), 1),
+                'impressions' => $impressions === null ? null : (int) round($impressions),
+                'clicks' => (int) round($clicks),
+                'cost' => round($cost, 2),
+                'conversions' => round($clicks * $this->conversionRate, 1),
                 // Per-click figures are ratios and do not scale with budget.
-                'average_cpc' => round((float) ($forecast['average_cpc'] ?? 0), 2),
-                'ctr' => round((float) ($forecast['ctr'] ?? 0), 4),
+                'average_cpc' => $averageCpc === null ? null : round($averageCpc, 2),
+                'ctr' => $ctr === null ? null : round($ctr, 4),
             ];
         } catch (\Throwable $e) {
             report($e);
@@ -141,6 +155,12 @@ class KeywordForecastBuilder
 
             return null;
         }
+    }
+
+    private function number(mixed $value): ?float
+    {
+        return (is_int($value) || is_float($value)) && is_finite((float) $value) && $value >= 0
+            ? (float) $value : null;
     }
 
     /**

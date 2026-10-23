@@ -63,7 +63,7 @@ class CustomerMarketForecastTest extends TestCase
     private function seedForecast(Customer $customer, array $raw): void
     {
         Cache::put(
-            sprintf('market_forecast:%d:%s', $customer->id, md5(self::SITE)),
+            sprintf('market_forecast:v26:%d:%s', $customer->id, md5(self::SITE)),
             $raw,
             now()->addHour()
         );

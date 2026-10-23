@@ -25,7 +25,7 @@ use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\StorageHelper;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Support\Facades\Log;
 
 /**

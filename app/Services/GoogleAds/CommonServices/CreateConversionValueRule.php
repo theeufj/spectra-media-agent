@@ -3,14 +3,14 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Common\ValueRuleAction;
-use Google\Ads\GoogleAds\V22\Common\ValueRuleAudienceCondition;
-use Google\Ads\GoogleAds\V22\Common\ValueRuleDeviceCondition;
-use Google\Ads\GoogleAds\V22\Common\ValueRuleGeoLocationCondition;
-use Google\Ads\GoogleAds\V22\Enums\ValueRuleDeviceTypeEnum\ValueRuleDeviceType;
-use Google\Ads\GoogleAds\V22\Resources\ConversionValueRule;
-use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateConversionValueRulesRequest;
+use Google\Ads\GoogleAds\V26\Enums\ValueRuleDeviceTypeEnum\ValueRuleDeviceType;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRule;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRule\ValueRuleAction;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRule\ValueRuleAudienceCondition;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRule\ValueRuleDeviceCondition;
+use Google\Ads\GoogleAds\V26\Resources\ConversionValueRule\ValueRuleGeoLocationCondition;
+use Google\Ads\GoogleAds\V26\Services\ConversionValueRuleOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateConversionValueRulesRequest;
 use Illuminate\Support\Facades\Log;
 
 /**

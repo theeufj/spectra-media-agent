@@ -23,8 +23,8 @@ use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Console\Command;
 
 class TestAllCampaignTypes extends Command
@@ -818,7 +818,7 @@ class TestAllCampaignTypes extends Command
                      'ORDER BY campaign.name';
 
             $response = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $query,
                 ])
@@ -832,8 +832,8 @@ class TestAllCampaignTypes extends Command
 
                 $rows[] = [
                     $campaign->getName(),
-                    \Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType::name($campaign->getAdvertisingChannelType()),
-                    \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::name($campaign->getStatus()),
+                    \Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType::name($campaign->getAdvertisingChannelType()),
+                    \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::name($campaign->getStatus()),
                     '$'.number_format($budgetDollars, 2),
                 ];
             }
@@ -870,7 +870,7 @@ class TestAllCampaignTypes extends Command
                    .'ORDER BY ad_group_criterion.keyword.text';
 
             $response = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $query,
                 ])
@@ -881,9 +881,9 @@ class TestAllCampaignTypes extends Command
                 $kw = $criterion->getKeyword();
                 $result['keywords'][] = [
                     $kw->getText(),
-                    \Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType::name($kw->getMatchType()),
+                    \Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType::name($kw->getMatchType()),
                     $row->getAdGroup()->getName(),
-                    \Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus::name($criterion->getStatus()),
+                    \Google\Ads\GoogleAds\V26\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus::name($criterion->getStatus()),
                 ];
             }
             $result['count'] = count($result['keywords']);
@@ -897,7 +897,7 @@ class TestAllCampaignTypes extends Command
                       .'ORDER BY campaign_criterion.keyword.text';
 
             $negResponse = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $negQuery,
                 ])
@@ -908,7 +908,7 @@ class TestAllCampaignTypes extends Command
                 $kw = $criterion->getKeyword();
                 $result['negatives'][] = [
                     $kw->getText(),
-                    \Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType::name($kw->getMatchType()),
+                    \Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType::name($kw->getMatchType()),
                     $row->getCampaign()->getName(),
                 ];
             }

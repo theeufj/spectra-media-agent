@@ -14,7 +14,7 @@ use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\Diagnostics\OfficialTroubleshootingDocs;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use Carbon\Carbon;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Log;
 
 /**

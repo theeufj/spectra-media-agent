@@ -7,35 +7,35 @@ use App\Models\Customer;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Common\AdScheduleInfo;
-use Google\Ads\GoogleAds\V22\Common\DeviceInfo;
-use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V22\Common\LanguageInfo;
-use Google\Ads\GoogleAds\V22\Common\LocationInfo;
-use Google\Ads\GoogleAds\V22\Common\Metrics;
-use Google\Ads\GoogleAds\V22\Common\Segments;
-use Google\Ads\GoogleAds\V22\Common\TargetingSetting;
-use Google\Ads\GoogleAds\V22\Common\TargetRestriction;
-use Google\Ads\GoogleAds\V22\Common\TargetSpend;
-use Google\Ads\GoogleAds\V22\Enums\AdNetworkTypeEnum\AdNetworkType;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Enums\TargetingDimensionEnum\TargetingDimension;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAdPolicySummary;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupBidModifier;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V22\Resources\Campaign as GoogleCampaign;
-use Google\Ads\GoogleAds\V22\Resources\Campaign\GeoTargetTypeSetting;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
-use Google\Ads\GoogleAds\V22\Resources\Customer as GoogleCustomer;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordForecastMetricsRequest;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordForecastMetricsResponse;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
-use Google\Ads\GoogleAds\V22\Services\KeywordForecastMetrics;
+use Google\Ads\GoogleAds\V26\Common\AdScheduleInfo;
+use Google\Ads\GoogleAds\V26\Common\DeviceInfo;
+use Google\Ads\GoogleAds\V26\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V26\Common\LanguageInfo;
+use Google\Ads\GoogleAds\V26\Common\LocationInfo;
+use Google\Ads\GoogleAds\V26\Common\Metrics;
+use Google\Ads\GoogleAds\V26\Common\Segments;
+use Google\Ads\GoogleAds\V26\Common\TargetingSetting;
+use Google\Ads\GoogleAds\V26\Common\TargetRestriction;
+use Google\Ads\GoogleAds\V26\Common\TargetSpend;
+use Google\Ads\GoogleAds\V26\Enums\AdNetworkTypeEnum\AdNetworkType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\CriterionTypeEnum\CriterionType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\TargetingDimensionEnum\TargetingDimension;
+use Google\Ads\GoogleAds\V26\Resources\AdGroup;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAdPolicySummary;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupBidModifier;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V26\Resources\Campaign as GoogleCampaign;
+use Google\Ads\GoogleAds\V26\Resources\Campaign\GeoTargetTypeSetting;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V26\Resources\Customer as GoogleCustomer;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordForecastMetricsRequest;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordForecastMetricsResponse;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Services\KeywordForecastMetrics;
 use Tests\TestCase;
 
 /** SDK fixtures only: no database, OAuth or live API calls. */
@@ -226,7 +226,7 @@ class SearchDeliveryProviderTest extends TestCase
             'negative_keywords' => [], 'ad_schedule' => [], 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney'];
     }
 
-    public function test_forecast_models_actual_exact_match_geo_language_budget_cap_and_negative_scope(): void
+    public function test_v26_forecast_preserves_exact_match_geo_language_budget_and_cap_but_discloses_unmodeled_negatives(): void
     {
         CarbonImmutable::setTestNow('2026-10-10T23:30:00Z');
         $forecast = $this->forecast();
@@ -236,7 +236,10 @@ class SearchDeliveryProviderTest extends TestCase
         $result = $forecast('1234567890', [['text' => 'google ads management', 'match_type' => 'EXACT', 'ad_group_resource' => 'group5']], 9.99, null, 7, $context);
 
         $this->assertTrue($result['success']);
-        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertStringContainsString('negative keywords', implode(' ', $result['caveats']));
+        $this->assertNull($result['impressions']);
+        $this->assertNull($result['ctr']);
         $this->assertSame($context['negative_keywords'], $result['context']['negative_keywords']);
         $this->assertNotEmpty($result['checked_at']);
         $this->assertArrayNotHasKey('conversions', $result);
@@ -247,12 +250,9 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertSame('2026-10-12', $forecast->request->getForecastPeriod()->getStartDate());
         $this->assertSame(3_000_000, $campaign->getBiddingStrategy()->getMaximizeClicksBiddingStrategy()->getMaxCpcBidCeilingMicros());
         $this->assertSame(10_000_000, $campaign->getBiddingStrategy()->getMaximizeClicksBiddingStrategy()->getDailyTargetSpendMicros());
-        $this->assertSame(KeywordMatchType::EXACT, $campaign->getAdGroups()[0]->getBiddableKeywords()[0]->getKeyword()->getMatchType());
-        $this->assertSame('geoTargetConstants/2036', $campaign->getGeoModifiers()[0]->getGeoTargetConstant());
+        $this->assertSame(KeywordMatchType::EXACT, $campaign->getAdGroups()[0]->getKeywords()[0]->getMatchType());
+        $this->assertSame('geoTargetConstants/2036', $campaign->getGeoTargetConstants()[0]);
         $this->assertSame('languageConstants/1000', $campaign->getLanguageConstants()[0]);
-        $this->assertSame('free', $campaign->getNegativeKeywords()[0]->getText());
-        $this->assertSame('jobs', $campaign->getAdGroups()[0]->getNegativeKeywords()[0]->getText());
-        $this->assertFalse($campaign->hasConversionRate());
     }
 
     public function test_scheduled_forecast_uses_the_verified_future_launch_window_without_changing_spend_limits(): void
@@ -313,7 +313,7 @@ class SearchDeliveryProviderTest extends TestCase
             $result = $forecast('1234567890', $snapshot['keywords'], $expected / 1_000_000, null, 7, $snapshot);
             $this->assertTrue($result['success']);
             $this->assertSame($expected, $result['context']['keywords'][0]['cpc_bid_micros']);
-            $this->assertSame($expected, $forecast->request->getCampaign()->getAdGroups()[0]->getBiddableKeywords()[0]->getMaxCpcBidMicros());
+            $this->assertSame($expected, $forecast->request->getCampaign()->getBiddingStrategy()->getManualCpcBiddingStrategy()->getMaxCpcBidMicros());
         }
     }
 
@@ -329,6 +329,53 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertCount(2, $result['caveats']);
     }
 
+    public function test_unequal_manual_keyword_bids_cannot_be_certified_by_a_uniform_v26_forecast(): void
+    {
+        $context = array_replace($this->context(), ['bidding_strategy' => BiddingStrategyType::MANUAL_CPC]);
+        $keywords = [['text' => 'managed ppc', 'match_type' => 'EXACT', 'cpc_bid_micros' => 3_000_000],
+            ['text' => 'google ads agency', 'match_type' => 'PHRASE', 'cpc_bid_micros' => 800_000]];
+        $forecast = $this->forecast();
+        $result = $forecast('1234567890', $keywords, 3, null, 7, $context);
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertSame($keywords, $result['context']['keywords']);
+        $this->assertStringContainsString('unequal Manual CPC', implode(' ', $result['caveats']));
+        $this->assertSame(3_000_000, $forecast->request->getCampaign()->getBiddingStrategy()->getManualCpcBiddingStrategy()->getMaxCpcBidMicros());
+
+        $keywords[1]['cpc_bid_micros'] = 3_000_000;
+        $result = $forecast('1234567890', $keywords, 3, null, 7, $context);
+        $this->assertTrue($result['auto_repair_safe']);
+    }
+
+    public function test_missing_optional_forecast_metrics_are_unknown_and_cannot_certify_reach(): void
+    {
+        $forecast = $this->forecast();
+        $forecast->metrics = new KeywordForecastMetrics;
+        $result = $forecast('1234567890', ['managed ppc'], 3, null, 7, $this->context());
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertNull($result['clicks']);
+        $this->assertNull($result['cost_micros']);
+        $this->assertNull($result['average_cpc_micros']);
+        $this->assertStringContainsString('click and cost', implode(' ', $result['caveats']));
+    }
+
+    public function test_search_partner_campaigns_cannot_be_certified_without_v26_network_selection(): void
+    {
+        $forecast = $this->forecast();
+        $context = $this->context() + ['search_partners_enabled' => false];
+        $result = $forecast('1234567890', ['managed ppc'], 3, null, 7, $context);
+        $this->assertTrue($result['auto_repair_safe']);
+
+        $context['search_partners_enabled'] = true;
+        $result = $forecast('1234567890', ['managed ppc'], 3, null, 7, $context);
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertStringContainsString('network selection', implode(' ', $result['caveats']));
+    }
+
     public function test_legacy_phrase_call_keeps_explicit_disclosed_conversion_assumption(): void
     {
         $forecast = $this->forecast();
@@ -339,7 +386,9 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertSame('supplied_assumption', $result['conversion_rate_source']);
         $this->assertSame(2_030_000, $result['context']['cpc_bid_ceiling_micros']);
         $this->assertSame([['text' => 'google ads management', 'match_type' => 'PHRASE']], $result['context']['keywords']);
-        $this->assertSame(1.0, $result['conversions']);
+        $this->assertSame(0.1, $result['conversions']);
+        $this->assertSame(0.02, $result['conversion_rate_assumption']);
+        $this->assertSame('click_forecast_times_supplied_assumption', $result['conversions_source']);
     }
 
     public function test_device_restrictions_and_shared_negative_uncertainty_cannot_certify_repair(): void
@@ -359,14 +408,16 @@ class FakeSearchDeliveryForecast extends GenerateKeywordForecast
 {
     public ?GenerateKeywordForecastMetricsRequest $request = null;
 
+    public ?KeywordForecastMetrics $metrics = null;
+
     public function __construct() {}
 
     protected function sendRequest(GenerateKeywordForecastMetricsRequest $request): GenerateKeywordForecastMetricsResponse
     {
         $this->request = $request;
 
-        return new GenerateKeywordForecastMetricsResponse(['campaign_forecast_metrics' => new KeywordForecastMetrics([
-            'impressions' => 100, 'clicks' => 5, 'cost_micros' => 10_000_000, 'average_cpc_micros' => 2_000_000, 'conversions' => 1,
+        return new GenerateKeywordForecastMetricsResponse(['campaign_forecast_metrics' => $this->metrics ?? new KeywordForecastMetrics([
+            'clicks' => 5, 'cost_micros' => 10_000_000, 'average_cpc_micros' => 2_000_000,
         ])]);
     }
 }
@@ -389,10 +440,11 @@ class ScriptedSearchDeliveryInspector extends InspectSearchDelivery
         if (str_contains($query, 'customer.currency_code')) {
             return [new GoogleAdsRow([
                 'customer' => new GoogleCustomer(['time_zone' => 'Australia/Sydney', 'currency_code' => 'AUD']),
-                'campaign' => new GoogleCampaign(['status' => 2, 'advertising_channel_type' => 2, 'bidding_strategy_type' => $this->extra['strategy'] ?? 9,
+                'campaign' => new GoogleCampaign(['status' => 2, 'advertising_channel_type' => 2,
+                    'start_date_time' => '2026-10-01 15:30:00', 'end_date_time' => '2026-12-31 23:59:59', 'bidding_strategy_type' => $this->extra['strategy'] ?? 9,
                     'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
                     'geo_target_type_setting' => new GeoTargetTypeSetting(['positive_geo_target_type' => 7]),
-                    'network_settings' => new \Google\Ads\GoogleAds\V22\Resources\Campaign\NetworkSettings(['target_google_search' => true])]),
+                    'network_settings' => new \Google\Ads\GoogleAds\V26\Resources\Campaign\NetworkSettings(['target_google_search' => true])]),
                 'campaign_budget' => new CampaignBudget(['amount_micros' => 10_000_000]),
             ])];
         }

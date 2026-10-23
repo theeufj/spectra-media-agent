@@ -3,8 +3,8 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 
 class SearchAudience extends BaseGoogleAdsService
 {

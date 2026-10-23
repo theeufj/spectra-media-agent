@@ -3,81 +3,78 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Resources\CampaignAsset;
-use Google\Ads\GoogleAds\V22\Services\CampaignAssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsRequest;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Enums\AssetSetTypeEnum\AssetSetType;
+use Google\Ads\GoogleAds\V26\Resources\CampaignAssetSet;
+use Google\Ads\GoogleAds\V26\Services\CampaignAssetSetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignAssetSetsRequest;
 use Illuminate\Support\Facades\Log;
 
 class GetAndLinkLocationAssets extends BaseGoogleAdsService
 {
     /**
-     * Find Business Profile location assets already synced to the Google Ads account
-     * and link them to the specified campaign.
+     * Preserve inherited account locations, or link an explicitly selected
+     * existing location group to the specified campaign.
      *
-     * Google Ads auto-syncs LOCATION assets when a Business Profile is linked to the
-     * account (done in Google Ads UI → Tools → Linked accounts → Business Profile).
-     * This service detects those assets and wires them to the campaign.
+     * Customer LOCATION_SYNC asset sets are inherited without a campaign mutation.
+     * An optional location-group asset set narrows that selection through a
+     * CampaignAssetSet. Individual LOCATION assets are never CampaignAssets.
      *
-     * AssetFieldType::LOCATION = 29 (protobuf value; not exposed in the V22 PHP enum).
-     *
-     * @return int Number of location assets linked
+     * @return int Number of new campaign asset-set links created (zero for inheritance, existing links or dry run)
      */
-    public function __invoke(string $customerId, string $campaignResourceName): int
+    public function __invoke(string $customerId, string $campaignResourceName, ?string $locationGroupResourceName = null): int
     {
         $this->ensureClient();
 
-        $query = "SELECT asset.resource_name, asset.name FROM asset WHERE asset.type = 'LOCATION'";
-
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
-                'customer_id' => $customerId,
-                'query' => $query,
-            ]));
-
-            $linked = 0;
-
-            foreach ($response->getIterator() as $row) {
-                $assetResourceName = $row->getAsset()->getResourceName();
-
-                try {
-                    $campaignAsset = new CampaignAsset([
+            if (! preg_match('/^\d+$/', $customerId) || $customerId !== $this->customer->cleanGoogleCustomerId()
+                || ! preg_match('#^customers/'.$customerId.'/campaigns/\d+$#', $campaignResourceName)
+                || ($locationGroupResourceName !== null && ! preg_match('#^customers/'.$customerId.'/assetSets/\d+$#', $locationGroupResourceName))) {
+                throw new \InvalidArgumentException('Location assets must belong to the target customer and campaign.');
+            }
+            if ($locationGroupResourceName === null) {
+                $query = 'SELECT customer_asset_set.asset_set FROM customer_asset_set '
+                    ."WHERE customer_asset_set.status = 'ENABLED' AND asset_set.status = 'ENABLED' AND asset_set.type = 'LOCATION_SYNC'";
+                foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                    Log::info('GetAndLinkLocationAssets: Account location sync is configured; preserving inherited campaign selection', [
+                        'asset_set' => $row->getCustomerAssetSet()->getAssetSet(),
                         'campaign' => $campaignResourceName,
-                        'asset' => $assetResourceName,
-                        'field_type' => 29, // AssetFieldType::LOCATION (proto value, not in V22 PHP enum)
                     ]);
-
-                    $operation = new CampaignAssetOperation;
-                    $operation->setCreate($campaignAsset);
-
-                    $this->client->getCampaignAssetServiceClient()->mutateCampaignAssets(
-                        new MutateCampaignAssetsRequest([
-                            'validate_only' => $this->dryRun,
-                            'customer_id' => $customerId,
-                            'operations' => [$operation],
-                        ])
-                    );
-
-                    $linked++;
-                } catch (GoogleAdsException $e) {
-                    // Skip duplicate links (asset already linked to this campaign)
-                    if (! str_contains($e->getMessage(), 'already exists')) {
-                        Log::warning('GetAndLinkLocationAssets: Failed to link location asset', [
-                            'asset' => $assetResourceName,
-                            'campaign' => $campaignResourceName,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
                 }
+
+                return 0;
             }
 
-            return $linked;
+            $group = null;
+            $query = 'SELECT asset_set.resource_name, asset_set.type FROM asset_set '
+                ."WHERE asset_set.resource_name = '{$locationGroupResourceName}' AND asset_set.status = 'ENABLED'";
+            foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                $group = $row->getAssetSet();
+            }
+            if (! $group || ! in_array($group->getType(), [AssetSetType::BUSINESS_PROFILE_DYNAMIC_LOCATION_GROUP,
+                AssetSetType::CHAIN_DYNAMIC_LOCATION_GROUP, AssetSetType::STATIC_LOCATION_GROUP], true)) {
+                throw new \InvalidArgumentException('The selected asset set is not an enabled location group.');
+            }
+            $query = 'SELECT campaign_asset_set.resource_name FROM campaign_asset_set '
+                ."WHERE campaign_asset_set.campaign = '{$campaignResourceName}' "
+                ."AND campaign_asset_set.asset_set = '{$locationGroupResourceName}' AND campaign_asset_set.status = 'ENABLED'";
+            foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                return 0;
+            }
+            $response = $this->client->getCampaignAssetSetServiceClient()->mutateCampaignAssetSets(new MutateCampaignAssetSetsRequest([
+                'validate_only' => $this->dryRun,
+                'customer_id' => $customerId,
+                'operations' => [new CampaignAssetSetOperation(['create' => new CampaignAssetSet([
+                    'campaign' => $campaignResourceName, 'asset_set' => $locationGroupResourceName,
+                ])])],
+            ]));
+
+            return $this->dryRun ? 0 : count($response->getResults());
         } catch (\Throwable $e) {
             report($e);
-            Log::warning('GetAndLinkLocationAssets: Query failed', [
+            Log::warning('GetAndLinkLocationAssets: Could not verify or link location assets', [
                 'customer_id' => $customerId,
+                'campaign' => $campaignResourceName,
+                'asset_set' => $locationGroupResourceName,
                 'error' => $e->getMessage(),
             ]);
 

@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use App\Services\GoogleAds\CommonServices\GetCompetitiveCampaignState;
-use Google\Ads\GoogleAds\V22\Common\TargetSpend;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Common\TargetSpend;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Resources\AdGroup;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 use Google\ApiCore\PagedListResponse;
 use Tests\TestCase;
 
@@ -35,7 +35,7 @@ class OptimizationPlatformStateTest extends TestCase
                 $this->assertStringContainsString('ad_group.cpc_bid_micros', $fields);
                 $rows = [new GoogleAdsRow(['ad_group' => new AdGroup(['resource_name' => 'customers/123/adGroups/12', 'cpc_bid_micros' => 1500000]),
                     'ad_group_criterion' => new AdGroupCriterion(['resource_name' => 'customers/123/adGroupCriteria/12~45',
-                        'status' => 2, 'cpc_bid_micros' => 0, 'keyword' => new \Google\Ads\GoogleAds\V22\Common\KeywordInfo(['text' => 'ads management', 'match_type' => 2])])])];
+                        'status' => 2, 'cpc_bid_micros' => 0, 'keyword' => new \Google\Ads\GoogleAds\V26\Common\KeywordInfo(['text' => 'ads management', 'match_type' => 2])])])];
             }
             $response = $this->createMock(PagedListResponse::class);
             $response->method('getIterator')->willReturn(new \ArrayIterator($rows));

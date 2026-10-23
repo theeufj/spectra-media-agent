@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
-use Google\Ads\GoogleAds\V22\Enums\TimeTypeEnum\TimeType;
-use Google\Ads\GoogleAds\V22\Resources\BillingSetup;
-use Google\Ads\GoogleAds\V22\Services\BillingSetupOperation;
-use Google\Ads\GoogleAds\V22\Services\ListPaymentsAccountsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateBillingSetupRequest;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Enums\TimeTypeEnum\TimeType;
+use Google\Ads\GoogleAds\V26\Resources\BillingSetup;
+use Google\Ads\GoogleAds\V26\Services\BillingSetupOperation;
+use Google\Ads\GoogleAds\V26\Services\ListPaymentsAccountsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateBillingSetupRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Illuminate\Support\Facades\Log;
 
 class BillingSetupService extends BaseGoogleAdsService
@@ -58,7 +58,7 @@ class BillingSetupService extends BaseGoogleAdsService
                 'create' => $billingSetup,
             ]);
 
-            // MutateBillingSetupRequest is the one mutate request in the v22 SDK
+            // MutateBillingSetupRequest is the one mutate request in the V26 SDK
             // with no validate_only field, so a dry run cannot be validated
             // server-side — it can only be not sent. Without this,
             // ->dryRun() would still link the sub-account to a live payments
@@ -140,7 +140,7 @@ class BillingSetupService extends BaseGoogleAdsService
             foreach ($response->getPaymentsAccounts() as $account) {
                 Log::info('Found payments account for billing setup', [
                     'resource_name' => $account->getResourceName(),
-                    'display_name' => $account->getDisplayName(),
+                    'display_name' => $account->getName(),
                 ]);
 
                 return $account->getResourceName();

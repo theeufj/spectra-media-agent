@@ -11,7 +11,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Campaigns\GoogleBudgetPacingHistory;
 use App\Services\GoogleAds\CommonServices\GetCampaignBudgetPacing;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
 use Illuminate\Support\Facades\Log;
 
 /** One read-only comparison for health cards and pacing emails. This never changes spending limits. */

@@ -7,10 +7,10 @@ use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\StorageHelper;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
-use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupAssetsRequest;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Resources\AssetGroupAsset;
+use Google\Ads\GoogleAds\V26\Services\AssetGroupAssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetGroupAssetsRequest;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\ImageManager;
 

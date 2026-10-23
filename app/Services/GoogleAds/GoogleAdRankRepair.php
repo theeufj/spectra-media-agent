@@ -17,27 +17,27 @@ use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\CommonServices\ReadCreativeStagingSafety;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V22\Common\CalloutAsset;
-use Google\Ads\GoogleAds\V22\Common\ResponsiveSearchAdInfo;
-use Google\Ads\GoogleAds\V22\Common\SitelinkAsset;
-use Google\Ads\GoogleAds\V22\Common\StructuredSnippetAsset;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Enums\AssetLinkStatusEnum\AssetLinkStatus;
-use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\ServedAssetFieldTypeEnum\ServedAssetFieldType;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Resources\Asset;
-use Google\Ads\GoogleAds\V22\Resources\CampaignAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\AssetOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignAssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsRequest;
+use Google\Ads\GoogleAds\V26\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V26\Common\CalloutAsset;
+use Google\Ads\GoogleAds\V26\Common\ResponsiveSearchAdInfo;
+use Google\Ads\GoogleAds\V26\Common\SitelinkAsset;
+use Google\Ads\GoogleAds\V26\Common\StructuredSnippetAsset;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetLinkStatusEnum\AssetLinkStatus;
+use Google\Ads\GoogleAds\V26\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\ServedAssetFieldTypeEnum\ServedAssetFieldType;
+use Google\Ads\GoogleAds\V26\Resources\Ad;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V26\Resources\Asset;
+use Google\Ads\GoogleAds\V26\Resources\CampaignAsset;
+use Google\Ads\GoogleAds\V26\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V26\Services\AssetOperation;
+use Google\Ads\GoogleAds\V26\Services\CampaignAssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignAssetsRequest;
 use Google\ApiCore\ApiException;
 use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Cache;
@@ -47,7 +47,7 @@ use Illuminate\Support\Facades\Gate;
 /** Staged creative repair only: no keyword, bidding, budget, targeting or campaign-status mutations. */
 class GoogleAdRankRepair
 {
-    private const STAGING_CONTEXT_FIELDS = ['status', 'start_date', 'end_date', 'channel', 'bidding_strategy',
+    private const STAGING_CONTEXT_FIELDS = ['status', 'start_date', 'end_date', 'start_date_time', 'end_date_time', 'channel', 'bidding_strategy',
         'portfolio_bidding_strategy', 'daily_budget_micros', 'actual_cpc_ceiling_micros', 'currency_code', 'time_zone',
         'google_search_enabled', 'search_partners_enabled', 'display_enabled', 'positive_geo_target_type'];
 

@@ -13,7 +13,7 @@
         "aws/aws-sdk-php": "^3.0",
         "bacon/bacon-qr-code": "^3.1",
         "google/auth": "^1.49",
-        "googleads/google-ads-php": "^31.1",
+        "googleads/google-ads-php": "^35.2.0",
         "guzzlehttp/guzzle": "^7.10",
         "inertiajs/inertia-laravel": "^2.0",
         "intervention/image": "^3.11",

@@ -8,7 +8,7 @@ use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
 use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 

@@ -26,8 +26,8 @@ use App\Services\GoogleAds\CommonServices\UpdateCampaignNetworkSettings;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use App\Services\MicrosoftAds\AdGroupService as MicrosoftAdGroupService;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 

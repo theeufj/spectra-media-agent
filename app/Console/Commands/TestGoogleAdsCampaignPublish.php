@@ -3,18 +3,18 @@
 namespace App\Console\Commands;
 
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\ManualCpc;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\ManualCpc;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V26\Resources\Campaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V26\Services\ListAccessibleCustomersRequest;
 use Illuminate\Console\Command;
 
 class TestGoogleAdsCampaignPublish extends Command
@@ -237,7 +237,7 @@ class TestGoogleAdsCampaignPublish extends Command
     {
         $customerServiceClient = $this->googleAdsClient->getCustomerServiceClient();
 
-        $customer = new \Google\Ads\GoogleAds\V22\Resources\Customer([
+        $customer = new \Google\Ads\GoogleAds\V26\Resources\Customer([
             'descriptive_name' => 'Test Client Account - '.date('Y-m-d H:i:s'),
             'currency_code' => 'USD',
             'time_zone' => 'America/New_York',
@@ -247,7 +247,7 @@ class TestGoogleAdsCampaignPublish extends Command
         // we must NOT set test_account=true explicitly if the MCC is already a test account.
         // The sub-account inherits the test status.
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest([
             'customer_id' => $mccCustomerId,
             'customer_client' => $customer,
         ]);
@@ -277,7 +277,7 @@ class TestGoogleAdsCampaignPublish extends Command
                   FROM customer 
                   LIMIT 1';
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
             'customer_id' => $customerId,
             'query' => $query,
         ]);
@@ -311,7 +311,7 @@ class TestGoogleAdsCampaignPublish extends Command
 
         $campaignBudgetServiceClient = $this->googleAdsClient->getCampaignBudgetServiceClient();
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest([
             'customer_id' => $customerId,
             'operations' => [$campaignBudgetOperation],
         ]);
@@ -328,8 +328,8 @@ class TestGoogleAdsCampaignPublish extends Command
             'advertising_channel_type' => AdvertisingChannelType::SEARCH,
             'status' => CampaignStatus::PAUSED, // Start paused for safety
             'campaign_budget' => $budgetResourceName,
-            'start_date' => date('Ymd'),
-            'end_date' => date('Ymd', strtotime('+30 days')),
+            'start_date_time' => date('Y-m-d').' 00:00:00',
+            'end_date_time' => date('Y-m-d', strtotime('+30 days')).' 23:59:59',
             'manual_cpc' => new ManualCpc,
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
@@ -339,7 +339,7 @@ class TestGoogleAdsCampaignPublish extends Command
 
         $campaignServiceClient = $this->googleAdsClient->getCampaignServiceClient();
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignsRequest([
             'customer_id' => $customerId,
             'operations' => [$campaignOperation],
         ]);
@@ -362,12 +362,12 @@ class TestGoogleAdsCampaignPublish extends Command
                     campaign.status,
                     campaign.advertising_channel_type,
                     campaign.campaign_budget,
-                    campaign.start_date,
-                    campaign.end_date
+                    campaign.start_date_time,
+                    campaign.end_date_time
                   FROM campaign 
                   WHERE campaign.id = {$campaignId}";
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
             'customer_id' => $customerId,
             'query' => $query,
         ]);
@@ -395,13 +395,13 @@ class TestGoogleAdsCampaignPublish extends Command
         // You need to specify the MCC customer ID here
         $mccCustomerId = $this->ask('Enter your MCC Customer ID (without dashes)', '7542073739');
 
-        $customer = new \Google\Ads\GoogleAds\V22\Resources\Customer([
+        $customer = new \Google\Ads\GoogleAds\V26\Resources\Customer([
             'descriptive_name' => 'Test Account - '.date('Y-m-d H:i:s'),
             'currency_code' => 'USD',
             'time_zone' => 'America/New_York',
         ]);
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest([
             'customer_id' => str_replace('-', '', $mccCustomerId),
             'customer_client' => $customer,
         ]);

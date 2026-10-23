@@ -5,16 +5,16 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
-use Google\Ads\GoogleAds\V22\Common\Metrics;
-use Google\Ads\GoogleAds\V22\Common\TargetSpend;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V22\Resources\Campaign as GoogleCampaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Resources\Customer as GoogleCustomer;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Common\Metrics;
+use Google\Ads\GoogleAds\V26\Common\TargetSpend;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V26\Resources\Campaign as GoogleCampaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Resources\Customer as GoogleCustomer;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 use Google\ApiCore\PagedListResponse;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -123,7 +123,7 @@ class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
             $rows = [new GoogleAdsRow([
                 'customer' => new GoogleCustomer(['time_zone' => 'America/Los_Angeles', 'currency_code' => 'AUD']),
                 'campaign' => new GoogleCampaign([
-                    'start_date' => $this->campaignStartDate,
+                    'start_date_time' => $this->campaignStartDate.' 00:00:00',
                     'status' => CampaignStatus::ENABLED, 'advertising_channel_type' => AdvertisingChannelType::SEARCH,
                     'bidding_strategy_type' => BiddingStrategyType::TARGET_SPEND,
                     'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),

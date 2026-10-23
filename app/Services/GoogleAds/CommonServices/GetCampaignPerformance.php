@@ -4,8 +4,8 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Contracts\Ads\CampaignPerformanceSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 
 class GetCampaignPerformance extends BaseGoogleAdsService implements CampaignPerformanceSource
 {

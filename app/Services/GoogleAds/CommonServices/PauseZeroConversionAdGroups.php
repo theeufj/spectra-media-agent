@@ -4,7 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 
 /**
  * Deterministically pause ad groups that have spent real money over a trailing window

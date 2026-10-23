@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetServiceClient;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V26\Services\Client\CampaignBudgetServiceClient;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest;
 
 class CreateCampaignBudget extends BaseGoogleAdsService
 {
@@ -20,7 +20,7 @@ class CreateCampaignBudget extends BaseGoogleAdsService
         $campaignBudget = new CampaignBudget([
             'name' => $budgetName,
             'amount_micros' => $dailyBudgetMicros,
-            'delivery_method' => \Google\Ads\GoogleAds\V22\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod::STANDARD,
+            'delivery_method' => \Google\Ads\GoogleAds\V26\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod::STANDARD,
             'explicitly_shared' => $explicitlyShared,
         ]);
 

@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Services\ListAccessibleCustomersRequest;
 use Illuminate\Console\Command;
 
 class TestGoogleAdsMCCAccess extends Command
@@ -177,8 +177,8 @@ class TestGoogleAdsMCCAccess extends Command
                       FROM customer 
                       LIMIT 1';
 
-            // Use SearchGoogleAdsRequest for V22
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            // Use SearchGoogleAdsRequest for V26
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]);
@@ -228,7 +228,7 @@ class TestGoogleAdsMCCAccess extends Command
                       FROM customer_client 
                       WHERE customer_client.level <= 1';
 
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccCustomerId,
                 'query' => $query,
             ]);

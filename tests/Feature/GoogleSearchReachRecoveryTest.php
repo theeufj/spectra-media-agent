@@ -14,7 +14,7 @@ use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\GoogleSearchReachPlanner;
 use App\Services\Agents\GoogleSearchReachRecovery;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;

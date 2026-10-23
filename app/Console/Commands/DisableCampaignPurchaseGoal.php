@@ -4,10 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
-use Google\Ads\GoogleAds\V22\Resources\CampaignConversionGoal;
-use Google\Ads\GoogleAds\V22\Services\CampaignConversionGoalOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignConversionGoalsRequest;
+use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Google\Ads\GoogleAds\V26\Resources\CampaignConversionGoal;
+use Google\Ads\GoogleAds\V26\Services\CampaignConversionGoalOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignConversionGoalsRequest;
 use Google\Protobuf\FieldMask;
 use Illuminate\Console\Command;
 

@@ -25,21 +25,28 @@ class ForecastFrame
 {
     /**
      * @param  array<string, mixed>  $raw  an unscaled forecast from KeywordForecastBuilder
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    public static function apply(array $raw, float $monthlyBudget): array
+    public static function apply(array $raw, float $monthlyBudget): ?array
     {
-        $cost = (float) ($raw['cost'] ?? 0);
+        $cost = self::number($raw['cost'] ?? null);
+        $clicks = self::number($raw['clicks'] ?? null);
+        $conversions = self::number($raw['conversions'] ?? null);
+        if ($cost === null || $clicks === null || $conversions === null) {
+            return null;
+        }
+        $impressions = self::number($raw['impressions'] ?? null);
         $scaled = $monthlyBudget > 0 && $cost > $monthlyBudget;
         $factor = $scaled ? $monthlyBudget / $cost : 1.0;
 
         return array_merge($raw, [
             'budget' => round($monthlyBudget, 2),
             'budget_capped' => $scaled,
-            'impressions' => (int) round(((float) ($raw['impressions'] ?? 0)) * $factor),
-            'clicks' => (int) round(((float) ($raw['clicks'] ?? 0)) * $factor),
+            'impressions' => $impressions === null ? null : (int) round($impressions * $factor),
+            'clicks' => (int) round($clicks * $factor),
             'cost' => round($cost * $factor, 2),
-            'conversions' => round(((float) ($raw['conversions'] ?? 0)) * $factor, 1),
+            'conversions' => round($conversions * $factor, 1),
+            'ctr' => self::number($raw['ctr'] ?? null),
 
             /*
              * The unscaled totals travel with the framed ones so the browser
@@ -47,11 +54,17 @@ class ForecastFrame
              * the scarce resource here, not arithmetic.
              */
             'unconstrained' => [
-                'impressions' => (int) ($raw['impressions'] ?? 0),
-                'clicks' => (int) ($raw['clicks'] ?? 0),
+                'impressions' => $impressions === null ? null : (int) $impressions,
+                'clicks' => (int) $clicks,
                 'cost' => round($cost, 2),
-                'conversions' => round((float) ($raw['conversions'] ?? 0), 1),
+                'conversions' => round($conversions, 1),
             ],
         ]);
+    }
+
+    private static function number(mixed $value): ?float
+    {
+        return (is_int($value) || is_float($value)) && is_finite((float) $value) && $value >= 0
+            ? (float) $value : null;
     }
 }

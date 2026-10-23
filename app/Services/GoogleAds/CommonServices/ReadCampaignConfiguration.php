@@ -24,7 +24,7 @@ class ReadCampaignConfiguration extends BaseGoogleAdsService
         $row = $this->rows($customerId, "SELECT campaign.id, campaign.status FROM campaign WHERE campaign.resource_name = '{$campaign}'")[0] ?? [];
         $status = $row['campaign']['status'] ?? 'UNKNOWN';
 
-        return is_int($status) ? \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::name($status) : strtoupper((string) $status);
+        return is_int($status) ? \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::name($status) : strtoupper((string) $status);
     }
 
     public function sitelinks(string $customerId, string $campaign): array

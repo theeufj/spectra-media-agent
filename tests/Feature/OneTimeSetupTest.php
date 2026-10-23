@@ -357,13 +357,13 @@ class OneTimeSetupTest extends TestCase
         \App\Models\Setting::where('key', 'campaign_testing_mode')->delete();
         config(['campaigns.testing_mode_default' => false, 'campaigns.default_status' => 'ENABLED']);
 
-        $paused = \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::PAUSED;
+        $paused = \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::PAUSED;
         $this->assertSame($paused, \App\Services\CampaignStatusHelper::getGoogleAdsStatus(customer: $customer));
         $this->assertSame($paused, \App\Services\CampaignStatusHelper::getGoogleAdsStatus('ENABLED', $customer));
 
         $customer->service_type = 'managed';
         $this->assertSame(
-            \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::ENABLED,
+            \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::ENABLED,
             \App\Services\CampaignStatusHelper::getGoogleAdsStatus('ENABLED', $customer),
         );
     }

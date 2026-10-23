@@ -19,7 +19,7 @@ use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\Diagnostics\OfficialTroubleshootingDocs;
 use App\Services\Health\CampaignHealthChecker;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;

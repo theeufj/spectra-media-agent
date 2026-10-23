@@ -16,7 +16,7 @@ use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\Health\CampaignBudgetPacing;
 use App\Services\Health\CampaignHealthChecker;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;

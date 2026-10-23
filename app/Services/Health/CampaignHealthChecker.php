@@ -11,8 +11,8 @@ use App\Models\Strategy;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use Carbon\Carbon;
-use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
+use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Support\Facades\Log;
 
 class CampaignHealthChecker

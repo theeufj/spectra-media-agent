@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AccessInvitationStatusEnum\AccessInvitationStatus;
-use Google\Ads\GoogleAds\V22\Enums\AccessRoleEnum\AccessRole;
-use Google\Ads\GoogleAds\V22\Resources\CustomerUserAccessInvitation;
-use Google\Ads\GoogleAds\V22\Services\CustomerUserAccessInvitationOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCustomerUserAccessInvitationRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AccessInvitationStatusEnum\AccessInvitationStatus;
+use Google\Ads\GoogleAds\V26\Enums\AccessRoleEnum\AccessRole;
+use Google\Ads\GoogleAds\V26\Resources\CustomerUserAccessInvitation;
+use Google\Ads\GoogleAds\V26\Services\CustomerUserAccessInvitationOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCustomerUserAccessInvitationRequest;
 use Google\ApiCore\ApiException;
 
 /**
@@ -133,14 +133,15 @@ class InviteCustomerUser extends BaseGoogleAdsService
                     ])
                 );
 
-            $resourceName = $response->getResult()?->getResourceName();
+            $result = $response->getResult();
+            $resourceName = $result?->getResourceName();
 
             // Google's multi-party approval can make this mutate succeed
-            // without creating an invitation. Our V22 client predates the
-            // backported review field, so an empty resource name is the only
-            // signal it exposes. The buyer gets no email until another admin
+            // without completing the invitation. An explicit review takes
+            // precedence even if Google also returns a resource name; an empty
+            // resource remains unconfirmed. The buyer gets no email until an admin
             // approves the request; never report it as an invitation sent.
-            if (! $resourceName) {
+            if ($result?->getMultiPartyAuthReview() || ! $resourceName) {
                 $this->logInfo("Google Ads administrator invitation for {$email} to {$customerId} awaits multi-party approval");
 
                 return ['success' => true, 'resource_name' => null, 'approval_pending' => true];

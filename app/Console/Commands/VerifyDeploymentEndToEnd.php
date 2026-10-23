@@ -7,7 +7,7 @@ use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Console\Command;
 
 /**

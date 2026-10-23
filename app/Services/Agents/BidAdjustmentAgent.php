@@ -10,9 +10,9 @@ use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\GoogleAds\CommonServices\GetPerformanceBySegment;
 use App\Services\GoogleAds\CommonServices\SetAdSchedule;
 use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
-use Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek;
-use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
-use Google\Ads\GoogleAds\V22\Enums\MinuteOfHourEnum\MinuteOfHour;
+use Google\Ads\GoogleAds\V26\Enums\DayOfWeekEnum\DayOfWeek;
+use Google\Ads\GoogleAds\V26\Enums\DeviceEnum\Device;
+use Google\Ads\GoogleAds\V26\Enums\MinuteOfHourEnum\MinuteOfHour;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 

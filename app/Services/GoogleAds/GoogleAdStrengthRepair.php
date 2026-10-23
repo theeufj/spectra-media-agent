@@ -6,7 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Notification;
 use App\Notifications\CriticalAgentAlert;
-use Google\Ads\GoogleAds\V22\Enums\AdStrengthEnum\AdStrength;
+use Google\Ads\GoogleAds\V26\Enums\AdStrengthEnum\AdStrength;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 

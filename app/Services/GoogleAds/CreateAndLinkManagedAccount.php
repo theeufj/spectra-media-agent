@@ -63,7 +63,7 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
                 return null;
             }
 
-            // Note: In Google Ads API v22, createCustomerClient() automatically links the account to MCC
+            // Note: In Google Ads API v26, createCustomerClient() automatically links the account to MCC
             // No separate linking step is needed
 
             Log::info('Successfully created managed account (automatically linked via API)', [

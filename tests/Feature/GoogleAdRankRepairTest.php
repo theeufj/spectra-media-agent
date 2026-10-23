@@ -15,17 +15,17 @@ use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\GoogleAdRankRepair;
 use App\Services\GoogleAds\GoogleAdStrengthRepair;
 use Carbon\CarbonImmutable;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Services\Client\AdGroupAdServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\AssetServiceClient;
-use Google\Ads\GoogleAds\V22\Services\Client\CampaignAssetServiceClient;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdResult;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsResponse;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetResult;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetsResponse;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetResult;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsResponse;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Services\Client\AdGroupAdServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\AssetServiceClient;
+use Google\Ads\GoogleAds\V26\Services\Client\CampaignAssetServiceClient;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAdResult;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAdsResponse;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetResult;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetsResponse;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignAssetResult;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignAssetsResponse;
 use Google\ApiCore\ApiException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
@@ -995,6 +995,8 @@ class RankRepairFixture extends GoogleAdRankRepair
         parent::__construct($gemini, $evidence);
         $this->snapshot = ['status' => 2, 'channel' => 2, 'daily_budget_micros' => 10_000_000,
             'start_date' => now('Australia/Sydney')->subDays(3)->toDateString(),
+            'start_date_time' => now('Australia/Sydney')->subDays(3)->toDateString().' 00:00:00',
+            'end_date_time' => now('Australia/Sydney')->addMonth()->toDateString().' 23:59:59',
             'end_date' => now('Australia/Sydney')->addMonth()->toDateString(), 'portfolio_bidding_strategy' => '',
             'google_search_enabled' => true, 'search_partners_enabled' => false, 'display_enabled' => false,
             'positive_geo_target_type' => 7,

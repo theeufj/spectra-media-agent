@@ -5,27 +5,28 @@ namespace App\Services\GoogleAds\Diagnostics;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionPrimaryStatusEnum\AdGroupCriterionPrimaryStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionPrimaryStatusReasonEnum\AdGroupCriterionPrimaryStatusReason;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdNetworkTypeEnum\AdNetworkType;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V22\Enums\CampaignCriterionStatusEnum\CampaignCriterionStatus;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
-use Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek;
-use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Enums\MinuteOfHourEnum\MinuteOfHour;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
-use Google\Ads\GoogleAds\V22\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType;
-use Google\Ads\GoogleAds\V22\Enums\TargetingDimensionEnum\TargetingDimension;
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupCriterionPrimaryStatusEnum\AdGroupCriterionPrimaryStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupCriterionPrimaryStatusReasonEnum\AdGroupCriterionPrimaryStatusReason;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdNetworkTypeEnum\AdNetworkType;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\CampaignCriterionStatusEnum\CampaignCriterionStatus;
+use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V26\Enums\CriterionTypeEnum\CriterionType;
+use Google\Ads\GoogleAds\V26\Enums\DayOfWeekEnum\DayOfWeek;
+use Google\Ads\GoogleAds\V26\Enums\DeviceEnum\Device;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\MinuteOfHourEnum\MinuteOfHour;
+use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Google\Ads\GoogleAds\V26\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType;
+use Google\Ads\GoogleAds\V26\Enums\TargetingDimensionEnum\TargetingDimension;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 
 /** Read-only, network-specific evidence for a Google Search delivery incident. */
 class InspectSearchDelivery extends BaseGoogleAdsService
@@ -39,7 +40,7 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         }
 
         $settings = null;
-        $query = "SELECT customer.time_zone, customer.currency_code, campaign.status, campaign.start_date, campaign.end_date,
+        $query = "SELECT customer.time_zone, customer.currency_code, campaign.status, campaign.start_date_time, campaign.end_date_time,
                          campaign.advertising_channel_type, campaign.bidding_strategy_type,
                          campaign.maximize_conversions.target_cpa_micros, campaign.target_spend.cpc_bid_ceiling_micros,
                          campaign.bidding_strategy, campaign.geo_target_type_setting.positive_geo_target_type,
@@ -54,8 +55,10 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                 'account_time_zone_verified' => in_array($row->getCustomer()->getTimeZone(), timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
                 'status' => $value->getStatus(),
-                'start_date' => $value->getStartDate(),
-                'end_date' => $value->getEndDate(),
+                'start_date' => CampaignDateTimes::calendarDate($value->getStartDateTime()),
+                'start_date_time' => $value->getStartDateTime(),
+                'end_date' => CampaignDateTimes::calendarDate($value->getEndDateTime()),
+                'end_date_time' => $value->getEndDateTime(),
                 'channel' => $value->getAdvertisingChannelType(),
                 'bidding_strategy' => $value->getBiddingStrategyType(),
                 'target_cpa_micros' => (int) ($value->getMaximizeConversions()?->getTargetCpaMicros() ?? 0),
@@ -292,8 +295,8 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                     'bid_modifier' => $modifier->getBidModifier()];
             }
         }
-        // v22 forecasts support explicit keyword negatives, not references to
-        // shared negative lists. Preserve uncertainty instead of omitting them.
+        // The v26 forecast cannot model keyword negatives or shared-list
+        // references. Preserve this uncertainty instead of omitting exclusions.
         $query = "SELECT campaign_shared_set.shared_set, shared_set.type
                   FROM campaign_shared_set WHERE campaign.id = {$campaignId}
                   AND campaign_shared_set.status = ENABLED AND shared_set.type = NEGATIVE_KEYWORDS";

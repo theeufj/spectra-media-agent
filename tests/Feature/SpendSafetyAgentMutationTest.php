@@ -9,7 +9,7 @@ use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\GeminiService;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Laravel\Pennant\Feature;
 use Tests\TestCase;

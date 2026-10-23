@@ -3,9 +3,9 @@
 namespace Tests\Unit\GoogleAds;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient;
-use Google\Ads\GoogleAds\V22\Services\Client\GoogleAdsServiceClient;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
+use Google\Ads\GoogleAds\V26\Services\Client\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Google\ApiCore\PagedListResponse;
 use Google\ApiCore\RetrySettings;
 use Tests\TestCase;

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 use Tests\TestCase;
 
 /**
@@ -33,7 +33,7 @@ class GoogleAdsExceptionHandlingTest extends TestCase
         // reason the handlers were dead.
         // Assembled rather than written out, so that this file does not itself
         // contain the string the scan below looks for.
-        $missing = 'Google\\Ads\\GoogleAds\\V22\\'.'Errors\\GoogleAdsException';
+        $missing = 'Google\\Ads\\GoogleAds\\V26\\'.'Errors\\GoogleAdsException';
 
         $this->assertFalse(class_exists($missing), 'if this now exists, revisit the import fix');
     }

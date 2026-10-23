@@ -19,7 +19,7 @@ use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\CommonServices\UpdateResponsiveSearchAd;
 use App\Services\GoogleAds\GoogleAdStrengthRepair;
-use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
+use Google\Ads\GoogleAds\V26\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;

@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Support\CampaignDateTimes;
 
 /** Fresh platform metrics. API failures propagate; stale local spend is not a stop signal. */
 class GetCampaignSpendSafety extends BaseGoogleAdsService
@@ -19,7 +20,7 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($resource !== "customers/{$customerId}/campaigns/{$campaign->googleCampaignNumericId()}") {
             throw new \RuntimeException('Spend safety campaign resource does not match its customer account.');
         }
-        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.start_date, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
+        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.start_date_time, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
             .'campaign_budget.amount_micros FROM campaign '
             ."WHERE campaign.resource_name = '{$resource}'";
         $snapshot = null;
@@ -29,7 +30,7 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
                 'campaign_type' => $row->getCampaign()->getAdvertisingChannelType(),
                 'account_timezone' => $row->getCustomer()->getTimeZone(),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
-                'campaign_start_date' => $row->getCampaign()->getStartDate(),
+                'campaign_start_date' => $row->getCampaign()->getStartDateTime(),
                 'bidding_strategy' => $row->getCampaign()->getBiddingStrategyType(),
                 'cpc_bid_ceiling_micros' => (int) ($row->getCampaign()->getTargetSpend()?->getCpcBidCeilingMicros() ?? 0),
                 'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros(),
@@ -38,11 +39,13 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($snapshot === null) {
             throw new \RuntimeException('Google did not return the campaign spend safety snapshot.');
         }
-        if (! preg_match('/^(\d{4})-?(\d{2})-?(\d{2})$/', $snapshot['campaign_start_date'], $date)
-            || ! checkdate((int) $date[2], (int) $date[3], (int) $date[1])) {
+        // V26 returns an account-local timestamp. GAQL metrics still require
+        // date bounds, so retain its local calendar date without UTC conversion.
+        $startDate = CampaignDateTimes::calendarDate($snapshot['campaign_start_date']);
+        if ($startDate === null) {
             throw new \RuntimeException('Google did not return a valid campaign start date for spend safety.');
         }
-        $snapshot['campaign_start_date'] = "{$date[1]}-{$date[2]}-{$date[3]}";
+        $snapshot['campaign_start_date'] = $startDate;
         $lifetime = $this->metrics($customerId, $resource);
         $snapshot['cost_micros'] = $lifetime['cost_micros'];
         $snapshot['conversions'] = $lifetime['conversions'];

@@ -19,7 +19,7 @@ class OfficialTroubleshootingDocs
         ],
         'impression_share' => [
             'title' => 'Google Ads API impression-share metrics',
-            'url' => 'https://developers.google.com/google-ads/api/fields/v22/metrics',
+            'url' => 'https://developers.google.com/google-ads/api/fields/v26/metrics',
             'fallback' => 'Search impression share below 10% is reported as 0.0999; rank loss above 90% is reported as 0.9001.',
         ],
     ];

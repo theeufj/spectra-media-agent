@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Resources\CampaignAsset;
-use Google\Ads\GoogleAds\V22\Services\CampaignAssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Resources\CampaignAsset;
+use Google\Ads\GoogleAds\V26\Services\CampaignAssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCampaignAssetsRequest;
 
 class LinkCampaignAsset extends BaseGoogleAdsService
 {

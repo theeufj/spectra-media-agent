@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
-use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Resources\Customer;
+use Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 use Illuminate\Support\Facades\Log;
 
 class MCCAccountManager extends BaseGoogleAdsService

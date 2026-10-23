@@ -26,10 +26,10 @@ use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 // Reporting
 use App\Services\Reporting\ExecutiveReportService;
 use App\Services\Reporting\QualityScoreTrendingService;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 // Optimization agent
-use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\DeviceEnum\Device;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Console\Command;
 
 class TestNewServices extends Command
@@ -213,7 +213,7 @@ class TestNewServices extends Command
                    .'LIMIT 1';
 
             $response = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $query,
                 ])
@@ -735,7 +735,7 @@ class TestNewServices extends Command
                    ."AND campaign_criterion.type IN ('DEVICE', 'LOCATION', 'AD_SCHEDULE')";
 
             $response = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $query,
                 ])
@@ -744,13 +744,13 @@ class TestNewServices extends Command
             $criteria = [];
             foreach ($response->getIterator() as $row) {
                 $cc = $row->getCampaignCriterion();
-                $type = \Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType::name($cc->getType());
+                $type = \Google\Ads\GoogleAds\V26\Enums\CriterionTypeEnum\CriterionType::name($cc->getType());
                 $modifier = $cc->getBidModifier() ?: '-';
 
                 $detail = match ($type) {
-                    'DEVICE' => 'Device: '.\Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device::name($cc->getDevice()->getType()),
+                    'DEVICE' => 'Device: '.\Google\Ads\GoogleAds\V26\Enums\DeviceEnum\Device::name($cc->getDevice()->getType()),
                     'LOCATION' => 'Location: '.($cc->getLocation()?->getGeoTargetConstant() ?? '?'),
-                    'AD_SCHEDULE' => 'Day: '.\Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek::name($cc->getAdSchedule()->getDayOfWeek()),
+                    'AD_SCHEDULE' => 'Day: '.\Google\Ads\GoogleAds\V26\Enums\DayOfWeekEnum\DayOfWeek::name($cc->getAdSchedule()->getDayOfWeek()),
                     default => $type,
                 };
 
@@ -777,7 +777,7 @@ class TestNewServices extends Command
                         ."WHERE campaign.status != 'REMOVED'";
 
             $assetResponse = $client->getGoogleAdsServiceClient()->search(
-                new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
                     'query' => $assetQuery,
                 ])
@@ -789,7 +789,7 @@ class TestNewServices extends Command
                 $asset = $row->getAsset();
                 $assets[] = [
                     $row->getCampaign()->getName(),
-                    \Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType::name($asset->getType()),
+                    \Google\Ads\GoogleAds\V26\Enums\AssetTypeEnum\AssetType::name($asset->getType()),
                     $asset->getName(),
                 ];
             }

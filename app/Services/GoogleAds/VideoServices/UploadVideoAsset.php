@@ -4,12 +4,12 @@ namespace App\Services\GoogleAds\VideoServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\YoutubeVideoAsset;
-use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
-use Google\Ads\GoogleAds\V22\Resources\Asset;
-use Google\Ads\GoogleAds\V22\Services\AssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\YoutubeVideoAsset;
+use Google\Ads\GoogleAds\V26\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V26\Resources\Asset;
+use Google\Ads\GoogleAds\V26\Services\AssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetsRequest;
 
 class UploadVideoAsset extends BaseGoogleAdsService
 {

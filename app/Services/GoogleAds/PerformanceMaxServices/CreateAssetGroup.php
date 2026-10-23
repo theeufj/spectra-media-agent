@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AssetGroupStatusEnum\AssetGroupStatus;
-use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
-use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AssetGroupStatusEnum\AssetGroupStatus;
+use Google\Ads\GoogleAds\V26\Resources\AssetGroup;
+use Google\Ads\GoogleAds\V26\Services\AssetGroupOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetGroupsRequest;
 
 class CreateAssetGroup extends BaseGoogleAdsService
 {

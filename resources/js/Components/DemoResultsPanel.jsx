@@ -21,7 +21,7 @@ export default function DemoResultsPanel({ result }) {
     const descriptions = ad_copy?.descriptions?.filter(Boolean) ?? [];
     const hasAdCopy = headlines.length > 0;
 
-    const num = (n) => Number(n || 0).toLocaleString();
+    const num = (n) => n == null ? '—' : Number(n).toLocaleString();
     const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (

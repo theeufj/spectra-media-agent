@@ -4,12 +4,12 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-use Google\Ads\GoogleAds\V22\Enums\AssetLinkStatusEnum\AssetLinkStatus;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAssetsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\AssetLinkStatusEnum\AssetLinkStatus;
+use Google\Ads\GoogleAds\V26\Resources\AdGroupAsset;
+use Google\Ads\GoogleAds\V26\Services\AdGroupAssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAdGroupAssetsRequest;
 
 class LinkAdGroupAsset extends BaseGoogleAdsService
 {

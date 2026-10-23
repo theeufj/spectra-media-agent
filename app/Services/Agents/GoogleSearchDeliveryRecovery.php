@@ -10,7 +10,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Pennant\Feature;
 

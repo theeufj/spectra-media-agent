@@ -9,7 +9,7 @@ use App\Services\Agents\GoogleSearchMutationGuard;
 use App\Services\Agents\GoogleSearchReachGate;
 use App\Services\Agents\GoogleSearchReachPlanner;
 use App\Services\Agents\Optimization\RecommendationApplier;
-use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -93,6 +93,39 @@ class GoogleSearchMutationGuardTest extends TestCase
 
             return $e;
         })->assess($campaign, [$this->change()])['ready']);
+    }
+
+    public function test_v26_click_and_cost_evidence_can_verify_reach_when_impressions_are_unavailable(): void
+    {
+        $result = $this->guard(evidence: fn ($evidence) => array_replace_recursive($evidence,
+            ['forecast' => ['impressions' => null, 'ctr' => null]]))->assess($this->campaign(), [$this->change()]);
+
+        $this->assertTrue($result['ready']);
+        foreach (['clicks', 'cost_micros'] as $metric) {
+            $result = $this->guard(evidence: fn ($evidence) => array_replace_recursive($evidence,
+                ['forecast' => [$metric => null, 'impressions' => null]]))->assess($this->campaign(), [$this->change()]);
+            $this->assertFalse($result['ready'], $metric.' cannot be inferred from a missing optional metric.');
+            $this->assertContains('search_reach_forecast_unverified', array_column($result['issues'], 'code'));
+        }
+    }
+
+    public function test_v26_partial_serving_days_and_same_day_schedule_changes_are_not_lost(): void
+    {
+        $snapshot = $this->snapshot();
+        $snapshot['start_date_time'] = now('Australia/Sydney')->addDay()->toDateString().' 15:30:00';
+        $snapshot['end_date_time'] = $snapshot['end_date'].' 23:59:59';
+        $result = $this->guard($snapshot)->assess($this->campaign(), [$this->change()]);
+        $this->assertFalse($result['ready']);
+        $this->assertContains('search_reach_forecast_outside_live_dates', array_column($result['issues'], 'code'));
+
+        $changed = $snapshot;
+        $changed['start_date_time'] = substr($snapshot['start_date_time'], 0, 10).' 16:30:00';
+        $this->assertNotSame(GoogleSearchReachGate::settingsFingerprint($snapshot), GoogleSearchReachGate::settingsFingerprint($changed));
+
+        $snapshot['end_date_time'] = '2026-02-30 23:59:59';
+        $result = $this->guard($snapshot)->assess($this->campaign(), [$this->change()]);
+        $this->assertFalse($result['ready']);
+        $this->assertContains('search_reach_live_dates_unverified', array_column($result['issues'], 'code'));
     }
 
     public function test_pausing_or_removing_the_only_active_keyword_is_deferred_without_a_provider_call(): void

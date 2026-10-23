@@ -4,11 +4,11 @@ namespace App\Services\GoogleAds\SearchServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V26\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V26\Resources\AdGroup;
+use Google\Ads\GoogleAds\V26\Services\AdGroupOperation;
 
 class CreateSearchAdGroup extends BaseGoogleAdsService
 {
@@ -50,7 +50,7 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
         try {
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
             // Fix: Use MutateAdGroupsRequest object
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateAdGroupsRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$adGroupOperation],
@@ -75,7 +75,7 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
         $query = "SELECT ad_group.resource_name, ad_group.name FROM ad_group WHERE ad_group.campaign = '{$campaignResourceName}' AND ad_group.name = '{$adGroupName}'";
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]);

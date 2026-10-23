@@ -3,10 +3,10 @@
 namespace App\Console\Commands;
 
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Resources\Customer;
+use Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest;
+use Google\Ads\GoogleAds\V26\Services\ListAccessibleCustomersRequest;
 use Google\ApiCore\ApiException;
 use Illuminate\Console\Command;
 
@@ -40,7 +40,7 @@ class TestGoogleAdsConnection extends Command
                 ->build();
 
             // Create a GoogleAdsClient.
-            $googleAdsClient = (new \Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder)
+            $googleAdsClient = (new \Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder)
                 ->fromFile(storage_path('app/google_ads_php.ini'))
                 ->withOAuth2Credential($oAuth2Credential)
                 ->build();

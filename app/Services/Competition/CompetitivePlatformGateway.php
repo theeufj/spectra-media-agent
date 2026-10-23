@@ -7,7 +7,7 @@ use App\Services\Agents\CampaignOptimizationAgent;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\GetCompetitiveCampaignState;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 
 /** Google changes use the existing MCC services and never create another budget. */
 class CompetitivePlatformGateway

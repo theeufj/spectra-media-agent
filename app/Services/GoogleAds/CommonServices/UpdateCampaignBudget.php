@@ -79,12 +79,12 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
 
     protected function writeBudget(string $customerId, string $budgetResourceName, int $micros): bool
     {
-        $budget = new \Google\Ads\GoogleAds\V22\Resources\CampaignBudget(['resource_name' => $budgetResourceName, 'amount_micros' => $micros]);
-        $operation = new \Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+        $budget = new \Google\Ads\GoogleAds\V26\Resources\CampaignBudget(['resource_name' => $budgetResourceName, 'amount_micros' => $micros]);
+        $operation = new \Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
         $operation->setUpdate($budget);
         $operation->setUpdateMask(new FieldMask(['paths' => ['amount_micros']]));
         $response = $this->client->getCampaignBudgetServiceClient()->mutateCampaignBudgets(
-            new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+            new \Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest([
                 'validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$operation],
             ])
         );

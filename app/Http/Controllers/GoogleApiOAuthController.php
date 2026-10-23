@@ -165,7 +165,7 @@ class GoogleApiOAuthController extends Controller
 
             $response = Http::withToken($token)
                 ->withHeaders(['developer-token' => $developerToken])
-                ->get('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers');
+                ->get('https://googleads.googleapis.com/v26/customers:listAccessibleCustomers');
 
             if (! $response->successful()) {
                 $body = $response->json();

@@ -30,7 +30,7 @@ class CampaignForecastPreview
         // happens after it, so changing the demo budget does not invalidate a
         // day's worth of Keyword Planner calls.
         $raw = Cache::remember(
-            'demo_forecast:'.md5($url),
+            'demo_forecast:v26:'.md5($url),
             now()->addHours(24),
             fn () => KeywordForecastBuilder::fromDemoConfig()->forUrl($url)
         );

@@ -3,21 +3,21 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\FlexibleRuleOperandInfo;
-use Google\Ads\GoogleAds\V22\Common\FlexibleRuleUserListInfo;
-use Google\Ads\GoogleAds\V22\Common\RuleBasedUserListInfo;
-use Google\Ads\GoogleAds\V22\Common\UserListRuleInfo;
-use Google\Ads\GoogleAds\V22\Common\UserListRuleItemGroupInfo;
-use Google\Ads\GoogleAds\V22\Common\UserListRuleItemInfo;
-use Google\Ads\GoogleAds\V22\Common\UserListStringRuleItemInfo;
-use Google\Ads\GoogleAds\V22\Enums\UserListFlexibleRuleOperatorEnum\UserListFlexibleRuleOperator;
-use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
-use Google\Ads\GoogleAds\V22\Enums\UserListPrepopulationStatusEnum\UserListPrepopulationStatus;
-use Google\Ads\GoogleAds\V22\Enums\UserListStringRuleItemOperatorEnum\UserListStringRuleItemOperator;
-use Google\Ads\GoogleAds\V22\Resources\UserList;
-use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
-use Google\Ads\GoogleAds\V22\Services\UserListOperation;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\FlexibleRuleOperandInfo;
+use Google\Ads\GoogleAds\V26\Common\FlexibleRuleUserListInfo;
+use Google\Ads\GoogleAds\V26\Common\RuleBasedUserListInfo;
+use Google\Ads\GoogleAds\V26\Common\UserListRuleInfo;
+use Google\Ads\GoogleAds\V26\Common\UserListRuleItemGroupInfo;
+use Google\Ads\GoogleAds\V26\Common\UserListRuleItemInfo;
+use Google\Ads\GoogleAds\V26\Common\UserListStringRuleItemInfo;
+use Google\Ads\GoogleAds\V26\Enums\UserListFlexibleRuleOperatorEnum\UserListFlexibleRuleOperator;
+use Google\Ads\GoogleAds\V26\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
+use Google\Ads\GoogleAds\V26\Enums\UserListPrepopulationStatusEnum\UserListPrepopulationStatus;
+use Google\Ads\GoogleAds\V26\Enums\UserListStringRuleItemOperatorEnum\UserListStringRuleItemOperator;
+use Google\Ads\GoogleAds\V26\Resources\UserList;
+use Google\Ads\GoogleAds\V26\Services\MutateUserListsRequest;
+use Google\Ads\GoogleAds\V26\Services\UserListOperation;
 use Google\ApiCore\ApiException;
 
 class CreateRemarketingAudience extends BaseGoogleAdsService

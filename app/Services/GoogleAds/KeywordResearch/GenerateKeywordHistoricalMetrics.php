@@ -3,8 +3,8 @@
 namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordHistoricalMetricsRequest;
+use Google\Ads\GoogleAds\V26\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
+use Google\Ads\GoogleAds\V26\Services\GenerateKeywordHistoricalMetricsRequest;
 
 /** Historical estimates for the selected keywords, under the campaign's actual targeting. */
 class GenerateKeywordHistoricalMetrics extends BaseGoogleAdsService

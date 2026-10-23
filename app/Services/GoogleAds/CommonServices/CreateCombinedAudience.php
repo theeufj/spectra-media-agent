@@ -3,13 +3,13 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\LogicalUserListInfo;
-use Google\Ads\GoogleAds\V22\Common\LogicalUserListOperandInfo;
-use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
-use Google\Ads\GoogleAds\V22\Resources\UserList;
-use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
-use Google\Ads\GoogleAds\V22\Services\UserListOperation;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\LogicalUserListInfo;
+use Google\Ads\GoogleAds\V26\Common\LogicalUserListOperandInfo;
+use Google\Ads\GoogleAds\V26\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
+use Google\Ads\GoogleAds\V26\Resources\UserList;
+use Google\Ads\GoogleAds\V26\Services\MutateUserListsRequest;
+use Google\Ads\GoogleAds\V26\Services\UserListOperation;
 use Google\ApiCore\ApiException;
 
 class CreateCombinedAudience extends BaseGoogleAdsService
@@ -48,8 +48,8 @@ class CreateCombinedAudience extends BaseGoogleAdsService
 
         $logicalUserList = new LogicalUserListInfo([
             'rules' => [
-                new \Google\Ads\GoogleAds\V22\Common\UserListLogicalRuleInfo([
-                    'operator' => \Google\Ads\GoogleAds\V22\Enums\UserListLogicalRuleOperatorEnum\UserListLogicalRuleOperator::PBAND,
+                new \Google\Ads\GoogleAds\V26\Common\UserListLogicalRuleInfo([
+                    'operator' => \Google\Ads\GoogleAds\V26\Enums\UserListLogicalRuleOperatorEnum\UserListLogicalRuleOperator::ALL,
                     'rule_operands' => $operands,
                 ]),
             ],

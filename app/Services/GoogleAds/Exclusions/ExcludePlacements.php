@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\Exclusions;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Common\MobileApplicationInfo;
-use Google\Ads\GoogleAds\V22\Common\PlacementInfo;
-use Google\Ads\GoogleAds\V22\Resources\CustomerNegativeCriterion;
-use Google\Ads\GoogleAds\V22\Services\CustomerNegativeCriterionOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCustomerNegativeCriteriaRequest;
+use Google\Ads\GoogleAds\V26\Common\MobileApplicationInfo;
+use Google\Ads\GoogleAds\V26\Common\PlacementInfo;
+use Google\Ads\GoogleAds\V26\Resources\CustomerNegativeCriterion;
+use Google\Ads\GoogleAds\V26\Services\CustomerNegativeCriterionOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateCustomerNegativeCriteriaRequest;
 
 /**
  * Applies placement exclusions to a Google Ads account.

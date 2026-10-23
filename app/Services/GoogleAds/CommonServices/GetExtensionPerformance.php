@@ -3,7 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest;
 
 class GetExtensionPerformance extends BaseGoogleAdsService
 {
@@ -68,7 +68,7 @@ class GetExtensionPerformance extends BaseGoogleAdsService
         $this->ensureClient();
 
         // GAQL requires the enum name string, not the integer value.
-        $fieldTypeName = \Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType::name($fieldType);
+        $fieldTypeName = \Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType::name($fieldType);
         if (! $fieldTypeName) {
             return 0;
         }

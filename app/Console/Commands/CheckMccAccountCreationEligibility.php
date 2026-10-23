@@ -6,9 +6,9 @@ use App\Models\MccAccount;
 use App\Models\User;
 use App\Notifications\MccAccountCreationEligible;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\V26\Resources\Customer;
+use Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest;
 use Google\ApiCore\ApiException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -170,7 +170,7 @@ class CheckMccAccountCreationEligibility extends Command
     {
         try {
             $svc = $client->getGoogleAdsServiceClient();
-            $tree = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $tree = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccId,
                 'query' => 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.manager, customer_client.status FROM customer_client',
             ]);
@@ -188,7 +188,7 @@ class CheckMccAccountCreationEligibility extends Command
                 $currency = strtoupper($cc->getCurrencyCode() ?: '');
 
                 try {
-                    $costReq = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                    $costReq = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                         'customer_id' => $id,
                         'query' => 'SELECT metrics.cost_micros FROM customer',
                     ]);
@@ -240,13 +240,13 @@ class CheckMccAccountCreationEligibility extends Command
     private function statusName(int $status): string
     {
         try {
-            return \Google\Ads\GoogleAds\V22\Enums\CustomerStatusEnum\CustomerStatus::name($status);
+            return \Google\Ads\GoogleAds\V26\Enums\CustomerStatusEnum\CustomerStatus::name($status);
         } catch (\Throwable $e) {
             return "status {$status}";
         }
     }
 
-    private function buildMccClient(MccAccount $mcc, string $mccId): \Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    private function buildMccClient(MccAccount $mcc, string $mccId): \Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
     {
         $configPath = storage_path('app/google_ads_php.ini');
 

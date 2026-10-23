@@ -4,12 +4,12 @@ namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\ImageAsset;
-use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
-use Google\Ads\GoogleAds\V22\Resources\Asset;
-use Google\Ads\GoogleAds\V22\Services\AssetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\ImageAsset;
+use Google\Ads\GoogleAds\V26\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V26\Resources\Asset;
+use Google\Ads\GoogleAds\V26\Services\AssetOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateAssetsRequest;
 
 class UploadImageAsset extends BaseGoogleAdsService
 {
@@ -77,7 +77,7 @@ class UploadImageAsset extends BaseGoogleAdsService
         $query = "SELECT asset.resource_name, asset.name FROM asset WHERE asset.name = '{$assetName}' AND asset.type = 'IMAGE'";
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
                 'query' => $query,
             ]);

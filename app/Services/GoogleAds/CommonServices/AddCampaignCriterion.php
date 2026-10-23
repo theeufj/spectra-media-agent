@@ -4,10 +4,10 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Common\LocationInfo;
-use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
-use Google\Ads\GoogleAds\V22\Services\CampaignCriterionOperation;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
+use Google\Ads\GoogleAds\V26\Common\LocationInfo;
+use Google\Ads\GoogleAds\V26\Resources\CampaignCriterion;
+use Google\Ads\GoogleAds\V26\Services\CampaignCriterionOperation;
 
 class AddCampaignCriterion extends BaseGoogleAdsService
 {
@@ -61,7 +61,7 @@ class AddCampaignCriterion extends BaseGoogleAdsService
 
         try {
             $campaignCriterionServiceClient = $this->client->getCampaignCriterionServiceClient();
-            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignCriteriaRequest([
+            $request = new \Google\Ads\GoogleAds\V26\Services\MutateCampaignCriteriaRequest([
                 'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignCriterionOperation],

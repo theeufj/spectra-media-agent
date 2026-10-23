@@ -6,7 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\GoogleAdStrengthRepair;
-use Google\Ads\GoogleAds\V22\Enums\AdStrengthEnum\AdStrength;
+use Google\Ads\GoogleAds\V26\Enums\AdStrengthEnum\AdStrength;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

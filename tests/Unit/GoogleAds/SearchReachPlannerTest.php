@@ -67,6 +67,19 @@ class SearchReachPlannerTest extends TestCase
         $this->assertFalse($result['auto_repair_safe']);
     }
 
+    public function test_v26_intraday_start_and_end_only_forecast_complete_serving_days(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');
+        $planner = $this->planner();
+        $snapshot = $this->snapshot() + ['start_date' => '2026-10-22', 'end_date' => '2026-10-26',
+            'start_date_time' => '2026-10-22 15:30:00', 'end_date_time' => '2026-10-26 10:30:00'];
+        $planner->assess($this->campaign(), $snapshot);
+
+        $this->assertSame('2026-10-23', $planner->requests[0]['context']['forecast_start_date']);
+        $this->assertSame('2026-10-25', $planner->requests[0]['context']['forecast_end_date_limit']);
+        $this->assertSame(3, $planner->requests[0]['context']['forecast_period_days']);
+    }
+
     public function test_a_trial_gets_a_researched_proposal_without_becoming_mutation_authorization(): void
     {
         $planner = $this->planner([['text' => 'outsource google ads', 'match_type' => 'PHRASE', 'selection_reason' => 'Commercial buyer of managed PPC.']]);

@@ -15,7 +15,7 @@ use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
@@ -71,13 +71,13 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
             ->withLoginCustomerId($mccCustomerId)
             ->build();
 
-        $newCustomer = new \Google\Ads\GoogleAds\V22\Resources\Customer([
+        $newCustomer = new \Google\Ads\GoogleAds\V26\Resources\Customer([
             'descriptive_name' => 'PHPUnit Test '.date('Y-m-d H:i:s'),
             'currency_code' => 'AUD',
             'time_zone' => 'Australia/Sydney',
         ]);
 
-        $request = new \Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest([
+        $request = new \Google\Ads\GoogleAds\V26\Services\CreateCustomerClientRequest([
             'customer_id' => $mccCustomerId,
             'customer_client' => $newCustomer,
         ]);

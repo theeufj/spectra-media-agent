@@ -42,7 +42,7 @@ export function frameForBudget(forecast, monthlyBudget) {
         ...forecast,
         budget: monthlyBudget,
         budget_capped: capped,
-        impressions: Math.round(raw.impressions * factor),
+        impressions: raw.impressions == null ? null : Math.round(raw.impressions * factor),
         clicks: Math.round(raw.clicks * factor),
         cost,
         conversions,
