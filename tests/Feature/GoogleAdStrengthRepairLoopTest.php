@@ -79,7 +79,7 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
     private function repairServices(bool $accepted = true): void
     {
         $ai = Mockery::mock(GeminiService::class);
-        $ai->shouldReceive('generateContent')->withArgs(function ($model, $prompt, $context) {
+        $ai->shouldReceive('generateContent')->withArgs(function ($model, $prompt, ...$arguments) {
             $this->assertStringContainsString('unique headlines', $prompt);
             $this->assertStringContainsString('Do not manufacture prices', $prompt);
             $this->assertStringContainsString('Try adding a few more unique headlines.', $prompt);

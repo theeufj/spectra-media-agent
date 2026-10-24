@@ -133,6 +133,45 @@ class AdCopyOfferClarityTest extends TestCase
         Http::assertSentCount(4);
     }
 
+    public function test_initial_generation_forwards_json_temperature_and_platform_neutral_limits_to_xai(): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        config(['ai.text_provider' => 'xai', 'services.xai.api_key' => 'test-copy-routing-key']);
+        Cache::forget('xai:unavailable');
+        $copy = ['headlines' => ['Local Bicycle Repairs', 'Get Ready for Your Next Ride', 'Repairs for Your Daily Commute', 'Book a Bicycle Repair', 'Bicycle Repairs for Riders'],
+            'descriptions' => ['Book a bicycle repair to prepare for your next ride.',
+                'Get your bicycle repaired for your daily commute.', 'Explore our bicycle repair service for local riders.']];
+        $generations = 0;
+        Http::fake(function (Request $request) use (&$generations, $copy) {
+            $this->assertSame('https://api.x.ai/v1/chat/completions', $request->url());
+            $messages = $request['messages'];
+            $prompt = collect($messages)->firstWhere('role', 'user')['content'];
+            if (str_starts_with($prompt, 'Review the following ad copy')) {
+                $data = ['overall_score' => 88, 'factual_accuracy' => true, 'intent_relevance' => true,
+                    'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []];
+            } else {
+                $generations++;
+                $this->assertSame(['type' => 'json_object'], $request['response_format']);
+                $this->assertSame(0.2, $request['temperature']);
+                $system = collect($messages)->firstWhere('role', 'system')['content'];
+                $this->assertStringContainsString('requested platform asset counts and Unicode character limits', $system);
+                $this->assertStringContainsString('Never remove an agency/service fee qualifier or source currency', $system);
+                $this->assertStringNotContainsString('30 Unicode', $system, 'Initial generation supports platforms with different limits.');
+                $data = $copy;
+            }
+
+            return Http::response(['choices' => [['message' => ['content' => json_encode($data, JSON_THROW_ON_ERROR)]]]]);
+        });
+
+        $job = (new GenerateAdCopy($campaign, $strategy, 'Google Ads'))->withFakeQueueInteractions();
+        $job->handle();
+
+        $job->assertNotFailed();
+        $this->assertSame(1, $generations);
+        $this->assertSame($copy, $strategy->adCopies()->sole()->only(['headlines', 'descriptions']));
+        Http::assertSentCount(2);
+    }
+
     public static function unclearSets(): array
     {
         return ['all process headlines' => [false], 'clear opening with process-dominated remaining assets' => [true]];

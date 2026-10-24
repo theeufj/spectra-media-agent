@@ -34,9 +34,16 @@ class GoogleAdRankCopyPolicyTest extends TestCase
         $proposal = ['headlines' => ['Google Ads Setup', 'No Recurring Agency Fees', 'Explore Our Setup Service'],
             'descriptions' => ['Get a campaign prepared for your business.', 'Ad spend is paid separately to Google.']];
         $gemini = $this->createMock(GeminiService::class);
-        $gemini->expects($this->once())->method('generateContent')->willReturnCallback(function ($model, $prompt) use ($proposal): array {
+        $gemini->expects($this->once())->method('generateContent')->willReturnCallback(function ($model, $prompt, $config, $systemInstruction) use ($proposal): array {
             $this->assertSame(config('ai.models.default'), $model);
-            $this->assertStringContainsString('3–15 distinct useful headlines', $prompt);
+            $this->assertSame(['responseMimeType' => 'application/json', 'temperature' => 0.2], $config);
+            $this->assertStringContainsString('6–8 strong distinct headlines and 3 short descriptions', $prompt);
+            $this->assertStringContainsString('3–15 headlines and 2–4 descriptions', $prompt);
+            $this->assertStringContainsString('aim for 25 or fewer', $systemInstruction);
+            $this->assertStringContainsString('aim for 75 or fewer', $systemInstruction);
+            $this->assertStringContainsString('absolute limit of 30 Unicode characters', $systemInstruction);
+            $this->assertStringContainsString('absolute limit of 90 Unicode characters', $systemInstruction);
+            $this->assertStringContainsString('Never remove an agency/service fee qualifier', $systemInstruction);
             $this->assertStringContainsString('Prefer a smaller, strong set', $prompt);
             $this->assertStringContainsString('No Recurring Fees', $prompt);
             $this->assertStringContainsString('Another headline or description cannot supply the missing qualifier', $prompt);
