@@ -195,6 +195,26 @@ class CustomerReviewJourneyTest extends TestCase
         $this->get(route('products.list', ['feed' => $foreign->id]))->assertNotFound();
     }
 
+    public function test_excluding_a_selected_image_concept_persists_false_for_every_size_and_returns_saved_values(): void
+    {
+        [, $customer] = $this->owner();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $images = collect(['square', 'landscape', 'mrec'])->map(fn ($format) => ImageCollateral::create([
+            'campaign_id' => $campaign->id, 'concept_key' => 'selected-concept', 'format' => $format,
+            'platform' => 'Google Ads', 'cloudfront_url' => 'https://assets.example/'.$format.'.png',
+            's3_path' => $format.'.png', 'should_deploy' => true, 'is_seed' => true,
+        ]));
+        $this->putJson(route('campaigns.collateral-approval.update', $campaign), [
+            'type' => 'image', 'ids' => $images->pluck('id')->all(), 'field' => 'should_deploy', 'value' => false,
+        ])->assertOk()->assertExactJson(['type' => 'image', 'field' => 'should_deploy',
+            'rows' => $images->map(fn ($image) => ['id' => $image->id, 'should_deploy' => false])->all()]);
+        foreach ($images as $image) {
+            $this->assertFalse($image->fresh()->should_deploy);
+            $this->assertFalse(\Illuminate\Support\Facades\DB::table('image_collaterals')->where('id', $image->id)->value('should_deploy'));
+            $this->assertTrue($image->fresh()->is_seed);
+        }
+    }
+
     public function test_ad_copy_approval_is_saved_under_its_campaign_policy(): void
     {
         [, $customer] = $this->owner();

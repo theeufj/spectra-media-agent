@@ -88,6 +88,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const toast = useToast();
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview });
+    const selectedImages = collateral.imageCollaterals.filter(image => image.should_deploy && image.is_active !== false);
     const [editingImage, setEditingImage] = useState(null);
     const [extendingVideo, setExtendingVideo] = useState(null);
 
@@ -525,7 +526,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">Your ad, as a customer could see it</h1>
                             <p className="mt-2 mb-5 text-sm text-gray-600">Review the message and destination, then approve the assets below.{setupOnly && ' Creating the ads leaves the campaign paused.'}</p>
-                            {collateral.adCopy ? <AdPreviewPanel adCopy={collateral.adCopy} images={collateral.imageCollaterals} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''} />
+                            {collateral.adCopy ? <AdPreviewPanel adCopy={collateral.adCopy} images={selectedImages} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''} />
                                 : <p role="status" className="rounded-lg bg-gray-50 p-5 text-gray-600">{isPolling ? 'Your ad copy is being prepared. The preview will appear here.' : 'Ad copy is not available yet. Use Generate ad copy below to retry.'}</p>}
                         </div>
                         <div className="lg:border-l lg:border-gray-100 lg:pl-6">
@@ -751,7 +752,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 adCopy={collateral.adCopy}
                                                                 brandName={reviewSummary.business_name}
                                                                 websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''}
-                                                                images={collateral.imageCollaterals}
+                                                                images={selectedImages}
                                                             />
                                                         </div>
                                                     )}

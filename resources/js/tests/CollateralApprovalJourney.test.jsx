@@ -21,7 +21,6 @@ vi.mock('@/Components/AdSpendSetupModal', () => ({ default: ({ show, strategy, o
 vi.mock('@/Components/ConfirmationModal', () => ({ default: ({ show, title, message, onConfirm, confirmText }) => show ? <section role="dialog"><h2>{title}</h2><p>{message}</p><button onClick={onConfirm}>{confirmText}</button></section> : null }));
 vi.mock('@/Components/Modal', () => ({ default: () => null }));
 vi.mock('@/Components/CreativeSizesModal', () => ({ default: () => null }));
-vi.mock('@/Components/AdPreview', () => ({ default: () => null }));
 const strategy = { id: 11, uuid: 'strategy-a', platform: 'Facebook Ads', signed_off_at: '2026-10-01', campaign_type: 'display', ad_copies_count: 1, image_collaterals_count: 0, video_collaterals_count: 0 };
 const copy = { id: 14, strategy_id: 11, platform: 'Facebook Ads', headlines: ['Repair your sailboat'], descriptions: ['Book a service'], should_deploy: false, updated_at: '2026-10-01' };
 const props = { campaign: { id: 8, uuid: 'campaign-a', name: 'Repair campaign', daily_budget: 20, total_budget: 600 }, currentStrategy: strategy, allStrategies: [strategy], adCopy: copy, imageCollaterals: [], videoCollaterals: [], supportsVideo: false, hasActiveSubscription: true, deploymentEnabled: true, brandVerified: true, managedBillingEnabled: false };
@@ -29,6 +28,58 @@ const props = { campaign: { id: 8, uuid: 'campaign-a', name: 'Repair campaign', 
 beforeEach(() => { polling.data = null; vi.clearAllMocks(); });
 
 describe('saved creative selections', () => {
+    it('saves every format of deselected concepts and retains the saved exclusion after a reload', async () => {
+        const images = Array.from({ length: 9 }, (_, index) => ({ id: 749 + index,
+            concept_key: `concept-${Math.floor(index / 3)}`, format: ['square', 'landscape', 'mrec'][index % 3],
+            cloudfront_url: `https://assets.example/${index}.png`, should_deploy: true, is_active: true }));
+        const saved = images.map(image => ({ ...image }));
+        fetchJson.mockImplementation(async (_url, { json }) => {
+            for (const row of saved) if (json.ids.includes(row.id)) row[json.field] = json.value;
+            return { rows: json.ids.map(id => ({ id, [json.field]: json.value })) };
+        });
+        const view = render(<Collateral {...props} imageCollaterals={images} />);
+        for (let index = 0; index < 3; index++) {
+            fireEvent.click(view.getAllByRole('checkbox', { name: 'Include this image in deployment' })[index]);
+            await waitFor(() => expect(view.getAllByRole('checkbox', { name: 'Include this image in deployment' })[index]).toHaveAttribute('aria-checked', 'false'));
+            expect(fetchJson.mock.calls[index]).toEqual([route('campaigns.collateral-approval.update', props.campaign.uuid), {
+                method: 'PUT', json: { type: 'image', ids: images.slice(index * 3, index * 3 + 3).map(image => image.id), field: 'should_deploy', value: false },
+            }]);
+        }
+        expect(fetchJson).toHaveBeenCalledTimes(3);
+        expect(saved.every(image => image.should_deploy === false)).toBe(true);
+        expect(view.getByText('0/3 image concepts')).toBeVisible();
+        view.unmount();
+        const reloaded = render(<Collateral {...props} imageCollaterals={saved} />);
+        expect(reloaded.getAllByRole('checkbox', { name: 'Include this image in deployment' }).every(checkbox => checkbox.getAttribute('aria-checked') === 'false')).toBe(true);
+        expect(reloaded.getByText('0/3 image concepts')).toBeVisible();
+    });
+
+    it('updates both Search previews when an image is excluded and never shows an unselected or inactive asset', async () => {
+        const search = { ...strategy, platform: 'Google Ads', campaign_type: 'search' };
+        const images = [
+            { id: 749, concept_key: 'selected', format: 'square', should_deploy: true, is_active: true, cloudfront_url: 'https://assets.example/selected.png' },
+            { id: 750, concept_key: 'excluded', format: 'square', should_deploy: false, is_active: true, cloudfront_url: 'https://assets.example/excluded.png' },
+            { id: 751, concept_key: 'inactive', format: 'square', should_deploy: true, is_active: false, cloudfront_url: 'https://assets.example/inactive.png' },
+        ];
+        fetchJson.mockResolvedValue({ rows: [{ id: 749, should_deploy: false }] });
+        const view = render(<Collateral {...props} currentStrategy={search} allStrategies={[search]}
+            adCopy={{ ...copy, platform: 'Google Ads' }} imageCollaterals={images} />);
+        fireEvent.click(view.getByRole('button', { name: '👁️ Preview Ad' }));
+        const previews = view.getAllByText('Ad Preview').map(heading => heading.closest('.bg-gray-100'));
+        expect(previews).toHaveLength(2);
+        for (const preview of previews) {
+            expect(within(preview).getByRole('img')).toHaveAttribute('src', 'https://assets.example/selected.png');
+            expect(within(preview).getByText(/Search images require account eligibility and attachment in Google Ads/)).toBeVisible();
+        }
+        expect(view.getByText('Select images to save to your Google Ads asset library. Attach eligible images to your Search ads in Google Ads.')).toBeVisible();
+        fireEvent.click(view.getAllByRole('checkbox', { name: 'Include this image in deployment' })[0]);
+        await waitFor(() => expect(view.getAllByRole('checkbox', { name: 'Include this image in deployment' })[0]).toHaveAttribute('aria-checked', 'false'));
+        for (const preview of previews) expect(within(preview).queryByRole('img')).toBeNull();
+        expect(fetchJson).toHaveBeenCalledExactlyOnceWith(route('campaigns.collateral-approval.update', props.campaign.uuid), {
+            method: 'PUT', json: { type: 'image', ids: [749], field: 'should_deploy', value: false },
+        });
+    });
+
     it('keeps confirmed checkbox state when persistence fails and offers a visible recovery', async () => {
         fetchJson.mockRejectedValue(new Error('offline'));
         const { getByRole } = render(<Collateral {...props} />);
