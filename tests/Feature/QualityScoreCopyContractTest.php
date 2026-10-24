@@ -20,6 +20,13 @@ class QualityScoreCopyContractTest extends TestCase
 {
     use DatabaseTransactions;
 
+    private function approvedCopyReview(): array
+    {
+        return ['overall_status' => 'approved', 'programmatic_validation' => ['is_valid' => true, 'feedback' => [], 'fee_scope' => ['is_valid' => true]],
+            'gemini_feedback' => ['overall_score' => 88, 'factual_accuracy' => true, 'intent_relevance' => true,
+                'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []]];
+    }
+
     public function test_object_and_legacy_array_responses_are_reviewed_as_complete_ads(): void
     {
         $copy = ['headlines' => ['Google Ads Management', 'Your AI Marketing Team', 'Explore Our Plans'],
@@ -42,7 +49,7 @@ class QualityScoreCopyContractTest extends TestCase
             $review = Mockery::mock(AdminMonitorService::class);
             $review->shouldReceive('reviewAdCopy')->withArgs(fn ($candidate, $existing) => $existing
                 && $candidate->headlines === $copy['headlines'] && $candidate->descriptions === $copy['descriptions'])
-                ->andReturn(['overall_status' => 'approved']);
+                ->andReturn($this->approvedCopyReview());
             $this->app->instance(AdminMonitorService::class, $review);
             $updater = Mockery::mock(UpdateResponsiveSearchAd::class);
             $updater->shouldReceive('replace')->withArgs(fn ($id, $ad, $headlines, $descriptions) => $id === '123' && $ad === $resource

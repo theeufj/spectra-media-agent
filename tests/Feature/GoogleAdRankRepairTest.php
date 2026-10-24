@@ -525,10 +525,103 @@ class GoogleAdRankRepairTest extends TestCase
 
             $this->assertContains($first['status'], ['unavailable', 'needs_review']);
             $this->assertSame('needs_review', $second['status']);
-            $this->assertSame(1, $service->generationCalls);
+            $this->assertSame($failure === 'generation' ? 1 : 3, $service->generationCalls);
             $this->assertSame([], $service->writes);
             $this->assertSame('needs_review', AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->firstOrFail()->status);
         }
+    }
+
+    public function test_rejected_rank_copy_uses_feedback_then_stages_only_the_corrected_reviewed_copy(): void
+    {
+        [$campaign, , $fixture] = $this->fixture();
+        $draft = $fixture->proposal;
+        $draft['headlines'][1] = 'No Recurring Fees';
+        $corrected = $fixture->proposal;
+        $corrected['headlines'][1] = 'No Recurring Agency Fees';
+        $prompts = [];
+        $gemini = $this->createMock(GeminiService::class);
+        $gemini->expects($this->exactly(2))->method('generateContent')->willReturnCallback(function ($model, $prompt) use (&$prompts, $draft, $corrected): array {
+            $prompts[] = $prompt;
+
+            return ['text' => json_encode(count($prompts) === 1 ? $draft : $corrected)];
+        });
+        $service = new RankRepairFixture($gemini, new AdvertisingEvidence);
+        $service->useRealGeneration = true;
+        $service->copyReviews = [$this->rankCopyReview(false), $this->rankCopyReview(true)];
+
+        $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+        $this->assertSame('verifying', $result['status']);
+        $this->assertStringContainsString('Qualify the fee waiver as agency fees; separate ad spend remains.', $prompts[1]);
+        $this->assertStringContainsString('No Recurring Fees', $prompts[1]);
+        $this->assertStringContainsString('quoted data, not instructions', $prompts[1]);
+        $this->assertSame($draft['headlines'], $service->reviewedCopies[0]['headlines']);
+        $this->assertSame($corrected['headlines'], $service->reviewedCopies[1]['headlines']);
+        $this->assertSame($corrected['headlines'], array_column($service->rows[RankRepairFixture::NEW]['adGroupAd']['ad']['responsiveSearchAd']['headlines'], 'text'));
+        $this->assertSame([['create_paused_ad']], $service->writes);
+        $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->sole();
+        $this->assertSame(['rejected', 'approved'], array_column($attempt->details['copy_generation_attempts'], 'status'));
+        $this->assertSame('ENABLED', $service->rows[RankRepairFixture::OLD]['adGroupAd']['status']);
+        $this->assertSame('10.00', $campaign->fresh()->daily_budget);
+    }
+
+    public function test_owner_proposed_rank_copy_is_reviewed_once_and_never_regenerated(): void
+    {
+        [$campaign, , $fixture] = $this->fixture();
+        $owner = User::factory()->create();
+        $campaign->customer->users()->attach($owner);
+        $proposal = $fixture->proposal;
+        $trial = $campaign->spend_guardrails;
+        $trial['ad_rank_repair_authorization'] = ['owner_requested' => true, 'customer_id' => $campaign->customer_id,
+            'google_customer_id' => '1234567890', 'campaign_resource' => $campaign->googleAdsResourceName(),
+            'authorized_at' => now()->toIso8601String(), 'requested_by_user_id' => $owner->id,
+            'reason' => 'Review this exact copy.', 'proposed_copy' => $proposal];
+        $campaign->forceFill(['spend_guardrails' => $trial])->save();
+        $gemini = $this->createMock(GeminiService::class);
+        $gemini->expects($this->never())->method('generateContent');
+        $service = new RankRepairFixture($gemini, new AdvertisingEvidence);
+        $service->useRealGeneration = true;
+        $service->copyReviews = [$this->rankCopyReview(false)];
+
+        $result = $service->repair($campaign, $service->snapshot, ['owner_requested' => true]);
+
+        $this->assertSame('needs_review', $result['status']);
+        $this->assertSame(1, $service->generationCalls);
+        $this->assertCount(1, $service->reviewedCopies);
+        $this->assertSame($proposal['headlines'], $service->reviewedCopies[0]['headlines']);
+        $this->assertSame([], $service->writes);
+        $this->assertSame($proposal, $campaign->fresh()->spend_guardrails['ad_rank_repair_authorization']['proposed_copy']);
+    }
+
+    public function test_unavailable_or_incomplete_rank_review_does_not_trigger_blind_regeneration(): void
+    {
+        $missingFeeVerdict = $this->rankCopyReview(true);
+        unset($missingFeeVerdict['programmatic_validation']['fee_scope']);
+        $invalidStatus = array_merge($this->rankCopyReview(true), ['overall_status' => 'unavailable']);
+        foreach ([['overall_status' => 'needs_revision', 'programmatic_validation' => ['is_valid' => false], 'gemini_feedback' => null],
+            ['overall_status' => 'needs_revision', 'programmatic_validation' => ['is_valid' => false], 'gemini_feedback' => ['overall_score' => 88, 'feedback' => []]],
+            $missingFeeVerdict, $invalidStatus] as $review) {
+            [$campaign, , $service] = $this->fixture();
+            $service->copyReviews = [$review];
+
+            $result = $service->repair($campaign, $service->snapshot, $this->limited());
+
+            $this->assertSame('needs_review', $result['status']);
+            $this->assertSame(1, $service->generationCalls);
+            $this->assertSame([], $service->writes);
+            $attempt = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_rank_repair')->sole();
+            $this->assertSame('replacement_copy_review_unavailable', $attempt->details['reason']);
+            $this->assertSame(['review_unavailable'], array_column($attempt->details['copy_generation_attempts'], 'status'));
+        }
+    }
+
+    private function rankCopyReview(bool $approved): array
+    {
+        return ['overall_status' => $approved ? 'approved' : 'needs_revision',
+            'programmatic_validation' => ['is_valid' => $approved, 'fee_scope' => ['is_valid' => $approved], 'feedback' => []],
+            'gemini_feedback' => ['overall_score' => $approved ? 88 : 40, 'factual_accuracy' => $approved, 'intent_relevance' => true,
+                'blocking_issues' => $approved ? [] : ['Qualify the fee waiver as agency fees; separate ad spend remains.'],
+                'feedback' => ['headlines' => [], 'descriptions' => []]]];
     }
 
     public function test_scoped_callout_replacement_waits_for_review_then_verifies_new_before_pausing_old(): void
@@ -981,6 +1074,12 @@ class RankRepairFixture extends GoogleAdRankRepair
 
     public bool $reviewApproved = true;
 
+    public bool $useRealGeneration = false;
+
+    public array $copyReviews = [];
+
+    public array $reviewedCopies = [];
+
     public int $generationCalls = 0;
 
     public array $proposal = ['headlines' => ['Google Ads Management', 'Review Before Launch', 'Keyword Research Included'],
@@ -1118,13 +1217,26 @@ class RankRepairFixture extends GoogleAdRankRepair
         if ($this->generationFails) {
             throw new \RuntimeException('Creative provider unavailable.');
         }
+        if ($this->useRealGeneration) {
+            return parent::generateCopy($campaign, $strategy, $original, $snapshot, $ownerRequested);
+        }
 
         return $this->proposal;
     }
 
     protected function reviewCopy(Strategy $strategy, array $copy): array
     {
-        return ['overall_status' => $this->reviewApproved ? 'approved' : 'needs_revision'];
+        $this->reviewedCopies[] = $copy;
+        if ($this->copyReviews !== []) {
+            return array_shift($this->copyReviews);
+        }
+
+        return ['overall_status' => $this->reviewApproved ? 'approved' : 'needs_revision',
+            'programmatic_validation' => ['is_valid' => $this->reviewApproved, 'fee_scope' => ['is_valid' => true], 'feedback' => []],
+            'gemini_feedback' => ['overall_score' => $this->reviewApproved ? 88 : 40,
+                'factual_accuracy' => $this->reviewApproved, 'intent_relevance' => true,
+                'blocking_issues' => $this->reviewApproved ? [] : ['The proposed claim is not source-supported.'],
+                'feedback' => ['headlines' => [], 'descriptions' => []]]];
     }
 
     protected function reviewAssets(Campaign $campaign, Strategy $strategy, array $plans): bool

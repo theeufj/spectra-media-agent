@@ -341,7 +341,9 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
         $gemini = $this->createMock(GeminiService::class);
         $gemini->expects($this->never())->method('generateContent');
 
-        return new QualityScoreImprovementAgent($gemini);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        return app(QualityScoreImprovementAgent::class);
     }
 
     public function test_quality_score_pauses_require_viable_remaining_keywords(): void

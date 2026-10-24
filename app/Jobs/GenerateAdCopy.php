@@ -237,11 +237,28 @@ class GenerateAdCopy implements ShouldQueue
                        headlines include a direct call to action") sat unread
                        in the reviewer's own feedback.
                     */
+                    $excerpt = static fn (array $assets, int $limit, int $characters): array => array_map(
+                        static fn ($asset) => is_string($asset) ? mb_substr($asset, 0, $characters) : '[non-string asset]',
+                        array_slice(array_values($assets), 0, $limit),
+                    );
                     $lastFeedback = array_filter([
+                        // Each generation call is stateless. Include the actual
+                        // rejected assets so indexed reviewer notes refer to
+                        // something concrete; quote and bound this untrusted data.
+                        'rejected_candidate_excerpt' => [
+                            'headlines' => $excerpt($adCopyData['headlines'], 15, 300),
+                            'descriptions' => $excerpt($adCopyData['descriptions'], 5, 1000),
+                        ],
                         'rule_violations' => $programmaticFeedback,
                         'reviewer_notes' => $reviewerFeedback,
+                        'reviewer_assessment' => [
+                            'factual_accuracy' => $reviewResults['gemini_feedback']['factual_accuracy'] ?? null,
+                            'intent_relevance' => $reviewResults['gemini_feedback']['intent_relevance'] ?? null,
+                            'blocking_issues' => $reviewResults['gemini_feedback']['blocking_issues'] ?? [],
+                        ],
+                        'fee_scope' => $reviewResults['programmatic_validation']['fee_scope'] ?? [],
                         'reviewer_score' => $score > 0 ? "{$score}/100 — 76 or above is required" : null,
-                    ]);
+                    ], static fn ($value) => $value !== null && $value !== []);
 
                     $attemptFailures[] = 'not_approved';
                 }

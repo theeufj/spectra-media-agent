@@ -31,6 +31,13 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
 {
     use DatabaseTransactions;
 
+    private function approvedCopyReview(): array
+    {
+        return ['overall_status' => 'approved', 'programmatic_validation' => ['is_valid' => true, 'feedback' => [], 'fee_scope' => ['is_valid' => true]],
+            'gemini_feedback' => ['overall_score' => 88, 'factual_accuracy' => true, 'intent_relevance' => true,
+                'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []]];
+    }
+
     private const AD = 'customers/123/adGroupAds/456~789';
 
     private array $copy = ['headlines' => ['Google Ads Management', 'Your AI Marketing Team', 'Explore Our Plans'],
@@ -82,7 +89,7 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->app->instance(GeminiService::class, $ai);
         $review = Mockery::mock(AdminMonitorService::class);
         $review->shouldReceive('reviewAdCopy')->withArgs(fn ($ad, $existing) => $existing && $ad->headlines === $this->copy['headlines'])
-            ->andReturn(['overall_status' => 'approved']);
+            ->andReturn($this->approvedCopyReview());
         $this->app->instance(AdminMonitorService::class, $review);
         $updater = Mockery::mock(UpdateResponsiveSearchAd::class);
         $updater->shouldReceive('replace')->withArgs(fn ($id, $resource, $headlines, $descriptions) => $id === '123'
@@ -643,7 +650,7 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $review->method('reviewAdCopy')->willReturnCallback(function () use ($campaign) {
             Campaign::whereKey($campaign->id)->update(['status' => 'paused']);
 
-            return ['overall_status' => 'approved'];
+            return $this->approvedCopyReview();
         });
         $this->app->instance(AdminMonitorService::class, $review);
         $updater = $this->createMock(UpdateResponsiveSearchAd::class);
@@ -708,7 +715,7 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $ai->method('generateContent')->willReturn(['text' => json_encode($this->copy)]);
         $this->app->instance(GeminiService::class, $ai);
         $review = $this->createMock(AdminMonitorService::class);
-        $review->method('reviewAdCopy')->willReturn(['overall_status' => 'approved']);
+        $review->method('reviewAdCopy')->willReturn($this->approvedCopyReview());
         $this->app->instance(AdminMonitorService::class, $review);
         $updater = $this->createMock(UpdateResponsiveSearchAd::class);
         $updater->expects($this->never())->method('replace');

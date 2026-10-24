@@ -231,13 +231,101 @@ class GoogleAdStrengthRepair
     {
         return DB::transaction(function () use ($campaign, $ad) {
             Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $authorization = null;
+            if ($this->attemptCount($campaign, $ad['resource_name']) >= self::MAX_REPAIRS) {
+                $authorization = $this->generationRetryAuthorization($campaign, $ad['resource_name']);
+                if (! $authorization) {
+                    throw new \DomainException('The ad-copy repair limit is exhausted. A current, one-use generation retry authorization is required.');
+                }
+            }
 
-            return AgentActivity::record('quality_score', 'ad_strength_repair_attempt', 'Preparing a reviewed RSA repair.',
+            $attempt = AgentActivity::record('quality_score', 'ad_strength_repair_attempt', 'Preparing a reviewed RSA repair.',
                 $campaign->customer_id, $campaign->id, [
                     'ad_resource' => $ad['resource_name'], 'strength_before' => $ad['ad_strength'],
                     'action_items' => $ad['action_items'], 'started_at' => now()->toIso8601String(),
-                ], 'running');
+                    'generation_revision' => GenerateReviewedRsaCopy::REVISION,
+                ] + ($authorization ? ['generation_retry_authorization_id' => $authorization->id] : []), 'running');
+            if ($authorization) {
+                $authorization->update(['status' => 'completed', 'details' => array_merge($authorization->details ?? [], [
+                    'consumed_at' => now()->toIso8601String(), 'attempt_id' => $attempt->id,
+                ])]);
+            }
+
+            return $attempt;
         });
+    }
+
+    /** Authorize one bounded recovery without removing or discounting prior attempts. */
+    public function authorizeGenerationRetry(Campaign $campaign, string $resource, string $reason): AgentActivity
+    {
+        return DB::transaction(function () use ($campaign, $resource, $reason) {
+            Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $reason = trim($reason);
+            if ($reason === '' || mb_strlen($reason) > 2000) {
+                throw new \InvalidArgumentException('A generation retry requires an audit reason of 1–2000 characters.');
+            }
+            $account = $campaign->customer?->cleanGoogleCustomerId();
+            if (! $account || preg_match('#^customers/'.preg_quote($account, '#').'/adGroupAds/\d+~\d+$#', $resource) !== 1) {
+                throw new \InvalidArgumentException('The retry ad resource must belong to this campaign customer account.');
+            }
+            $latest = $this->latest($campaign, $resource);
+            if ($this->attemptCount($campaign, $resource) !== self::MAX_REPAIRS || $latest === null || ! $this->unsubmittedGenerationFailure($latest)) {
+                throw new \DomainException('Only an unsubmitted generation or review failure at the exact repair limit can receive a retry authorization.');
+            }
+            if (AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_copy_generation_retry_authorized')
+                ->where('details->ad_resource', $resource)->where('created_at', '>=', now()->subDays(7))->exists()) {
+                throw new \DomainException('An ad-copy generation retry has already been authorized for this ad within seven days.');
+            }
+
+            return AgentActivity::record('quality_score', 'ad_copy_generation_retry_authorized', $reason,
+                $campaign->customer_id, $campaign->id, ['failed_attempt_id' => $latest->id,
+                    'ad_resource' => $resource, 'generation_revision' => GenerateReviewedRsaCopy::REVISION,
+                    'reason' => $reason, 'expires_at' => now()->addDay()->toIso8601String()], 'pending');
+        });
+    }
+
+    public function hasAuthorizedGenerationRetry(Campaign $campaign, string $resource): bool
+    {
+        return $this->generationRetryAuthorization($campaign, $resource) !== null;
+    }
+
+    private function generationRetryAuthorization(Campaign $campaign, string $resource): ?AgentActivity
+    {
+        $latest = $this->latest($campaign, $resource);
+        if ($this->attemptCount($campaign, $resource) !== self::MAX_REPAIRS || $latest === null || ! $this->unsubmittedGenerationFailure($latest)
+            || isset($latest->details['retry_after']) && Carbon::parse($latest->details['retry_after'])->isFuture()) {
+            return null;
+        }
+        $authorization = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_copy_generation_retry_authorized')
+            ->where('status', 'pending')->where('details->ad_resource', $resource)
+            ->where('details->failed_attempt_id', $latest->id)->where('details->generation_revision', GenerateReviewedRsaCopy::REVISION)
+            ->where('created_at', '>=', now()->subDay())->latest('id')->first();
+        if (! $authorization || ! isset($authorization->details['expires_at'])
+            || Carbon::parse($authorization->details['expires_at'])->isPast()) {
+            return null;
+        }
+
+        return $authorization;
+    }
+
+    private function unsubmittedGenerationFailure(?AgentActivity $attempt): bool
+    {
+        if (! $attempt || $attempt->action !== 'ad_strength_repair_attempt' || $attempt->status !== 'needs_review') {
+            return false;
+        }
+        $details = $attempt->details ?? [];
+        if (($details['reason'] ?? null) !== 'repair_failed' || isset($details['submitted_at']) || isset($details['google_write_started_at'])) {
+            return false;
+        }
+        if (in_array($details['error_code'] ?? '', ['ad_strength_copy_invalid', 'ad_strength_copy_rejected', 'ad_strength_review_unavailable'], true)) {
+            return true;
+        }
+        // The previous pipeline did not store a distinct code for review rejection.
+        // These exact pre-write errors are safe to identify; generic API failures are not.
+        $error = $details['error'] ?? $attempt->description;
+
+        return $error === 'Replacement RSA copy did not pass evidence and relevance review.'
+            || is_string($error) && preg_match('/\ARSA assets must contain 1[–-](?:30|90) characters\.\z/u', $error) === 1;
     }
 
     public function failedAttempt(Campaign $campaign, AgentActivity $attempt, string $reason, ?AgentIssue $issue = null): void
@@ -245,8 +333,9 @@ class GoogleAdStrengthRepair
         $attempt->update(['status' => 'needs_review', 'description' => $reason, 'details' => array_merge($attempt->details ?? [], [
             'reason' => 'repair_failed', 'error' => $reason, 'retry_after' => now()->addHour()->toIso8601String(),
         ], $issue ? ['error_code' => $issue->code, 'error_message' => $issue->message] : [])]);
-        if ($this->attemptCount($campaign, $attempt->details['ad_resource']) >= self::MAX_REPAIRS) {
-            $this->escalate($campaign, $attempt->details['ad_resource'], 'Automatic ad-copy repair stopped after three attempts: '.$reason, $issue->code ?? 'ad_strength_repair_failed');
+        $attemptCount = $this->attemptCount($campaign, $attempt->details['ad_resource']);
+        if ($attemptCount >= self::MAX_REPAIRS) {
+            $this->escalate($campaign, $attempt->details['ad_resource'], 'Automatic ad-copy repair stopped after '.$attemptCount.' bounded attempts: '.$reason, $issue->code ?? 'ad_strength_repair_failed');
         }
     }
 
@@ -317,7 +406,7 @@ class GoogleAdStrengthRepair
                 $details['retry_after'] = now()->addHour()->toIso8601String();
                 if ($this->attemptCount($campaign, $details['ad_resource']) >= self::MAX_REPAIRS) {
                     $details['error_code'] = 'ad_strength_repair_limit_reached';
-                    $details['error_message'] = 'Google still reports weak ad strength after three bounded repair attempts. Review the ad feedback before further changes.';
+                    $details['error_message'] = 'Google still reports weak ad strength after '.$this->attemptCount($campaign, $details['ad_resource']).' bounded repair attempts. Review the ad feedback before further changes.';
                 }
             }
             $locked->update(['action' => $terminal ? 'ad_copy_update_verified' : 'ad_copy_update_submitted',

@@ -7,6 +7,7 @@ use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Prompts\AdCopyGenerationPolicy;
 use App\Prompts\AdCopyPrompt;
 use App\Services\AdminMonitorService;
 use App\Services\GeminiService;
@@ -44,6 +45,92 @@ class AdCopyOfferClarityTest extends TestCase
         $this->assertStringContainsString("Write exactly {$descriptions} descriptions", $prompt);
         $this->assertStringContainsString("Use the offer's actual currency", $prompt);
         $this->assertStringContainsString('Omit prices, discounts, guarantees and claims that the sources do not establish', $prompt);
+    }
+
+    #[DataProvider('platforms')]
+    public function test_initial_generation_uses_the_shared_factual_policy_before_untrusted_brief_data(string $platform): void
+    {
+        $prompt = (new AdCopyPrompt('Reuse our old headline: No Recurring Fees.', $platform,
+            evidence: ['landing_page' => 'https://agency.example/setup', 'sources' => [[
+                'url' => 'https://agency.example/setup',
+                'content' => 'Setup costs EUR120 once. Advertising spend is billed separately.',
+            ]]]))->getPrompt();
+
+        $this->assertStringContainsString(AdCopyGenerationPolicy::instructions(), $prompt);
+        $this->assertLessThan(strpos($prompt, 'Reuse our old headline:'), strpos($prompt, '--- SOURCE-BACKED CLAIMS'));
+        $this->assertStringContainsString('same headline or description', $prompt);
+        $this->assertStringContainsString('A fee waiver needs explicit source support; a single setup price alone is not enough', $prompt);
+        $this->assertStringContainsString('never infer the offer currency from the advertising account or its budget', $prompt);
+        $this->assertStringContainsString('If an accurate qualification cannot fit', $prompt);
+        $this->assertStringContainsString('Check every retained claim against the current offer sources, even if it previously served', $prompt);
+        $this->assertStringContainsString('do not invent ongoing costs', $prompt);
+        $this->assertStringContainsString('Setup costs EUR120 once.', $prompt);
+        $this->assertStringNotContainsString('sitetospend', strtolower($prompt));
+        $this->assertStringNotContainsString('$999', $prompt);
+    }
+
+    public function test_initial_generation_corrects_a_fee_claim_from_reviewer_feedback_before_saving(): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        $campaign->update(['product_focus' => 'Advertising campaign setup']);
+        $strategy->update(['ad_copy_strategy' => 'Explain the campaign setup service.']);
+        $this->setOfferSource($campaign, 'Campaign setup costs EUR120 once with no recurring agency fees. '
+            .'The service researches buyer keywords and writes the ads for you. Advertising spend is paid separately.');
+        $corrected = ['headlines' => ['Advertising Campaign Setup', 'No Recurring Agency Fees', 'Keywords for Your Buyers',
+            'Ad Copy Written for You', 'EUR120 Campaign Setup'],
+            'descriptions' => ['Get buyer keyword research and ad copy with our campaign setup service.',
+                'EUR120 is the one-time setup service fee. Advertising spend is paid separately.',
+                'No recurring agency fees. Explore the campaign setup service and what it includes.']];
+        $bad = $corrected;
+        $bad['headlines'][1] = 'No Recurring Fees';
+        $bad['headlines'][2] = str_repeat('界', 301);
+        $generations = 0;
+        $reviews = 0;
+        Http::fake(function (Request $request) use (&$generations, &$reviews, $bad, $corrected) {
+            $prompt = $request['contents'][0]['parts'][0]['text'];
+            if (str_starts_with($prompt, 'Review the following ad copy')) {
+                $reviews++;
+                if ($reviews === 1) {
+                    $this->assertStringContainsString('fee_scope_misleading_recurring_claim', $prompt);
+                }
+                // The factual validator must reject the first candidate even
+                // when the model reviewer misses the fee problem.
+                $data = ['overall_score' => 88, 'factual_accuracy' => true, 'intent_relevance' => true,
+                    'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []];
+            } else {
+                $generations++;
+                $this->assertStringContainsString(AdCopyGenerationPolicy::instructions(), $prompt);
+                if ($generations === 2) {
+                    $this->assertStringContainsString('CRITICAL CORRECTIONS REQUIRED', $prompt);
+                    $this->assertStringContainsString('Qualify any fee waiver as the agency/service fee', $prompt);
+                    $this->assertStringContainsString('Another asset cannot qualify this claim', $prompt);
+                    $this->assertStringContainsString('Campaign setup costs EUR120 once', $prompt);
+                    $this->assertStringContainsString('rejected_candidate_excerpt', $prompt);
+                    $this->assertStringContainsString('fee_scope', $prompt);
+                    $this->assertStringContainsString('"is_valid": false', $prompt);
+                    $corrections = explode("--- CRITICAL CORRECTIONS REQUIRED ---\n", $prompt, 2)[1];
+                    $start = strpos($corrections, '{');
+                    $end = strrpos($corrections, '}');
+                    $feedback = json_decode(substr($corrections, $start, $end - $start + 1), true, flags: JSON_THROW_ON_ERROR);
+                    $this->assertSame('No Recurring Fees', $feedback['rejected_candidate_excerpt']['headlines'][1]);
+                    $this->assertSame(str_repeat('界', 300), $feedback['rejected_candidate_excerpt']['headlines'][2]);
+                    $this->assertFalse($feedback['fee_scope']['is_valid']);
+                }
+                $data = $generations === 1 ? $bad : $corrected;
+            }
+
+            return Http::response([['candidates' => [['content' => ['parts' => [['text' => json_encode($data, JSON_THROW_ON_ERROR)]]],
+                'finishReason' => 'STOP']]]]);
+        });
+
+        $job = (new GenerateAdCopy($campaign, $strategy, 'Google Ads'))->withFakeQueueInteractions();
+        $job->handle();
+
+        $job->assertNotFailed();
+        $this->assertSame(2, $generations);
+        $this->assertSame(2, $reviews);
+        $this->assertSame($corrected, $strategy->adCopies()->sole()->only(['headlines', 'descriptions']));
+        Http::assertSentCount(4);
     }
 
     public static function unclearSets(): array
@@ -240,6 +327,11 @@ class AdCopyOfferClarityTest extends TestCase
                 $this->assertStringNotContainsString('concepts, IN ORDER', $prompt);
                 if ($attempt > 1) {
                     $this->assertStringContainsString('CRITICAL CORRECTIONS REQUIRED', $prompt);
+                    $this->assertStringContainsString('rejected_candidate_excerpt', $prompt);
+                    if ($attempt === 2) {
+                        $this->assertStringContainsString('"intent_relevance": false', $prompt);
+                        $this->assertStringContainsString('Ready for Handover', $prompt);
+                    }
                     if (! $recover || $attempt === 2) {
                         $this->assertStringContainsString('The headline set is dominated by account workflow', $prompt);
                     }

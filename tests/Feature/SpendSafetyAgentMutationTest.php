@@ -41,7 +41,7 @@ class SpendSafetyAgentMutationTest extends TestCase
         $stale = $campaign->fresh();
         $campaign->update(['spend_safety_hold' => ['reason' => 'no_conversions_after_matured_spend']]);
 
-        $qs = (new QualityScoreImprovementAgent(app(GeminiService::class)))->improve($stale);
+        $qs = app(QualityScoreImprovementAgent::class)->improve($stale);
         $budget = (new BudgetIntelligenceAgent)->optimize($stale);
         $this->assertTrue($qs['skipped']);
         $this->assertSame([], $qs['actions']);
