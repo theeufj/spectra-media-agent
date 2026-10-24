@@ -395,6 +395,7 @@ class QualityScoreImprovementAgent
             return array_merge($result, ['skipped' => 'not_managed_or_active']);
         }
         $lock = Cache::lock("ad_strength_repair:{$campaign->id}", 900);
+        $leaseExpiresAt = now()->addSeconds(900);
         if (! $lock->get()) {
             return array_merge($result, ['skipped' => 'already_checking']);
         }
@@ -416,6 +417,13 @@ class QualityScoreImprovementAgent
             $verifications = [];
             $submittedCopies = [];
             foreach ($ads as $ad) {
+                // A failed provider call can also exhaust the lease. Stop
+                // before another ad starts an attempt or repairs extensions.
+                if (! $this->ownsRepairLease($lock, $leaseExpiresAt)) {
+                    $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => 'repair_lock_lost'];
+
+                    break;
+                }
                 preg_match('#^(customers/\d+)/adGroupAds/(\d+)~#', $ad['resource_name'], $parts);
                 $group = isset($parts[1], $parts[2]) ? $parts[1].'/adGroups/'.$parts[2] : '';
                 $strategy = $campaign->strategies()->where('google_ads_ad_group_id', $group)->first();
@@ -524,6 +532,15 @@ class QualityScoreImprovementAgent
 
                         continue;
                     }
+                    // Generation, review and the live read can outlast the lease.
+                    // Never write as a former owner or continue to the next ad.
+                    if (! $this->ownsRepairLease($lock, $leaseExpiresAt)) {
+                        $attempt->update(['status' => 'skipped', 'description' => 'RSA repair lock expired or changed owner during review; no copy write was sent.',
+                            'details' => array_merge($attempt->details ?? [], ['reason' => 'repair_lock_lost'])]);
+                        $result['unresolved'][] = ['ad_resource' => $ad['resource_name'], 'reason' => 'repair_lock_lost'];
+
+                        break;
+                    }
                     $attempt->update(['details' => array_merge($attempt->details ?? [], ['google_write_started_at' => now()->toIso8601String()])]);
                     $updater = app(UpdateResponsiveSearchAd::class, ['customer' => $customer]);
                     if (! $updater->replace($customer->cleanGoogleCustomerId(), $ad['resource_name'], $copy['headlines'], $copy['descriptions'])) {
@@ -587,6 +604,17 @@ class QualityScoreImprovementAgent
         }
 
         return $result;
+    }
+
+    /**
+     * Reads the clock and current cache owner, which may change between calls.
+     *
+     * @phpstan-impure
+     */
+    private function ownsRepairLease(\Illuminate\Contracts\Cache\Lock $lock, \Carbon\CarbonInterface $expiresAt): bool
+    {
+        return $expiresAt->greaterThan(now()) && $lock instanceof \Illuminate\Cache\Lock
+            && $lock->isOwnedByCurrentProcess();
     }
 
     public static function isStrengthMutationHold(string $reason): bool

@@ -151,7 +151,10 @@ class AdCopyOfferClarityTest extends TestCase
                     'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []];
             } else {
                 $generations++;
-                $this->assertSame(['type' => 'json_object'], $request['response_format']);
+                $this->assertSame('json_schema', $request['response_format']['type']);
+                $this->assertTrue($request['response_format']['json_schema']['strict']);
+                $this->assertSame(\App\Prompts\AdCopyResponseSchema::forRules(AdminMonitorService::getRulesForPlatform('google')),
+                    $request['response_format']['json_schema']['schema']);
                 $this->assertSame(0.2, $request['temperature']);
                 $system = collect($messages)->firstWhere('role', 'system')['content'];
                 $this->assertStringContainsString('requested platform asset counts and Unicode character limits', $system);

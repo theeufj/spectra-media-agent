@@ -36,7 +36,8 @@ class GoogleAdRankCopyPolicyTest extends TestCase
         $gemini = $this->createMock(GeminiService::class);
         $gemini->expects($this->once())->method('generateContent')->willReturnCallback(function ($model, $prompt, $config, $systemInstruction) use ($proposal): array {
             $this->assertSame(config('ai.models.default'), $model);
-            $this->assertSame(['responseMimeType' => 'application/json', 'temperature' => 0.2], $config);
+            $this->assertSame(['responseMimeType' => 'application/json', 'temperature' => 0.2,
+                'responseJsonSchema' => \App\Prompts\AdCopyResponseSchema::rankRepair()], $config);
             $this->assertStringContainsString('6–8 strong distinct headlines and 3 short descriptions', $prompt);
             $this->assertStringContainsString('3–15 headlines and 2–4 descriptions', $prompt);
             $this->assertStringContainsString('aim for 25 or fewer', $systemInstruction);

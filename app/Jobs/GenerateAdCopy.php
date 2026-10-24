@@ -151,7 +151,8 @@ class GenerateAdCopy implements ShouldQueue
                     app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($this->campaign, $this->strategy),
                 ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $adCopyPrompt,
-                    config: ['responseMimeType' => 'application/json', 'temperature' => 0.2],
+                    config: ['responseMimeType' => 'application/json', 'temperature' => 0.2,
+                        'responseJsonSchema' => \App\Prompts\AdCopyResponseSchema::forRules($rules)],
                     systemInstruction: 'Write concise, truthful advertising assets and return only the requested JSON object. '
                         .'Obey the requested platform asset counts and Unicode character limits, counting spaces and punctuation. Aim comfortably below each maximum. '
                         .'Each asset must be a complete, standalone message. Never remove an agency/service fee qualifier or source currency to shorten a claim. '

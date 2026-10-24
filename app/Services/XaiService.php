@@ -85,7 +85,11 @@ class XaiService
 
         // Gemini takes responseMimeType; the OpenAI-compatible APIs take
         // response_format. The caller asked for JSON either way.
-        if (($config['responseMimeType'] ?? null) === 'application/json') {
+        if (is_array($config['responseJsonSchema'] ?? null) && $config['responseJsonSchema'] !== []) {
+            $payload['response_format'] = ['type' => 'json_schema', 'json_schema' => [
+                'name' => 'structured_response', 'strict' => true, 'schema' => $config['responseJsonSchema'],
+            ]];
+        } elseif (($config['responseMimeType'] ?? null) === 'application/json') {
             $payload['response_format'] = ['type' => 'json_object'];
         }
 
