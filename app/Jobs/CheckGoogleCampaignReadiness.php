@@ -227,7 +227,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
                     $snapshot['skip_reason'] = $snapshot['ad_strength']['mutation_holds'][0]['reason'];
                 }
                 $snapshot['pending'] = $snapshot['ad_strength']['pending'] ?? [];
-                $snapshot['issues'] = array_merge($snapshot['issues'], $this->issues($snapshot['ad_strength']['errors'] ?? []), $this->strengthIssues($snapshot['ad_strength']));
+                $snapshot['issues'] = array_merge($snapshot['issues'], $this->allStrengthIssues($snapshot['ad_strength']));
                 $snapshot['errors'] = array_merge($snapshot['errors'], $this->issues($snapshot['ad_strength']['errors'] ?? []));
             } else {
                 $snapshot['ad_strength']['skipped'] = $reason ?? 'missing_google_campaign';
@@ -298,7 +298,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
             $snapshot[$component]['last_known'] = $last;
             $snapshot[$component]['last_known_checked_at'] = $previous[$component]['last_known_checked_at'] ?? $previous['checked_at'] ?? null;
             $issues = $component !== 'ad_strength' ? $this->issues($last['issues'] ?? [])
-                : array_merge($this->issues($last['errors'] ?? []), $this->strengthIssues($last));
+                : $this->allStrengthIssues($last);
             $snapshot['issues'] = array_merge($snapshot['issues'], $issues);
             $previousUnknown = $previousUnknown || (! empty($issues) && (($last['status'] ?? null) === 'unknown' || ! empty($last['errors'])));
         }
@@ -396,7 +396,42 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
 
     private function escalate(Campaign $campaign, Strategy $strategy, array $snapshot): void
     {
-        $fingerprint = hash('sha256', json_encode([$strategy->id, $snapshot['issues']], JSON_THROW_ON_ERROR));
+        // The repair loop already notifies customers/admins when a bounded
+        // per-ad repair is exhausted. Keep that evidence in readiness, but do
+        // not send it again from this aggregate check.
+        $strength = $snapshot['ad_strength'];
+        if ($this->allStrengthIssues($strength) === [] && isset($strength['last_known'])) {
+            $strength = $strength['last_known'];
+        }
+        $strength['unresolved'] = array_merge($strength['unresolved'] ?? [], $strength['last_known']['unresolved'] ?? []);
+        $reported = [];
+        foreach ($strength['unresolved'] ?? [] as $row) {
+            if (! is_array($row) || ! empty($row['waiting'])) {
+                continue;
+            }
+            $issue = $this->unresolved([$row])[0];
+            $key = $this->issueKey($issue);
+            $sent = ! empty($row['ad_resource']) && AgentActivity::where('campaign_id', $campaign->id)
+                ->where('action', 'ad_strength_escalated')->where('details->ad_resource', $row['ad_resource'])
+                ->where('details->issue_code', $issue['code'])->where('created_at', '>=', now()->subDay())->exists();
+            // A second ad with the same problem still needs its own alert.
+            $reported[$key] = ($reported[$key] ?? true) && $sent;
+        }
+        $notificationIssues = array_values(array_filter($snapshot['issues'], fn ($issue) => ! ($reported[$this->issueKey($issue)] ?? false)));
+        if ($notificationIssues === []) {
+            return;
+        }
+        $identity = array_map($this->issueKey(...), $notificationIssues);
+        foreach ($strength['unresolved'] ?? [] as $row) {
+            if (is_array($row) && empty($row['waiting']) && isset($row['ad_resource'])) {
+                $issue = $this->unresolved([$row])[0];
+                if (in_array($issue, $notificationIssues, true)) {
+                    $identity[] = $issue['code'].':'.$row['ad_resource'];
+                }
+            }
+        }
+        sort($identity);
+        $fingerprint = hash('sha256', json_encode([$strategy->id, $identity], JSON_THROW_ON_ERROR));
         if (AgentActivity::where('campaign_id', $campaign->id)->where('action', 'google_readiness_alerted')
             ->where('details->fingerprint', $fingerprint)->where('created_at', '>=', now()->subDay())->exists()) {
             return;
@@ -404,24 +439,24 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
         $affected = [];
         foreach (['conversion_goals' => 'Conversion goals', 'audience_observation' => 'Search audience mode', 'ad_strength' => 'Ad strength'] as $component => $label) {
             $componentIssues = $component === 'ad_strength'
-                ? array_merge($this->issues($snapshot[$component]['errors'] ?? []), $this->strengthIssues($snapshot[$component]))
+                ? $this->allStrengthIssues($snapshot[$component])
                 : $snapshot[$component]['issues'] ?? [];
             if ($componentIssues === [] && isset($snapshot[$component]['last_known'])) {
                 $last = $snapshot[$component]['last_known'];
                 $componentIssues = $component === 'ad_strength'
-                    ? array_merge($this->issues($last['errors'] ?? []), $this->strengthIssues($last)) : $last['issues'] ?? [];
+                    ? $this->allStrengthIssues($last) : $last['issues'] ?? [];
             }
-            if ($componentIssues !== []) {
+            if (array_intersect(array_map($this->issueKey(...), $componentIssues), array_map($this->issueKey(...), $notificationIssues)) !== []) {
                 $affected[] = $label;
             }
         }
         $subject = $affected === [] ? 'Deployment verification' : implode(', ', $affected);
         CriticalAgentAlert::deliver('google_campaign_readiness', 'Google campaign readiness needs attention',
             'Review '.$subject.' for "'.$campaign->name.'". See the reported issues. This readiness check has not changed campaign pause or budget settings.',
-            ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id, 'strategy_id' => $strategy->id, 'issues' => $snapshot['issues'], 'action_url' => route('admin.campaigns.show', $campaign), 'dedupe_key' => $fingerprint],
+            ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id, 'strategy_id' => $strategy->id, 'issues' => $notificationIssues, 'action_url' => route('admin.campaigns.show', $campaign), 'dedupe_key' => $fingerprint],
             CriticalAgentAlert::RECIPIENTS_ADMINS, $campaign->customer);
         AgentActivity::record('google_readiness', 'google_readiness_alerted', 'Unresolved Google readiness issues escalated for review.',
-            $campaign->customer_id, $campaign->id, ['strategy_id' => $strategy->id, 'fingerprint' => $fingerprint, 'issues' => $snapshot['issues']], 'needs_review');
+            $campaign->customer_id, $campaign->id, ['strategy_id' => $strategy->id, 'fingerprint' => $fingerprint, 'issues' => $notificationIssues], 'needs_review');
     }
 
     /** @return list<array{code:string,message:string}> */
@@ -435,6 +470,9 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
     {
         return array_map(function ($issue) {
             if (is_array($issue) && isset($issue['reason'])) {
+                if (! empty($issue['error_code']) && ! empty($issue['error_message'])) {
+                    return (new AgentIssue($issue['error_code'], $issue['error_message']))->toArray();
+                }
                 if ($issue['reason'] === 'google_evaluation_delayed') {
                     return (new AgentIssue('ad_strength_google_evaluation_delayed', 'Google review or ad-strength evaluation is still pending after 72 hours of observation. Check the ad status in Google Ads; no approval or strength result has been assumed.'))->toArray();
                 }
@@ -499,6 +537,17 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
         }
 
         return $strength;
+    }
+
+    private function issueKey(array $issue): string
+    {
+        return $issue['code'].':'.$issue['message'];
+    }
+
+    /** The error and unresolved row are two views of one repair failure. */
+    private function allStrengthIssues(array $strength): array
+    {
+        return array_values(array_unique(array_merge($this->issues($strength['errors'] ?? []), $this->strengthIssues($strength)), SORT_REGULAR));
     }
 
     private function strengthIssues(array $strength): array

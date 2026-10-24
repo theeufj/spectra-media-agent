@@ -73,7 +73,7 @@ class VerifyGoogleAdImprovement implements ShouldQueue
         }
         $attempt->update(['status' => 'needs_review', 'description' => 'RSA repair could not be verified; review required.',
             'details' => array_merge($attempt->details ?? [], ['reason' => 'verification_failed', 'last_read_error' => $exception->getMessage()])]);
-        $state->escalate($this->campaign, $this->adResource, $attempt->description);
+        $state->escalate($this->campaign, $this->adResource, $attempt->description, 'ad_strength_verification_failed');
     }
 
     private function attempt(GoogleAdStrengthRepair $state): ?AgentActivity

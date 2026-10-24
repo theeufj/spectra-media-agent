@@ -6,6 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Notification;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Agents\AgentIssue;
 use Google\Ads\GoogleAds\V26\Enums\AdStrengthEnum\AdStrength;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -83,16 +84,17 @@ class GoogleAdStrengthRepair
 
     public static function copy(array $headlines, array $descriptions): array
     {
-        $normalize = function (array $texts, int $min, int $max, int $length): array {
+        $normalize = function (array $texts, string $field, int $min, int $max, int $length): array {
             $result = [];
             $seen = [];
-            foreach ($texts as $text) {
+            foreach (array_values($texts) as $index => $text) {
                 if (! is_string($text) || ! mb_check_encoding($text, 'UTF-8')) {
-                    throw new \InvalidArgumentException('RSA assets must be valid UTF-8 text.');
+                    throw new \InvalidArgumentException("RSA {$field}[{$index}] must be valid UTF-8 text.");
                 }
                 $text = trim($text);
-                if ($text === '' || mb_strlen($text) > $length) {
-                    throw new \InvalidArgumentException("RSA assets must contain 1–{$length} characters.");
+                $characters = mb_strlen($text);
+                if ($characters < 1 || $characters > $length) {
+                    throw new \InvalidArgumentException("RSA {$field}[{$index}] contains {$characters} Unicode characters; allowed length is 1–{$length}.");
                 }
                 $key = mb_strtolower($text);
                 if (! isset($seen[$key])) {
@@ -101,13 +103,13 @@ class GoogleAdStrengthRepair
                 }
             }
             if (count($result) < $min || count($result) > $max) {
-                throw new \InvalidArgumentException("RSA requires {$min}–{$max} distinct assets.");
+                throw new \InvalidArgumentException('RSA '.$field.' contains '.count($result)." distinct assets; requires {$min}–{$max}.");
             }
 
             return $result;
         };
 
-        return ['headlines' => $normalize($headlines, 3, 15, 30), 'descriptions' => $normalize($descriptions, 2, 4, 90)];
+        return ['headlines' => $normalize($headlines, 'headlines', 3, 15, 30), 'descriptions' => $normalize($descriptions, 'descriptions', 2, 4, 90)];
     }
 
     public static function ad(array $row): array
@@ -238,13 +240,13 @@ class GoogleAdStrengthRepair
         });
     }
 
-    public function failedAttempt(Campaign $campaign, AgentActivity $attempt, string $reason): void
+    public function failedAttempt(Campaign $campaign, AgentActivity $attempt, string $reason, ?AgentIssue $issue = null): void
     {
         $attempt->update(['status' => 'needs_review', 'description' => $reason, 'details' => array_merge($attempt->details ?? [], [
             'reason' => 'repair_failed', 'error' => $reason, 'retry_after' => now()->addHour()->toIso8601String(),
-        ])]);
+        ], $issue ? ['error_code' => $issue->code, 'error_message' => $issue->message] : [])]);
         if ($this->attemptCount($campaign, $attempt->details['ad_resource']) >= self::MAX_REPAIRS) {
-            $this->escalate($campaign, $attempt->details['ad_resource'], $reason);
+            $this->escalate($campaign, $attempt->details['ad_resource'], 'Automatic ad-copy repair stopped after three attempts: '.$reason, $issue->code ?? 'ad_strength_repair_failed');
         }
     }
 
@@ -313,6 +315,10 @@ class GoogleAdStrengthRepair
                 'last_verified_at' => now()->toIso8601String(), 'next_verification_at' => now()->addHour()->toIso8601String()]);
             if ($terminal && $reason === 'still_weak') {
                 $details['retry_after'] = now()->addHour()->toIso8601String();
+                if ($this->attemptCount($campaign, $details['ad_resource']) >= self::MAX_REPAIRS) {
+                    $details['error_code'] = 'ad_strength_repair_limit_reached';
+                    $details['error_message'] = 'Google still reports weak ad strength after three bounded repair attempts. Review the ad feedback before further changes.';
+                }
             }
             $locked->update(['action' => $terminal ? 'ad_copy_update_verified' : 'ad_copy_update_submitted',
                 'status' => $terminal ? 'needs_review' : 'pending',
@@ -324,7 +330,7 @@ class GoogleAdStrengthRepair
         $attempt->refresh();
         if ($result['status'] === 'needs_review'
             && ($result['reason'] !== 'still_weak' || $this->attemptCount($campaign, $attempt->details['ad_resource']) >= self::MAX_REPAIRS)) {
-            $this->escalate($campaign, $attempt->details['ad_resource'], $attempt->description);
+            $this->escalate($campaign, $attempt->details['ad_resource'], $attempt->details['error_message'] ?? $attempt->description, $attempt->details['error_code'] ?? 'ad_strength_'.$result['reason']);
         }
 
         return $result;
@@ -390,16 +396,16 @@ class GoogleAdStrengthRepair
         return $actualHeadlines === $headlines && $actualDescriptions === $descriptions;
     }
 
-    public function escalate(Campaign $campaign, string $resource, string $message): void
+    public function escalate(Campaign $campaign, string $resource, string $message, string $issueCode = 'ad_strength_unresolved'): void
     {
-        $event = DB::transaction(function () use ($campaign, $resource, $message) {
+        $event = DB::transaction(function () use ($campaign, $resource, $message, $issueCode) {
             Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
             if (AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_strength_escalated')
-                ->where('details->ad_resource', $resource)->where('created_at', '>=', now()->subDays(7))->exists()) {
+                ->where('details->ad_resource', $resource)->where('details->issue_code', $issueCode)->where('created_at', '>=', now()->subDays(7))->exists()) {
                 return null;
             }
             $event = AgentActivity::record('quality_score', 'ad_strength_escalated', $message,
-                $campaign->customer_id, $campaign->id, ['ad_resource' => $resource, 'action_required' => 'Review the unresolved RSA copy, policy review and Google action items.'], 'needs_review');
+                $campaign->customer_id, $campaign->id, ['ad_resource' => $resource, 'issue_code' => $issueCode, 'action_required' => 'Review the unresolved RSA copy, policy review and Google action items.'], 'needs_review');
             foreach ($campaign->customer->users as $user) {
                 Notification::notify($user, 'ad_strength_unresolved', 'Ad strength repair needs review', $message,
                     route('campaigns.show', $campaign), 'Review campaign', $campaign->customer, ['ad_resource' => $resource]);

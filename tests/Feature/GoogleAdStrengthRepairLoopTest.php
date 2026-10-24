@@ -384,6 +384,56 @@ class GoogleAdStrengthRepairLoopTest extends TestCase
         $this->assertCount(1, app(QualityScoreImprovementAgent::class)->checkAdStrength($campaign)['actions']);
     }
 
+    public function test_third_submitted_repair_still_weak_alert_is_not_repeated_during_cooldown_or_after_the_repair_limit(): void
+    {
+        Notification::fake();
+        $campaign = $this->campaign();
+        $campaign->update(['daily_budget' => '50.00', 'approved_daily_budget' => '50.00', 'platform_status' => 'ENABLED']);
+        $before = $campaign->only(['status', 'platform_status', 'daily_budget', 'approved_daily_budget']);
+        $user = User::factory()->create();
+        $campaign->customer->users()->attach($user);
+        $state = app(GoogleAdStrengthRepair::class);
+        $row = $this->row(copy: $this->copy);
+        for ($repair = 1; $repair <= GoogleAdStrengthRepair::MAX_REPAIRS; $repair++) {
+            $attempt = $this->submitted($campaign);
+            for ($read = 0; $read < GoogleAdStrengthRepair::MAX_VERIFICATION_READS; $read++) {
+                $this->travel(61)->minutes();
+                $result = $state->verify($campaign, $attempt, GoogleAdStrengthRepair::ad($row));
+            }
+            $this->assertSame('needs_review', $result['status']);
+            $this->assertSame('still_weak', $result['reason']);
+            if ($repair < GoogleAdStrengthRepair::MAX_REPAIRS) {
+                Notification::assertNotSentTo($user, CriticalAgentAlert::class);
+            }
+        }
+
+        $details = $attempt->fresh()->details;
+        $this->assertSame('ad_strength_repair_limit_reached', $details['error_code']);
+        $this->assertNotEmpty($details['error_message']);
+        $this->reader([$row]);
+        $this->mock(GeminiService::class)->shouldNotReceive('generateContent');
+        $updater = Mockery::mock(UpdateResponsiveSearchAd::class);
+        $updater->shouldNotReceive('replace');
+        $this->app->bind(UpdateResponsiveSearchAd::class, fn () => $updater);
+        $agent = app(QualityScoreImprovementAgent::class);
+        $cooldown = $agent->checkAdStrength($campaign);
+        $this->assertSame('still_weak', $cooldown['unresolved'][0]['reason']);
+        $this->travel(61)->minutes();
+        $exhausted = $agent->checkAdStrength($campaign);
+        $this->assertSame('repair_limit_reached', $exhausted['unresolved'][0]['reason']);
+        foreach ([$cooldown, $exhausted] as $observed) {
+            $this->assertSame($details['error_code'], $observed['unresolved'][0]['error_code']);
+            $this->assertSame($details['error_message'], $observed['unresolved'][0]['error_message']);
+            $this->assertSame([], $observed['actions']);
+        }
+        $this->assertSame(3, $state->attemptCount($campaign, self::AD));
+        $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_strength_escalated')->count());
+        $this->assertSame(1, \App\Models\Notification::where('user_id', $user->id)->where('type', 'ad_strength_unresolved')->count());
+        Notification::assertSentToTimes($user, CriticalAgentAlert::class, 1);
+        $this->assertSame($before, $campaign->fresh()->only(array_keys($before)));
+        Queue::assertNotPushed(VerifyGoogleAdImprovement::class);
+    }
+
     public function test_policy_disapproval_is_unresolved_even_when_strength_increases(): void
     {
         Notification::fake();

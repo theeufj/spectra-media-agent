@@ -73,6 +73,35 @@ class PreLaunchForecastTest extends TestCase
         $this->assertSame('TARGET_SPEND', $result->metadata['expected_bidding']);
     }
 
+    public function test_target_bidding_metadata_matches_the_supported_wire_strategy(): void
+    {
+        foreach (['TargetCpa' => 'MAXIMIZE_CONVERSIONS', 'TargetRoas' => 'MAXIMIZE_CONVERSION_VALUE'] as $name => $wireType) {
+            $updater = $this->createMock(UpdateCampaignBiddingStrategy::class);
+            $updater->method('__invoke')->willReturn(true);
+            $applier = new class(new Customer, $updater) extends BiddingStrategyApplier
+            {
+                public function __construct(Customer $customer, private UpdateCampaignBiddingStrategy $service)
+                {
+                    parent::__construct($customer);
+                }
+
+                protected function updater(): UpdateCampaignBiddingStrategy
+                {
+                    return $this->service;
+                }
+
+                public function getConversionCountForCustomer(string $customerId): int
+                {
+                    return 100;
+                }
+            };
+            $result = ExecutionResult::success();
+            $applier->applyBiddingStrategy('123', 'customers/123/campaigns/456', new Strategy(['bidding_strategy' => ['name' => $name,
+                'parameters' => ['targetCpaMicros' => 20_000_000, 'targetRoas' => 4.0]]]), $result);
+            $this->assertSame($wireType, $result->metadata['expected_bidding']);
+        }
+    }
+
     private function runPreflight(array $forecast, string $assessmentStatus = 'evidence_ready', string $primaryId = '456', array $previousState = [],
         array $snapshotOverrides = [], array $assessmentOverrides = [], array $campaignOverrides = [], bool $inspectionFails = false,
         array $postResearchChanges = [], ?\Closure $duringResearch = null, array $activationChanges = [], array $omittedSnapshotFields = []): array

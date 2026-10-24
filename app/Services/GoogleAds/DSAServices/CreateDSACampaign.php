@@ -77,7 +77,7 @@ class CreateDSACampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::SEARCH,
             'status' => CampaignStatusHelper::getGoogleAdsStatus(customer: $this->customer),
             'campaign_budget' => $budgetResource,
-            'manual_cpc' => new ManualCpc(['enhanced_cpc_enabled' => true]),
+            'manual_cpc' => new ManualCpc,
             'dynamic_search_ads_setting' => $dsaSettings,
         ]);
 

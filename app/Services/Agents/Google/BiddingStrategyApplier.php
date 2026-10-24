@@ -30,8 +30,8 @@ class BiddingStrategyApplier
             return;
         }
 
-        // Smart Bidding strategies that need conversion data to work effectively.
-        // Google minimums: Target CPA needs 30+/month, Target ROAS needs 50+/month.
+        // Our launch policy requires conversion evidence before adding CPA or ROAS targets.
+        // These thresholds are application policy, not Google eligibility requirements.
         $targetRoasStrategies = ['TARGET_ROAS', 'TARGETROAS'];
         $targetCpaStrategies = ['TARGET_CPA', 'TARGETCPA'];
         $needsConversionData = in_array($strategyName, array_merge($targetRoasStrategies, $targetCpaStrategies), true);
@@ -46,7 +46,7 @@ class BiddingStrategyApplier
                 ]);
                 $result->addWarning(
                     'bidding_strategy_downgraded',
-                    "Bidding strategy changed from {$strategyName} to Maximize Conversions — account needs {$minRequired}+ conversions/month before this strategy is effective. Will auto-upgrade via BiddingStrategyProgressionAgent."
+                    "Selected Maximize Conversions because our launch policy requires {$minRequired}+ recorded conversions in 30 days before adding this target. Agents will reassess bidding as campaign evidence becomes available."
                 );
                 $strategyName = 'MAXIMIZE_CONVERSIONS';
             }
@@ -64,8 +64,8 @@ class BiddingStrategyApplier
             return;
         }
         $result->addMetadata('expected_bidding', match ($mappedStrategy) {
-            'TARGET_CPA' => 'TARGET_CPA',
-            'TARGET_ROAS' => 'TARGET_ROAS',
+            'TARGET_CPA' => 'MAXIMIZE_CONVERSIONS',
+            'TARGET_ROAS' => 'MAXIMIZE_CONVERSION_VALUE',
             'MAXIMIZE_CLICKS' => 'TARGET_SPEND',
             default => $mappedStrategy,
         });
@@ -84,7 +84,7 @@ class BiddingStrategyApplier
         if ($success) {
             Log::info("GoogleAdsExecutionAgent: Applied bidding strategy {$mappedStrategy} to campaign {$campaignResourceName}");
         } else {
-            $result->addWarning('bidding_strategy_not_applied', "Could not apply {$mappedStrategy} bidding strategy — campaign will run on Manual CPC until next optimisation cycle.");
+            $result->addWarning('bidding_strategy_not_applied', "Could not confirm {$mappedStrategy} bidding in Google. Review the current campaign configuration before assuming the change was applied.");
         }
     }
 

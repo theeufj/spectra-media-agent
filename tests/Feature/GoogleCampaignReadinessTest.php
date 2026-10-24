@@ -318,6 +318,120 @@ class GoogleCampaignReadinessTest extends TestCase
         Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
     }
 
+    public function test_copy_failure_is_one_issue_and_cooldown_does_not_send_another_alert(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        $issue = ['code' => 'ad_strength_copy_invalid', 'message' => 'Replacement copy failed validation after three attempts. Current ad copy was not changed.'];
+        $row = ['ad_resource' => 'customers/1234567890/adGroupAds/1~2', 'reason' => 'repair_failed',
+            'error_code' => $issue['code'], 'error_message' => $issue['message']];
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->exactly(3))->method('checkAdStrength')->willReturnOnConsecutiveCalls(
+            $this->strength(['verified' => false, 'errors' => [$issue], 'unresolved' => [$row]]),
+            $this->strength(['verified' => false, 'unresolved' => [$row]]),
+            $this->strength(['verified' => false, 'unresolved' => [[...$row, 'reason' => 'repair_limit_reached']]])
+        );
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        for ($i = 0; $i < 3; $i++) {
+            $job->handle($strength, $verifier);
+            $this->assertSame([$issue], $this->snapshot($strategy)['issues']);
+            $this->assertFalse($this->snapshot($strategy)['ready']);
+        }
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+        $this->assertSame(50.0, (float) $campaign->fresh()->daily_budget);
+        $this->assertSame('active', $campaign->fresh()->status->value);
+    }
+
+    public function test_reordered_ad_issues_do_not_repeat_the_alert(): void
+    {
+        [$campaign] = $this->workspace();
+        $admin = $this->adminRecipient();
+        $rows = [
+            ['ad_resource' => 'customers/1234567890/adGroupAds/1~2', 'reason' => 'policy_disapproved'],
+            ['ad_resource' => 'customers/1234567890/adGroupAds/1~3', 'reason' => 'copy_changed'],
+        ];
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->method('reconcile')->willReturn($this->goals());
+        $strength->method('checkAdStrength')->willReturnOnConsecutiveCalls(
+            $this->strength(['verified' => false, 'unresolved' => $rows]),
+            $this->strength(['verified' => false, 'unresolved' => array_reverse($rows)])
+        );
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+    }
+
+    public function test_terminal_ad_alert_is_not_repeated_by_readiness_but_other_ads_and_goals_still_alert(): void
+    {
+        [$campaign, $customer, $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        $customer->users()->attach($admin);
+        $issue = ['code' => 'ad_strength_copy_invalid', 'message' => 'Replacement copy failed validation.'];
+        $row = ['ad_resource' => 'customers/1234567890/adGroupAds/1~2', 'reason' => 'repair_failed',
+            'error_code' => $issue['code'], 'error_message' => $issue['message']];
+        $state = app(\App\Services\GoogleAds\GoogleAdStrengthRepair::class);
+        $state->escalate($campaign, $row['ad_resource'], 'Automatic repairs exhausted: '.$issue['message'], $issue['code']);
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->method('reconcile')->willReturnOnConsecutiveCalls($this->goals(), $this->goals(),
+            $this->goals(['ready' => false, 'status' => 'needs_review', 'issues' => [['code' => 'purchase_missing', 'message' => 'Purchase action is missing.']]])
+        );
+        $strength->method('checkAdStrength')->willReturnOnConsecutiveCalls(
+            $this->strength(['verified' => false, 'errors' => [$issue], 'unresolved' => [$row]]),
+            $this->strength(['verified' => false, 'unresolved' => [$row, [...$row, 'ad_resource' => 'customers/1234567890/adGroupAds/1~3']]]),
+            $this->strength(['verified' => false, 'unresolved' => [$row]])
+        );
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 1);
+        $this->assertSame([$issue], $this->snapshot($strategy)['issues']);
+        $job->handle($strength, $verifier);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 2);
+        $job->handle($strength, $verifier);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 3);
+        Notification::assertSentTo($admin, CriticalAgentAlert::class, fn ($alert) => $alert->alertType === 'google_campaign_readiness'
+            && $alert->details['issues'] === [['code' => 'purchase_missing', 'message' => 'Purchase action is missing.']]
+            && str_contains($alert->message, 'Conversion goals') && ! str_contains($alert->message, 'Ad strength'));
+    }
+
+    public function test_a_new_read_error_alerts_without_repeating_the_retained_exhausted_copy_issue(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $admin = $this->adminRecipient();
+        $resource = 'customers/1234567890/adGroupAds/1~2';
+        app(\App\Services\GoogleAds\GoogleAdStrengthRepair::class)->escalate($campaign, $resource, 'Copy repairs exhausted.', 'ad_strength_copy_invalid');
+        $copyIssue = ['code' => 'ad_strength_copy_invalid', 'message' => 'Replacement copy failed validation.'];
+        $readIssue = ['code' => 'google_read_failed', 'message' => 'Google was unavailable.'];
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->method('reconcile')->willReturn($this->goals());
+        $strength->method('checkAdStrength')->willReturnOnConsecutiveCalls(
+            $this->strength(['verified' => false, 'unresolved' => [['ad_resource' => $resource, 'reason' => 'repair_failed',
+                'error_code' => $copyIssue['code'], 'error_message' => $copyIssue['message']]]]),
+            $this->strength(['checked' => false, 'verified' => false, 'errors' => [$readIssue]])
+        );
+        $job = new CheckGoogleCampaignReadiness($campaign->id);
+        $job->handle($strength, $verifier);
+        $job->handle($strength, $verifier);
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 2);
+        Notification::assertSentTo($admin, CriticalAgentAlert::class, fn ($alert) => $alert->alertType === 'google_campaign_readiness' && $alert->details['issues'] === [$readIssue]);
+        $this->assertContains($copyIssue, $this->snapshot($strategy)['issues']);
+        $this->assertContains($readIssue, $this->snapshot($strategy)['issues']);
+    }
+
+    public function test_separate_sitelink_escalation_does_not_suppress_copy_failure_on_the_same_ad(): void
+    {
+        [$campaign] = $this->workspace();
+        $admin = $this->adminRecipient();
+        $state = app(\App\Services\GoogleAds\GoogleAdStrengthRepair::class);
+        $resource = 'customers/1234567890/adGroupAds/1~2';
+        $state->escalate($campaign, $resource, 'Sitelinks need review.', 'ad_strength_sitelink_coverage_unresolved');
+        $state->escalate($campaign, $resource, 'Copy repairs exhausted.', 'ad_strength_copy_invalid');
+        $state->escalate($campaign, $resource, 'Copy repairs exhausted.', 'ad_strength_copy_invalid');
+        Notification::assertSentToTimes($admin, CriticalAgentAlert::class, 2);
+        $this->assertSame(2, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ad_strength_escalated')->count());
+    }
+
     public function test_campaign_lock_prevents_overlapping_checks(): void
     {
         [$campaign, $customer, $strategy] = $this->workspace();

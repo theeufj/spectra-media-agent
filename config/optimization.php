@@ -2,11 +2,12 @@
 
 return [
 
+    // These are our evidence thresholds for automatic changes, not Google eligibility minimums.
     'bidding_strategy' => [
         'thresholds' => [
             'MAXIMIZE_CONVERSIONS' => 30,
             'MANUAL_CPC' => 30,
-            'ENHANCED_CPC' => 50,
+            'MAXIMIZE_CLICKS' => 30,
             'TARGET_CPA' => 100,
         ],
         'cpa_target_multiplier' => 0.9,

@@ -23,6 +23,7 @@ class GetCampaignPerformance extends BaseGoogleAdsService implements CampaignPer
                  'metrics.clicks, '.
                  'metrics.cost_micros, '.
                  'metrics.conversions, '.
+                 'metrics.conversions_value, '.
                  'metrics.ctr, '.
                  'metrics.average_cpc, '.
                  'metrics.cost_per_conversion '.
@@ -39,6 +40,7 @@ class GetCampaignPerformance extends BaseGoogleAdsService implements CampaignPer
                 'clicks' => 0,
                 'cost_micros' => 0,
                 'conversions' => 0.0,
+                'conversion_value' => 0.0,
                 'ctr' => 0.0,
                 'average_cpc' => 0.0,
                 'cost_per_conversion' => 0.0,
@@ -53,6 +55,7 @@ class GetCampaignPerformance extends BaseGoogleAdsService implements CampaignPer
                 $metrics['clicks'] += $rowMetrics->getClicks();
                 $metrics['cost_micros'] += $rowMetrics->getCostMicros();
                 $metrics['conversions'] += $rowMetrics->getConversions();
+                $metrics['conversion_value'] += $rowMetrics->getConversionsValue();
 
                 // CTR, CPC, CPA are calculated fields or averages, but API returns them for the row.
                 // If we have multiple rows (e.g. if we segmented by date), we'd need to recalculate.
