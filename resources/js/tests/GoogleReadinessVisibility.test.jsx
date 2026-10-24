@@ -38,6 +38,35 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Google readiness visibility', () => {
+    it('separates live delivery from a neutral pending ad-strength observation', () => {
+        render(<GoogleReadinessCard readiness={pending} live />);
+        const card = screen.getByRole('region', { name: 'Google ad quality' });
+        expect(card).toHaveClass('bg-slate-50');
+        expect(within(card).getAllByText('Ad strength pending')).toHaveLength(2);
+        expect(within(card).getByText(/Your campaign is live. Google has not finished its ad-strength evaluation/)).toBeVisible();
+        expect(within(card).queryByText(/not fully verified/)).toBeNull();
+        expect(within(card).queryByText('Needs attention')).toBeNull();
+    });
+
+    it('keeps an actual quality issue actionable alongside confirmed live delivery', () => {
+        const issue = { code: 'ad_strength_google_evaluation_delayed', message: 'Google evaluation has remained pending beyond the observation window.' };
+        render(<GoogleReadinessCard readiness={{ ...pending, status: 'needs_review', issues: [issue] }} live />);
+        const card = screen.getByRole('region', { name: 'Google ad quality' });
+        expect(card).toHaveClass('bg-amber-50');
+        expect(within(card).getByText('Needs attention')).toBeVisible();
+        expect(within(card).getByText(issue.message)).toBeVisible();
+        expect(within(card).getByRole('link', { name: 'Get help with readiness' })).toBeVisible();
+    });
+
+    it('does not relabel a separate review observation as an ad-strength rating when delivery is confirmed', () => {
+        render(<GoogleReadinessCard readiness={reviewPending} live />);
+        const card = screen.getByRole('region', { name: 'Google ad quality' });
+        expect(within(card).getAllByText('Waiting for Google review')).toHaveLength(2);
+        expect(within(card).getByText(/last quality check reported an ad review in progress/)).toBeVisible();
+        expect(within(card).queryByText('Ad strength pending')).toBeNull();
+        expect(within(card).queryByText(/not fully verified/)).toBeNull();
+    });
+
     it('identifies an actual observed RSA review separately from a pending strength rating', () => {
         render(<GoogleReadinessCard readiness={reviewPending} />);
         const card = screen.getByRole('region', { name: 'Google campaign readiness' });

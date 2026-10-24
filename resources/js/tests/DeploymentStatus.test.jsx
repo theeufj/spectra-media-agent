@@ -18,6 +18,11 @@ const campaign = { id: 59, uuid: 'campaign-uuid', name: 'Onboarding New Customer
 const deployment = { id: 769, platform: 'Google Ads (SEM)', status: 'deploying', progress: 2, ad_copies_count: 1 };
 const result = (status, progress) => ({ deployments: [{ ...deployment, status, progress }] });
 const response = data => ({ ok: true, status: 200, text: async () => JSON.stringify(data) });
+const liveDeployment = { ...deployment, status: 'active', progress: 3, deployment_complete: true,
+    delivery_status: { status: 'live', checked_at: '2026-10-24T03:00:00Z' },
+    google_readiness: { status: 'pending', ready: false, issues: [], pending: [{ code: 'ad_strength_strength_pending', message: 'Google has not confirmed ad strength yet.' }],
+        conversion_goals: { status: 'ready', ready: true }, audience_observation: { status: 'ready', ready: true },
+        ad_strength: { checked: true, verified: false, unresolved: [{ reason: 'strength_pending', waiting: true }] } } };
 
 beforeEach(() => {
     vi.useFakeTimers();
@@ -32,6 +37,128 @@ afterEach(() => {
 });
 
 describe('deployment completion feedback', () => {
+    it.each([['queued', 0], ['deploying', 2], ['pending', 0]])('clears an earlier live presentation when Echo starts new %s work and resumes polling', async (status, progress) => {
+        const listeners = {};
+        const channel = { listen: (name, listener) => { listeners[name] = listener; return channel; }, stopListening: vi.fn() };
+        vi.stubGlobal('Echo', { private: vi.fn(() => channel) });
+        fetch.mockReturnValue(new Promise(() => {}));
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[liveDeployment]} />);
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        expect(fetch).not.toHaveBeenCalled();
+
+        act(() => listeners['.deployment.progress']({ strategy_id: deployment.id, deployment: { status } }));
+
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        expect(screen.queryByRole('heading', { name: 'Your campaign is live' })).toBeNull();
+        expect(screen.getByText(`${progress * 25}%`)).toBeInTheDocument();
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves current live proof when a late completion event lacks new presentation', async () => {
+        const listeners = {};
+        const channel = { listen: (name, listener) => { listeners[name] = listener; return channel; }, stopListening: vi.fn() };
+        vi.stubGlobal('Echo', { private: vi.fn(() => channel) });
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[liveDeployment]} />);
+
+        act(() => {
+            listeners['.deployment.completed']({ strategy_id: deployment.id });
+            listeners['.deployment.progress']({ strategy_id: deployment.id, deployment: { status: 'deployed', progress: 3 } });
+        });
+
+        expect(screen.getByRole('heading', { name: 'Your campaign is live' })).toBeVisible();
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('shows confirmed live delivery at 100% while ad strength waits in a separate neutral card', async () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[liveDeployment]} />);
+        expect(screen.getAllByText(/^Live$/)).toHaveLength(2);
+        expect(screen.getByRole('heading', { name: 'Your campaign is live' })).toBeVisible();
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Google ad quality' })).toHaveClass('bg-slate-50');
+        expect(screen.getAllByText('Ad strength pending')).toHaveLength(2);
+        expect(screen.queryByText(/not fully verified/)).toBeNull();
+        expect(screen.queryByText(/Deployed · verifying/)).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(fetch).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: 'Refresh readiness status' })).toBeVisible();
+    });
+
+    it.each(['under_review', 'paused', 'unknown', 'needs_review'])('does not claim live for observed %s delivery', status => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[{
+            ...liveDeployment, deployment_complete: false, delivery_status: { status },
+        }]} />);
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        expect(screen.queryByRole('heading', { name: 'Your campaign is live' })).toBeNull();
+        expect(screen.getByText('75%')).toBeInTheDocument();
+    });
+
+    it('does not call a multi-platform campaign live while another platform is incomplete', () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[
+            liveDeployment, { ...deployment, id: 770, platform: 'Facebook Ads', status: 'deploying', progress: 2, deployment_complete: false,
+                delivery_status: { status: 'unknown' } },
+        ]} />);
+        expect(screen.getAllByText(/^Live$/)).toHaveLength(1);
+        expect(screen.queryByRole('heading', { name: 'Your campaign is live' })).toBeNull();
+        expect(screen.getByText('75%')).toBeInTheDocument();
+        expect(screen.getAllByText(/Creating ads/)).toHaveLength(2);
+    });
+
+    it('waits for current delivery proof on a terminal raw status, then stops without waiting for ad strength', async () => {
+        fetch.mockResolvedValueOnce(response({ deployments: [liveDeployment] }));
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[{
+            ...liveDeployment, deployment_complete: false, delivery_status: { status: 'unknown' },
+        }]} />);
+        expect(screen.getByText('75%')).toBeInTheDocument();
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(screen.getByRole('heading', { name: 'Your campaign is live' })).toBeVisible();
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps completed construction at 100% under real policy review and observes approval before showing Live', async () => {
+        const underReview = { ...liveDeployment, delivery_status: { status: 'under_review' } };
+        fetch.mockResolvedValueOnce(response({ deployments: [underReview] }))
+            .mockResolvedValue(response({ deployments: [liveDeployment] }));
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[underReview]} />);
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        expect(screen.getAllByText('Waiting for Google review')).toHaveLength(2);
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(screen.getByRole('heading', { name: 'Your campaign is live' })).toBeVisible();
+        await act(() => vi.advanceTimersByTimeAsync(60000));
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not accept contradictory live delivery without completed deployment proof', () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[{
+            ...liveDeployment, deployment_complete: false,
+        }]} />);
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        expect(screen.getByText('75%')).toBeInTheDocument();
+    });
+
+    it('never relabels a setup-only paused handover as live from inconsistent serving data', () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'paused' }} deployments={[liveDeployment]} setupOnly />);
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        expect(screen.getByRole('heading', { name: 'Your paused ads have been created' })).toBeVisible();
+        expect(screen.getByText(/Your ads remain paused/)).toBeVisible();
+    });
+
+    it('keeps legacy terminal behavior for other platforms without a delivery presentation', async () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[{
+            ...deployment, platform: 'Facebook Ads', status: 'active', progress: 3, deployment_complete: false, delivery_status: null,
+        }]} />);
+        expect(screen.getByText('75%')).toBeInTheDocument();
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('announces deployment immediately, then confirms verification and stops polling', async () => {
         fetch.mockResolvedValueOnce(response(result('deployed', 3)))
             .mockResolvedValue(response(result('verified', 4)));

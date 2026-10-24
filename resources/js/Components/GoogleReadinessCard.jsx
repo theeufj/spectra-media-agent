@@ -104,7 +104,7 @@ function checkedTime(value) {
     return <time dateTime={value}>{new Date(value).toLocaleString()}</time>;
 }
 
-export default function GoogleReadinessCard({ readiness, conversionGoals, admin = false }) {
+export default function GoogleReadinessCard({ readiness, conversionGoals, admin = false, live = false }) {
     const state = resolveGoogleReadiness(readiness, conversionGoals);
     const status = googleReadinessStatus(readiness, conversionGoals);
     const goals = state?.conversion_goals;
@@ -115,7 +115,10 @@ export default function GoogleReadinessCard({ readiness, conversionGoals, admin 
     const pendingMessages = pending.filter((issue, index) => pending.findIndex(other => other.code === issue.code && other.message === issue.message) === index);
     const awaitingEvaluation = awaitingGoogleEvaluation(state);
     const awaitingReview = awaitingGoogleReview(state);
-    const evaluationLabel = awaitingReview ? 'Waiting for Google review' : 'Waiting for Google evaluation';
+    const awaitingStrength = awaitingEvaluation && ((state?.pending || []).some(issue => ['ad_strength_strength_pending', 'ad_strength_rating_pending'].includes(issue.code))
+        || strength?.unresolved?.some(item => ['strength_pending', 'rating_pending'].includes(item.reason) && item.waiting === true));
+    const evaluationLabel = live && awaitingStrength ? 'Ad strength pending' : awaitingReview ? 'Waiting for Google review' : 'Waiting for Google evaluation';
+    const neutralPending = live && status === 'pending' && awaitingEvaluation;
     const labels = { verified: 'Verified', pending: awaitingEvaluation ? evaluationLabel : 'Checks pending', needs_review: 'Needs attention', unknown: 'Unknown', on_hold: 'Checks on hold' };
     const goalLabel = goals?.status === 'ready' && goals.ready ? 'Verified' : goals?.status === 'needs_review' ? 'Needs review' : goals?.status === 'unknown' ? 'Unknown' : 'Not checked';
     const strengthLabel = strength?.status === 'not_applicable' ? 'Not applicable to this campaign type' : strength?.checked && strength.verified && !strength.skipped ? 'Verified'
@@ -123,12 +126,15 @@ export default function GoogleReadinessCard({ readiness, conversionGoals, admin 
     const audienceLabel = audiences?.status === 'not_applicable' ? 'Not applicable to this strategy' : audiences?.status === 'ready' && audiences.ready ? 'Verified'
         : audiences?.status === 'unknown' ? 'Unknown' : audiences?.status === 'needs_review' ? 'Needs review' : 'Not checked';
     const goalName = { SIGNUP: 'Sign-up', PURCHASE: 'Purchase', SUBMIT_LEAD_FORM: 'Lead form' }[goals?.intent?.category];
-    return <section aria-label="Google campaign readiness" className={`mt-4 rounded-lg border p-4 ${status === 'verified' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
-        <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-semibold text-gray-900">Google campaign readiness</h3><span className={`rounded-full px-2 py-1 text-xs font-semibold ${status === 'verified' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>{labels[status]}</span></div>
+    return <section aria-label={live ? 'Google ad quality' : 'Google campaign readiness'} className={`mt-4 rounded-lg border p-4 ${status === 'verified' ? 'border-green-200 bg-green-50' : neutralPending ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
+        <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-semibold text-gray-900">{live ? 'Google ad quality' : 'Google campaign readiness'}</h3><span className={`rounded-full px-2 py-1 text-xs font-semibold ${status === 'verified' ? 'bg-green-100 text-green-800' : neutralPending ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-900'}`}>{labels[status]}</span></div>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-gray-600">Conversion goal{goalName ? ` · ${goalName}` : ''}</dt><dd className="font-medium text-gray-900">{goalLabel}</dd></div><div><dt className="text-gray-600">Ad strength</dt><dd className="font-medium text-gray-900">{strengthLabel}</dd></div><div><dt className="text-gray-600">Audience settings</dt><dd className="font-medium text-gray-900">{audienceLabel}</dd></div></dl>
         {status === 'verified' && <p className="mt-3 text-sm text-gray-700">The last check confirmed the applicable conversion goal, ad strength and audience settings. Delivery still depends on approval, billing and pause settings.</p>}
         {status === 'pending' && <p className="mt-3 text-sm text-gray-700">{awaitingEvaluation
-            ? `${awaitingReview ? 'Google is still reviewing the ad or its assets.' : 'Google has not finished evaluating the ad review or strength rating.'} This is a waiting state; the campaign is not fully verified yet. Automatic checks will continue, and a prolonged wait will be flagged for review.`
+            ? live ? awaitingStrength
+                ? 'Your campaign is live. Google has not finished its ad-strength evaluation. Automatic checks will continue, and a prolonged wait will be flagged for review.'
+                : `Your campaign is live. ${awaitingReview ? 'The last quality check reported an ad review in progress.' : 'A Google quality evaluation is pending.'} Automatic checks will refresh this observation.`
+                : `${awaitingReview ? 'Google is still reviewing the ad or its assets.' : 'Google has not finished evaluating the ad review or strength rating.'} This is a waiting state; the campaign is not fully verified yet. Automatic checks will continue, and a prolonged wait will be flagged for review.`
             : 'One or more applicable campaign checks are still waiting for confirmation. The next check will update the results above.'}</p>}
         {status === 'unknown' && <p className="mt-3 text-sm text-amber-950">The current readiness check is unavailable. This does not confirm that the campaign is ready. Last reported issues remain visible until a successful check resolves them.</p>}
         {state?.skip_reason && <p className="mt-3 text-sm text-gray-700">{holds[state.skip_reason] || 'Automatic repairs are on hold. Pause and budget settings have been preserved.'}</p>}

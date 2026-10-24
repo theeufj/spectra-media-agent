@@ -13,6 +13,7 @@ use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\ActivityLogger;
 use App\Services\Campaigns\CampaignBudgetConfirmation;
+use App\Services\Deployment\DeploymentStatusPresenter;
 use App\Services\StorageHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -263,21 +264,7 @@ class CampaignController extends Controller
         }]);
 
         // Get any recent deployment jobs for this campaign
-        $deployments = $campaign->strategies->map(function ($strategy) {
-            return [
-                'id' => $strategy->id,
-                'platform' => $strategy->platform,
-                'status' => $strategy->deployment_status ?? 'pending',
-                'progress' => $this->calculateDeploymentProgress($strategy),
-                'deployed_at' => $strategy->deployed_at,
-                'error_message' => $strategy->deployment_error,
-                'ad_copies_count' => $strategy->ad_copies_count,
-                'images_count' => $strategy->image_collaterals_count,
-                'videos_count' => $strategy->video_collaterals_count,
-                'google_readiness' => $strategy->execution_result['metadata']['google_readiness'] ?? null,
-                'conversion_goal_readiness' => $strategy->execution_result['metadata']['conversion_goal_readiness'] ?? null,
-            ];
-        });
+        $deployments = $campaign->strategies->map(fn (Strategy $strategy) => $this->deploymentRow($campaign, $strategy));
 
         return Inertia::render('Campaigns/DeploymentStatus', [
             'campaign' => $campaign->toArray(),
@@ -965,21 +952,7 @@ class CampaignController extends Controller
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }]);
 
-        $deployments = $campaign->strategies->map(function ($strategy) {
-            return [
-                'id' => $strategy->id,
-                'platform' => $strategy->platform,
-                'status' => $strategy->deployment_status ?? 'pending',
-                'deployed_at' => $strategy->deployed_at,
-                'error_message' => $strategy->deployment_error,
-                'ad_copies_count' => $strategy->ad_copies_count,
-                'images_count' => $strategy->image_collaterals_count,
-                'videos_count' => $strategy->video_collaterals_count,
-                'progress' => $this->calculateDeploymentProgress($strategy),
-                'google_readiness' => $strategy->execution_result['metadata']['google_readiness'] ?? null,
-                'conversion_goal_readiness' => $strategy->execution_result['metadata']['conversion_goal_readiness'] ?? null,
-            ];
-        });
+        $deployments = $campaign->strategies->map(fn (Strategy $strategy) => $this->deploymentRow($campaign, $strategy));
 
         // Calculate overall progress
         $totalSteps = $campaign->strategies->count() * 4; // Each strategy has 4 deployment steps
@@ -995,16 +968,38 @@ class CampaignController extends Controller
             'deployments' => $deployments,
             'overall_progress' => $overallProgress,
             'is_complete' => $deployments->isNotEmpty() && $deployments->every(
-                fn ($deployment) => in_array($deployment['status'], ['verified', 'active', 'failed', 'deploy_unverified', 'skipped_plan'], true)
+                fn ($deployment) => $deployment['deployment_complete'] || in_array($deployment['status'], ['verified', 'active', 'failed', 'deploy_unverified', 'skipped_plan'], true)
             ),
         ]);
     }
 
-    /**
-     * Calculate deployment progress for a strategy (0-4 steps).
-     */
-    private function calculateDeploymentProgress($strategy): int
+    /** @return array<string, mixed> */
+    private function deploymentRow(Campaign $campaign, Strategy $strategy): array
     {
+        $presentation = app(DeploymentStatusPresenter::class)->present($campaign, $strategy);
+
+        return $presentation + [
+            'id' => $strategy->id,
+            'platform' => $strategy->platform,
+            'status' => $strategy->deployment_status ?? 'pending',
+            'progress' => $this->calculateDeploymentProgress($strategy, $presentation['deployment_complete']),
+            'deployed_at' => $strategy->deployed_at,
+            'error_message' => $strategy->deployment_error,
+            'ad_copies_count' => $strategy->ad_copies_count,
+            'images_count' => $strategy->image_collaterals_count,
+            'videos_count' => $strategy->video_collaterals_count,
+            'google_readiness' => $strategy->execution_result['metadata']['google_readiness'] ?? null,
+            'conversion_goal_readiness' => $strategy->execution_result['metadata']['conversion_goal_readiness'] ?? null,
+        ];
+    }
+
+    /** Calculate construction progress independently of delivery and quality. */
+    private function calculateDeploymentProgress(Strategy $strategy, bool $complete): int
+    {
+        if ($complete) {
+            return 4;
+        }
+
         $progress = 0;
 
         // Step 1: Collateral generated
@@ -1017,15 +1012,8 @@ class CampaignController extends Controller
             $progress++;
         }
 
-        // Step 3: Live on the platform
+        // Step 3: Platform objects created
         if ($strategy->deployed_at || in_array($strategy->deployment_status, ['deployed', 'verified', 'active'], true)) {
-            $progress++;
-        }
-
-        // Step 4: VerifyDeployment confirmed the objects exist. This used to
-        // repeat step 3's condition, so the bar hit 4/4 the moment a deploy
-        // finished, verified or not.
-        if ($strategy->deployment_status === 'verified') {
             $progress++;
         }
 
