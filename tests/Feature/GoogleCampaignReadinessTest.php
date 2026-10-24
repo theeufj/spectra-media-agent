@@ -334,6 +334,51 @@ class GoogleCampaignReadinessTest extends TestCase
         }
     }
 
+    public function test_activation_refresh_is_unique_from_a_delayed_check_and_retries_an_inflight_campaign_lock(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $ordinary = new CheckGoogleCampaignReadiness($campaign->id);
+        $urgent = (new CheckGoogleCampaignReadiness($campaign->id, afterActivation: true))->withFakeQueueInteractions();
+        $this->assertNotSame($ordinary->uniqueId(), $urgent->uniqueId());
+        $this->assertSame('google-readiness:'.$campaign->id, $ordinary->uniqueId());
+        $lock = Cache::lock('google-readiness:campaign:'.$campaign->id, 650);
+        $this->assertTrue($lock->get());
+        try {
+            [$goals, $strength, $verifier] = $this->services();
+            $goals->expects($this->never())->method('reconcile');
+            $strength->expects($this->never())->method('checkAdStrength');
+            $urgent->handle($strength, $verifier);
+            $urgent->assertReleased(60);
+            $this->assertArrayNotHasKey('google_readiness', $strategy->fresh()->execution_result['metadata']);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    public function test_fresh_post_activation_google_review_evidence_replaces_a_stale_inactive_hold_without_claiming_readiness(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $execution = $strategy->execution_result;
+        $execution['metadata']['google_readiness'] = ['status' => 'skipped', 'ready' => false,
+            'skip_reason' => 'campaign_not_active', 'checked_at' => now()->subHour()->toIso8601String(),
+            'ad_strength' => ['checked' => false, 'verified' => false, 'skipped' => 'campaign_not_active'], 'issues' => []];
+        $strategy->update(['execution_result' => $execution]);
+        [$goals, $strength, $verifier] = $this->services();
+        $goals->expects($this->once())->method('reconcile')->willReturn($this->goals());
+        $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->waitingStrength([
+            'reason' => 'review_pending', 'evidence' => ['approval_status' => 'UNKNOWN', 'review_status' => 'REVIEW_IN_PROGRESS', 'ad_strength' => 'PENDING'],
+        ]));
+        (new CheckGoogleCampaignReadiness($campaign->id, afterActivation: true))->handle($strength, $verifier);
+        $state = $this->snapshot($strategy);
+        $this->assertNull($state['skip_reason']);
+        $this->assertSame('pending', $state['status']);
+        $this->assertFalse($state['ready']);
+        $this->assertTrue($state['ad_strength']['checked']);
+        $this->assertArrayNotHasKey('skipped', $state['ad_strength']);
+        $this->assertSame('ad_strength_review_pending', $state['pending'][0]['code']);
+        $this->assertSame(['approved_budget' => 50], $strategy->fresh()->execution_result['metadata']['search_campaign_baseline']);
+    }
+
     public function test_confirmed_pending_strength_is_recorded_without_a_critical_alert_or_false_readiness(): void
     {
         [$campaign, , $strategy] = $this->workspace();

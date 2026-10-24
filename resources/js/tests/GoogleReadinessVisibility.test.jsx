@@ -24,6 +24,12 @@ const healthy = { status: 'ready', ready: true, checked_at: '2026-10-05T00:00:00
     audience_observation: { status: 'ready', ready: true, applicable: true, issues: [] } };
 const pending = { ...healthy, status: 'pending', ready: false, pending: [{ code: 'ad_strength_strength_pending', message: 'Google has not confirmed the ad strength yet.' }],
     ad_strength: { checked: true, verified: false, pending_since: '2026-10-05T00:00:00Z', expires_at: '2026-10-08T00:00:00Z', unresolved: [{ reason: 'strength_pending', waiting: true }] } };
+const reviewPending = { ...pending, checked_at: '2026-10-24T13:20:00Z',
+    pending: [{ code: 'ad_strength_review_pending', message: 'Google review is pending. The agent will check again; readiness has not been assumed.' }],
+    ad_strength: { ...pending.ad_strength, pending_since: '2026-10-24T13:20:00Z', expires_at: '2026-10-27T13:20:00Z', unresolved: [{ reason: 'review_pending', waiting: true,
+        ad_resource: 'customers/123/adGroupAds/789~456', copy_fingerprint: 'observed-copy-456',
+        observed_at: '2026-10-24T13:20:00Z', copy_identity_source: 'observed',
+        evidence: { approval_status: 'UNKNOWN', review_status: 'REVIEW_IN_PROGRESS', ad_strength: 'PENDING' } }] } };
 
 beforeEach(() => {
     page.props = { auth: { user: {} } };
@@ -32,6 +38,59 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Google readiness visibility', () => {
+    it('identifies an actual observed RSA review separately from a pending strength rating', () => {
+        render(<GoogleReadinessCard readiness={reviewPending} />);
+        const card = screen.getByRole('region', { name: 'Google campaign readiness' });
+        expect(within(card).getAllByText('Waiting for Google review')).toHaveLength(2);
+        expect(within(card).getByText(/Google is still reviewing the ad or its assets/)).toBeVisible();
+        expect(within(card).getByText(/campaign is not fully verified yet/)).toBeVisible();
+        expect(within(card).getAllByText('Verified')).toHaveLength(2);
+        expect(within(card).queryByText('Waiting for Google evaluation')).toBeNull();
+        expect(within(card).queryByText('Checks on hold')).toBeNull();
+        expect(within(card).queryByText(/last check confirmed the applicable/)).toBeNull();
+    });
+
+    it('retains a current manual pause instead of promoting old review evidence to a current waiting result', () => {
+        render(<GoogleReadinessCard readiness={{ ...reviewPending, status: 'skipped', skip_reason: 'campaign_not_active',
+            ad_strength: { checked: false, verified: false, skipped: 'campaign_not_active',
+                last_known: reviewPending.ad_strength, last_known_checked_at: reviewPending.checked_at } }} />);
+        expect(screen.getByText('Checks on hold')).toBeVisible();
+        expect(screen.getByText('Check on hold')).toBeVisible();
+        expect(screen.getByText(/Automatic repairs are on hold while the campaign is inactive or paused/)).toBeVisible();
+        expect(screen.getByText(/Last ad strength evidence:/)).toBeVisible();
+        expect(screen.queryByText('Waiting for Google review')).toBeNull();
+        expect(screen.queryByText(/Google is still reviewing the ad or its assets/)).toBeNull();
+    });
+
+    it('keeps real policy issues actionable alongside another ad awaiting Google review', () => {
+        const issue = { code: 'ad_strength_policy_disapproved', message: 'Google disapproved another ad for policy reasons.' };
+        render(<GoogleReadinessCard readiness={{ ...reviewPending, status: 'needs_review', issues: [issue] }} />);
+        expect(screen.getByText('Needs attention')).toBeVisible();
+        expect(screen.getByText('Waiting for Google review')).toBeVisible();
+        expect(screen.getByText(issue.message)).toBeVisible();
+        expect(screen.getByRole('link', { name: 'Get help with readiness' })).toBeVisible();
+        expect(screen.queryByText(/last check confirmed the applicable/)).toBeNull();
+    });
+
+    it('replaces a stale deployment pause snapshot only after fresh readiness reports the actual Google review', () => {
+        const paused = { ...pending, status: 'skipped', skip_reason: 'campaign_not_active',
+            ad_strength: { checked: false, verified: false, skipped: 'campaign_not_active',
+                last_known: pending.ad_strength, last_known_checked_at: healthy.checked_at } };
+        const campaign = { id: 61, name: 'Signups', status: 'paused' };
+        const deployment = { id: 771, platform: 'Google Ads (SEM)', status: 'verified', progress: 4, google_readiness: paused };
+        const view = render(<DeploymentStatus campaign={campaign} deployments={[deployment]} />);
+        expect(screen.getByText('Checks on hold')).toBeVisible();
+
+        view.rerender(<DeploymentStatus campaign={{ ...campaign, status: 'active' }}
+            deployments={[{ ...deployment, google_readiness: reviewPending }]} />);
+
+        expect(screen.getAllByText('Waiting for Google review')).toHaveLength(2);
+        expect(screen.queryByText('Checks on hold')).toBeNull();
+        expect(screen.queryByText(/Automatic repairs are on hold while the campaign is inactive or paused/)).toBeNull();
+        expect(screen.queryByText(/Deployment Complete!/)).toBeNull();
+        expect(screen.getByRole('button', { name: 'Refresh readiness status' })).toBeVisible();
+    });
+
     it('shows pending Google review independently of the verified conversion goal', () => {
         render(<GoogleReadinessCard readiness={pending} />);
         const card = screen.getByRole('region', { name: 'Google campaign readiness' });

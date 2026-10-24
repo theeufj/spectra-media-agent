@@ -50,6 +50,16 @@ function awaitingGoogleEvaluation(state) {
         || strength.unresolved?.some(item => evaluationPendingReasons.has(item.reason)) || false;
 }
 
+function awaitingGoogleReview(state) {
+    // A pending rating or post-update verification is not proof that an ad is
+    // under review. Use the classified observation for the exact Google copy.
+    return hasExplicitPending(state) && awaitingGoogleEvaluation(state)
+        && state.pending?.some(issue => issue.code === 'ad_strength_review_pending')
+        && state.ad_strength.unresolved?.some(item => item.reason === 'review_pending' && item.waiting === true
+            && typeof item.ad_resource === 'string' && item.ad_resource.length > 0
+            && typeof item.copy_fingerprint === 'string' && item.copy_fingerprint.length > 0) || false;
+}
+
 /** A later launch check must be able to invalidate an earlier green aggregate. */
 export function resolveGoogleReadiness(readiness, conversionGoals) {
     if (!conversionGoals?.status) return readiness || null;
@@ -103,11 +113,13 @@ export default function GoogleReadinessCard({ readiness, conversionGoals, admin 
     const issues = readinessIssues(state).filter(issue => !isLegacyPendingIssue(state, issue));
     const pending = [...(state?.pending || []), ...readinessIssues(state).filter(issue => isLegacyPendingIssue(state, issue))];
     const pendingMessages = pending.filter((issue, index) => pending.findIndex(other => other.code === issue.code && other.message === issue.message) === index);
-    const awaitingReview = awaitingGoogleEvaluation(state);
-    const labels = { verified: 'Verified', pending: awaitingReview ? 'Waiting for Google evaluation' : 'Checks pending', needs_review: 'Needs attention', unknown: 'Unknown', on_hold: 'Checks on hold' };
+    const awaitingEvaluation = awaitingGoogleEvaluation(state);
+    const awaitingReview = awaitingGoogleReview(state);
+    const evaluationLabel = awaitingReview ? 'Waiting for Google review' : 'Waiting for Google evaluation';
+    const labels = { verified: 'Verified', pending: awaitingEvaluation ? evaluationLabel : 'Checks pending', needs_review: 'Needs attention', unknown: 'Unknown', on_hold: 'Checks on hold' };
     const goalLabel = goals?.status === 'ready' && goals.ready ? 'Verified' : goals?.status === 'needs_review' ? 'Needs review' : goals?.status === 'unknown' ? 'Unknown' : 'Not checked';
     const strengthLabel = strength?.status === 'not_applicable' ? 'Not applicable to this campaign type' : strength?.checked && strength.verified && !strength.skipped ? 'Verified'
-        : strength?.errors?.length ? 'Unknown' : strength?.skipped ? 'Check on hold' : awaitingReview ? 'Waiting for Google evaluation' : strength?.unresolved?.length ? 'Needs review' : 'Not confirmed';
+        : strength?.errors?.length ? 'Unknown' : strength?.skipped ? 'Check on hold' : awaitingEvaluation ? evaluationLabel : strength?.unresolved?.length ? 'Needs review' : 'Not confirmed';
     const audienceLabel = audiences?.status === 'not_applicable' ? 'Not applicable to this strategy' : audiences?.status === 'ready' && audiences.ready ? 'Verified'
         : audiences?.status === 'unknown' ? 'Unknown' : audiences?.status === 'needs_review' ? 'Needs review' : 'Not checked';
     const goalName = { SIGNUP: 'Sign-up', PURCHASE: 'Purchase', SUBMIT_LEAD_FORM: 'Lead form' }[goals?.intent?.category];
@@ -115,13 +127,15 @@ export default function GoogleReadinessCard({ readiness, conversionGoals, admin 
         <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-semibold text-gray-900">Google campaign readiness</h3><span className={`rounded-full px-2 py-1 text-xs font-semibold ${status === 'verified' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>{labels[status]}</span></div>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-gray-600">Conversion goal{goalName ? ` · ${goalName}` : ''}</dt><dd className="font-medium text-gray-900">{goalLabel}</dd></div><div><dt className="text-gray-600">Ad strength</dt><dd className="font-medium text-gray-900">{strengthLabel}</dd></div><div><dt className="text-gray-600">Audience settings</dt><dd className="font-medium text-gray-900">{audienceLabel}</dd></div></dl>
         {status === 'verified' && <p className="mt-3 text-sm text-gray-700">The last check confirmed the applicable conversion goal, ad strength and audience settings. Delivery still depends on approval, billing and pause settings.</p>}
-        {status === 'pending' && <p className="mt-3 text-sm text-gray-700">{awaitingReview ? 'Google has not finished evaluating the ad review or strength rating. This is a waiting state; the campaign is not fully verified yet. Automatic checks will continue, and a prolonged wait will be flagged for review.' : 'One or more applicable campaign checks are still waiting for confirmation. The next check will update the results above.'}</p>}
+        {status === 'pending' && <p className="mt-3 text-sm text-gray-700">{awaitingEvaluation
+            ? `${awaitingReview ? 'Google is still reviewing the ad or its assets.' : 'Google has not finished evaluating the ad review or strength rating.'} This is a waiting state; the campaign is not fully verified yet. Automatic checks will continue, and a prolonged wait will be flagged for review.`
+            : 'One or more applicable campaign checks are still waiting for confirmation. The next check will update the results above.'}</p>}
         {status === 'unknown' && <p className="mt-3 text-sm text-amber-950">The current readiness check is unavailable. This does not confirm that the campaign is ready. Last reported issues remain visible until a successful check resolves them.</p>}
         {state?.skip_reason && <p className="mt-3 text-sm text-gray-700">{holds[state.skip_reason] || 'Automatic repairs are on hold. Pause and budget settings have been preserved.'}</p>}
         {issues.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-800">{issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message || 'A Google readiness issue needs review.'}</li>)}</ul>}
         {pendingMessages.length > 0 && <ul aria-label="Pending Google evaluation" className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{pendingMessages.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul>}
-        {awaitingReview && checkedTime(strength?.pending_since) && <p className="mt-2 text-xs text-gray-600">Waiting since: {checkedTime(strength.pending_since)}</p>}
-        {awaitingReview && checkedTime(strength?.expires_at) && <p className="mt-1 text-xs text-gray-600">Flag for review if still waiting at: {checkedTime(strength.expires_at)}</p>}
+        {awaitingEvaluation && checkedTime(strength?.pending_since) && <p className="mt-2 text-xs text-gray-600">Waiting since: {checkedTime(strength.pending_since)}</p>}
+        {awaitingEvaluation && checkedTime(strength?.expires_at) && <p className="mt-1 text-xs text-gray-600">Flag for review if still waiting at: {checkedTime(strength.expires_at)}</p>}
         <p className="mt-3 text-xs text-gray-600">{checkedTime(state?.checked_at) ? <>Last readiness check: {checkedTime(state.checked_at)}</> : 'No completed readiness check is available yet.'}</p>
         {strength?.last_known_checked_at && <p className="mt-1 text-xs text-gray-600">Last ad strength evidence: {checkedTime(strength.last_known_checked_at)}</p>}
         {audiences?.last_known_checked_at && <p className="mt-1 text-xs text-gray-600">Last audience settings evidence: {checkedTime(audiences.last_known_checked_at)}</p>}

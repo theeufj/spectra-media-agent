@@ -46,17 +46,31 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
     // An application escalation window, not a promise about Google's review SLA.
     private const GOOGLE_EVALUATION_WAIT_HOURS = 72;
 
-    public function __construct(public int $campaignId) {}
+    public bool $afterActivation = false;
+
+    public function __construct(public int $campaignId, bool $afterActivation = false)
+    {
+        $this->afterActivation = $afterActivation;
+        // An urgent refresh may wait for a pre-existing 650-second campaign
+        // lock, without changing retry behavior for the hourly checks.
+        if ($afterActivation) {
+            $this->tries = 4;
+        }
+    }
 
     public function uniqueId(): string
     {
-        return 'google-readiness:'.$this->campaignId;
+        return 'google-readiness:'.$this->campaignId.($this->afterActivation ? ':after-activation' : '');
     }
 
     public function handle(QualityScoreImprovementAgent $strengthAgent, DeploymentVerifier $verifier): void
     {
         $lock = Cache::lock('google-readiness:campaign:'.$this->campaignId, 650);
         if (! $lock->get()) {
+            if ($this->afterActivation && $this->attempts() < $this->tries) {
+                $this->release($this->attempts() === 1 ? 60 : 300);
+            }
+
             return;
         }
         $started = $this->startRun();

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\CampaignStatus;
+use App\Jobs\CheckGoogleCampaignReadiness;
 use App\Jobs\RecordSiteConversion;
 use App\Models\Campaign;
 use App\Models\Customer;
@@ -35,7 +36,7 @@ class StagedSearchActivationTest extends TestCase
         $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890', 'service_type' => 'managed']);
         $resource = 'customers/1234567890/campaigns/456';
         $campaign = Campaign::factory()->create($campaignAttributes + ['customer_id' => $customer->id, 'status' => 'draft',
-            'google_ads_campaign_id' => $resource, 'end_date' => now()->addDays(30)]);
+            'google_ads_campaign_id' => $resource, 'platform_status' => 'PAUSED', 'end_date' => now()->addDays(30)]);
         $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
             'campaign_type' => 'search', 'deployment_status' => 'deployed', 'google_ads_campaign_id' => $resource,
             'execution_result' => ['metadata' => ['google_search_staging' => ['campaign_resource' => $resource,
@@ -85,11 +86,16 @@ class StagedSearchActivationTest extends TestCase
 
             public array $sequence = [];
 
+            public ?\Closure $duringRead = null;
+
             public function __construct(private bool $enabled) {}
 
             public function __invoke(string $customerId, string $campaignResourceName): ?array
             {
                 $this->calls++;
+                if ($this->duringRead) {
+                    ($this->duringRead)($this->calls, $campaignResourceName);
+                }
                 if ($this->sequence !== []) {
                     $status = array_shift($this->sequence);
 
@@ -148,11 +154,92 @@ class StagedSearchActivationTest extends TestCase
         $this->assertSame(2, $reader->calls);
         $this->assertSame([['1234567890', 'customers/1234567890/campaigns/456', false]], $writer->enabled);
         $this->assertSame(CampaignStatus::Active, $campaign->fresh()->status);
+        $this->assertSame('ENABLED', $campaign->fresh()->platform_status);
+        $this->assertNotNull($campaign->fresh()->last_checked_at);
+        Queue::assertPushed(CheckGoogleCampaignReadiness::class, fn ($job) => $job->campaignId === $campaign->id
+            && $job->afterActivation === true && $job->afterCommit === true && $job->delay === null);
         $this->assertTrue($strategy->fresh()->execution_result['metadata']['search_reach_activation']['enabled_verified']);
         $this->assertSame('preserved', $strategy->fresh()->execution_result['metadata']['unrelated_evidence']);
         Queue::assertPushed(RecordSiteConversion::class);
         $this->assertFalse($settler->settle($campaign), 'A completed activation is idempotent.');
         $this->assertCount(1, $writer->enabled);
+        Queue::assertPushed(CheckGoogleCampaignReadiness::class, 1);
+    }
+
+    public function test_owner_pause_during_the_enable_readback_is_preserved_and_compensated_before_status_sync(): void
+    {
+        [$campaign, $strategy, , $reader, $writer, $settler] = $this->fixture();
+        $reader->sequence = [GoogleCampaignStatus::PAUSED, GoogleCampaignStatus::ENABLED, GoogleCampaignStatus::PAUSED];
+        $reader->duringRead = function (int $call) use ($campaign): void {
+            if ($call === 2) {
+                $campaign->fresh()->update(['status' => 'paused', 'platform_status' => 'PAUSED']);
+            }
+        };
+        try {
+            $settler->settle($campaign);
+            $this->fail('A concurrent owner pause cannot be overwritten by activation status synchronization.');
+        } catch (\RuntimeException) {
+        }
+        $this->assertSame(CampaignStatus::Paused, $campaign->fresh()->status);
+        $this->assertSame('PAUSED', $campaign->fresh()->platform_status);
+        $this->assertCount(1, $writer->paused);
+        $this->assertFalse($strategy->fresh()->execution_result['metadata']['search_reach_activation']['enabled_verified']);
+        Queue::assertNotPushed(CheckGoogleCampaignReadiness::class);
+        Queue::assertNotPushed(RecordSiteConversion::class);
+    }
+
+    public function test_owner_pause_after_status_sync_cannot_fall_through_to_unstaged_lifecycle_promotion(): void
+    {
+        [$campaign, , , , $writer, $settler] = $this->fixture();
+        $dispatcher = Campaign::getEventDispatcher();
+        Campaign::setEventDispatcher(clone $dispatcher);
+        $pausedAfterSync = false;
+        Campaign::retrieved(function (Campaign $observed) use ($campaign, &$pausedAfterSync): void {
+            // The first read of ENABLED is synchronizeEnabledStage's final
+            // refresh, after the status-sync transaction has returned.
+            if (! $pausedAfterSync && $observed->id === $campaign->id && $observed->platform_status === 'ENABLED') {
+                $pausedAfterSync = true;
+                $observed->update(['status' => CampaignStatus::Paused, 'platform_status' => 'PAUSED']);
+            }
+        });
+        try {
+            $this->assertFalse($settler->settle($campaign));
+            $this->assertTrue($pausedAfterSync, 'The pause must occur after a verified ENABLED observation was synchronized.');
+            $this->assertSame(CampaignStatus::Paused, $campaign->fresh()->status);
+            $this->assertSame('PAUSED', $campaign->fresh()->platform_status);
+            $this->assertCount(1, $writer->enabled);
+            Queue::assertNotPushed(RecordSiteConversion::class);
+        } finally {
+            Campaign::setEventDispatcher($dispatcher);
+        }
+    }
+
+    public function test_a_secondary_stage_does_not_claim_an_unobserved_primary_campaign_is_enabled(): void
+    {
+        [$campaign, , , , , $settler] = $this->fixture(['google_ads_campaign_id' => 'customers/1234567890/campaigns/789']);
+        $settler->settle($campaign);
+        $this->assertSame('PAUSED', $campaign->fresh()->platform_status);
+        $this->assertNull($campaign->fresh()->last_checked_at);
+    }
+
+    public function test_multiple_stages_publish_enabled_status_only_after_every_readback_succeeds(): void
+    {
+        [$campaign, , , $reader, , $settler] = $this->fixture();
+        $resource = 'customers/1234567890/campaigns/789';
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
+            'campaign_type' => 'search', 'deployment_status' => 'deployed', 'google_ads_campaign_id' => $resource,
+            'execution_result' => ['metadata' => ['google_search_staging' => ['campaign_resource' => $resource,
+                'verified_platform_status' => 'PAUSED', 'enable_after_success' => true]]]]);
+        $reader->sequence = [GoogleCampaignStatus::PAUSED, GoogleCampaignStatus::PAUSED,
+            GoogleCampaignStatus::ENABLED, GoogleCampaignStatus::ENABLED];
+        $reader->duringRead = function (int $call) use ($campaign): void {
+            if ($call >= 3) {
+                $this->assertSame('PAUSED', $campaign->fresh()->platform_status);
+            }
+        };
+        $this->assertTrue($settler->settle($campaign));
+        $this->assertSame('ENABLED', $campaign->fresh()->platform_status);
+        Queue::assertPushed(CheckGoogleCampaignReadiness::class, 1);
     }
 
     public function test_failed_fresh_reach_check_preserves_the_pause_and_does_not_record_campaign_live(): void

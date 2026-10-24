@@ -3,6 +3,7 @@
 namespace App\Services\Campaigns;
 
 use App\Enums\CampaignStatus;
+use App\Jobs\CheckGoogleCampaignReadiness;
 use App\Jobs\RecordSiteConversion;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
@@ -14,6 +15,7 @@ use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -131,6 +133,7 @@ class SettleDeployedCampaign
                             'Enabled the staged Search campaign after a fresh demand, reach and approved-spending check. Google confirmed it is enabled.',
                             $campaign->customer_id, $campaign->id, ['campaign_resource' => $resource]);
                     }
+                    $this->synchronizeEnabledStage($campaign, $customer, $attempted);
                 } catch (\Throwable $e) {
                     report($e);
                     $allPaused = true;
@@ -172,6 +175,12 @@ class SettleDeployedCampaign
             }
         }
 
+        // A completed staged activation is terminal here. A newer owner pause
+        // observed after synchronization must never enter unstaged promotion.
+        if ($staged->isNotEmpty() && $campaign->status !== CampaignStatus::Active) {
+            return false;
+        }
+
         if ($campaign->status === CampaignStatus::Active) {
             if ($previousStatus !== CampaignStatus::Active) {
                 RecordSiteConversion::dispatch($customer, 'campaign_live');
@@ -186,6 +195,42 @@ class SettleDeployedCampaign
         RecordSiteConversion::dispatch($customer, 'campaign_live');
 
         return true;
+    }
+
+    /** Publish only fresh observations, without overwriting a concurrent owner pause. */
+    private function synchronizeEnabledStage(Campaign $campaign, Customer $customer, array $activated): void
+    {
+        DB::transaction(function () use ($campaign, $customer, $activated): void {
+            $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $owner = Customer::whereKey($customer->id)->lockForUpdate()->first();
+            $current->setRelation('customer', $owner);
+            if (! $owner || $current->customer_id !== $owner->id || $owner->service_type === 'setup_only'
+                || $owner->cleanGoogleCustomerId() !== $customer->cleanGoogleCustomerId()
+                || $current->status !== CampaignStatus::Active || ! CampaignSpendGuardrails::canEnable($current)
+                || CampaignSpendGuardrails::activeTrial($current)) {
+                throw new \RuntimeException('Launch authorization changed during Google activation. The activated stages must be paused.');
+            }
+            $strategies = Strategy::where('campaign_id', $current->id)
+                ->whereKey(array_map(fn ($stage) => $stage['strategy']->id, $activated))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            foreach ($activated as $stage) {
+                $strategy = $strategies->get($stage['strategy']->id);
+                if (! $strategy || $strategy->reusableGoogleCampaignId() !== $stage['resource']
+                    || ($strategy->execution_result['metadata']['google_search_staging']['campaign_resource'] ?? null) !== $stage['resource']
+                    || ($strategy->execution_result['metadata']['google_search_staging']['enable_after_success'] ?? false) !== true
+                    || ($strategy->execution_result['metadata']['search_reach_activation']['enabled_verified'] ?? false) !== true) {
+                    throw new \RuntimeException('The staged Google campaign identity or launch intent changed during activation. Review its current status.');
+                }
+            }
+            // This column describes the primary platform object. Enabling a
+            // secondary strategy cannot certify an unobserved primary campaign.
+            if (in_array($current->googleAdsResourceName(), array_column($activated, 'resource'), true)) {
+                $current->update(['platform_status' => 'ENABLED', 'last_checked_at' => now()]);
+            }
+            // Do not invent a review-pending state or erase prior findings.
+            // A new observation replaces the old hold only after Google responds.
+            CheckGoogleCampaignReadiness::dispatch($current->id, afterActivation: true)->afterCommit();
+        }, 3);
+        $campaign->refresh();
     }
 
     private function verifyStagedReach(Campaign $campaign, Customer $customer, Strategy $strategy): void
