@@ -64,6 +64,7 @@ class GoogleSearchReachGate
     {
         $forecast ??= $assessment['forecast'] ?? [];
         $issues = [];
+        $warnings = [];
         $unknown = false;
         $add = function (string $code, string $message, bool $unavailable = false) use (&$issues, &$unknown): void {
             $issues[] = (new AgentIssue($code, $message))->jsonSerialize();
@@ -224,14 +225,23 @@ class GoogleSearchReachGate
         }
         if ($forecastValid) {
             $monthlyClicks = $clicks * 30 / $period;
+            $meets = $monthlyClicks >= $metadata['min_forecast_clicks_per_30_days'];
             $metadata += ['forecast_period' => $forecast['forecast_period'], 'forecast_period_days' => $period,
                 'forecast_clicks' => $clicks, 'forecast_clicks_per_30_days' => $monthlyClicks,
+                'traffic_status' => $meets ? 'threshold_met' : 'limited', 'meets_traffic_threshold' => $meets,
                 'forecast_cost_micros' => $cost, 'forecast_note' => 'Forecast totals are estimates for the stated period, not guaranteed traffic or a hard billing cap.'];
             if (isset($forecast['impressions']) && $forecast['impressions'] <= 0) {
                 $add('search_reach_no_forecast_impressions', 'No impressions are forecast at the staged Search settings. Review the keyword set, bid and targeting before launching.');
             }
-            if ($monthlyClicks < $metadata['min_forecast_clicks_per_30_days']) {
-                $add('search_reach_below_useful_threshold', 'The keyword set is forecast to attract fewer than '.$metadata['min_forecast_clicks_per_30_days'].' clicks per 30 days at the current bid and targeting.');
+            if ($clicks <= 0 || $cost <= 0) {
+                $add('search_reach_no_forecast_traffic', 'Positive forecast traffic and cost are required before launching. No traffic has been assumed.');
+            } elseif (! $meets) {
+                $message = 'Limited forecast traffic: fewer than '.$metadata['min_forecast_clicks_per_30_days'].' clicks per 30 days at the current bid and targeting. The budget may not be fully spent; purchases are not guaranteed.';
+                if ($initialLaunch && ! CampaignSpendGuardrails::activeTrial($campaign)) {
+                    $warnings[] = (new AgentIssue('search_reach_below_useful_threshold', $message))->jsonSerialize();
+                } else {
+                    $add('search_reach_below_useful_threshold', $message);
+                }
             }
             if (is_int($budget) && $budget > 0 && $cost > $budget * $period) {
                 $add('search_reach_forecast_budget_exceeded', 'Forecast ad spend exceeds the approved daily-budget envelope for the stated period.');
@@ -283,7 +293,6 @@ class GoogleSearchReachGate
             }
         }
 
-        $warnings = [];
         if ($limitedEstimate) {
             $metadata += ['forecast_limitations' => $limitations, 'negative_keyword_effect_verified' => false];
             $warnings[] = (new AgentIssue('search_reach_negative_keywords_unmodeled',

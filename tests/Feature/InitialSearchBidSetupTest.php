@@ -187,7 +187,13 @@ class InitialSearchBidSetupTest extends TestCase
         return ['managed' => ['managed'], 'paid setup' => ['setup_only']];
     }
 
-    public function test_keyword_cost_research_writes_the_economical_useful_bid_without_changing_pause_or_budget(): void
+    public static function forecastTraffic(): array
+    {
+        return ['traffic guideline met' => [false], 'positive limited traffic' => [true]];
+    }
+
+    #[DataProvider('forecastTraffic')]
+    public function test_keyword_cost_research_writes_the_researched_bid_without_reblocking_low_reach_or_changing_pause_or_budget(bool $limited): void
     {
         [$customer, $campaign, $strategy] = $this->fixture();
         $bidding = $strategy->bidding_strategy;
@@ -200,7 +206,7 @@ class InitialSearchBidSetupTest extends TestCase
         ]]]);
         $tested = [];
         $forecast = $this->createMock(\App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast::class);
-        $forecast->method('__invoke')->willReturnCallback(function ($account, $keywords, $maxCpc, $rate, $days, $context) use (&$tested): array {
+        $forecast->method('__invoke')->willReturnCallback(function ($account, $keywords, $maxCpc, $rate, $days, $context) use (&$tested, $limited): array {
             $bid = $context['cpc_bid_ceiling_micros'];
             $tested[] = $bid;
             $this->assertSame(5_000_000, $context['daily_budget_micros']);
@@ -209,10 +215,11 @@ class InitialSearchBidSetupTest extends TestCase
             [$dailyClicks, $dailyCost] = match ($bid) {
                 1_800_000 => [2, 3_000_000], 1_000_000 => [1, 800_000],
                 500_000 => [0.5, 200_000], 750_000 => [1.2, 600_000],
+                1_400_000 => [1.5, 1_600_000], 1_600_000 => [1.9, 2_200_000],
                 default => throw new \UnexpectedValueException('Unexpected bid in the economic setup forecast.'),
             };
 
-            return ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => $days * $dailyClicks,
+            return ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => $days * $dailyClicks / ($limited ? 100 : 1),
                 'cost_micros' => $days * $dailyCost, 'period_days' => $days,
                 'forecast_period' => ['from' => $context['forecast_start_date'],
                     'through' => \Carbon\CarbonImmutable::parse($context['forecast_start_date'])->addDays($days - 1)->toDateString()],
@@ -233,13 +240,15 @@ class InitialSearchBidSetupTest extends TestCase
             }
         });
         $this->assertTrue($this->configure($customer, $campaign, $strategy, $result), $result->errorMessage());
-        $this->assertSame([1_000_000, 1_800_000, 500_000, 750_000], $tested);
-        $this->assertSame([['account' => self::ACCOUNT, 'resource' => self::GROUP, 'bid' => 750_000]], $this->writes);
-        $this->assertSame(750_000, $this->remote['keywords'][0]['ad_group_cpc_bid_micros']);
+        $expectedBid = $limited ? 1_600_000 : 750_000;
+        $this->assertSame($limited ? [1_000_000, 1_800_000, 1_400_000, 1_600_000] : [1_000_000, 1_800_000, 500_000, 750_000], $tested);
+        $this->assertSame([['account' => self::ACCOUNT, 'resource' => self::GROUP, 'bid' => $expectedBid]], $this->writes);
+        $this->assertSame($expectedBid, $this->remote['keywords'][0]['ad_group_cpc_bid_micros']);
         $this->assertSame(GoogleStatus::PAUSED, $this->remote['status']);
         $this->assertSame(5_000_000, $this->remote['daily_budget_micros']);
         $this->assertSame('5.00', $campaign->fresh()->approved_daily_budget);
         $this->assertSame('verified', $strategy->fresh()->execution_result['metadata']['initial_search_bid']['status']);
+        $this->assertSame(! $limited, $strategy->fresh()->execution_result['metadata']['initial_search_bid']['meets_traffic_threshold']);
     }
 
     public function test_missing_estimates_stop_before_a_bid_mutation_or_verified_evidence(): void

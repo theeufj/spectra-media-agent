@@ -110,6 +110,43 @@ class GoogleConversionProcessingTest extends TestCase
         $this->assertFalse(app(OwnSiteConversionDelivery::class)->hasProcessedSignup());
     }
 
+    public function test_paid_setup_processing_uses_its_pinned_receipt_after_the_global_purchase_mapping_changes(): void
+    {
+        $this->freezeTime();
+        $binding = ['strategy_uuid' => 'legacy-paused-test', 'action_resource' => 'customers/4532711701/conversionActions/7866193903'];
+        Setting::set('own_site.purchase_tracking', json_encode($binding), 'json');
+        $event = $this->event(['event' => 'paid_setup', 'deduplication_key' => 'paid_setup:cs_verified_setup',
+            'value' => '999.00', 'currency' => 'USD']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/888');
+
+        CheckGoogleConversionProcessing::scheduleFor($event);
+        Queue::assertPushed(CheckGoogleConversionProcessing::class, fn ($job) => $job->eventId === $event->id
+            && $job->requestId === 'fixture-request' && $job->afterCommit === true);
+        Http::fake(['datamanager.googleapis.com/*' => Http::response($this->processingResponse('SUCCESS'))]);
+        (new CheckGoogleConversionProcessing($event->id, 'fixture-request'))->handle($this->service());
+
+        $this->assertSame('SUCCESS', $event->fresh()->google_processing_status);
+        $this->assertSame('processed', $event->fresh()->googleDeliveryStatus());
+        $this->assertSame('customers/123/conversionActions/456', $event->fresh()->google_conversion_resource);
+        $this->assertSame('not_verified', app(OwnSiteConversionDelivery::class)->summary()['reported_in_google_ads']);
+        $this->assertSame($binding, Setting::get('own_site.purchase_tracking'));
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request->method() === 'GET');
+    }
+
+    public function test_legacy_native_setup_receipts_do_not_schedule_or_query_server_processing(): void
+    {
+        $event = $this->event(['event' => 'paid_setup', 'mode' => 'verified_purchase',
+            'deduplication_key' => 'paid_setup:cs_legacy_native', 'value' => '999.00', 'currency' => 'USD']);
+        CheckGoogleConversionProcessing::scheduleFor($event);
+        (new CheckGoogleConversionProcessing($event->id, 'fixture-request'))->handle($this->service());
+
+        Queue::assertNotPushed(CheckGoogleConversionProcessing::class);
+        Http::assertNothingSent();
+        $this->assertNull($event->fresh()->google_processing_status);
+        $this->assertSame('verified_purchase', $event->fresh()->mode);
+    }
+
     public function test_processing_failure_is_persisted_and_reported_to_admin(): void
     {
         $event = $this->event();

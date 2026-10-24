@@ -189,11 +189,17 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'reach_recovery_verified')->count());
     }
 
-    public function test_old_safe_proposal_cannot_authorize_a_repair_when_fresh_combined_reach_is_zero(): void
+    public static function insufficientRepairTraffic(): array
+    {
+        return ['zero traffic' => [0], 'limited positive traffic' => [3]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('insufficientRepairTraffic')]
+    public function test_old_safe_proposal_cannot_authorize_a_repair_when_fresh_combined_reach_is_zero_or_limited(int $clicks): void
     {
         $campaign = $this->makeCampaign();
         $planner = new FakeSearchReachPlanner(fn () => $this->diagnosis());
-        $planner->mutationEvidence = fn ($evidence) => array_replace_recursive($evidence, ['forecast' => ['clicks' => 0, 'impressions' => 0]]);
+        $planner->mutationEvidence = fn ($evidence) => array_replace_recursive($evidence, ['forecast' => ['clicks' => $clicks, 'impressions' => $clicks * 10]]);
         $watchdog = new FakeSearchReachWatchdog($planner, $this->snapshot());
         $state = $watchdog->check($campaign);
 
@@ -201,7 +207,8 @@ class GoogleSearchReachRecoveryTest extends TestCase
         $this->assertSame('repair_reach_unverified', $state['blocked_reason']);
         $this->assertSame([], $watchdog->added);
         $this->assertFalse(isset($state['repair_attempts']));
-        $this->assertContains('search_reach_below_useful_threshold', array_column($state['repair_reach_gate']['reach_gate']['issues'], 'code'));
+        $this->assertContains($clicks === 0 ? 'search_reach_no_forecast_traffic' : 'search_reach_below_useful_threshold',
+            array_column($state['repair_reach_gate']['reach_gate']['issues'], 'code'));
     }
 
     public function test_a_fresh_readback_forecast_failure_preserves_the_partial_repair_for_review(): void

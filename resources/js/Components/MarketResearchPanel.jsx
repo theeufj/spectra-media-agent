@@ -52,13 +52,18 @@ const asList = (value) => Array.isArray(value) ? value : [];
 const message = (value) => typeof value === 'string' ? value : value?.message || value?.reason || '';
 const numeric = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const money = (micros, currency) => numeric(micros) ? `${currency} ${(micros / 1_000_000).toFixed(2)}` : 'Not verified';
-const clicks = (value) => numeric(value) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value) : 'Not verified';
+const clicks = (value) => numeric(value) ? value > 0 && value < 0.01 ? '<0.01' : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value) : 'Not verified';
 const averageCpc = (forecast, currency) => forecast?.success === true
     && Number.isSafeInteger(forecast.cost_micros) && forecast.cost_micros > 0
     && numeric(forecast.clicks) && forecast.clicks > 0
     ? money(forecast.cost_micros / forecast.clicks, currency) : 'Not verified';
 const costEfficientReach = (strategy) => strategy?.evidence?.selection_policy === 'cost_efficient_reach'
     || strategy?.evidence?.budget_option_forecast?.selection_policy === 'cost_efficient_reach';
+const limitedTraffic = (strategy, forecast = strategy?.forecast) => forecast?.success === true
+    && numeric(forecast.clicks) && forecast.clicks > 0
+    && (strategy?.traffic_status === 'limited' || strategy?.meets_traffic_threshold === false
+        || forecast.traffic_status === 'limited' || forecast.meets_traffic_threshold === false
+        || strategy?.evidence?.traffic_status === 'limited' || strategy?.evidence?.meets_traffic_threshold === false);
 const biddingMode = (value) => {
     const mode = typeof value === 'string' ? value.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/\s+/g, '_').toUpperCase() : '';
     return ({ MANUAL_CPC: 'Manual cost-per-click bidding', MAXIMIZE_CONVERSIONS: 'Maximize conversions', TARGET_CPA: 'Target cost per conversion', TARGET_SPEND: 'Maximize clicks' })[mode] || 'Not verified';
@@ -106,6 +111,8 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
     const status = stale ? 'stale' : research?.status || 'queued';
     const result = research?.result;
     const options = researchBudgetOptions(research);
+    const unavailableComparisons = asList(result?.budget_comparisons).filter(comparison => comparison.status === 'unavailable'
+        && Number.isSafeInteger(comparison.daily_budget_micros) && comparison.daily_budget_micros > 0);
     const lowestOption = options[0];
     const littleBudgetGain = options.length > 1 && options.slice(1).every(option =>
         option.forecast.forecast_period.from === lowestOption.forecast.forecast_period.from
@@ -125,8 +132,8 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                 {status === 'not_requested' && <p role="status" className="mt-1 text-sm text-gray-600">Research starts automatically once your campaign draft and platform account are ready.</p>}
                 {stale && <p role="status" className="mt-1 text-sm text-gray-600">Your campaign or the research validity changed. Refresh the evidence before approving a plan.</p>}
                 {status === 'needs_review' && <p className="mt-1 text-sm text-gray-600">{existingRecommendation
-                    ? 'The agents found a recommendation with useful forecast traffic. Changes to an existing campaign need a separate review before they can be applied.'
-                    : 'The agents have not found a plan with enough verified traffic. Review the findings below; a higher budget alone may not help.'}</p>}
+                    ? 'The agents found a recommendation with a tested traffic estimate. Changes to an existing campaign need a separate review before they can be applied.'
+                    : 'The agents could not verify a positive traffic estimate for every placement. Review the findings below; a higher budget alone may not help.'}</p>}
                 {status === 'unknown' && <p className="mt-1 text-sm text-gray-600">The agents could not complete a reliable check. Your saved budget has not changed.</p>}
                 {numeric(research?.requested_daily_budget_micros) && <p className="mt-2 text-sm text-gray-600">Requested research budget: {money(research.requested_daily_budget_micros, currency)} a day</p>}
             </div>
@@ -137,7 +144,8 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
             <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>
             <p className="mt-1 text-sm text-gray-600"><strong>Indicative estimates.</strong> Each option uses the same keyword set, with a researched maximum CPC for each daily budget. Google forecasts clicks and ad spend for the dates shown; actual results can vary. Click counts are rounded.</p>
-            {asList(result?.strategies).some(costEfficientReach) && <p className="mt-2 text-sm text-gray-600">Bids favour lower estimated cost per click while meeting the traffic threshold.</p>}
+            {result?.requires_explicit_option_selection === true && !selectedOptionId && <p role="status" className="mt-2 text-sm text-gray-700">No estimate is available for your starting amount. Choose an available researched option or research another amount. No budget has been selected.</p>}
+            {asList(result?.strategies).some(costEfficientReach) && <p className="mt-2 text-sm text-gray-600">Bids favour lower estimated cost per click for the forecast traffic. Estimates do not establish sales or profitability.</p>}
             {littleBudgetGain && <div role="note" className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                 <p className="font-semibold">Higher budgets add little forecast traffic</p>
                 <p className="mt-1">Google forecasts little or no extra traffic across these researched budgets and maximum CPC bids for this keyword set. A higher spending limit does not guarantee more clicks.</p>
@@ -155,9 +163,10 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                     </span>
                     <span className="mt-2 block text-sm text-gray-700">Maximum CPC: {money(option.cpc_bid_micros, code)}</span>
                     <span className="mt-1 block text-sm text-gray-700">Estimated average CPC: {averageCpc(option.forecast, code)}</span>
-                    <span className="mt-3 block text-sm text-gray-700">About {Math.round(option.forecast.clicks)} clicks</span>
+                    <span className="mt-3 block text-sm text-gray-700">About {option.forecast.clicks < 1 ? clicks(option.forecast.clicks) : Math.round(option.forecast.clicks)} clicks</span>
                     <span className="mt-1 block text-sm text-gray-700">{money(option.forecast.cost_micros, code)} estimated ad spend</span>
                     <span className="mt-1 block text-xs text-gray-500">{option.forecast.forecast_period?.from} to {option.forecast.forecast_period?.through}{option.forecast.period_days ? ` · ${option.forecast.period_days} days` : ''}</span>
+                    {asList(option.proposal?.strategies).some(strategy => limitedTraffic(strategy, option.forecast)) && <span className="mt-2 block text-xs text-amber-800"><strong>Limited forecast traffic.</strong> This budget may not be fully spent.</span>}
                     <span className="mt-2 block text-xs font-medium text-brand-dark">{option.daily_budget_micros === research.requested_daily_budget_micros ? 'Custom budget estimate' : index === 0 ? 'Lowest tested budget' : !samePeriod ? 'Different forecast dates' : littleGain ? 'Little extra traffic for the higher budget' : 'More estimated traffic'}</span>
                 </>;
                 const style = `block rounded-lg border p-4 ${selectedOptionId === option.id ? 'border-brand-dark bg-gray-50' : 'border-gray-200'} ${onSelectBudgetOption ? 'cursor-pointer' : ''}`;
@@ -165,6 +174,16 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
             })}</div>
             {onSelectBudgetOption && <p className="mt-2 text-xs text-gray-600">Choosing an option updates your proposal. Your saved budget changes only after you approve it.</p>}
         </fieldset>}
+        {!pending && !stale && unavailableComparisons.length > 0 && <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h4 className="text-sm font-semibold text-gray-900">Amounts without a verified estimate</h4>
+            <ul className="mt-2 space-y-2 text-sm text-gray-700">{unavailableComparisons.map(comparison => <li key={comparison.daily_budget_micros}>
+                <span className="font-semibold">{money(comparison.daily_budget_micros, currency)} / day</span>
+                <span className="ml-2">{comparison.forecast?.success === true && numeric(comparison.forecast.clicks)
+                    ? `${clicks(comparison.forecast.clicks)} forecast clicks` : 'Traffic estimate unavailable'}</span>
+                {message(comparison.reason) && <p className="mt-1 text-xs text-gray-600">{message(comparison.reason)}</p>}
+            </li>)}</ul>
+            <p className="mt-2 text-xs text-gray-600">These amounts cannot be selected from this research. You can request another estimate.</p>
+        </div>}
         {customBudgetUrl && <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
             <Link href={customBudgetUrl} className="text-sm font-semibold text-brand-dark underline">Research a custom amount</Link>
             <p className="mt-1 text-sm text-gray-600">Try another daily budget, such as {currency} 50, for an indicative forecast. Researching an amount does not change your saved budget or switch on ads.</p>
@@ -185,6 +204,11 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                     <div><h5 className="text-sm font-semibold text-gray-700">Current plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.current_budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.current_bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.current_cpc_bid_micros, code)}</p><Keywords values={strategy.current_keywords} /></div>
                     <div><h5 className="text-sm font-semibold text-gray-700">Proposed plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.cpc_bid_micros, code)}</p><Keywords values={strategy.proposed_keywords} /><Forecast forecast={strategy.forecast} period={strategy.forecast_period} timezone={strategy.time_zone} currency={code} /></div>
                 </div>
+                {limitedTraffic(strategy) && <div role="note" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-semibold">Limited forecast traffic</p>
+                    <p className="mt-1">Google forecasts {clicks(strategy.forecast.clicks)} clicks{strategy.forecast.forecast_period?.from && strategy.forecast.forecast_period?.through
+                        ? ` from ${strategy.forecast.forecast_period.from} to ${strategy.forecast.forecast_period.through}` : ' for the forecast period'}. Your budget may not be fully spent. You can choose this estimate or research another amount; sales and profitability are not verified.</p>
+                </div>}
                 {asList(strategy.reasons).length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{asList(strategy.reasons).map(message).filter(Boolean).map(reason => <li key={reason}>{reason}</li>)}</ul>}
                 {caveats.length > 0 && <div className="mt-3 text-xs text-gray-600"><p className="font-semibold">Estimate limitations</p><ul className="mt-1 list-disc space-y-1 pl-5">{[...new Set(caveats)].map(caveat => <li key={caveat}>{caveat}</li>)}</ul></div>}
             </article>;

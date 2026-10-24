@@ -3,6 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 
 const { page, postMock, visitMock, researchPostMock } = vi.hoisted(() => ({ page: { url: '/' }, postMock: vi.fn(), visitMock: vi.fn(), researchPostMock: vi.fn() }));
+const watch = vi.hoisted(() => ({ phase: 'idle', data: null }));
+const pollingRequests = vi.hoisted(() => vi.fn());
 
 vi.mock('@inertiajs/react', () => ({
     Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
@@ -17,8 +19,8 @@ vi.mock('@inertiajs/react', () => ({
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({ default: ({ children }) => <main>{children}</main> }));
 vi.mock('@/Components/CampaignCopilot', () => ({ default: () => null }));
 vi.mock('@/Components/ForecastPanel', () => ({ default: () => null }));
-vi.mock('@/hooks/useJobWatch', () => ({ useJobWatch: () => ({ phase: 'idle', data: null }) }));
-vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null }) }));
+vi.mock('@/hooks/useJobWatch', () => ({ useJobWatch: () => watch }));
+vi.mock('@/hooks/usePolling', () => ({ usePolling: (...args) => { pollingRequests(...args); return { data: null }; } }));
 
 import CampaignShow from '@/Pages/Campaigns/Show';
 
@@ -27,10 +29,66 @@ beforeEach(() => {
     postMock.mockReset();
     visitMock.mockReset();
     researchPostMock.mockReset();
+    watch.phase = 'idle';
+    watch.data = null;
+    pollingRequests.mockClear();
+});
+
+const readyStrategies = [{ id: 11, uuid: 'draft-strategy', platform: 'Google Ads', campaign_type: 'search', ad_copy_strategy: 'Review this direction', imagery_strategy: 'None' }];
+
+it.each(['needs_review', 'stale'])('prepares the strategy before showing an old %s budget decision', status => {
+    const campaign = { uuid: 'preparing-campaign', name: 'New campaign', strategies: [], daily_budget: '50.00',
+        currency_code: 'AUD', auto_generated_at: '2026-10-24', is_generating_strategies: true };
+    const { getByText, queryByRole, queryByText, queryByLabelText } = render(<CampaignShow auth={{ user: {} }} campaign={campaign}
+        marketResearch={{ request_id: 'before-strategy', status, current: false, reasons: ['Old research should not be shown.'] }} />);
+
+    expect(getByText('Preparing your campaign')).toBeVisible();
+    expect(getByText(/Budget choices appear after your strategy is ready/)).toBeVisible();
+    expect(queryByRole('heading', { name: 'Review the researched plan and budget' })).toBeNull();
+    expect(queryByText('Old research should not be shown.')).toBeNull();
+    expect(queryByText('The campaign plan needs review')).toBeNull();
+    expect(queryByText('This research needs refreshing')).toBeNull();
+    expect(queryByLabelText('Daily budget (AUD)')).toBeNull();
+    expect(researchPostMock).not.toHaveBeenCalled();
+    expect(postMock).not.toHaveBeenCalled();
+});
+
+it.each([null, { request_id: 'new-research', status: 'queued' }])('shows research after the watched strategy finishes with metadata %j and permits higher or lower amounts', researchAtCompletion => {
+    const campaign = { uuid: 'strategy-arrives', name: 'New campaign', strategies: [], daily_budget: '50.00',
+        currency_code: 'AUD', auto_generated_at: '2026-10-24', is_generating_strategies: true };
+    const props = { auth: { user: {} }, campaign, marketResearch: { status: 'needs_review', current: false }, marketResearchStatusUrl: '/research/status' };
+    const view = render(<CampaignShow {...props} />);
+    expect(view.queryByLabelText('Daily budget (AUD)')).toBeNull();
+
+    watch.phase = 'done';
+    watch.data = { ...campaign, strategies: readyStrategies, is_generating_strategies: false,
+        search_delivery_state: { market_research: researchAtCompletion } };
+    view.rerender(<CampaignShow {...props} />);
+    expect(view.getByText('Researching your market')).toBeVisible();
+    expect(view.queryByText('The campaign plan needs review')).toBeNull();
+    expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+    expect(pollingRequests).toHaveBeenCalledWith('/research/status', expect.objectContaining({ enabled: true }));
+    const statusSettings = pollingRequests.mock.calls.find(([url]) => url === '/research/status')[1];
+    expect(statusSettings.until({ marketResearch: { status: 'not_requested' } })).toBe(false);
+
+    // Once the fresh research is available, choosing another amount researches
+    // that amount without approving it or using the initial 50 as a ceiling.
+    const ready = { ...watch.data, search_delivery_state: null };
+    const research = { request_id: 'new-research', status: 'needs_review', current: true, approvable: false };
+    view.rerender(<CampaignShow auth={{ user: {} }} campaign={ready} marketResearch={research} />);
+    for (const amount of ['100', '25']) {
+        fireEvent.change(view.getByLabelText('Daily budget (AUD)'), { target: { value: amount } });
+        fireEvent.click(view.getByRole('button', { name: 'Research this budget' }));
+        expect(researchPostMock).toHaveBeenLastCalledWith(route('campaigns.market-research.refresh', { campaign: campaign.uuid }),
+            { daily_budget: amount }, expect.objectContaining({ preserveScroll: true }));
+    }
+    expect(researchPostMock).toHaveBeenCalledTimes(2);
+    expect(campaign.daily_budget).toBe('50.00');
+    expect(postMock).not.toHaveBeenCalled();
 });
 
 it('opens custom research from the saved campaign and researches AUD50 without changing the saved AUD5 or approving it', () => {
-    const campaign = { id: 7, uuid: 'custom-research', name: 'Paused setup', strategies: [],
+    const campaign = { id: 7, uuid: 'custom-research', name: 'Paused setup', strategies: readyStrategies,
         daily_budget: '5.00', approved_daily_budget: '5.00', budget_confirmed_at: '2026-10-23', currency_code: 'AUD' };
     const marketResearch = { request_id: 'existing-research', input_fingerprint: 'context', status: 'ready',
         current: true, approvable: true, expires_at: '2099-01-01T00:00:00Z',
@@ -59,7 +117,7 @@ it('opens custom research from the saved campaign and researches AUD50 without c
 
 it.each(['', '4.99', '50.001', '10000.01', '100000', '1e10'])('does not request unbounded or invalid custom daily budget %s', value => {
     page.url = '/campaigns/bounded-custom?budget=1';
-    const campaign = { id: 7, uuid: 'bounded-custom', name: 'Paused setup', strategies: [], daily_budget: '5.00',
+    const campaign = { id: 7, uuid: 'bounded-custom', name: 'Paused setup', strategies: readyStrategies, daily_budget: '5.00',
         budget_confirmed_at: '2026-10-23', currency_code: 'AUD' };
     const { getByLabelText, getByRole } = render(<CampaignShow auth={{ user: {} }} campaign={campaign} />);
     expect(getByLabelText('Daily budget (AUD)')).toHaveAttribute('max', '10000');
@@ -83,7 +141,7 @@ it('shows the current native purchase connection instead of asking for the legac
 
 it('opens the confirmed budget form from Change and returns to review after reconfirmation', () => {
     const campaign = {
-        id: 7, uuid: 'test-campaign', name: 'Setup campaign', strategies: [],
+        id: 7, uuid: 'test-campaign', name: 'Setup campaign', strategies: readyStrategies,
         auto_generated_at: '2026-10-23', budget_confirmed_at: '2026-10-23',
         daily_budget: '5.00', currency_code: 'AUD',
     };
@@ -115,7 +173,7 @@ it.each([
     ['manual managed', false, false], ['generated managed', true, false],
     ['manual setup', false, true], ['generated setup', true, true],
 ])('requires automatic research before approval for an unconfirmed %s campaign', (name, generated, setupOnly) => {
-    const campaign = { id: 7, uuid: 'unconfirmed-campaign', name: 'New campaign', strategies: [],
+    const campaign = { id: 7, uuid: 'unconfirmed-campaign', name: 'New campaign', strategies: readyStrategies,
         daily_budget: '5.00', currency_code: 'AUD', budget_confirmed_at: null,
         auto_generated_at: generated ? '2026-10-23' : null };
     const { getByRole, getByText } = render(<CampaignShow auth={{ user: {} }} campaign={campaign} setupOnly={setupOnly}

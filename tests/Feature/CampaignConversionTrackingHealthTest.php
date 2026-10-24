@@ -70,13 +70,13 @@ class CampaignConversionTrackingHealthTest extends TestCase
         ], $changes));
     }
 
-    private function tracking(string $status = 'ENABLED', array $activity = []): ConversionTrackingService
+    private function tracking(string $status = 'ENABLED', array $activity = [], string $action = self::ACTION_RESOURCE): ConversionTrackingService
     {
         $tracking = $this->trackingMock();
         $this->expectMockCall($tracking, 'getCampaignStatus')->once()->with(self::CUSTOMER_ID, self::CAMPAIGN_RESOURCE)->andReturn($status);
         if ($status === 'ENABLED') {
             $this->expectMockCall($tracking, 'getCampaignActionConversionsLast30Days')->once()
-                ->with(self::CUSTOMER_ID, self::CAMPAIGN_RESOURCE, self::ACTION_RESOURCE)
+                ->with(self::CUSTOMER_ID, self::CAMPAIGN_RESOURCE, $action)
                 ->andReturn(array_replace(['period' => 'LAST_30_DAYS', 'conversions' => 0.0, 'all_conversions' => 0.0], $activity));
         } else {
             $tracking->shouldNotReceive('getCampaignActionConversionsLast30Days');
@@ -180,6 +180,52 @@ class CampaignConversionTrackingHealthTest extends TestCase
         $this->assertSame('selected_conversion_delivery_failed', $state['issues'][0]['code']);
         $this->assertStringContainsString('2 real server-side event(s)', $state['issues'][0]['message']);
         $this->assertStringContainsString('GTM change alone will not repair an import failure', $state['message']);
+    }
+
+    public function test_purchase_goal_includes_pinned_setup_and_subscription_failures_after_the_mapping_changes(): void
+    {
+        $action = 'customers/'.self::CUSTOMER_ID.'/conversionActions/78';
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => $action]]);
+        $this->event(['event' => 'paid_setup', 'deduplication_key' => 'paid_setup:cs_real_setup', 'value' => '999.00',
+            'google_conversion_resource' => $action, 'upload_error' => 'Recorded setup upload failed']);
+        $this->event(['event' => 'paid_subscription', 'deduplication_key' => 'paid_subscription:sub_real', 'value' => '149.00',
+            'google_conversion_resource' => $action, 'uploaded_to_google' => true, 'google_request_id' => 'subscription-receipt',
+            'google_accepted_at' => now()->subHour(), 'google_processing_status' => 'FAILED']);
+        $this->event(['event' => 'paid_setup', 'mode' => 'verified_purchase', 'value' => '999.00',
+            'google_conversion_resource' => $action, 'upload_error' => 'Legacy browser receipt is not server evidence']);
+        $this->event(['event' => 'paid_setup', 'value' => '999.00', 'google_conversion_resource' => self::ACTION_RESOURCE,
+            'upload_error' => 'Another action must remain separate']);
+        $this->event(['google_conversion_resource' => $action, 'upload_error' => 'Signup is not a paid purchase']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/9876543210/conversionActions/99');
+
+        $state = $this->health(['intent' => ['mode' => 'custom', 'category' => 'PURCHASE', 'action_resource' => $action]])
+            ->inspect($this->strategy, $this->tracking(action: $action), $this->account());
+
+        $this->assertSame('delivery_failed', $state['status']);
+        $this->assertSame(['paid_subscription', 'paid_setup'], $state['delivery']['events']);
+        $this->assertSame($action, $state['delivery']['action_resource']);
+        $this->assertSame(['upload_failed' => 1, 'processing_failed' => 1], $state['delivery']['statuses']);
+        $this->assertStringContainsString('2 real server-side event(s)', $state['issues'][0]['message']);
+        $this->assertNull($this->customer->fresh()->conversion_tracking_verified_at);
+    }
+
+    public function test_a_processed_setup_receipt_does_not_prove_google_purchase_attribution(): void
+    {
+        $action = 'customers/'.self::CUSTOMER_ID.'/conversionActions/78';
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => $action]]);
+        $this->event(['event' => 'paid_setup', 'deduplication_key' => 'paid_setup:cs_processed_setup', 'value' => '999.00',
+            'google_conversion_resource' => $action, 'uploaded_to_google' => true, 'google_request_id' => 'setup-receipt',
+            'google_accepted_at' => now()->subHour(), 'google_processing_status' => 'SUCCESS']);
+
+        $state = $this->health(['intent' => ['mode' => 'custom', 'category' => 'PURCHASE', 'action_resource' => $action]])
+            ->inspect($this->strategy, $this->tracking(action: $action), $this->account());
+
+        $this->assertSame('not_verified', $state['status']);
+        $this->assertSame(['processed' => 1], $state['delivery']['statuses']);
+        $this->assertSame('not_verified', $state['delivery']['reported_in_google_ads']);
+        $this->assertSame(0.0, $state['selected_action_activity']['all_conversions']);
+        $this->assertSame([], $state['issues']);
+        $this->assertNull($this->customer->fresh()->conversion_tracking_verified_at);
     }
 
     public function test_unrelated_actions_accounts_modes_events_and_old_records_do_not_trigger_failures(): void

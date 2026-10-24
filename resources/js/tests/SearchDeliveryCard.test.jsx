@@ -65,14 +65,15 @@ describe('SearchDeliveryCard', () => {
         expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
     });
 
-    it('shows setup research for a new customer campaign without a delivery warning or missing live metrics', () => {
+    it('prepares a new customer strategy before research without a delivery warning or missing live metrics', () => {
         const draft = { ...campaign, status: 'draft', daily_budget: '5.00', currency_code: 'AUD',
             google_ads_campaign_id: null, budget_confirmed_at: null, strategies: [],
             search_delivery_state: { market_research: { status: 'researching', request_id: 'new-research', result: null } } };
         render(<CampaignShow auth={{ user: {} }} campaign={draft} marketResearch={draft.search_delivery_state.market_research} />);
 
-        expect(screen.getByText('Researching your market')).toBeVisible();
-        expect(screen.getByText(/Saved daily budget:/)).toHaveTextContent('AUD 5.00');
+        expect(screen.getByText('Preparing your campaign')).toBeVisible();
+        expect(screen.queryByText('Researching your market')).toBeNull();
+        expect(screen.queryByText(/Saved daily budget:/)).toBeNull();
         expect(screen.queryByRole('region', { name: 'Google Search delivery diagnosis' })).toBeNull();
         expect(screen.queryByText('Delivery needs review')).toBeNull();
         expect(screen.queryByText(/This delivery check is out of date/)).toBeNull();

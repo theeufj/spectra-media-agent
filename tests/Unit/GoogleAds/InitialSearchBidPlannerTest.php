@@ -95,7 +95,8 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->assertSame(8, $result['evidence']['forecast']['clicks']);
         $this->assertSame(40_000_000, $result['evidence']['forecast']['cost_micros']);
         $this->assertSame('cost_efficient_reach', $result['evidence']['selection_policy']);
-        $this->assertFalse($result['evidence']['candidates'][0]['credible_reach']);
+        $this->assertTrue($result['evidence']['candidates'][0]['credible_reach']);
+        $this->assertFalse($result['evidence']['candidates'][0]['meets_traffic_threshold']);
         $this->assertCount(6, $result['evidence']['candidates']);
         $this->assertSame(6, $result['evidence']['forecast']['period_days']);
     }
@@ -112,6 +113,37 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->assertSame(500_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
         $candidates[2]['forecast']['cost_micros'] = 1_500_000;
         $this->assertSame(2_000_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
+    }
+
+    public function test_positive_low_reach_is_an_honest_selectable_estimate_and_does_not_force_a_higher_budget(): void
+    {
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn($this->historical());
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $forecast->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
+            $clicks = $context['cpc_bid_ceiling_micros'] >= 2_000_000 ? 0.8 : 0.2;
+
+            return [...$this->forecast($keywords, $context, $days, $clicks), 'cost_micros' => 100_000];
+        });
+        $result = $this->planner($historical, $forecast)->plan($this->campaign(), $this->snapshot());
+
+        $this->assertTrue($result['ready'], json_encode($result));
+        $this->assertSame('limited', $result['traffic_status']);
+        $this->assertFalse($result['meets_traffic_threshold']);
+        $this->assertSame(0.8, $result['evidence']['forecast']['clicks']);
+        $this->assertStringContainsString('below', $result['traffic_warning']);
+        $this->assertFalse($result['activation_ready']);
+        $this->assertSame('5.00', $this->campaign()->approved_daily_budget);
+    }
+
+    public function test_limited_reach_ranking_keeps_reach_instead_of_selecting_an_almost_empty_cheap_forecast(): void
+    {
+        $candidates = [
+            ['cpc_bid_micros' => 5_000_000, 'meets_traffic_threshold' => false, 'forecast' => ['clicks' => 0.29, 'cost_micros' => 1_000_000]],
+            ['cpc_bid_micros' => 50_000_000, 'meets_traffic_threshold' => false, 'forecast' => ['clicks' => 3.92, 'cost_micros' => 114_000_000]],
+            ['cpc_bid_micros' => 45_000_000, 'meets_traffic_threshold' => false, 'forecast' => ['clicks' => 3.8, 'cost_micros' => 100_000_000]],
+        ];
+        $this->assertSame(45_000_000, InitialSearchBidPlanner::bestForecast($candidates)['cpc_bid_micros']);
     }
 
     public function test_economic_ranking_rejects_a_large_cost_increase_for_a_few_more_clicks_regardless_of_order(): void
@@ -212,7 +244,7 @@ class InitialSearchBidPlannerTest extends TestCase
     {
         foreach ([['clicks' => 0, 'cost_micros' => 0], ['clicks' => null, 'cost_micros' => 500_000],
             ['clicks' => 40, 'cost_micros' => null], ['clicks' => 40, 'cost_micros' => 0],
-            ['clicks' => 2, 'cost_micros' => 500_000], ['success' => false]] as $override) {
+            ['success' => false]] as $override) {
             $result = $this->withEstimates($override)->plan($this->campaign(), $this->snapshot());
 
             $this->assertFalse($result['ready'], json_encode($override));

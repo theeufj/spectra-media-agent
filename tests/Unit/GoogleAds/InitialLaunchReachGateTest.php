@@ -52,7 +52,7 @@ class InitialLaunchReachGateTest extends TestCase
 
     public function test_initial_launch_still_rejects_unknown_caveats_stale_mismatched_and_unsafe_evidence(): void
     {
-        foreach (['unmarked', 'unknown_code', 'extra_caveat', 'stale', 'budget', 'context', 'insufficient', 'targeting', 'trial', 'conflict', 'scope', 'group', 'unknown_match'] as $case) {
+        foreach (['unmarked', 'unknown_code', 'extra_caveat', 'stale', 'budget', 'context', 'zero', 'targeting', 'trial', 'conflict', 'scope', 'group', 'unknown_match'] as $case) {
             [$campaign, $snapshot, $assessment] = $this->evidence();
             switch ($case) {
                 case 'unmarked': $assessment['forecast']['limitations'] = [];
@@ -67,7 +67,7 @@ class InitialLaunchReachGateTest extends TestCase
                     break;
                 case 'context': $assessment['forecast']['context']['cpc_bid_ceiling_micros'] = 3_000_000;
                     break;
-                case 'insufficient': $assessment['forecast']['clicks'] = 5;
+                case 'zero': $assessment['forecast']['clicks'] = 0;
                     break;
                 case 'targeting': $snapshot['unsupported_targeting'] = ['unknown audience'];
                     break;
@@ -89,6 +89,30 @@ class InitialLaunchReachGateTest extends TestCase
             $this->assertFalse($result['ready'], $case.' must remain blocked');
             $this->assertNotEmpty($result['issues']);
         }
+    }
+
+    public function test_initial_launch_reports_positive_low_reach_as_a_warning_while_repairs_and_trials_remain_strict(): void
+    {
+        [$campaign, $snapshot, $assessment] = $this->evidence();
+        $assessment['forecast']['clicks'] = 0.25;
+        $assessment['forecast']['cost_micros'] = 1_000_000;
+        $gate = new GoogleSearchReachGate;
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $assessment);
+        $this->assertTrue($result['ready'], json_encode($result));
+        $this->assertSame('limited', $result['metadata']['traffic_status']);
+        $this->assertFalse($result['metadata']['meets_traffic_threshold']);
+        $this->assertContains('search_reach_below_useful_threshold', array_column($result['warnings'], 'code'));
+        $this->assertNotContains('search_reach_below_useful_threshold', array_column($result['issues'], 'code'));
+        $this->assertFalse($gate->evaluate($campaign, $snapshot, $assessment)['ready']);
+
+        // Remove the negative limitation to isolate the controlled-trial threshold.
+        $snapshot['negative_keywords'] = $assessment['forecast']['context']['negative_keywords'] = [];
+        $assessment['forecast']['caveats'] = $assessment['forecast']['limitations'] = [];
+        $assessment['forecast']['auto_repair_safe'] = true;
+        $campaign->spend_guardrails = ['enabled' => true, 'started_at' => now()->toIso8601String()];
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $assessment);
+        $this->assertFalse($result['ready']);
+        $this->assertContains('search_reach_below_useful_threshold', array_column($result['issues'], 'code'));
     }
 
     public function test_a_known_nonconflicting_ad_group_negative_can_use_the_initial_launch_estimate(): void

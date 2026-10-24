@@ -112,7 +112,7 @@ class CheckGoogleConversionProcessing implements ShouldBeUnique, ShouldQueue
 
     private static function eligible(SpectraConversionEvent $event): bool
     {
-        return $event->mode === 'server_google' && in_array($event->event, ['signup', 'paid_subscription'], true)
+        return $event->mode === 'server_google' && in_array($event->event, ['signup', 'paid_subscription', 'paid_setup'], true)
             && $event->uploaded_to_google && (bool) $event->google_request_id
             && (bool) $event->google_accepted_at && (bool) $event->google_conversion_resource;
     }

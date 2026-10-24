@@ -53,6 +53,8 @@ class RecordSiteGoogleConversion implements ShouldQueue
     private const UPLOAD_ACTIONS = [
         'signup' => 'signup_import',
         'paid_subscription' => 'paid_subscription',
+        // Both verified acquisitions use the reviewed canonical Purchase action.
+        'paid_setup' => 'paid_subscription',
         'campaign_live' => 'campaign_live',
         'seven_day_return' => 'seven_day_return',
     ];
@@ -60,6 +62,21 @@ class RecordSiteGoogleConversion implements ShouldQueue
     public static function actionKey(string $event): ?string
     {
         return self::UPLOAD_ACTIONS[$event] ?? null;
+    }
+
+    public static function canonicalPurchaseDestination(): ?string
+    {
+        $resource = Setting::get('conversion_resource_name.paid_subscription');
+
+        return self::isCanonicalPurchaseDestination($resource) ? $resource : null;
+    }
+
+    public static function isCanonicalPurchaseDestination(mixed $resource): bool
+    {
+        $account = (string) config('conversions.google_ads_customer_id');
+
+        return ctype_digit($account) && is_string($resource)
+            && preg_match('#^customers/'.preg_quote($account, '#').'/conversionActions/\d+$#', $resource) === 1;
     }
 
     /**
@@ -92,8 +109,17 @@ class RecordSiteGoogleConversion implements ShouldQueue
         $record = $eventId
             ? SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->findOrFail($eventId)
             : null;
-        if ($this->event === 'paid_subscription' && ! $record) {
-            throw new \LogicException('Paid conversions require a verified invoice event.');
+        if (in_array($this->event, ['paid_subscription', 'paid_setup'], true) && ! $record) {
+            throw new \LogicException('Paid conversions require a verified paid receipt.');
+        }
+        if ($this->event === 'paid_setup') {
+            $cents = preg_match('/^(\d+)\.(\d{2})$/', $record->value, $amount)
+                ? (int) $amount[1] * 100 + (int) $amount[2] : 0;
+            if ($record->mode !== 'server_google' || ! preg_match('/^paid_setup:cs_[A-Za-z0-9_]+$/', $record->deduplication_key ?? '')
+                || $record->currency !== 'USD' || $cents <= 0 || $cents > (int) config('services.stripe.setup_fee_usd_cents', 99900)
+                || ! $record->occurred_at || $record->occurred_at->isFuture()) {
+                throw new \LogicException('Paid setup imports require their verified positive Stripe checkout receipt.');
+            }
         }
 
         $adIdentifiers = $record ? $record->ad_identifiers : $this->user->googleAdIdentifiers();
@@ -134,7 +160,11 @@ class RecordSiteGoogleConversion implements ShouldQueue
         }
 
         try {
-            $resourceName = Setting::get("conversion_resource_name.{$actionKey}");
+            $resourceName = $this->event === 'paid_setup' ? $record->google_conversion_resource
+                : Setting::get("conversion_resource_name.{$actionKey}");
+            if ($this->event === 'paid_setup' && ! self::isCanonicalPurchaseDestination($resourceName)) {
+                throw new \RuntimeException('The paid setup receipt has no valid pinned canonical Purchase destination. Review its tracking configuration.');
+            }
             if (! is_string($resourceName) || ! preg_match('~^customers/(\d+)/conversionActions/(\d+)$~', $resourceName, $parts)) {
                 throw new \RuntimeException("Conversion action '{$actionKey}' is not provisioned.");
             }

@@ -53,7 +53,7 @@ class CampaignConversionTrackingHealth
         }
         $activity = $tracking->getCampaignActionConversionsLast30Days($customerId, $resource, $action);
         $state['selected_action_activity'] = $activity;
-        $state['delivery'] = $this->delivery($customerId, $action);
+        $state['delivery'] = $this->delivery($customerId, $action, $readiness['intent']['category'] ?? null);
         $failures = ($state['delivery']['statuses']['upload_failed'] ?? 0)
             + ($state['delivery']['statuses']['processing_failed'] ?? 0);
         if ($failures > 0) {
@@ -77,21 +77,29 @@ class CampaignConversionTrackingHealth
         return (new ReconcileCampaignConversionGoals($strategy->campaign->customer))->inspect($strategy, $resource);
     }
 
-    private function delivery(string $customerId, string $action): ?array
+    private function delivery(string $customerId, string $action, ?string $category): ?array
     {
-        if ($customerId !== (string) config('conversions.google_ads_customer_id')) {
+        if ($customerId !== (string) config('conversions.google_ads_customer_id')
+            || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/conversionActions/\d+$#', $action)) {
             return null;
         }
-        $event = match ($action) {
-            Setting::get('conversion_resource_name.signup_import') => 'signup',
-            Setting::get('conversion_resource_name.paid_subscription') => 'paid_subscription',
-            default => null,
+        // The selected, remotely inspected goal and each receipt's pinned
+        // destination are evidence. A changed global mapping must not erase
+        // an earlier upload failure for this exact account/action.
+        $events = match ($category) {
+            'SIGNUP' => ['signup'],
+            'PURCHASE' => ['paid_subscription', 'paid_setup'],
+            default => match ($action) {
+                Setting::get('conversion_resource_name.signup_import') => ['signup'],
+                Setting::get('conversion_resource_name.paid_subscription') => ['paid_subscription', 'paid_setup'],
+                default => null,
+            },
         };
-        if ($event === null) {
+        if ($events === null) {
             return null;
         }
         $statuses = [];
-        $records = SpectraConversionEvent::where('event', $event)->where('mode', 'server_google')
+        $records = SpectraConversionEvent::whereIn('event', $events)->where('mode', 'server_google')
             ->where('google_conversion_resource', $action)->where('created_at', '>=', now()->subDays(30))
             ->orderBy('id')->lazyById(200);
         foreach ($records as $record) {
@@ -103,7 +111,8 @@ class CampaignConversionTrackingHealth
             $statuses[$status] = ($statuses[$status] ?? 0) + 1;
         }
 
-        return ['event' => $event, 'action_resource' => $action, 'days' => 30, 'statuses' => $statuses,
+        return ['event' => count($events) === 1 ? $events[0] : 'purchase', 'events' => $events,
+            'action_resource' => $action, 'days' => 30, 'statuses' => $statuses,
             'reported_in_google_ads' => 'not_verified'];
     }
 

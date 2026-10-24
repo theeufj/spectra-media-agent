@@ -12,7 +12,7 @@ import SearchDeliveryCard from '@/Components/SearchDeliveryCard';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import MarketResearchPanel from '@/Components/MarketResearchPanel';
 import CampaignCopilot from '@/Components/CampaignCopilot';
-import { useJobWatch } from '@/hooks/useJobWatch';
+import { useCampaignStrategyWatch } from '@/hooks/useCampaignStrategyWatch';
 import { usePolling } from '@/hooks/usePolling';
 import { brandTint } from '@/Components/Marketing/Hero';
 
@@ -257,7 +257,8 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => (
     <section className="mb-8 rounded-xl border border-gray-200 bg-white p-8" role="status">
         <h2 className="text-xl font-semibold text-gray-900">Preparing your campaign</h2>
         <p className="mt-2 text-gray-600">We are waiting for the campaign plan for {campaignName}. It will appear here when saved.</p>
-        <p className="mt-4 text-sm text-gray-500">{Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s elapsed</p>
+        <p className="mt-2 text-gray-600">Budget choices appear after your strategy is ready. Compare traffic estimates, research a higher or lower amount, then choose the budget you approve.</p>
+        {Number.isFinite(elapsedSeconds) && <p className="mt-4 text-sm text-gray-500">{Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s elapsed</p>}
         {elapsedSeconds > 300 && <p className="mt-3 text-sm text-amber-800">This is taking longer than expected. Your business details are saved; you can return from your dashboard.</p>}
     </section>
 );
@@ -293,15 +294,9 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
     // useJobWatch distinguishes those: `failed` (the server reported an error),
     // `timeout` (took too long), and `disconnected` (the endpoint itself has
     // been failing), so the page can say which.
-    const { phase: watchPhase, data: watchData } = useJobWatch(
+    const { phase: watchPhase, data: watchData } = useCampaignStrategyWatch(
         route('api.campaigns.show', { campaign: campaigns.uuid }),
-        {
-            enabled: isPolling,
-            interval: 10000,
-            timeoutMs: 5 * 60 * 1000,
-            isFailed: (d) => Boolean(d?.strategy_generation_error),
-            isDone: (d) => Boolean(d?.strategies?.length) && !d?.is_generating_strategies,
-        }
+        isPolling
     );
 
     // Mirror each poll onto the rendered campaign so strategies appear the
@@ -529,33 +524,23 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
         });
     };
 
-    /*
-       Two decisions, two screens.
-
-       This page asked the customer to set a daily budget and to sign off on
-       the strategies behind it, stacked in one scroll with a market forecast
-       between them. They are separate questions — what am I willing to spend,
-       and is this the right campaign — and answering the second means
-       scrolling past the first, which is already answered. On a one-time setup
-       it is also the page where they press Create, so the length was standing
-       between them and the thing they paid for.
-
-       The budget comes first because it is the input the forecast and the ad
-       group bids are framed against, and because the server will not deploy an
-       auto-generated campaign until it is confirmed. Once set, it collapses to
-       one line with a way back — ?budget=1 returns here deliberately, so
-       changing your mind is a link rather than a dead end.
-    */
+    // Strategy generation comes before research and the owner's budget choice.
+    // A starting amount is research context, not an approved spending limit.
     const [showResearch, setShowResearch] = useState(false);
     const pageUrl = usePage().url;
     const revisitingBudget = pageUrl.includes('budget=1');
     const budgetStage = !campaign.budget_confirmed_at || revisitingBudget;
+    const strategiesReady = campaigns.strategies.length > 0 && !campaigns.is_generating_strategies;
+    // The watch can finish before Inertia props are refreshed. Use its new
+    // research request, rather than evidence from before the strategy existed.
+    const currentMarketResearch = campaigns === watchData
+        ? campaigns.search_delivery_state?.market_research ?? null : marketResearch;
 
     return (
         <AuthenticatedLayout
             user={auth.user}
             header={<h2 className="font-semibold text-xl text-jet leading-tight">
-                {budgetStage ? `Your campaign budget` : `Your campaign — ${campaigns.name}`}
+                {budgetStage && strategiesReady ? `Your campaign budget` : `Your campaign — ${campaigns.name}`}
             </h2>}
         >
             <Head title={`Your campaign — ${campaigns.name}`} />
@@ -587,18 +572,14 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                 </div>
             )}
 
-            {budgetStage && (
+            {budgetStage && strategiesReady && (
                 <div className="mx-auto max-w-7xl">
-                    {/* The prop, not the polled local state: confirming the
-                        budget redirects back with fresh props, and the local
-                        copy is only seeded once so it would still show as
-                        unconfirmed. */}
                     <BudgetConfirmation
-                        campaign={campaign}
+                        campaign={campaigns}
                         currency={campaign.currency_code || 'USD'}
                         selfFunded={selfFunded}
                         setupOnly={setupOnly}
-                        marketResearch={marketResearch}
+                        marketResearch={currentMarketResearch}
                         marketResearchStatusUrl={marketResearchStatusUrl}
                         marketResearchRefreshUrl={marketResearchRefreshUrl}
                         editing={revisitingBudget}
@@ -633,7 +614,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                             {campaign.currency_code || 'USD'} {Number(campaign.daily_budget || 0).toFixed(2)}
                             {selfFunded && <span className="text-gray-500"> — billed to you by Google, not by us</span>}
                         </p>
-                        <div className="flex items-center gap-4">
+                        {strategiesReady && <div className="flex items-center gap-4">
                             <button
                                 type="button"
                                 onClick={() => setShowResearch(v => !v)}
@@ -647,13 +628,13 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                             >
                                 Change
                             </Link>
-                        </div>
+                        </div>}
                     </div>
 
-                    {showResearch && (
+                    {showResearch && strategiesReady && (
                         <MarketResearchPanel
                             className="mt-3"
-                            research={marketResearch || campaign.search_delivery_state?.market_research}
+                            research={currentMarketResearch || campaigns.search_delivery_state?.market_research}
                             statusUrl={marketResearchStatusUrl}
                             currency={campaign.currency_code || 'USD'}
                             customBudgetUrl={`${route('campaigns.show', { campaign: campaign.uuid })}?budget=1#custom-budget-research`}
@@ -718,12 +699,12 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             {/* Step 2. Not merely hidden on the budget screen — unmounted, so
                 the strategy cards and their collateral polling do not run
                 behind a decision that has not been made yet. */}
-            {(!budgetStage || isPolling || pollingError || !campaign.auto_generated_at) && (
+            {(!budgetStage || !strategiesReady || isPolling || pollingError || !campaign.auto_generated_at) && (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto">
-                    {isPolling && (
+                    {(isPolling || !strategiesReady) && !pollingError && (
                         <StrategyGenerationLoader
-                            elapsedSeconds={elapsedSeconds}
+                            elapsedSeconds={isPolling ? elapsedSeconds : undefined}
                             campaignName={campaigns.name}
                         />
                     )}
@@ -827,7 +808,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                             ))}
                         </div>
                     ) : (
-                        !isPolling && (
+                        !isPolling && pollingError && (
                             <div className="text-center p-8 bg-mint-cream rounded-lg">
                                 <p className="text-gray-600">No strategies generated yet.</p>
                             </div>

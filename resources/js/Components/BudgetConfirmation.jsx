@@ -26,11 +26,20 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
     const [refreshError, setRefreshError] = useState(null);
     const [now, setNow] = useState(Date.now());
     const initial = marketResearch || campaign.search_delivery_state?.market_research || null;
+    const needsAuthoritativeResearch = initial?.current === undefined;
     const poll = usePolling(marketResearchStatusUrl, {
-        interval: 5000, enabled: Boolean(marketResearchStatusUrl) && isResearchPending(initial),
-        restartKey: initial?.request_id || campaign.uuid, until: (response) => !isResearchPending(response?.marketResearch),
+        // A newly watched strategy carries raw research metadata. Fetch its
+        // authoritative status even if it completed before the watch returned.
+        interval: 5000, enabled: Boolean(marketResearchStatusUrl) && (isResearchPending(initial) || needsAuthoritativeResearch),
+        restartKey: initial?.request_id || campaign.uuid,
+        until: (response) => Boolean(response?.marketResearch?.status)
+            && !['not_requested', 'queued', 'researching'].includes(response.marketResearch.status)
+            && !(needsAuthoritativeResearch && response.marketResearch.current === false && response.marketResearch.status !== 'unknown'),
     });
-    const research = latestMarketResearch(initial, poll.data?.marketResearch);
+    // Raw campaign metadata is not a verified status response and may still
+    // name the request from before generation. Let the status endpoint supply
+    // the current request rather than pinning the new form to that old ID.
+    const research = latestMarketResearch(needsAuthoritativeResearch ? null : initial, poll.data?.marketResearch) || initial;
     const options = researchBudgetOptions(research);
     const matchingRequest = data.research_id === research?.request_id && data.research_fingerprint === research?.input_fingerprint;
     const option = matchingRequest ? options.find(candidate => candidate.id === data.budget_option_id) : null;
@@ -100,7 +109,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
             {(refreshError || poll.error) && <p role="alert" className="mt-3 text-sm text-red-700">{refreshError || 'The latest research status could not be checked. Refresh research before approving.'}</p>}
             <form id="custom-budget-research" onSubmit={submit} className="mt-5 scroll-mt-6 border-t border-gray-200 pt-5">
                 <h4 className="text-base font-semibold text-gray-900">Research a custom daily budget</h4>
-                <p id="custom-budget-research-help" className="mt-1 mb-3 text-sm text-gray-600">Try an amount such as {currency} 50/day to see indicative traffic and spend estimates. Researching does not save your budget or activate ads.</p>
+                <p id="custom-budget-research-help" className="mt-1 mb-3 text-sm text-gray-600">Try a higher or lower amount, such as {currency} 50/day, to compare indicative traffic and spend estimates. Your starting amount does not limit your research. Researching does not save your budget or activate ads.</p>
                 <p className="mb-3 text-sm text-gray-600">Saved daily budget: <strong>{currency} {Number(campaign.daily_budget || 0).toFixed(2)}</strong>. Your saved spend stays unchanged until you approve the researched plan.</p>
                 {fresh && options.length === 0 && <div className="mb-4 flex flex-wrap items-center gap-3"><p className="text-sm text-gray-700">Researched daily budget: <strong>{currency} {quote}</strong></p><button type="button" onClick={useQuote} disabled={processing || refreshing} className="rounded-md border border-brand-dark px-3 py-2 text-sm font-medium text-brand-dark">Use researched budget</button></div>}
                 <label htmlFor="daily_budget" className="block text-sm font-medium text-gray-700">Daily budget ({currency})</label>

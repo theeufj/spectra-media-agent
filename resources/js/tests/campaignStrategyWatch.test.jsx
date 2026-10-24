@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act } from '@testing-library/react';
-import { useJobWatch } from '@/hooks/useJobWatch';
+import { useCampaignStrategyWatch } from '@/hooks/useCampaignStrategyWatch';
 
 vi.mock('@/utils/http', () => ({ fetchJson: vi.fn() }));
 import { fetchJson } from '@/utils/http';
@@ -25,13 +25,7 @@ import { fetchJson } from '@/utils/http';
  */
 
 function Harness({ enabled }) {
-    const { phase, data } = useJobWatch('/api/campaigns/36', {
-        enabled,
-        interval: 10000,
-        timeoutMs: 5 * 60 * 1000,
-        isFailed: (d) => Boolean(d?.strategy_generation_error),
-        isDone: (d) => Boolean(d?.strategies?.length) && !d?.is_generating_strategies,
-    });
+    const { phase, data } = useCampaignStrategyWatch('/api/campaigns/36', enabled);
 
     return (
         <>
@@ -85,6 +79,20 @@ describe('campaign strategy watch', () => {
         await act(() => vi.advanceTimersByTimeAsync(60000));
 
         expect(fetchJson.mock.calls.length).toBe(settled);
+    });
+
+    it('receives a slow strategy after five minutes without requiring a reload', async () => {
+        fetchJson.mockResolvedValue(GENERATING);
+        const { getByTestId } = render(<Harness enabled />);
+
+        await act(() => vi.advanceTimersByTimeAsync(6 * 60 * 1000));
+        expect(getByTestId('phase').textContent).toBe('watching');
+
+        fetchJson.mockResolvedValue(READY);
+        await act(() => vi.advanceTimersByTimeAsync(10000));
+
+        expect(getByTestId('phase').textContent).toBe('done');
+        expect(getByTestId('strategies').textContent).toBe('1');
     });
 
     it('says it is disconnected when the endpoint stops answering', async () => {

@@ -198,9 +198,11 @@ class SearchKeywordBuilder
             }
             AgentActivity::record('deployment', $blocked ? 'search_reach_preflight_blocked' : 'search_reach_preflight_checked',
                 $blocked ? 'Search launch held: '.($firstGateIssue['message'] ?? 'Keyword reach could not be verified.')
-                    : ($gate['status'] === 'estimated_with_limitations'
+                    : (($gate['metadata']['meets_traffic_threshold'] ?? null) === false
+                        ? 'Limited Search traffic is estimated at the approved settings. The customer’s selected budget was retained; actual traffic and purchases are not guaranteed.'
+                        : ($gate['status'] === 'estimated_with_limitations'
                         ? 'Useful Search traffic is estimated within the staged spending settings. Retained negative keywords are not modeled; actual traffic may be lower.'
-                        : 'Verified useful Search keyword reach within the staged bid, targeting and approved spending limits.'),
+                        : 'Verified useful Search keyword reach within the staged bid, targeting and approved spending limits.')),
                 $campaign->customer_id, $campaign->id, ['assessment' => $assessment, 'gate' => $gate]);
             foreach (\App\Services\Agents\AgentIssue::list($gate['issues']) as $gateIssue) {
                 $result->addError($gateIssue->code, $gateIssue->message.' No serving ads were added.');

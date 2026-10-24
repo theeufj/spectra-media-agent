@@ -54,6 +54,7 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $provider->method('fingerprint')->willReturnCallback(fn (Campaign $campaign, ?int $budget = null) => $this->fingerprint($campaign, $budget));
         $provider->method('approvalFingerprint')->willReturnCallback(fn (Campaign $campaign) => $this->fingerprint($campaign));
         $provider->method('research')->willReturnCallback(fn (Campaign $campaign, ?int $budget = null) => [...$this->proposal,
+            'requested_daily_budget_micros' => $budget,
             'fingerprint' => $this->fingerprint($campaign, $budget), 'checked_at' => now()->toIso8601String()]);
         $this->workflow = new CampaignMarketResearchWorkflow($provider);
         $this->app->instance(CampaignMarketResearchWorkflow::class, $this->workflow);
@@ -106,13 +107,22 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertTrue($this->workflow->status($this->campaign)['approved']);
     }
 
-    private function researchedOptions(array $bids = [2_000_000, 2_000_000, 2_000_000]): array
+    private function researchedOptions(array $bids = [2_000_000, 2_000_000, 2_000_000], ?int $reference = null): array
     {
         $this->customer->update(['currency_code' => 'AUD']);
-        $status = $this->researched();
+        if ($reference !== null) {
+            $queued = $this->workflow->request($this->campaign, dailyCents: intdiv($reference, 10_000));
+            $this->workflow->run($this->campaign, $queued['request_id']);
+            $status = $this->workflow->status($this->campaign);
+        } else {
+            $status = $this->researched();
+        }
         $base = $status['result'];
+        if ($reference !== null) {
+            $base['requested_daily_budget_micros'] = $base['reference_daily_budget_micros'] = $reference;
+        }
         $options = [];
-        foreach ([5_000_000, 10_000_000, 15_000_000] as $index => $budget) {
+        foreach ($reference === null ? [5_000_000, 10_000_000, 15_000_000] : [intdiv($reference, 2), $reference, $reference * 2] as $index => $budget) {
             $row = $base['strategies'][0];
             $bid = $bids[$index];
             $row['cpc_bid_micros'] = $bid;
@@ -133,13 +143,72 @@ class CampaignMarketResearchWorkflowTest extends TestCase
             $options[] = ['id' => hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)), 'daily_budget_micros' => $budget,
                 'cpc_bid_micros' => $bid, 'forecast' => $forecast, 'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'proposal' => $proposal];
         }
-        $result = [...$options[0]['proposal'], 'budget_options' => $options,
-            'default_budget_option_id' => $options[0]['id'], 'selected_budget_option_id' => $options[0]['id']];
+        $default = $reference === null ? $options[0] : $options[1];
+        $result = [...$default['proposal'], 'budget_options' => $options,
+            'default_budget_option_id' => $default['id'], 'selected_budget_option_id' => $default['id']];
         $stored = $this->campaign->fresh()->search_delivery_state;
         $stored['market_research']['result'] = $result;
         $this->campaign->update(['search_delivery_state' => $stored]);
 
         return $this->workflow->status($this->campaign);
+    }
+
+    public function test_a_custom_reference_does_not_prevent_an_explicitly_chosen_higher_comparison_or_approve_it_implicitly(): void
+    {
+        $status = $this->researchedOptions(reference: 50_000_000);
+        $options = $status['result']['budget_options'];
+        $this->assertSame($options[1]['id'], $status['result']['default_budget_option_id']);
+        $this->assertEquals('5.00', $this->campaign->fresh()->daily_budget);
+        $this->assertNull($this->campaign->fresh()->approved_daily_budget);
+        $body = ['daily_budget' => '100.00', 'research_id' => $status['request_id'],
+            'research_fingerprint' => $status['input_fingerprint'], 'accept_proposal' => true];
+        $this->post(route('campaigns.confirm-budget', $this->campaign), [...$body, 'budget_option_id' => $options[1]['id']])
+            ->assertSessionHasErrors('daily_budget');
+        $this->assertNull($this->campaign->fresh()->budget_confirmed_at);
+        $this->post(route('campaigns.confirm-budget', $this->campaign), [...$body, 'budget_option_id' => $options[2]['id']])
+            ->assertSessionHasNoErrors();
+        $this->assertEquals('100.00', $this->campaign->fresh()->approved_daily_budget);
+        $this->assertEquals('100.00', $this->strategy->fresh()->daily_budget);
+        $this->assertSame($options[2]['id'], $this->workflow->status($this->campaign)['result']['selected_budget_option_id']);
+    }
+
+    public function test_positive_fractional_low_reach_is_approvable_but_zero_and_unavailable_proof_are_not(): void
+    {
+        $status = $this->researchedOptions();
+        $state = $this->campaign->fresh()->search_delivery_state;
+        $result = $state['market_research']['result'];
+        $option = $result['budget_options'][0];
+        $option['forecast']['clicks'] = 0.25;
+        $option['forecast']['cost_micros'] = 100_000;
+        $option['proposal']['strategies'][0]['forecast'] = $option['forecast'];
+        $option['proposal']['strategies'][0]['traffic_status'] = 'limited';
+        $option['proposal']['strategies'][0]['meets_traffic_threshold'] = false;
+        $option['id'] = hash('sha256', json_encode($option['proposal'], JSON_THROW_ON_ERROR));
+        $state['market_research']['result'] = [...$option['proposal'], 'budget_options' => [$option],
+            'default_budget_option_id' => null, 'selected_budget_option_id' => null, 'requires_explicit_option_selection' => true];
+        $this->campaign->update(['search_delivery_state' => $state]);
+        $body = ['daily_budget' => '5.00', 'research_id' => $status['request_id'],
+            'research_fingerprint' => $status['input_fingerprint'], 'accept_proposal' => true];
+        $this->post(route('campaigns.confirm-budget', $this->campaign), $body)->assertSessionHasErrors('daily_budget');
+        foreach ([0, null] as $invalidClicks) {
+            $invalid = $option;
+            $invalid['forecast']['clicks'] = $invalidClicks;
+            $invalid['proposal']['strategies'][0]['forecast'] = $invalid['forecast'];
+            $invalid['id'] = hash('sha256', json_encode($invalid['proposal'], JSON_THROW_ON_ERROR));
+            $bad = $state;
+            $bad['market_research']['result']['budget_options'] = [$invalid];
+            $this->campaign->update(['search_delivery_state' => $bad]);
+            $this->post(route('campaigns.confirm-budget', $this->campaign), [...$body, 'budget_option_id' => $invalid['id']])
+                ->assertSessionHasErrors('daily_budget');
+            $this->assertNull($this->campaign->fresh()->approved_daily_budget);
+        }
+        $this->campaign->update(['search_delivery_state' => $state]);
+        $this->post(route('campaigns.confirm-budget', $this->campaign), [...$body, 'budget_option_id' => $option['id']])
+            ->assertSessionHasNoErrors();
+        $saved = $this->workflow->status($this->campaign);
+        $this->assertTrue($saved['approved']);
+        $this->assertSame(0.25, $saved['result']['strategies'][0]['forecast']['clicks']);
+        $this->assertSame('limited', $saved['result']['strategies'][0]['traffic_status']);
     }
 
     public function test_approval_adopts_only_the_selected_budget_option_and_persists_its_actual_forecast(): void
@@ -180,7 +249,7 @@ class CampaignMarketResearchWorkflowTest extends TestCase
     public static function invalidBudgetOptions(): array
     {
         return array_map(fn ($case) => [$case], ['unknown_id', 'wrong_amount', 'expired', 'wrong_request', 'changed_inputs',
-            'failed_forecast', 'insufficient_clicks', 'missing_cost', 'overspend', 'different_keywords', 'different_keyword_bid', 'past_dates', 'stale_forecast',
+            'failed_forecast', 'zero_clicks', 'missing_cost', 'overspend', 'different_keywords', 'different_keyword_bid', 'past_dates', 'stale_forecast',
             'live_review', 'platform_footprint', 'custom_budget_mismatch', 'different_proposed_selection', 'option_over_owner_cap']);
     }
 
@@ -212,7 +281,7 @@ class CampaignMarketResearchWorkflowTest extends TestCase
             $forecast = $option['forecast'];
             match ($case) {
                 'failed_forecast' => $forecast['success'] = false,
-                'insufficient_clicks' => $forecast['clicks'] = 29,
+                'zero_clicks' => $forecast['clicks'] = 0,
                 'missing_cost' => $forecast['cost_micros'] = null,
                 'overspend' => $forecast['cost_micros'] = 300_000_001,
                 'different_keywords' => $forecast['context']['keywords'][0]['text'] = 'unresearched traffic',
@@ -375,8 +444,8 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $before = [array_intersect_key($this->campaign->fresh()->getAttributes(), $fields),
             $this->strategy->fresh()->getAttributes()];
         $planner = $this->createMock(\App\Services\GoogleAds\InitialSearchBidPlanner::class);
-        $planner->expects($this->once())->method('estimate')->willReturnCallback(function ($campaign, $keywords, $context, $budget, $cap): array {
-            $this->assertSame(50_000_000, $budget);
+        $planner->expects($this->exactly(3))->method('estimate')->willReturnCallback(function ($campaign, $keywords, $context, $budget, $cap): array {
+            $this->assertContains($budget, [25_000_000, 50_000_000, 100_000_000]);
             $this->assertSame(3_000_000, $cap);
 
             return ['ready' => true, 'cpc_bid_micros' => 2_000_000, 'caveats' => [], 'evidence' => ['historical' => [],
@@ -421,7 +490,7 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertSame(50_000_000, $status['result']['strategies'][0]['forecast']['context']['daily_budget_micros']);
         $this->assertFalse($status['approvable']);
         $this->assertTrue($status['result']['strategies'][0]['requires_live_review']);
-        $this->assertCount(1, $status['result']['budget_options']);
+        $this->assertCount(3, $status['result']['budget_options']);
         $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '50.00',
             'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
             'budget_option_id' => $status['result']['budget_options'][0]['id'], 'accept_proposal' => true])->assertSessionHasErrors('daily_budget');

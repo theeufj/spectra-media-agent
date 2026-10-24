@@ -210,11 +210,13 @@ class InitialSearchBidPlanner
                 $clicks = $forecast['clicks'] ?? null;
                 $cost = $forecast['cost_micros'] ?? null;
                 $credible = ($forecast['success'] ?? false) && is_numeric($clicks) && is_finite((float) $clicks)
-                    && $clicks >= 1 && $clicks * 30 >= $minimumClicks * $context['forecast_period_days']
+                    && $clicks > 0
                     && is_int($cost) && $cost > 0 && $cost <= $budget * $context['forecast_period_days']
                     && $this->matchesForecast($forecast, $proposed, $candidateContext);
 
-                return ['cpc_bid_micros' => $bid, 'credible_reach' => $credible, 'forecast' => $forecast];
+                return ['cpc_bid_micros' => $bid, 'credible_reach' => $credible,
+                    'meets_traffic_threshold' => $credible && $clicks * 30 >= $minimumClicks * $context['forecast_period_days'],
+                    'forecast' => $forecast];
             };
             foreach ($bids as $bid) {
                 $evidence['candidates'][] = $observe($bid);
@@ -249,8 +251,11 @@ class InitialSearchBidPlanner
             $evidence['selection_policy'] = 'cost_efficient_reach';
             $chosen = self::bestForecast(array_values(array_filter($evidence['candidates'], fn ($candidate) => $candidate['credible_reach'])));
             if ($chosen !== null) {
-                $forecast = $chosen['forecast'];
+                $traffic = self::trafficEvidence($chosen['forecast']);
+                $forecast = [...$chosen['forecast'], ...$traffic];
                 $evidence['forecast'] = $forecast;
+                $evidence['selection_policy'] = $traffic['meets_traffic_threshold'] ? 'cost_efficient_reach' : 'limited_reach_comparison';
+                $evidence += $traffic;
                 $caveats = array_values(array_unique([...(array) ($forecast['caveats'] ?? []),
                     'Historical bids and forecast clicks are estimates, not minimum bids or guaranteed delivery.',
                     'This initial bid proposal does not approve activation, billing, tracking or Google policy readiness.',
@@ -258,14 +263,14 @@ class InitialSearchBidPlanner
                     ...(count($context['language_constants']) > 1 ? ['Historical keyword costs do not model the complete multi-language selection; the reach forecast retains every selected language.'] : []),
                 ]));
 
-                return ['ready' => true, 'status' => 'estimated', 'cpc_bid_micros' => $chosen['cpc_bid_micros'],
-                    'reason' => $exactBidMicros === null
+                return ['ready' => true, 'status' => 'estimated', ...$traffic, 'cpc_bid_micros' => $chosen['cpc_bid_micros'],
+                    'reason' => ! $traffic['meets_traffic_threshold'] ? $traffic['traffic_warning'] : ($exactBidMicros === null
                         ? 'The tested bid favours lower estimated cost per click while meeting the traffic threshold. Similar click costs favour more useful traffic; this does not establish profitable purchases.'
-                        : 'Fresh forecast reach at the exact researched bid and this proposed daily budget.',
+                        : 'Fresh forecast reach at the exact researched bid and this proposed daily budget.'),
                     'issues' => [], 'caveats' => $caveats, 'evidence' => $evidence, 'activation_ready' => false, 'auto_repair_safe' => false];
             }
 
-            return $this->unavailable('No tested keyword-cost estimate demonstrated sufficient reach within the approved spending limits.', $evidence);
+            return $this->unavailable('No positive traffic forecast could be verified within the spending limits. No fallback bid was chosen.', $evidence);
         } catch (\Throwable $e) {
             report($e);
 
@@ -279,6 +284,18 @@ class InitialSearchBidPlanner
         if ($candidates === []) {
             return null;
         }
+        $sufficient = array_values(array_filter($candidates, fn ($candidate) => $candidate['meets_traffic_threshold'] ?? true));
+        if ($sufficient === []) {
+            // A low-volume estimate remains a customer choice. Preserve the
+            // most researched reach, rather than selling a near-empty cheap click.
+            $maximum = max(array_column(array_column($candidates, 'forecast'), 'clicks'));
+            $nearBest = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecast']['clicks'] >= $maximum * 0.95));
+            usort($nearBest, fn ($a, $b) => [$a['forecast']['cost_micros'], $a['cpc_bid_micros'], -$a['forecast']['clicks']]
+                <=> [$b['forecast']['cost_micros'], $b['cpc_bid_micros'], -$b['forecast']['clicks']]);
+
+            return $nearBest[0];
+        }
+        $candidates = $sufficient;
         // A daily budget is a ceiling, not a target to consume. Compare actual
         // forecast cost per click, never the maximum bid or rounded UI clicks.
         $averageCost = fn ($candidate) => $candidate['forecast']['cost_micros'] / $candidate['forecast']['clicks'];
@@ -292,6 +309,25 @@ class InitialSearchBidPlanner
             <=> [$b['forecast']['cost_micros'], $b['cpc_bid_micros'], -$b['forecast']['clicks']]);
 
         return $nearBest[0];
+    }
+
+    /** Traffic adequacy is advisory; it never grants spending or activation permission. */
+    public static function trafficEvidence(array $forecast): array
+    {
+        $days = $forecast['period_days'] ?? null;
+        $clicks = $forecast['clicks'] ?? null;
+        if (! is_int($days) || $days <= 0 || ! is_numeric($clicks) || ! is_finite((float) $clicks) || $clicks <= 0) {
+            return ['traffic_status' => 'unavailable', 'meets_traffic_threshold' => false,
+                'forecast_clicks_per_30_days' => null, 'traffic_warning' => null];
+        }
+        $monthly = $clicks * 30 / $days;
+        $minimum = max(1, (int) config('optimization.search_delivery.min_forecast_clicks', 30));
+        $meets = $monthly >= $minimum;
+
+        return ['traffic_status' => $meets ? 'threshold_met' : 'limited', 'meets_traffic_threshold' => $meets,
+            'forecast_clicks_per_30_days' => $monthly,
+            'traffic_warning' => $meets ? null : 'Limited forecast traffic: '.rtrim(rtrim(number_format((float) $clicks, 4, '.', ''), '0'), '.').
+                " estimated clicks over {$days} days, below the {$minimum}-click monthly planning guideline. The daily budget may not be fully spent; purchases are not guaranteed."];
     }
 
     private function context(Campaign $campaign, array $snapshot, int $budget): array

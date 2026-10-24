@@ -63,7 +63,55 @@ class CampaignMarketResearchTest extends TestCase
         $this->assertSame('expensive original', $campaign->keywords[0]['text']);
     }
 
-    public function test_higher_budget_proposals_are_cost_derived_bounded_and_choose_the_lowest_tested_viable_amount(): void
+    public function test_low_reach_comparisons_keep_the_reference_and_research_lower_and_higher_amounts_without_approving_spend(): void
+    {
+        $campaign = $this->campaign();
+        $before = [$campaign->getAttributes(), $campaign->strategies[0]->getAttributes()];
+        $calls = [];
+        $service = $this->service($this->planner(function ($keywords, $budget) use (&$calls) {
+            $calls[] = $budget;
+            $result = $this->estimate(true, $budget);
+            $result['evidence']['forecast']['period_days'] = 6;
+            $result['evidence']['forecast']['clicks'] = match ($budget) {
+                25_000_000 => 1.2, 50_000_000 => 3.9, default => 5.8,
+            };
+
+            return $result;
+        }));
+        $result = $service->research($campaign, 50_000_000);
+        $this->assertSame('ready', $result['status']);
+        $this->assertSame([50_000_000, 25_000_000, 100_000_000], $calls);
+        $this->assertSame([25_000_000, 50_000_000, 100_000_000], array_column($result['budget_options'], 'daily_budget_micros'));
+        $this->assertSame(50_000_000, $result['reference_daily_budget_micros']);
+        $this->assertSame(50_000_000, $result['proposed_daily_budget_micros']);
+        $this->assertSame(50_000_000, collect($result['budget_options'])->firstWhere('id', $result['default_budget_option_id'])['daily_budget_micros']);
+        foreach ($result['budget_options'] as $option) {
+            $this->assertSame('limited', $option['traffic_status']);
+            $this->assertFalse($option['meets_traffic_threshold']);
+            $this->assertSame($option['forecast']['clicks'] * 5, $option['forecast_clicks_per_30_days']);
+            $this->assertStringContainsString('below', $option['proposal']['strategies'][0]['traffic_warning']);
+            $this->assertSame('limited_reach_comparison', $option['proposal']['strategies'][0]['evidence']['selection_policy']);
+        }
+        $this->assertSame($before, [$campaign->getAttributes(), $campaign->strategies[0]->getAttributes()]);
+    }
+
+    public function test_limited_keyword_sets_compete_for_reach_without_calling_tiny_cheap_traffic_viable(): void
+    {
+        $service = $this->service($this->planner(function ($keywords, $budget) {
+            $result = $this->estimate(true, $budget);
+            $alternative = $keywords[0]['text'] === 'relevant alternative';
+            $result['evidence']['forecast'] = [...$result['evidence']['forecast'], 'period_days' => 6,
+                'clicks' => $alternative ? 0.29 : 3.92, 'cost_micros' => $alternative ? 1_000_000 : 114_000_000];
+
+            return $result;
+        }), true);
+        $result = $service->research($this->campaign(), 50_000_000);
+        $this->assertSame('expensive original', $result['strategies'][0]['proposed_keywords'][0]['text']);
+        $this->assertSame(3.92, $result['strategies'][0]['forecast']['clicks']);
+        $this->assertSame('limited', $result['strategies'][0]['traffic_status']);
+    }
+
+    public function test_budget_comparisons_are_anchored_to_the_reference_without_historical_price_jumps(): void
     {
         $seen = [];
         $planner = $this->planner(function ($keywords, $budget) use (&$seen) {
@@ -74,9 +122,13 @@ class CampaignMarketResearchTest extends TestCase
 
         $result = $this->service($planner)->research($this->campaign());
 
-        $this->assertSame([5_000_000, 8_000_000], array_slice($seen, 0, 2));
+        $this->assertSame([5_000_000, 10_000_000, 15_000_000], $seen);
+        $this->assertSame([5_000_000, 10_000_000, 15_000_000], array_column($result['budget_comparisons'], 'daily_budget_micros'));
+        $this->assertNull($result['default_budget_option_id']);
+        $this->assertNull($result['selected_budget_option_id']);
+        $this->assertTrue($result['requires_explicit_option_selection']);
         $this->assertSame('ready', $result['status']);
-        $this->assertSame(8_000_000, $result['proposed_daily_budget_micros']);
+        $this->assertSame(10_000_000, $result['proposed_daily_budget_micros']);
         $this->assertSame(5_000_000, $result['strategies'][0]['current_budget_micros']);
     }
 
@@ -260,7 +312,7 @@ class CampaignMarketResearchTest extends TestCase
             $this->assertSame('ready', $result['status']);
             $this->assertSame(1, $service->recoveryCalls);
             $this->assertSame([true, 5_000_000], $seen[2]);
-            $this->assertSame($recoveryWorks ? 5_000_000 : 8_000_000, $result['proposed_daily_budget_micros']);
+            $this->assertSame($recoveryWorks ? 5_000_000 : 10_000_000, $result['proposed_daily_budget_micros']);
             $this->assertSame($recoveryWorks ? 'ordinary core service' : 'expensive original', $result['strategies'][0]['proposed_keywords'][0]['text']);
         }
     }
@@ -300,7 +352,7 @@ class CampaignMarketResearchTest extends TestCase
         $this->assertEquals('5.00', $campaign->daily_budget);
     }
 
-    public function test_custom_budget_quotes_are_exact_and_existing_campaign_options_remain_review_only(): void
+    public function test_custom_reference_is_included_with_comparisons_and_existing_campaign_options_remain_review_only(): void
     {
         foreach ([false, true] as $footprint) {
             $campaign = $this->campaign();
@@ -310,7 +362,7 @@ class CampaignMarketResearchTest extends TestCase
             $planner = $this->planner(fn ($keywords, $budget) => $this->estimate(true, $budget));
             $planner->expects($this->never())->method('forecastAtBid');
             $result = $this->service($planner)->research($campaign, 5_000_000);
-            $this->assertCount(1, $result['budget_options']);
+            $this->assertCount(3, $result['budget_options']);
             $this->assertSame(5_000_000, $result['budget_options'][0]['daily_budget_micros']);
             $this->assertSame($footprint ? 'needs_review' : 'ready', $result['budget_options'][0]['proposal']['status']);
             $this->assertSame($footprint ? 'needs_review' : 'ready', $result['status']);
@@ -371,7 +423,7 @@ class CampaignMarketResearchTest extends TestCase
         ];
         $result = $service->research($campaign, 5_000_000);
         $this->assertSame(['selected', 'combined', 'category', 'specific'], array_column($result['strategies'][0]['evidence']['tested_sets'], 'kind'));
-        $this->assertSame([250_000, 250_000, 250_000, 250_000], $caps);
+        $this->assertSame(array_fill(0, 6, 250_000), $caps);
         $this->assertSame('specific buyer term', $result['strategies'][0]['proposed_keywords'][0]['text']);
         $this->assertSame(250_000, $result['strategies'][0]['proposed_keywords'][0]['cpc_bid_micros']);
         $this->assertSame(90, $result['strategies'][0]['forecast']['clicks']);
@@ -411,7 +463,7 @@ class CampaignMarketResearchTest extends TestCase
         $result = $service->research($campaign, 5_000_000);
         $row = $result['strategies'][0];
         $this->assertSame(['selected', 'combined', 'category', 'specific', 'cost_efficient'], array_column($row['evidence']['tested_sets'], 'kind'));
-        $this->assertCount(5, $calls);
+        $this->assertCount(7, $calls);
         $this->assertSame([4_000_000], array_values(array_unique(array_column($calls, 1))));
         $this->assertSame('relevant setup service', $row['proposed_keywords'][0]['text']);
         $this->assertSame(4_000_000, $row['proposed_keywords'][0]['cpc_bid_micros']);
@@ -480,7 +532,7 @@ class CampaignMarketResearchTest extends TestCase
         (new SearchMarketInputs($campaign->customer))->forStrategy($campaign, $campaign->strategies[0]);
     }
 
-    public function test_custom_budget_is_a_hypothetical_quote_that_does_not_save_or_exceed_the_requested_total(): void
+    public function test_custom_budget_is_a_hypothetical_reference_that_does_not_save_or_approve_any_comparison(): void
     {
         $campaign = $this->campaign();
         $seen = [];
@@ -493,7 +545,8 @@ class CampaignMarketResearchTest extends TestCase
         $result = $service->research($campaign, 20_000_000);
 
         $this->assertSame('ready', $result['status']);
-        $this->assertSame([20_000_000], $seen);
+        $this->assertSame([20_000_000, 10_000_000, 40_000_000], $seen);
+        $this->assertSame(20_000_000, collect($result['budget_options'])->firstWhere('id', $result['default_budget_option_id'])['daily_budget_micros']);
         $this->assertSame(20_000_000, $result['proposed_daily_budget_micros']);
         $this->assertSame('5.00', $campaign->daily_budget);
         $this->assertSame('5.00', $campaign->strategies[0]->daily_budget);
@@ -536,15 +589,15 @@ class CampaignMarketResearchTest extends TestCase
             });
             $planner->expects($this->never())->method('forecastAtBid');
             $result = $this->service($planner)->research($campaign, 50_000_000);
-            $this->assertSame([50_000_000], $seen);
+            $this->assertSame([50_000_000, 25_000_000, 100_000_000], $seen);
             $this->assertSame(50_000_000, $result['requested_daily_budget_micros']);
             $this->assertSame(50_000_000, $result['proposed_daily_budget_micros']);
             $this->assertSame('needs_review', $result['status']);
             $this->assertSame('ready', $result['strategies'][0]['proposal_status']);
             $this->assertTrue($result['strategies'][0]['requires_live_review']);
             $this->assertSame('existing_campaign_research_only', $result['approval_scope']);
-            $this->assertCount(1, $result['budget_options']);
-            $this->assertSame(50_000_000, $result['budget_options'][0]['daily_budget_micros']);
+            $this->assertCount(3, $result['budget_options']);
+            $this->assertSame(50_000_000, collect($result['budget_options'])->firstWhere('id', $result['default_budget_option_id'])['daily_budget_micros']);
             $this->assertFalse($result['activation_ready']);
             $this->assertSame($before, [$campaign->getAttributes(), $strategy->getAttributes()]);
         }
@@ -630,7 +683,7 @@ class CampaignMarketResearchTest extends TestCase
     {
         return ['ready' => $ready, 'cpc_bid_micros' => 500_000, 'caveats' => [], 'evidence' => [
             'historical' => ['keywords' => ['expensive original' => ['low_top_of_page_bid_micros' => 8_000_000, 'high_top_of_page_bid_micros' => 12_000_000]]],
-            'forecast' => $ready ? ['success' => true, 'clicks' => 40, 'cost_micros' => $budget,
+            'forecast' => $ready ? ['success' => true, 'clicks' => 40, 'cost_micros' => $budget, 'period_days' => 30,
                 'forecast_period' => ['from' => now()->addDay()->toDateString(), 'through' => now()->addDays(30)->toDateString()]] : null,
         ]];
     }

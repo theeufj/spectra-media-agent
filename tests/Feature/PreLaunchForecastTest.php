@@ -168,7 +168,7 @@ class PreLaunchForecastTest extends TestCase
         [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 0, 'impressions' => 0]);
         $this->assertFalse($allowed);
         $this->assertFalse($result->success);
-        $this->assertContains('search_reach_below_useful_threshold', array_column($result->errors, 'code'));
+        $this->assertContains('search_reach_no_forecast_traffic', array_column($result->errors, 'code'));
         $this->assertSame('needs_review', $campaign->search_delivery_state['status']);
         $this->assertSame('456', $campaign->google_ads_campaign_id, 'The inspected resource must not overwrite the campaign binding.');
     }
@@ -250,13 +250,23 @@ class PreLaunchForecastTest extends TestCase
         $this->assertSame('estimated_with_limitations', $activation->metadata['search_reach_activation_check']['status']);
     }
 
-    public function test_positive_but_insufficient_forecast_is_blocked_and_recorded(): void
+    public function test_positive_low_forecast_is_allowed_with_its_advisory_warning_and_recorded_estimate(): void
     {
         [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 3.63, 'impressions' => 30]);
-        $this->assertFalse($allowed);
-        $this->assertContains('search_reach_below_useful_threshold', array_column($result->errors, 'code'));
+        $this->assertTrue($allowed, $result->errorMessage());
+        $this->assertTrue($result->success);
+        $this->assertSame([], $result->errors);
+        $this->assertContains('search_reach_below_useful_threshold', array_column($result->warnings, 'code'));
         $this->assertEquals(3.63, $result->metadata['search_reach_preflight']['gate']['metadata']['forecast_clicks_per_30_days']);
-        $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_reach_preflight_blocked')->count());
+        $this->assertFalse($result->metadata['search_reach_preflight']['gate']['metadata']['meets_traffic_threshold']);
+        $this->assertSame('limited', $result->metadata['search_reach_preflight']['gate']['metadata']['traffic_status']);
+        $this->assertSame('collecting_evidence', $campaign->search_delivery_state['status']);
+        $this->assertNull($campaign->search_delivery_state['blocked_reason']);
+        $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_reach_preflight_checked')->count());
+        $activity = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_reach_preflight_checked')->firstOrFail();
+        $this->assertStringContainsString('Limited Search traffic is estimated', $activity->description);
+        $this->assertStringNotContainsString('Verified useful', $activity->description);
+        $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_reach_preflight_blocked')->count());
     }
 
     public function test_unknown_keyword_demand_never_becomes_zero_or_launch_authorization(): void
@@ -373,12 +383,12 @@ class PreLaunchForecastTest extends TestCase
 
     public function test_demand_warnings_do_not_erase_the_blocking_gate_reason_or_fail_activity_recording(): void
     {
-        [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 3, 'impressions' => 30],
+        [$allowed, $result, $campaign] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 0, 'impressions' => 30],
             assessmentOverrides: ['issues' => [['code' => 'limited_keyword_demand', 'message' => 'Current terms have low measured demand.']]]);
         $this->assertFalse($allowed);
         $this->assertSame('limited_keyword_demand', $result->warnings[0]->code);
-        $this->assertSame('search_reach_below_useful_threshold', $result->errors[0]->code);
-        $this->assertSame('search_reach_below_useful_threshold', $campaign->search_delivery_state['blocked_reason']);
+        $this->assertSame('search_reach_no_forecast_traffic', $result->errors[0]->code);
+        $this->assertSame('search_reach_no_forecast_traffic', $campaign->search_delivery_state['blocked_reason']);
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'search_reach_preflight_blocked')->count());
     }
 

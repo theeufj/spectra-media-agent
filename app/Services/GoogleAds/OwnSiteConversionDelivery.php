@@ -10,7 +10,7 @@ class OwnSiteConversionDelivery
     public function summary(int $days = 30): array
     {
         $summary = [];
-        foreach (['signup', 'paid_subscription'] as $event) {
+        foreach (['signup', 'paid_subscription', 'paid_setup'] as $event) {
             $counts = ['registrations_or_payments' => 0, 'provider_accepted' => 0, 'processed' => 0,
                 'processed_with_warnings' => 0, 'processing' => 0, 'processing_failed' => 0, 'processing_unknown' => 0, 'legacy_unverified' => 0,
                 'upload_failed' => 0, 'awaiting_upload' => 0, 'no_click_identifier' => 0];

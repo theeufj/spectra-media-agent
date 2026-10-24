@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RecordSiteGoogleConversion;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Plan;
@@ -11,6 +12,7 @@ use App\Models\Strategy;
 use App\Models\User;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
+use App\Services\GoogleAds\DataManagerService;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\WebsiteConversionActions;
 use App\Services\Onboarding\SetupConversionGoal;
@@ -23,6 +25,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class OwnSitePurchaseTrackingTest extends TestCase
@@ -149,6 +152,131 @@ class OwnSitePurchaseTrackingTest extends TestCase
         $this->signedCheckout($session)->assertSuccessful();
         $this->assertSame(1, SpectraConversionEvent::where('event', 'paid_setup')->count());
         $this->assertCount(1, $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+    }
+
+    public function test_new_google_attributed_setup_purchase_uses_one_pinned_canonical_server_destination_and_preserves_native_binding(): void
+    {
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/789');
+        $binding = $this->install();
+        $this->owner->update(['wbraid' => 'fixture-braid']);
+        $this->signedCheckout($this->checkoutSession())->assertSuccessful();
+        $this->signedCheckout($this->checkoutSession())->assertSuccessful();
+        $receipt = SpectraConversionEvent::where('event', 'paid_setup')->sole();
+        $this->assertSame('server_google', $receipt->mode);
+        $this->assertSame('customers/999/conversionActions/789', $receipt->google_conversion_resource);
+        $this->assertSame('999.00', $receipt->value);
+        $this->assertSame('USD', $receipt->currency);
+        $this->assertSame('paid_setup:cs_fixture', $receipt->deduplication_key);
+        $this->assertSame(['wbraid' => 'fixture-braid'], $receipt->ad_identifiers);
+        $this->assertSame($binding, Setting::get(OwnSitePurchaseTracking::SETTING));
+        $this->assertSame([], $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+        Queue::assertPushed(RecordSiteGoogleConversion::class);
+
+        // A later mapping change cannot retarget the recorded purchase.
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/111');
+        $dataManager = $this->createMock(DataManagerService::class);
+        $dataManager->expects($this->once())->method('ingestConversion')->willReturnCallback(function (...$arguments) use ($receipt): array {
+            $this->assertSame('999', $arguments[0]);
+            $this->assertSame('789', $arguments[1]);
+            $this->assertSame(['wbraid' => 'fixture-braid'], $arguments[2]);
+            $this->assertSame(999.0, $arguments[3]);
+            $this->assertSame('USD', $arguments[4]);
+            $this->assertSame($receipt->occurred_at->timestamp, $arguments[5]->getTimestamp());
+            $this->assertContains('paid_setup:cs_fixture', $arguments);
+
+            return ['success' => true, 'requestId' => 'paid-setup-receipt'];
+        });
+        $job = new RecordSiteGoogleConversion($this->owner, 'paid_setup', $receipt->occurred_at, $receipt->id);
+        $job->handle($dataManager);
+        $job->handle($dataManager);
+        $this->assertTrue($receipt->fresh()->uploaded_to_google);
+        $this->assertSame([], $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+    }
+
+    public function test_server_selected_setup_receipts_never_fall_back_to_browser_after_failure_or_wrong_account_mapping(): void
+    {
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/888/conversionActions/789');
+        $binding = $this->install();
+        $this->owner->update(['gclid' => 'fixture-click']);
+        $receipt = $this->service()->recordSetupPurchase($this->owner, $this->customer, $this->checkoutSession(), now()->timestamp);
+        $this->assertSame('server_google', $receipt->mode);
+        $this->assertNull($receipt->google_conversion_resource);
+        $this->assertNotEmpty($receipt->upload_error);
+        $dataManager = $this->createMock(DataManagerService::class);
+        $dataManager->expects($this->never())->method('ingestConversion');
+        try {
+            (new RecordSiteGoogleConversion($this->owner, 'paid_setup', $receipt->occurred_at, $receipt->id))->handle($dataManager);
+            $this->fail('An unverified canonical destination cannot receive a paid setup conversion.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('canonical', $e->getMessage());
+        }
+        $this->assertSame([], $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+        $this->assertSame($binding, Setting::get(OwnSitePurchaseTracking::SETTING));
+        $this->assertFalse($receipt->fresh()->uploaded_to_google);
+    }
+
+    public function test_replayed_legacy_native_receipt_is_not_rerouted_after_click_identifiers_become_available(): void
+    {
+        $this->install();
+        $receipt = $this->service()->recordSetupPurchase($this->owner, $this->customer, $this->checkoutSession(), now()->timestamp);
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/789');
+        $this->owner->update(['gclid' => 'new-click']);
+        $replayed = $this->service()->recordSetupPurchase($this->owner, $this->customer, $this->checkoutSession(), now()->timestamp);
+        $this->assertSame($receipt->id, $replayed->id);
+        $this->assertSame('verified_purchase', $replayed->mode);
+        $this->assertNull($replayed->google_conversion_resource);
+        $this->assertCount(1, $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+        Queue::assertNotPushed(RecordSiteGoogleConversion::class);
+    }
+
+    public function test_failed_canonical_setup_upload_retries_its_pinned_receipt_without_browser_fallback(): void
+    {
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/789');
+        $binding = $this->install();
+        $this->owner->update(['gclid' => 'fixture-click']);
+        $receipt = $this->service()->recordSetupPurchase($this->owner, $this->customer, $this->checkoutSession(), now()->timestamp);
+        $calls = 0;
+        $dataManager = $this->createMock(DataManagerService::class);
+        $dataManager->expects($this->exactly(2))->method('ingestConversion')->willReturnCallback(function (...$arguments) use (&$calls): array {
+            $this->assertSame('999', $arguments[0]);
+            $this->assertSame('789', $arguments[1]);
+            $this->assertContains('paid_setup:cs_fixture', $arguments);
+
+            return ++$calls === 1 ? ['success' => false, 'error' => 'Temporary provider failure']
+                : ['success' => true, 'requestId' => 'retry-setup-receipt'];
+        });
+        $job = new RecordSiteGoogleConversion($this->owner, 'paid_setup', $receipt->occurred_at, $receipt->id);
+        try {
+            $job->handle($dataManager);
+            $this->fail('A rejected upload must remain retryable.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Temporary provider failure', $e->getMessage());
+        }
+        $this->assertFalse($receipt->fresh()->uploaded_to_google);
+        $this->assertNotEmpty($receipt->fresh()->upload_error);
+        $this->assertSame([], $this->service()->forBrowser($this->owner, $this->trackingRequest())['pending']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/888/conversionActions/111');
+        $job->handle($dataManager);
+        $this->assertTrue($receipt->fresh()->uploaded_to_google);
+        $this->assertSame($binding, Setting::get(OwnSitePurchaseTracking::SETTING));
+    }
+
+    public function test_a_paid_setup_upload_cannot_invent_a_receipt_or_import_a_legacy_browser_purchase(): void
+    {
+        $dataManager = $this->createMock(DataManagerService::class);
+        $dataManager->expects($this->never())->method('ingestConversion');
+        foreach ([null, $this->service()->recordSetupPurchase($this->owner, $this->customer, $this->checkoutSession(), now()->timestamp)] as $receipt) {
+            try {
+                (new RecordSiteGoogleConversion($this->owner, 'paid_setup', $receipt?->occurred_at, $receipt?->id))->handle($dataManager);
+                $this->fail('A paid setup requires an existing server-selected Stripe receipt.');
+            } catch (\LogicException $e) {
+                $this->assertStringContainsString('receipt', $e->getMessage());
+            }
+        }
     }
 
     public function test_free_failed_setup_only_unrelated_or_mismatched_checkouts_never_become_purchases(): void

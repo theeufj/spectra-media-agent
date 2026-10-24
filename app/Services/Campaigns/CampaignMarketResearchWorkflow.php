@@ -136,11 +136,15 @@ class CampaignMarketResearchWorkflow
         if (! $acceptProposal || ! $requestId || ($status['request_id'] ?? null) !== $requestId
             || ! $fingerprint || ! hash_equals($status['input_fingerprint'] ?? '', $fingerprint)
             || ! ($status['approvable'] ?? false) || ($result['status'] ?? null) !== 'ready'
+            || ($result['requested_daily_budget_micros'] ?? null) !== ($status['requested_daily_budget_micros'] ?? null)
             || ($result['fingerprint'] ?? null) !== ($status['input_fingerprint'] ?? null)) {
             throw ValidationException::withMessages(['daily_budget' => 'Review the current agent research before approving its campaign proposal and daily budget.']);
         }
         $options = $result['budget_options'] ?? [];
         if ($options !== []) {
+            if (($result['requires_explicit_option_selection'] ?? false) && $budgetOptionId === null) {
+                throw ValidationException::withMessages(['daily_budget' => 'Choose a researched budget comparison before approving. No higher amount was selected automatically.']);
+            }
             $selectedId = $budgetOptionId ?? $result['default_budget_option_id'] ?? null;
             $option = collect($options)->first(fn ($option) => ($option['id'] ?? null) === $selectedId);
             $baseRow = $result['strategies'][0] ?? [];
@@ -153,8 +157,7 @@ class CampaignMarketResearchWorkflow
                 || $this->keywordSelection($optionRow['proposed_keywords'] ?? []) !== $this->keywordSelection($baseRow['proposed_keywords'] ?? [])
                 || ($optionRow['forecast']['forecast_period'] ?? null) !== ($baseRow['forecast']['forecast_period'] ?? null)
                 || ($optionRow['forecast']['period_days'] ?? null) !== ($baseRow['forecast']['period_days'] ?? null)
-                || ($option['currency_code'] ?? null) !== strtoupper((string) $campaign->customer->currency_code)
-                || (isset($result['requested_daily_budget_micros']) && $option['daily_budget_micros'] !== $result['requested_daily_budget_micros'])) {
+                || ($option['currency_code'] ?? null) !== strtoupper((string) $campaign->customer->currency_code)) {
                 throw ValidationException::withMessages(['daily_budget' => 'Choose a current, fully researched budget option before approving.']);
             }
             $result = [...$option['proposal'], 'budget_options' => $options,
@@ -294,8 +297,7 @@ class CampaignMarketResearchWorkflow
                 || ($proposal['proposed_daily_budget_micros'] ?? null) !== $budget || ($row['budget_micros'] ?? null) !== $budget
                 || ($row['cpc_bid_micros'] ?? null) !== $bid || ($row['bidding_strategy'] ?? null) !== 'MANUAL_CPC'
                 || ($row['forecast'] ?? null) !== $forecast || ($forecast['success'] ?? null) !== true || ($forecast['source'] ?? null) !== 'google_keyword_forecast'
-                || ! is_int($days) || $days < 1 || $days > 30 || ! is_numeric($clicks) || ! is_finite((float) $clicks) || $clicks < 1
-                || $clicks * 30 < max(1, (int) config('optimization.search_delivery.min_forecast_clicks', 30)) * $days
+                || ! is_int($days) || $days < 1 || $days > 30 || ! is_numeric($clicks) || ! is_finite((float) $clicks) || $clicks <= 0
                 || ! is_int($cost) || $cost <= 0 || $cost > $budget * $days
                 || ($context['daily_budget_micros'] ?? null) !== $budget || ($context['cpc_bid_ceiling_micros'] ?? null) !== $bid
                 || ($context['bidding_strategy'] ?? null) !== 'MANUAL_CPC'

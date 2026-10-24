@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\RecordSiteGoogleConversion;
 use App\Models\Customer;
 use App\Models\Setting;
 use App\Models\SpectraConversionEvent;
@@ -45,13 +46,27 @@ class OwnSitePurchaseTracking
             return null;
         }
 
-        return SpectraConversionEvent::firstOrCreate(['deduplication_key' => 'paid_setup:'.$session['id']], [
-            'event' => 'paid_setup', 'user_id' => $user->id, 'mode' => 'verified_purchase',
+        $identifiers = $user->googleAdIdentifiers();
+        $serverRoute = $identifiers !== null
+            && preg_match('/\A[A-Za-z0-9._~+\/=\-]{1,255}\z/D', reset($identifiers)) === 1;
+        $destination = $serverRoute ? RecordSiteGoogleConversion::canonicalPurchaseDestination() : null;
+        $event = SpectraConversionEvent::firstOrCreate(['deduplication_key' => 'paid_setup:'.$session['id']], [
+            'event' => 'paid_setup', 'user_id' => $user->id, 'mode' => $serverRoute ? 'server_google' : 'verified_purchase',
             'value' => intdiv($amount, 100).'.'.str_pad((string) ($amount % 100), 2, '0', STR_PAD_LEFT),
             'currency' => 'USD', 'occurred_at' => CarbonImmutable::createFromTimestampUTC($completedAt),
-            'ad_identifiers' => $user->googleAdIdentifiers(), 'gclid' => $user->googleClickId(),
-            'uploaded_to_google' => false,
+            'ad_identifiers' => $identifiers, 'gclid' => $user->googleClickId(),
+            'uploaded_to_google' => false, 'google_conversion_resource' => $destination,
+            'upload_error' => $serverRoute && ! $destination ? 'The canonical Purchase destination is unavailable or belongs to another Google account.' : null,
         ]);
+        // Destination ownership is fixed on creation. A webhook replay cannot
+        // reroute legacy browser receipts or send one purchase to both accounts.
+        // Native browser delivery only selects paid_setup.mode=verified_purchase,
+        // so queued or failed server deliveries cannot fall back to that tag.
+        if ($event->mode === 'server_google' && $event->ad_identifiers && ! $event->uploaded_to_google) {
+            RecordSiteGoogleConversion::dispatch($user, 'paid_setup', $event->occurred_at, $event->id)->afterCommit();
+        }
+
+        return $event;
     }
 
     /** Operator installation only. API calls are reads; no campaign or action is changed. */

@@ -53,6 +53,12 @@ const deliveryLabels = {
     other_platform: ['Other platform', 'gray'],
 };
 
+const deliveryEventLabels = {
+    signup: 'Registrations',
+    paid_subscription: 'First subscription payments',
+    paid_setup: 'One-time setup payments',
+};
+
 export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform, delivery }) {
     const provisioned = actions.filter(a => a.provisioned).length;
 
@@ -78,7 +84,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                 {Object.entries(delivery.events).map(([event, counts]) => (
                                     <div key={event} className="rounded border border-gray-200 p-4 text-sm">
-                                        <p className="font-medium text-gray-900">{event === 'signup' ? 'Registrations' : 'First subscription payments'}: {counts.registrations_or_payments}</p>
+                                        <p className="font-medium text-gray-900">{deliveryEventLabels[event] || event}: {counts.registrations_or_payments}</p>
                                         <p className="mt-2 text-gray-600">Processed: {counts.processed + counts.processed_with_warnings} · Awaiting processing: {counts.provider_accepted + counts.processing}</p>
                                         <p className="mt-1 text-gray-600">Failed: {counts.upload_failed + counts.processing_failed} · Unverified: {counts.legacy_unverified + counts.processing_unknown} · No click identifier: {counts.no_click_identifier}</p>
                                     </div>

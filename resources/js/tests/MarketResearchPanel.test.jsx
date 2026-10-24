@@ -176,7 +176,7 @@ describe('campaign market research', () => {
 
     it('explains efficient bid selection only when the current proposal has that evidence', () => {
         const research = withOptions();
-        const explanation = 'Bids favour lower estimated cost per click while meeting the traffic threshold.';
+        const explanation = 'Bids favour lower estimated cost per click for the forecast traffic. Estimates do not establish sales or profitability.';
         const view = render(<MarketResearchPanel research={research} currency="AUD" />);
         expect(view.queryByText(explanation)).toBeNull();
         research.result.strategies[0].evidence = { selection_policy: 'cost_efficient_reach' };
@@ -329,7 +329,7 @@ describe('campaign market research', () => {
         });
         const view = render(budget(research));
         expect(view.getByText('A researched recommendation needs review')).toBeInTheDocument();
-        expect(view.getByText(/found a recommendation with useful forecast traffic/)).toBeInTheDocument();
+        expect(view.getByText(/found a recommendation with a tested traffic estimate/)).toBeInTheDocument();
         expect(view.queryByText(/have not found a plan/)).toBeNull();
         expect(view.getByText('31.25')).toBeInTheDocument();
         expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(5);
@@ -346,8 +346,125 @@ describe('campaign market research', () => {
         });
         const view = render(<MarketResearchPanel research={research} currency="AUD" />);
         expect(view.getByText('The campaign plan needs review')).toBeInTheDocument();
-        expect(view.getByText(/have not found a plan with enough verified traffic/)).toBeInTheDocument();
+        expect(view.getByText(/could not verify a positive traffic estimate for every placement/)).toBeInTheDocument();
         expect(view.queryByText('A researched recommendation needs review')).toBeNull();
+    });
+
+    it('warns about limited positive traffic while allowing explicit choice below the starting budget without an extra acknowledgement', () => {
+        const research = withOptions();
+        [25, 50, 100].forEach((daily, index) => {
+            const option = research.result.budget_options[index];
+            option.daily_budget_micros = daily * 1_000_000;
+            option.proposal.proposed_daily_budget_micros = option.daily_budget_micros;
+            option.forecast.clicks = [2.5, 4.5, 6.5][index];
+            Object.assign(option.proposal.strategies[0], { budget_micros: option.daily_budget_micros,
+                forecast: option.forecast, traffic_status: 'limited', meets_traffic_threshold: false,
+                forecast_clicks_per_30_days: option.forecast.clicks * 30 / 29 });
+        });
+        research.result.proposed_daily_budget_micros = 25_000_000;
+        research.result.strategies = research.result.budget_options[0].proposal.strategies;
+        const initialCampaign = { ...campaign, daily_budget: '50.00' };
+        const view = render(budget(research, { campaign: initialCampaign }));
+
+        expect(view.getByText('Limited forecast traffic')).toBeVisible();
+        expect(view.getByRole('note')).toHaveTextContent('Google forecasts 2.5 clicks from 2026-10-25 to 2026-11-22');
+        expect(view.getByRole('note')).toHaveTextContent('Your budget may not be fully spent');
+        expect(view.getByRole('note')).toHaveTextContent('sales and profitability are not verified');
+        expect(view.getAllByRole('radio')).toHaveLength(3);
+        expect(view.queryByRole('checkbox')).toBeNull();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+
+        fireEvent.click(view.getByRole('radio', { name: 'AUD 25.00 per day' }));
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(25);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeEnabled();
+        expect(view.getByText(/Saved daily budget:/)).toHaveTextContent('AUD 50.00');
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+
+        fireEvent.click(view.getByRole('button', { name: 'Approve researched plan' }));
+        expect(post).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('campaigns.confirm-budget'), expect.any(Object), {
+            daily_budget: '25.00', research_id: 'request-one', research_fingerprint: 'context-one',
+            budget_option_id: 'a'.repeat(64), accept_proposal: true,
+        });
+        expect(initialCampaign.daily_budget).toBe('50.00');
+    });
+
+    it('does not round a tiny positive limited forecast into zero traffic', () => {
+        const research = withOptions();
+        for (const option of research.result.budget_options) {
+            option.forecast.clicks = 0.003;
+            option.proposal.strategies[0].forecast = option.forecast;
+            option.proposal.strategies[0].traffic_status = 'limited';
+        }
+        const view = render(budget(research));
+        expect(view.getAllByText('About <0.01 clicks')).toHaveLength(3);
+        expect(view.getByText(/Google forecasts <0.01 clicks/)).toBeVisible();
+        expect(view.queryByText('About 0 clicks')).toBeNull();
+    });
+
+    it('shows unavailable and zero comparisons without selecting a different budget on the customer’s behalf', () => {
+        const research = withOptions();
+        const available = research.result.budget_options[2];
+        research.result.budget_options = [available];
+        research.result.proposed_daily_budget_micros = available.daily_budget_micros;
+        research.result.strategies = available.proposal.strategies;
+        research.result.requires_explicit_option_selection = true;
+        research.result.default_budget_option_id = null;
+        research.result.selected_budget_option_id = null;
+        research.result.budget_comparisons = [
+            { daily_budget_micros: 5_000_000, status: 'unavailable', forecast: null, option_id: null,
+                reason: 'The forecast could not be verified at this amount.' },
+            { daily_budget_micros: 10_000_000, status: 'unavailable', forecast: { success: true, clicks: 0 }, option_id: null,
+                reason: 'Google forecasts no clicks for this amount.' },
+        ];
+        const view = render(budget(research));
+
+        expect(view.getByText('Amounts without a verified estimate')).toBeVisible();
+        expect(view.getByText('Traffic estimate unavailable')).toBeVisible();
+        expect(view.getByText('0 forecast clicks')).toBeVisible();
+        expect(view.getByText('The forecast could not be verified at this amount.')).toBeVisible();
+        expect(view.getByText('Google forecasts no clicks for this amount.')).toBeVisible();
+        expect(view.getByRole('status')).toHaveTextContent('No budget has been selected');
+        expect(view.getAllByRole('radio')).toHaveLength(1);
+        expect(view.queryByRole('radio', { name: 'AUD 5.00 per day' })).toBeNull();
+        expect(view.getByRole('radio', { name: 'AUD 15.00 per day' })).not.toBeChecked();
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(5);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(post).not.toHaveBeenCalled();
+        expect(refreshPost).not.toHaveBeenCalled();
+
+        fireEvent.click(view.getByRole('radio', { name: 'AUD 15.00 per day' }));
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(15);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeEnabled();
+        expect(view.queryByText(/No budget has been selected/)).toBeNull();
+        fireEvent.click(view.getByRole('button', { name: 'Approve researched plan' }));
+        expect(post).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('campaigns.confirm-budget'), expect.any(Object), {
+            daily_budget: '15.00', research_id: 'request-one', research_fingerprint: 'context-one',
+            budget_option_id: available.id, accept_proposal: true,
+        });
+    });
+
+    it('shows a forecast-only limited traffic flag for a placement without budget option cards', () => {
+        const research = ready();
+        Object.assign(research.result.strategies[0].forecast, { clicks: 2, traffic_status: 'limited', meets_traffic_threshold: false });
+        const view = render(budget(research));
+        expect(view.getByText('Limited forecast traffic')).toBeVisible();
+        expect(view.getByText(/Google forecasts 2 clicks from/)).toBeVisible();
+        fireEvent.click(view.getByRole('button', { name: 'Use researched budget' }));
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeEnabled();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it.each([{ success: true, clicks: 0 }, { success: false, clicks: null }])('does not present zero or unavailable research as a limited positive choice: %j', forecast => {
+        const research = ready({ status: 'needs_review', approvable: false });
+        research.result.status = 'needs_review';
+        Object.assign(research.result.strategies[0], { status: 'needs_review', traffic_status: 'limited',
+            meets_traffic_threshold: false, forecast: { ...research.result.strategies[0].forecast, ...forecast } });
+        const view = render(budget(research));
+        expect(view.queryByText('Limited forecast traffic')).toBeNull();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(view.queryByRole('button', { name: 'Use researched budget' })).toBeNull();
+        expect(post).not.toHaveBeenCalled();
     });
 
     it('lets the customer compare exact forecast options and approve only the explicitly selected proposal', () => {

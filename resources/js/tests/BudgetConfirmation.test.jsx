@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 
 const postMock = vi.fn();
+const pollingMock = vi.hoisted(() => vi.fn(() => ({ data: null, error: null })));
 
 vi.mock('@inertiajs/react', () => ({
     router: { post: vi.fn() },
@@ -18,7 +19,7 @@ vi.mock('@inertiajs/react', () => ({
         };
     },
 }));
-vi.mock('@/hooks/usePolling', () => ({ usePolling: () => ({ data: null, error: null }) }));
+vi.mock('@/hooks/usePolling', () => ({ usePolling: (...args) => pollingMock(...args) }));
 
 import BudgetConfirmationComponent from '@/Components/BudgetConfirmation';
 
@@ -30,7 +31,35 @@ function BudgetConfirmation(props) {
 }
 
 describe('BudgetConfirmation', () => {
-    beforeEach(() => postMock.mockReset());
+    beforeEach(() => {
+        postMock.mockReset();
+        pollingMock.mockReset();
+        pollingMock.mockReturnValue({ data: null, error: null });
+    });
+
+    it.each(['not_requested', 'ready'])('fetches authoritative research for a newly watched strategy with raw %s metadata', status => {
+        const raw = { request_id: 'new-research', input_fingerprint: 'context', status,
+            result: { status: 'ready', fingerprint: 'context', proposed_daily_budget_micros: 25_000_000, strategies: [] } };
+        const current = { ...raw, request_id: 'authoritative-new-request', status: 'ready', current: true, approvable: true, expires_at: '2099-01-01T00:00:00Z' };
+        pollingMock.mockImplementation(url => ({ data: url === '/research/status' ? { marketResearch: current } : null, error: null }));
+        const view = render(<BudgetConfirmationComponent campaign={{ uuid: 'new-campaign', daily_budget: '50.00' }}
+            marketResearch={raw} marketResearchStatusUrl="/research/status" currency="AUD" />);
+
+        const [, options] = pollingMock.mock.calls.find(([url]) => url === '/research/status');
+        expect(options.enabled).toBe(true);
+        expect(options.until({ marketResearch: { status: 'not_requested' } })).toBe(false);
+        expect(options.until({ marketResearch: { status: 'queued' } })).toBe(false);
+        expect(options.until({ marketResearch: { status: 'stale', current: false } })).toBe(false);
+        expect(options.until({ marketResearch: { status: 'needs_review', current: false } })).toBe(false);
+        expect(options.until({ marketResearch: { status: 'unknown', current: false } })).toBe(true);
+        expect(options.until({ marketResearch: current })).toBe(true);
+        expect(view.getByText('Your researched campaign plan')).toBeVisible();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        fireEvent.click(view.getByRole('button', { name: 'Use researched budget' }));
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(25);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeEnabled();
+        expect(postMock).not.toHaveBeenCalled();
+    });
 
     it('shows the confirmed state instead of the form once the budget is set', () => {
         const { getByText, queryByText } = render(
