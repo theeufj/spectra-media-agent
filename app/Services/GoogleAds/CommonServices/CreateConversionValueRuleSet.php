@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetAttachmentTypeEnum\ValueRuleSetAttachmentType;
 use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetDimensionEnum\ValueRuleSetDimension;
 use Google\Ads\GoogleAds\V26\Resources\ConversionValueRuleSet;
 use Google\Ads\GoogleAds\V26\Services\ConversionValueRuleSetOperation;
@@ -29,10 +30,23 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
         array $ruleResourceNames,
         array $dimensions = [ValueRuleSetDimension::NO_CONDITION]
     ): ?string {
-        $this->ensureClient();
+        if (! preg_match('/^[1-9][0-9]{9}$/D', $customerId)
+            || $this->customer?->cleanGoogleCustomerId() !== $customerId
+            || ! preg_match('#^customers/'.$customerId.'/campaigns/[1-9][0-9]*$#D', $campaignResourceName)
+            || $ruleResourceNames === [] || $dimensions === []
+            || array_filter($ruleResourceNames, fn ($rule) => ! preg_match('#^customers/'.$customerId.'/conversionValueRules/[1-9][0-9]*$#D', $rule)) !== []
+            || array_filter($dimensions, fn ($dimension) => ! in_array($dimension, [ValueRuleSetDimension::NO_CONDITION,
+                ValueRuleSetDimension::DEVICE, ValueRuleSetDimension::AUDIENCE, ValueRuleSetDimension::GEO_LOCATION,
+                ValueRuleSetDimension::ITINERARY], true)) !== []) {
+            $this->logError('Conversion value rule set refused: account, campaign, rule resources or dimensions are invalid.');
+
+            return null;
+        }
 
         try {
+            $this->ensureClient();
             $ruleSet = new ConversionValueRuleSet([
+                'attachment_type' => ValueRuleSetAttachmentType::CAMPAIGN,
                 'conversion_value_rules' => $ruleResourceNames,
                 'campaign' => $campaignResourceName,
                 'dimensions' => $dimensions,
@@ -48,6 +62,11 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
                 'operations' => [$operation],
             ]));
 
+            if ($this->dryRun) {
+                $this->logInfo('Validated conversion value rule set; no rule set was created.');
+
+                return null;
+            }
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("CreateConversionValueRuleSet: Created rule set {$resourceName}");
 

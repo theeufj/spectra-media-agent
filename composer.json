@@ -12,6 +12,7 @@
         "php": "^8.5.12",
         "aws/aws-sdk-php": "^3.0",
         "bacon/bacon-qr-code": "^3.1",
+        "giggsey/libphonenumber-for-php-lite": "^9.0",
         "google/auth": "^1.49",
         "googleads/google-ads-php": "^35.2.0",
         "guzzlehttp/guzzle": "^7.10",

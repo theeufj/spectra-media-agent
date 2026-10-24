@@ -121,7 +121,8 @@ class DeploymentController extends Controller
 
         $this->authorize('view', $campaign);
         abort_unless($campaign->customer_id === $customer->id, 404);
-        $strategyId = $singlePlatform ? $campaign->strategies()->findOrFail($validated['strategy_id'])->id : null;
+        $selectedStrategy = $singlePlatform ? $campaign->strategies()->findOrFail($validated['strategy_id']) : null;
+        $strategyId = $selectedStrategy?->id;
         $selected = fn () => $campaign->strategies()->when($strategyId !== null, fn ($query) => $query->whereKey($strategyId));
 
         if ($selected()->whereNotNull('signed_off_at')
@@ -141,7 +142,9 @@ class DeploymentController extends Controller
                 'reason' => 'brand_guideline_unverified',
             ]);
 
-            return redirect()->route('brand-guidelines.index', ['review' => 1])->with('flash', [
+            return redirect()->route('brand-guidelines.index', ['review' => 1, 'return_campaign' => $campaign->uuid,
+                ...($selectedStrategy ? ['return_strategy' => $selectedStrategy->uuid] : []),
+            ])->with('flash', [
                 'type' => 'error',
                 'message' => 'Review and confirm the current brand profile before creating ads. Every ad we write starts from this profile.',
             ]);

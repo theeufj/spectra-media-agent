@@ -76,6 +76,14 @@ class AdminMonitorService
         $strategy = $adCopy->strategy;
         $evidence = $strategy?->campaign
             ? app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($strategy->campaign, $strategy) : [];
+        $feeScope = app(AdCopyFeeScopeValidator::class)->validate($headlines, $descriptions, $evidence);
+        $validationResults['fee_scope'] = $feeScope;
+        if (! $feeScope['is_valid']) {
+            $validationResults['is_valid'] = false;
+            foreach ($feeScope['issues'] as $issue) {
+                $validationResults['feedback']['general'][] = $issue['message'];
+            }
+        }
 
         // If programmatic validation fails critically, we might not even call Gemini.
         // For now, we'll always call Gemini but include programmatic results.

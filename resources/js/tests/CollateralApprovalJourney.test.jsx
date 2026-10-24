@@ -102,6 +102,24 @@ describe('saved creative selections', () => {
 });
 
 describe('one platform launch consent', () => {
+    it('preserves the current campaign review page when launch requires brand approval', () => {
+        const calls = [];
+        const originalRoute = globalThis.route;
+        globalThis.route = (name, params) => { calls.push([name, params]); return originalRoute(name, params); };
+        try {
+            const view = render(<Collateral {...props} brandVerified={false} />);
+            fireEvent.click(view.getByRole('button', { name: 'Deploy individual platform' }));
+            fireEvent.click(view.getByRole('button', { name: 'Facebook Ads' }));
+            expect(calls).toContainEqual(['brand-guidelines.index', {
+                review: 1, return_campaign: props.campaign.uuid, return_strategy: strategy.uuid,
+            }]);
+            expect(router.visit).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('brand-guidelines.index'));
+            expect(router.post).not.toHaveBeenCalled();
+        } finally {
+            globalThis.route = originalRoute;
+        }
+    });
+
     it('preserves its selected strategy through funding and explicit launch consent', () => {
         const { getByRole, getByText } = render(<Collateral {...props} managedBillingEnabled />);
         fireEvent.click(getByRole('button', { name: 'Deploy individual platform' }));

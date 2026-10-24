@@ -180,17 +180,36 @@ class BrandGuidelineController extends Controller
     {
         $this->authorize('update', $brandGuideline);
 
-        $validated = $request->validate(['profile_version' => 'nullable|integer|min:1']);
+        $validated = $request->validate([
+            'profile_version' => 'nullable|integer|min:1',
+            'return_campaign' => 'nullable|required_with:return_strategy|uuid',
+            'return_strategy' => 'nullable|uuid',
+        ]);
+        // Resume only a known route for this brand's customer. Resolve and
+        // authorize the context before approval so a stale or foreign origin
+        // cannot approve a profile and then redirect to another customer's ads.
+        /** @var Customer $owner */
+        $owner = $brandGuideline->customer;
+        $returnCampaign = isset($validated['return_campaign'])
+            ? $owner->campaigns()->where('uuid', $validated['return_campaign'])->firstOrFail() : null;
+        $returnStrategy = $returnCampaign && isset($validated['return_strategy'])
+            ? $returnCampaign->strategies()->where('uuid', $validated['return_strategy'])->firstOrFail() : null;
+        if ($returnCampaign) {
+            $this->authorize('view', $returnCampaign);
+        }
         app(BrandProfileReview::class)->approve($brandGuideline, $validated['profile_version'] ?? null);
+
+        if ($returnCampaign) {
+            return ($returnStrategy?->signed_off_at
+                ? redirect()->route('campaigns.collateral.show', ['campaign' => $returnCampaign, 'strategy' => $returnStrategy])
+                : redirect()->route('campaigns.show', $returnCampaign))
+                ->with('success', 'Brand profile confirmed — review your campaign before launching.');
+        }
 
         // The onboarding review flow signs off and moves straight into
         // campaign creation — to the auto-generated first campaign when one
         // exists, otherwise the wizard. Plain verifies stay on the page.
         if ($request->boolean('continue')) {
-            // Read the owner off the guideline rather than the session: the
-            // policy above has already established that it is the caller's.
-            /** @var \App\Models\Customer $owner */
-            $owner = $brandGuideline->customer;
             if ($owner->service_type === 'setup_only' && ! $owner->isPaidSetupOnly()) {
                 return redirect()->route('subscription.pricing')
                     ->with('success', 'Brand profile confirmed — your one-time setup payment starts the campaign build.');

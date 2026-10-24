@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Strategy;
 use App\Prompts\AdCopyPrompt;
 use App\Services\AdminMonitorService;
+use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
@@ -81,6 +82,110 @@ class AdCopyOfferClarityTest extends TestCase
         $this->assertSame($this->clearCopy()['headlines'], $saved->headlines);
         $this->assertSame($this->clearCopy()['descriptions'], $saved->descriptions);
         Http::assertSentCount(20);
+    }
+
+    public static function misleadingFeeScores(): array
+    {
+        return ['model approves at88' => [88], 'style fallback candidate at62' => [62]];
+    }
+
+    #[DataProvider('misleadingFeeScores')]
+    public function test_source_fee_scope_rejection_cannot_be_overridden_by_model_approval_or_style_fallback(int $score): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        $this->setOfferSource($campaign, 'Professional campaign setup costs US$999 once. Ad spend is paid separately to the advertising platform.');
+        $existing = AdCopy::create(['strategy_id' => $strategy->id, 'platform' => 'Google Ads', ...$this->clearCopy()]);
+        $before = $existing->only(['headlines', 'descriptions']);
+        $bad = $this->clearCopy();
+        $bad['descriptions'][1] = 'Ad spend goes directly to Google with no markup or recurring charges.';
+        $bad['descriptions'][2] = 'No recurring agency fees. Ad spend is separate.';
+        Http::fake(function (Request $request) use ($bad, $score) {
+            $prompt = $request['contents'][0]['parts'][0]['text'];
+            $review = str_starts_with($prompt, 'Review the following ad copy');
+            if ($review) {
+                $this->assertStringContainsString('fee_scope_misleading_recurring_claim', $prompt);
+                $data = ['overall_score' => $score, 'factual_accuracy' => true, 'intent_relevance' => true,
+                    'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []];
+            } else {
+                if (str_contains($prompt, 'CRITICAL CORRECTIONS REQUIRED')) {
+                    $this->assertStringContainsString('Qualify any fee waiver as the agency/service fee', $prompt);
+                }
+                $data = $bad;
+            }
+
+            return Http::response([['candidates' => [['content' => ['parts' => [['text' => json_encode($data, JSON_THROW_ON_ERROR)]]], 'finishReason' => 'STOP']]]]);
+        });
+        $job = (new GenerateAdCopy($campaign, $strategy, 'Google Ads'))->withFakeQueueInteractions();
+        $job->handle();
+        $job->assertFailed();
+        $this->assertSame($before, $existing->fresh()->only(['headlines', 'descriptions']));
+        Http::assertSentCount(20);
+    }
+
+    public static function supportedFeeClaims(): array
+    {
+        return [
+            'qualified service fee with separate spend' => ['No Recurring Agency Fees',
+                'Campaign setup is a one-time service. Ad spend is paid separately to the advertising platform.'],
+            'legitimate unrelated one-time purchase' => ['No Recurring Fees',
+                'Buy the bicycle repair guide once. No recurring fees or subscriptions apply.'],
+        ];
+    }
+
+    #[DataProvider('supportedFeeClaims')]
+    public function test_context_supported_qualified_or_genuinely_one_time_fee_claims_remain_approvable(string $headline, string $source): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        $this->setOfferSource($campaign, $source);
+        $copy = $this->clearCopy();
+        $copy['headlines'][1] = $headline;
+        $model = $this->createMock(GeminiService::class);
+        $model->expects($this->once())->method('generateContent')->willReturn(['text' => json_encode([
+            'overall_score' => 88, 'factual_accuracy' => true, 'intent_relevance' => true,
+            'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => [],
+        ], JSON_THROW_ON_ERROR)]);
+        $review = (new AdminMonitorService($model))->reviewAdCopy(new AdCopy([
+            'strategy_id' => $strategy->id, 'platform' => 'Google Ads', ...$copy,
+        ]));
+        $this->assertSame('approved', $review['overall_status']);
+        $this->assertTrue($review['programmatic_validation']['fee_scope']['is_valid']);
+    }
+
+    private function setOfferSource(Campaign $campaign, string $source): void
+    {
+        $campaign->customer->pages()->update(['content' => $source]);
+    }
+
+    public function test_the_advertised_owned_landing_page_is_included_before_source_limits_and_its_fee_scope_is_enforced(): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        $landing = $campaign->customer->website.'/campaign-setup';
+        $campaign->update(['landing_page_url' => $landing]);
+        $page = $campaign->customer->pages()->create(['url' => $landing, 'title' => 'One-time campaign setup',
+            'page_type' => 'service', 'content' => 'The campaign setup is a one-time payment. Advertising spend is additional.']);
+        $page->forceFill(['updated_at' => now()->subYear()])->save();
+        for ($index = 0; $index < 35; $index++) {
+            $campaign->customer->pages()->create(['url' => $campaign->customer->website.'/other-service-'.$index,
+                'title' => 'Other Service '.$index, 'page_type' => 'service', 'content' => 'A different ordinary service with no fee evidence.']);
+        }
+        Customer::factory()->create(['website' => $campaign->customer->website])->pages()->create([
+            'url' => $landing, 'title' => 'Foreign source', 'content' => 'No recurring costs apply to any purchase.']);
+        $evidence = app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($campaign->fresh(), $strategy);
+        $this->assertCount(8, $evidence['sources']);
+        $this->assertSame($landing, $evidence['sources'][0]['url']);
+        $this->assertStringContainsString('Advertising spend is additional.', $evidence['sources'][0]['content']);
+        $this->assertNotContains('Foreign source', array_column($evidence['sources'], 'title'));
+
+        $copy = $this->clearCopy();
+        $copy['descriptions'][1] = 'Ad spend goes directly to Google with no markup or recurring charges.';
+        $model = $this->createMock(GeminiService::class);
+        $model->method('generateContent')->willReturn(['text' => json_encode(['overall_score' => 88,
+            'factual_accuracy' => true, 'intent_relevance' => true, 'feedback' => [], 'blocking_issues' => []], JSON_THROW_ON_ERROR)]);
+        $review = (new AdminMonitorService($model))->reviewAdCopy(new AdCopy([
+            'strategy_id' => $strategy->id, 'platform' => 'Google Ads', ...$copy,
+        ]));
+        $this->assertSame('needs_revision', $review['overall_status']);
+        $this->assertFalse($review['programmatic_validation']['fee_scope']['is_valid']);
     }
 
     private function campaign(): array

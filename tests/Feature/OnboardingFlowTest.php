@@ -119,7 +119,7 @@ class OnboardingFlowTest extends TestCase
             ->withSession(['active_customer_id' => $customer->id])
             ->post('/deployment/deploy', ['campaign_id' => $campaign->id]);
 
-        $response->assertRedirect(route('brand-guidelines.index', ['review' => 1], absolute: false));
+        $response->assertRedirect(route('brand-guidelines.index', ['review' => 1, 'return_campaign' => $campaign->uuid], absolute: false));
         $this->assertSame(\App\Enums\CampaignStatus::Draft, $campaign->fresh()->status);
     }
 
@@ -186,7 +186,7 @@ class OnboardingFlowTest extends TestCase
             ->withSession(['active_customer_id' => $customer->id])
             ->post('/deployment/deploy', ['campaign_id' => $campaign->id]);
 
-        $response->assertRedirect(route('brand-guidelines.index', ['review' => 1], absolute: false));
+        $response->assertRedirect(route('brand-guidelines.index', ['review' => 1, 'return_campaign' => $campaign->uuid], absolute: false));
         $this->assertSame(\App\Enums\CampaignStatus::Draft, $campaign->fresh()->status);
     }
 }

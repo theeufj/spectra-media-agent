@@ -120,12 +120,13 @@ class AdExtensionBuilder
         $phone = $this->customer->phone ?? null;
         if ($phone) {
             try {
-                $createCallService = new CreateCallAsset($this->customer);
-                $countryCode = $strategy->bidding_strategy['call_country_code'] ?? 'US';
-                $callAssetResourceName = ($createCallService)($customerId, $phone, $countryCode);
+                $createCallService = app(CreateCallAsset::class, ['customer' => $this->customer]);
+                $callAssetResourceName = ($createCallService)($customerId, $phone, $this->customer->country);
                 if ($callAssetResourceName) {
                     ($linkAssetService)($customerId, $campaignResourceName, $callAssetResourceName, AssetFieldType::CALL);
                     $result->addPlatformId('call_asset', $callAssetResourceName);
+                } else {
+                    $result->addWarning('call_asset_not_created', 'The optional call extension could not be created. Check the business phone number and its country.');
                 }
             } catch (\Throwable $e) {
                 report($e);

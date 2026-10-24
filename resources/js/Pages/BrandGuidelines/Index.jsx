@@ -54,7 +54,10 @@ function ProfileField({ path, label, type = 'text', data, update, editing, error
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
     const page = usePage();
-    const onboarding = new URLSearchParams((page.url || '').split('?')[1] || '').get('review') === '1';
+    const reviewParams = new URLSearchParams((page.url || '').split('?')[1] || '');
+    const onboarding = reviewParams.get('review') === '1';
+    const returnContext = Object.fromEntries(['return_campaign', 'return_strategy']
+        .filter(key => reviewParams.get(key)).map(key => [key, reviewParams.get(key)]));
     const [editing, setEditing] = useState(false);
     const [section, setSection] = useState('overview');
     const [extracting, setExtracting] = useState(!brandGuideline);
@@ -95,7 +98,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
         event.preventDefault();
         form.put(route('brand-guidelines.update', brandGuideline.id), { preserveScroll: true, onSuccess: () => setEditing(false) });
     };
-    const approve = () => action(route('brand-guidelines.verify', brandGuideline.id), { continue: onboarding, profile_version: brandGuideline.profile_version });
+    const approve = () => action(route('brand-guidelines.verify', brandGuideline.id), { continue: onboarding, profile_version: brandGuideline.profile_version, ...returnContext });
     const currentSection = SECTIONS.find(item => item.id === section);
     const draft = Boolean(brandGuideline?.proposed_profile);
     const pendingChanges = brandGuideline?.extraction_changes || [];

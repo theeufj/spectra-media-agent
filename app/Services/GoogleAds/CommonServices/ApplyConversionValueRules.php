@@ -4,98 +4,21 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V26\Enums\ValueRuleSetDimensionEnum\ValueRuleSetDimension;
 use Illuminate\Support\Facades\Log;
 
-/**
- * ApplyConversionValueRules
- *
- * Orchestrator that creates device and optional audience ConversionValueRules
- * for a campaign, then bundles them into a ConversionValueRuleSet.
- *
- * - Always creates a MOBILE device rule at 1.2× (mobile conversions worth 20% more for local businesses).
- * - If the customer has a CRM audience list (google_ads_customer_match_list_id), adds a 1.5× audience rule.
- */
+/** Automatic deployment must not invent adjustments to measured conversion values. */
 class ApplyConversionValueRules extends BaseGoogleAdsService
 {
-    public function __invoke(
-        string $customerId,
-        string $campaignResourceName,
-        Customer $customer
-    ): bool {
-        $this->ensureClient();
+    public function __invoke(string $customerId, string $campaignResourceName, Customer $customer): bool
+    {
+        // No reviewed value-rule configuration exists in the campaign contract.
+        // Keep the hook for callers, but do not manufacture mobile/audience
+        // adjustments or attach existing rules. Explicit low-level adapters
+        // remain available to a future reviewed configuration workflow.
+        Log::info('ApplyConversionValueRules: Skipped; no explicitly approved value-rule configuration is available.', [
+            'customer_id' => $customerId, 'campaign' => $campaignResourceName,
+        ]);
 
-        try {
-            $ruleResourceNames = [];
-            $dimensions = [];
-            $createRule = app(CreateConversionValueRule::class, ['customer' => $this->customer]);
-
-            // Always create a MOBILE device rule (1.2× multiplier)
-            $mobileRuleResource = ($createRule)($customerId, [
-                'action' => ['operation' => 'ADD', 'value' => 1.2],
-                'device' => 'MOBILE',
-            ]);
-
-            if ($mobileRuleResource) {
-                $ruleResourceNames[] = $mobileRuleResource;
-                $dimensions[] = ValueRuleSetDimension::DEVICE;
-                Log::info('ApplyConversionValueRules: Created mobile device rule', [
-                    'rule' => $mobileRuleResource,
-                ]);
-            }
-
-            // Optional audience rule if customer has a CRM match list
-            $userListId = $customer->google_ads_customer_match_list_id ?? null;
-            if ($userListId) {
-                $audienceRuleResource = ($createRule)($customerId, [
-                    'action' => ['operation' => 'ADD', 'value' => 1.5],
-                    'audience' => ['user_list' => $userListId],
-                ]);
-
-                if ($audienceRuleResource) {
-                    $ruleResourceNames[] = $audienceRuleResource;
-                    $dimensions[] = ValueRuleSetDimension::AUDIENCE;
-                    Log::info('ApplyConversionValueRules: Created audience rule', [
-                        'rule' => $audienceRuleResource,
-                        'user_list' => $userListId,
-                    ]);
-                }
-            }
-
-            if (empty($ruleResourceNames)) {
-                Log::warning('ApplyConversionValueRules: No rules were created, skipping rule set');
-
-                return false;
-            }
-
-            // Bundle into a ConversionValueRuleSet and attach to the campaign
-            $createRuleSet = app(CreateConversionValueRuleSet::class, ['customer' => $this->customer]);
-            $ruleSetResource = ($createRuleSet)($customerId, $campaignResourceName, $ruleResourceNames, $dimensions);
-
-            if (! $ruleSetResource) {
-                Log::warning('ApplyConversionValueRules: Failed to create rule set for campaign', [
-                    'campaign' => $campaignResourceName,
-                ]);
-
-                return false;
-            }
-
-            Log::info('ApplyConversionValueRules: Successfully applied conversion value rules', [
-                'campaign' => $campaignResourceName,
-                'rule_set' => $ruleSetResource,
-                'rule_count' => count($ruleResourceNames),
-            ]);
-
-            return true;
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('ApplyConversionValueRules: Unexpected error', [
-                'customer_id' => $customerId,
-                'campaign' => $campaignResourceName,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
-        }
+        return false;
     }
 }

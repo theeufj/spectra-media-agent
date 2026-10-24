@@ -50,7 +50,9 @@ class OperationsJourneyTest extends TestCase
         $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'signed_off_at' => now()]);
         foreach (['deployment.deploy', 'deployment.deploy-platform'] as $endpoint) {
             $this->post(route($endpoint), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id])
-                ->assertRedirect(route('brand-guidelines.index', ['review' => 1], absolute: false));
+                ->assertRedirect(route('brand-guidelines.index', ['review' => 1, 'return_campaign' => $campaign->uuid,
+                    ...($endpoint === 'deployment.deploy-platform' ? ['return_strategy' => $strategy->uuid] : []),
+                ], absolute: false));
         }
         Queue::assertNotPushed(DeployCampaign::class);
         $this->assertNull($strategy->fresh()->deployment_status);

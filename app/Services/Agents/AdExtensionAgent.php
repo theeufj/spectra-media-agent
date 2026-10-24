@@ -87,7 +87,7 @@ class AdExtensionAgent
             }
             if ($counts[AssetFieldType::CALL] < 1 && $customer->phone) {
                 $creator = app(CreateCallAsset::class, ['customer' => $customer]);
-                $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $customer->phone, $customer->country ?? 'AU'), AssetFieldType::CALL);
+                $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $customer->phone, $customer->country), AssetFieldType::CALL);
                 $result['created'][] = ['type' => 'call', 'phone' => $customer->phone];
             }
 

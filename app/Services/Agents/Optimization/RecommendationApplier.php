@@ -570,7 +570,7 @@ class RecommendationApplier
         if (! $phone) {
             return [null, null, 'Call'];
         }
-        $resource = (new CreateCallAsset($customer))($customerId, $phone, $rec['country_code'] ?? 'AU');
+        $resource = (new CreateCallAsset($customer))($customerId, $phone, $customer->country);
 
         return [$resource, AssetFieldType::CALL, 'Call'];
     }

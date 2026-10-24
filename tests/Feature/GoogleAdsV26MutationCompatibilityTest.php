@@ -139,7 +139,7 @@ class GoogleAdsV26MutationCompatibilityTest extends TestCase
             });
             $client = $this->createMock(GoogleAdsClient::class);
             $client->method('getConversionValueRuleSetServiceClient')->willReturn($api);
-            $service = $this->service(CreateConversionValueRuleSet::class, $client);
+            $service = $this->service(CreateConversionValueRuleSet::class, $client, new Customer(['google_ads_customer_id' => self::CUSTOMER]));
             $result = $dimensions === null
                 ? $service(self::CUSTOMER, self::CAMPAIGN, [$rule])
                 : $service(self::CUSTOMER, self::CAMPAIGN, [$rule], $dimensions);
@@ -148,36 +148,20 @@ class GoogleAdsV26MutationCompatibilityTest extends TestCase
         }
     }
 
-    public function test_orchestration_declares_only_the_conditions_of_rules_that_were_created(): void
+    public function test_automatic_orchestration_does_not_invent_conversion_value_adjustments(): void
     {
-        foreach ([[false, true], [true, true], [true, false]] as [$hasAudience, $deviceCreated]) {
-            $customer = new Customer;
-            $customer->setAttribute('google_ads_customer_match_list_id', $hasAudience ? 'customers/'.self::CUSTOMER.'/userLists/1' : null);
-            $device = 'customers/'.self::CUSTOMER.'/conversionValueRules/1';
-            $audience = 'customers/'.self::CUSTOMER.'/conversionValueRules/2';
+        foreach ([null, 'customers/'.self::CUSTOMER.'/userLists/1'] as $list) {
+            $customer = new Customer(['google_ads_customer_id' => self::CUSTOMER]);
+            $customer->setAttribute('google_ads_customer_match_list_id', $list);
             $create = $this->createMock(CreateConversionValueRule::class);
-            $create->expects($this->exactly($hasAudience ? 2 : 1))->method('__invoke')->willReturnCallback(function (string $customerId, array $config) use ($deviceCreated, $device, $audience) {
-                $this->assertSame(self::CUSTOMER, $customerId);
-                if (isset($config['device'])) {
-                    $this->assertSame(['action' => ['operation' => 'ADD', 'value' => 1.2], 'device' => 'MOBILE'], $config);
-
-                    return $deviceCreated ? $device : null;
-                }
-                $this->assertSame(['action' => ['operation' => 'ADD', 'value' => 1.5], 'audience' => ['user_list' => 'customers/'.self::CUSTOMER.'/userLists/1']], $config);
-
-                return $audience;
-            });
+            $create->expects($this->never())->method('__invoke');
             $set = $this->createMock(CreateConversionValueRuleSet::class);
-            $expectedRules = array_merge($deviceCreated ? [$device] : [], $hasAudience ? [$audience] : []);
-            $expectedDimensions = array_merge($deviceCreated ? [ValueRuleSetDimension::DEVICE] : [], $hasAudience ? [ValueRuleSetDimension::AUDIENCE] : []);
-            $set->expects($this->once())->method('__invoke')
-                ->with(self::CUSTOMER, self::CAMPAIGN, $expectedRules, $expectedDimensions)
-                ->willReturn('customers/'.self::CUSTOMER.'/conversionValueRuleSets/3');
+            $set->expects($this->never())->method('__invoke');
             $this->app->bind(CreateConversionValueRule::class, fn () => $create);
             $this->app->bind(CreateConversionValueRuleSet::class, fn () => $set);
             $service = $this->service(ApplyConversionValueRules::class, $this->createMock(GoogleAdsClient::class), $customer);
 
-            $this->assertTrue($service(self::CUSTOMER, self::CAMPAIGN, $customer));
+            $this->assertFalse($service(self::CUSTOMER, self::CAMPAIGN, $customer));
         }
     }
 

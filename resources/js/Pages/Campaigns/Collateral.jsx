@@ -367,7 +367,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         }
         if (!brandVerified) {
             toast.warning('Review and approve your current brand profile before launch.');
-            router.visit(route('brand-guidelines.index', { review: 1 })); return;
+            router.visit(route('brand-guidelines.index', {
+                review: 1, return_campaign: campaign.uuid, return_strategy: currentStrategy.uuid,
+            })); return;
         }
         if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
         if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }

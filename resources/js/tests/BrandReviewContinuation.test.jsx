@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import BrandGuidelinesIndex from '@/Pages/BrandGuidelines/Index';
 import { router } from '@inertiajs/react';
 
@@ -55,5 +55,21 @@ describe('brand review continuation', () => {
         page.url = '/brand-guidelines';
         const { queryByRole } = render(<BrandGuidelinesIndex brandGuideline={{ ...brand, user_verified: true }} customer={customer} canEdit />);
         expect(queryByRole('button', { name: 'Continue to campaign' })).toBeNull();
+    });
+
+    it('keeps the originating campaign and strategy through a draft save and approval without forwarding an arbitrary URL', () => {
+        const campaign = '01a16b54-23b0-7238-984c-5ebcf3bb27d2';
+        const strategy = '01a16b54-23b0-7238-984c-5ebcf3bb27d3';
+        page.url = `/brand-guidelines?review=1&return_campaign=${campaign}&return_strategy=${strategy}&return_url=https://other.example`;
+        const view = render(<BrandGuidelinesIndex brandGuideline={brand} customer={customer} canEdit />);
+        fireEvent.click(view.getByRole('button', { name: 'Edit profile' }));
+        fireEvent.click(view.getByRole('button', { name: 'Save draft' }));
+        expect(actions.put).toHaveBeenCalledTimes(1);
+        act(() => actions.put.mock.calls[0][1].onSuccess());
+        view.rerender(<BrandGuidelinesIndex brandGuideline={{ ...brand, profile_version: 4 }} customer={customer} canEdit />);
+        fireEvent.click(view.getByRole('button', { name: 'Approve profile & continue' }));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/brand-guidelines.verify/48', {
+            continue: true, profile_version: 4, return_campaign: campaign, return_strategy: strategy,
+        }, expect.any(Object));
     });
 });

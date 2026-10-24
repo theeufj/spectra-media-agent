@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\KnowledgeBase;
 use App\Models\Product;
 use App\Models\Strategy;
 use App\Services\AdminMonitorService;
@@ -30,6 +31,31 @@ class AdvertisingEvidenceTest extends TestCase
         $customer->pages()->create(['url' => 'https://example.com/pricing', 'title' => 'Pricing', 'page_type' => 'pricing', 'content' => 'Starter US$149 per month. Growth US$249 per month.']);
 
         return $customer;
+    }
+
+    public function test_excluded_owned_sources_cannot_return_through_landing_or_other_page_mirrors(): void
+    {
+        $customer = $this->customer();
+        $landing = 'https://example.com/setup';
+        $customer->pages()->create(['url' => $landing, 'title' => 'Setup offer',
+            'content' => 'This excluded offer says advertising spend is additional.']);
+        foreach ([$landing, 'https://example.com/pricing'] as $url) {
+            KnowledgeBase::factory()->create(['customer_id' => $customer->id, 'url' => $url, 'source_type' => 'url', 'excluded_at' => now()]);
+        }
+        // The same URL in a different tenant must not exclude this customer's page.
+        KnowledgeBase::factory()->create(['url' => $customer->website, 'source_type' => 'url', 'excluded_at' => now()]);
+        $included = 'https://example.com/service';
+        $customer->pages()->create(['url' => $included, 'title' => 'Included service', 'content' => 'A current included service.']);
+        KnowledgeBase::factory()->create(['customer_id' => $customer->id, 'url' => $included, 'source_type' => 'url', 'excluded_at' => null]);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'landing_page_url' => $landing]);
+
+        $evidence = app(AdvertisingEvidence::class);
+        $pages = $evidence->pages($customer);
+        $this->assertArrayNotHasKey($landing, $pages);
+        $this->assertArrayNotHasKey('https://example.com/pricing', $pages);
+        $this->assertArrayHasKey($customer->website, $pages);
+        $this->assertArrayHasKey($included, $pages);
+        $this->assertEqualsCanonicalizing([$customer->website, $included], array_column($evidence->context($campaign)['sources'], 'url'));
     }
 
     public function test_invented_industry_prices_and_discounts_cannot_reach_google(): void
