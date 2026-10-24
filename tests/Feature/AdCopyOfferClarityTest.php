@@ -35,8 +35,9 @@ class AdCopyOfferClarityTest extends TestCase
 
         $this->assertStringContainsString('The first headline must clearly name the actual product or service', $prompt);
         $this->assertStringContainsString('The first description must explain what is being offered', $prompt);
-        $this->assertStringContainsString('at least half of the headlines', $prompt);
-        $this->assertStringContainsString('Rewrite or reorder their proposed lines', $prompt);
+        $this->assertStringContainsString('Search assets can be reordered or omitted', $prompt);
+        $this->assertStringContainsString('at most ONE headline mainly about administrative workflow', $prompt);
+        $this->assertStringContainsString('at least two DISTINCT, source-supported customer benefits', $prompt);
         $this->assertLessThan(strpos($prompt, 'Use the handover concept first.'), strpos($prompt, '--- OFFER AND CUSTOMER VALUE'));
         $this->assertStringContainsString("Write exactly {$headlines} headlines", $prompt);
         $this->assertStringContainsString("Write exactly {$descriptions} descriptions", $prompt);
@@ -44,12 +45,18 @@ class AdCopyOfferClarityTest extends TestCase
         $this->assertStringContainsString('Omit prices, discounts, guarantees and claims that the sources do not establish', $prompt);
     }
 
-    public function test_high_scoring_process_only_copy_is_rejected_and_cannot_become_the_style_fallback(): void
+    public static function unclearSets(): array
+    {
+        return ['all process headlines' => [false], 'clear opening with process-dominated remaining assets' => [true]];
+    }
+
+    #[DataProvider('unclearSets')]
+    public function test_high_scoring_process_dominated_copy_is_rejected_and_cannot_become_the_style_fallback(bool $clearOpening): void
     {
         [$campaign, $strategy] = $this->campaign();
         $copy = $this->clearCopy();
         $existing = AdCopy::create(['strategy_id' => $strategy->id, 'platform' => 'Google Ads', ...$copy]);
-        $this->fakeGeneration(recover: false);
+        $this->fakeGeneration(recover: false, clearOpening: $clearOpening);
 
         $job = (new GenerateAdCopy($campaign, $strategy, 'Google Ads'))->withFakeQueueInteractions();
         $job->handle();
@@ -89,15 +96,17 @@ class AdCopyOfferClarityTest extends TestCase
         $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
             'ad_copy_strategy' => 'Promote our bicycle repair service.',
             'creative_candidates' => [['title' => 'Account handover']],
-            'creative_concepts' => [['headline' => 'Your Account, Your Rules', 'description' => 'Review your account before handover.']]]);
+            'creative_concepts' => [['headline' => 'Workflow anchor headline', 'description' => 'Workflow anchor description.',
+                'supporting_copy' => 'Copy this administrative message.', 'selling_idea' => 'Account administration is everything.',
+                'subject' => 'A mechanic servicing a bicycle']]]);
 
         return [$campaign, $strategy];
     }
 
-    private function fakeGeneration(bool $recover): void
+    private function fakeGeneration(bool $recover, bool $clearOpening = false): void
     {
         $attempt = 0;
-        Http::fake(function (Request $request) use (&$attempt, $recover) {
+        Http::fake(function (Request $request) use (&$attempt, $recover, $clearOpening) {
             $prompt = $request['contents'][0]['parts'][0]['text'];
             $review = str_starts_with($prompt, 'Review the following ad copy');
             if ($review) {
@@ -108,20 +117,29 @@ class AdCopyOfferClarityTest extends TestCase
                 $this->assertStringContainsString('Negative example: for a bicycle repair service', $prompt);
                 $this->assertStringContainsString('Positive example:', $prompt);
                 $this->assertStringContainsString('Bicycle Repair Near You', $prompt);
+                $this->assertStringContainsString('a clear first asset cannot excuse an ambiguous or process-dominated remainder', $prompt);
+                $this->assertStringContainsString('at most ONE headline may be mainly administrative workflow', $prompt);
+                $this->assertStringContainsString('Use feedback.headlines for one numbered entry per headline', $prompt);
                 $clear = $recover && $attempt > 1;
                 $data = ['overall_score' => $clear ? 62 : 99, 'factual_accuracy' => true,
                     'intent_relevance' => $clear, 'feedback' => ['headlines' => [], 'descriptions' => []],
-                    'blocking_issues' => $clear ? [] : ['The headlines describe account handover without naming the bicycle repair offer.']];
+                    'blocking_issues' => $clear ? [] : ['The headline set is dominated by account workflow instead of supported bicycle repair value.']];
             } else {
                 $attempt++;
                 $this->assertStringContainsString('The first headline must clearly name the actual product or service', $prompt);
-                $this->assertStringContainsString("These requirements take priority over the selected creative concepts' wording and order", $prompt);
-                $this->assertStringContainsString('Your Account, Your Rules', $prompt);
+                $this->assertStringNotContainsString('Workflow anchor headline', $prompt);
+                $this->assertStringNotContainsString('Workflow anchor description.', $prompt);
+                $this->assertStringNotContainsString('Copy this administrative message.', $prompt);
+                $this->assertStringNotContainsString('Account administration is everything.', $prompt);
+                $this->assertStringContainsString('A mechanic servicing a bicycle', $prompt);
                 $this->assertStringNotContainsString('concepts, IN ORDER', $prompt);
                 if ($attempt > 1) {
                     $this->assertStringContainsString('CRITICAL CORRECTIONS REQUIRED', $prompt);
+                    if (! $recover || $attempt === 2) {
+                        $this->assertStringContainsString('The headline set is dominated by account workflow', $prompt);
+                    }
                 }
-                $data = $recover && $attempt > 1 ? $this->clearCopy() : $this->processCopy();
+                $data = $recover && $attempt > 1 ? $this->clearCopy() : $this->processCopy($clearOpening);
             }
 
             return Http::response([['candidates' => [['content' => ['parts' => [['text' => json_encode($data, JSON_THROW_ON_ERROR)]]],
@@ -138,11 +156,11 @@ class AdCopyOfferClarityTest extends TestCase
                 'Get help with your bicycle repair. See what the service includes.']];
     }
 
-    private function processCopy(): array
+    private function processCopy(bool $clearOpening = false): array
     {
-        return ['headlines' => ['Your Account, Your Rules', 'Ready for Handover', 'Review Before Launch',
+        return ['headlines' => [$clearOpening ? 'Bicycle Repair Near You' : 'Your Account, Your Rules', 'Ready for Handover', 'Review Before Launch',
             'Keep Account Control', 'Your Next Step Starts Here'],
-            'descriptions' => ['Review your account and approve the handover when you are ready.',
+            'descriptions' => [$clearOpening ? 'Book a bicycle repair to get your bike ready for your next ride.' : 'Review your account and approve the handover when you are ready.',
                 'See your account details in one place and choose your next step.',
                 'Control your account access and review your settings before launch.']];
     }
