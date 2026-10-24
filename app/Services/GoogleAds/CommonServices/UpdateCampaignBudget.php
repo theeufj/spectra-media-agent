@@ -17,11 +17,20 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
     {
+        return $this->updateWithChanges($customerId, $campaignResourceName, $newDailyBudgetMicros)['success'];
+    }
+
+    /**
+     * @return array{success: bool, changes: list<array{platform: string, resource_name: string, old_budget_micros: int, new_budget_micros: int, currency: string}>}
+     */
+    public function updateWithChanges(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): array
+    {
+        $result = ['success' => false, 'changes' => []];
         $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
         if ($local && ! CampaignSpendGuardrails::permitsDailyBudget($local, (int) $newDailyBudgetMicros)) {
             $this->logError('Budget mutation refused: exceeds the approved bounded-trial daily limit.');
 
-            return false;
+            return $result;
         }
         $this->ensureClient();
 
@@ -30,30 +39,40 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
             if (! $before) {
                 $this->logError("Could not find budget for campaign: $campaignResourceName");
 
-                return false;
+                return $result;
             }
             if (! $this->writeBudget($customerId, $before['budget_resource'], (int) $newDailyBudgetMicros)) {
-                return false;
+                return $result;
             }
             if ($this->dryRun) {
-                return true;
+                return ['success' => true, 'changes' => []];
             }
             $readback = $this->readBudget($customerId, $campaignResourceName);
             if (! $readback || $readback['budget_resource'] !== $before['budget_resource']
+                || $readback['currency_code'] !== $before['currency_code']
                 || $readback['daily_budget_micros'] !== (int) $newDailyBudgetMicros) {
                 $this->logError('Google budget mutation was not confirmed by readback.');
 
-                return false;
+                return $result;
+            }
+            $result['success'] = true;
+            if ($before['daily_budget_micros'] !== $readback['daily_budget_micros']) {
+                $result['changes'][] = ['platform' => 'google', 'resource_name' => $campaignResourceName,
+                    'old_budget_micros' => $before['daily_budget_micros'], 'new_budget_micros' => $readback['daily_budget_micros'],
+                    'currency' => $readback['currency_code']];
             }
             if ($local) {
                 app(GoogleBudgetPacingHistory::class)->record($local, $readback);
             }
 
-            return true;
+            return $result;
         } catch (\Throwable $e) {
             $this->logError('Failed to update or verify campaign budget: '.$e->getMessage(), $e);
 
-            return false;
+            // A later local recording failure must not erase a confirmed platform change.
+            $result['success'] = false;
+
+            return $result;
         }
     }
 

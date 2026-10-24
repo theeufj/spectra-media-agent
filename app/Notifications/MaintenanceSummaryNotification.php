@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Customer;
+use App\Support\ConfirmedBudgetChanges;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -13,7 +14,7 @@ use Illuminate\Notifications\Notification;
  * the agents did. Replaces per-agent individual emails.
  *
  * Carries the customer so the email wears their skin (TenantAware) and
- * files under them in the email log — this is a nightly customer-facing
+ * files under them in the email log — this is a customer-facing
  * send, not an internal alert.
  */
 class MaintenanceSummaryNotification extends Notification implements ShouldQueue
@@ -29,18 +30,22 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        // Only send if something actually changed
-        $total = array_sum(array_column($this->changeSummary, 'total_changes'));
+        return $this->confirmedSummary() !== [] ? ['mail'] : [];
+    }
 
-        return $total > 0 ? ['mail'] : [];
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        // Older queued jobs already carry their channels; via() is not called again.
+        return $this->confirmedSummary() !== [];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        // The receipt header: one number for the whole run. This email is
-        // the recurring proof of work — the strongest answer to "what am I
-        // paying for" is the specific list of what would have gone unfixed.
-        $totalChanges = array_sum(array_column($this->changeSummary, 'total_changes'));
+        // Revalidate here as well as via(): already queued legacy notifications
+        // can contain only a count, which is not evidence of a budget change.
+        $changeSummary = $this->confirmedSummary();
+        $totalChanges = array_sum(array_column($changeSummary, 'total_changes'));
+        $campaignsChanged = count($changeSummary);
         $totals = [
             'healed' => 'delivery issue(s) resolved',
             'keywords_added' => 'new keyword(s) mined from real searches',
@@ -50,12 +55,12 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
         ];
 
         $mail = $this->brandedMail()
-            ->subject("{$totalChanges} improvement(s) made across your campaigns today")
+            ->subject("{$totalChanges} change(s) made across your campaigns today")
             ->greeting('Hi '.$notifiable->name.',')
-            ->line("While you slept, our agents made **{$totalChanges} change(s)** across {$this->campaignsProcessed} campaign(s):");
+            ->line("During this maintenance run, our agents made **{$totalChanges} change(s)** across {$campaignsChanged} campaign(s):");
 
         foreach ($totals as $key => $label) {
-            $count = array_sum(array_map(fn ($r) => (int) ($r[$key] ?? 0), $this->changeSummary));
+            $count = array_sum(array_map(fn ($r) => (int) ($r[$key] ?? 0), $changeSummary));
             if ($count > 0) {
                 $mail->line("- {$count} {$label}");
             }
@@ -63,11 +68,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
         $mail->line('By campaign:');
 
-        foreach ($this->changeSummary as $campaignName => $results) {
-            if (($results['total_changes'] ?? 0) === 0) {
-                continue;
-            }
-
+        foreach ($changeSummary as $campaignName => $results) {
             $mail->line("**{$campaignName}**");
 
             if (! empty($results['healed'])) {
@@ -79,8 +80,11 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
             if (! empty($results['negatives_added'])) {
                 $mail->line('- Added '.$results['negatives_added'].' negative keyword(s) to reduce wasted spend');
             }
-            if (! empty($results['budget_adjustments'])) {
-                $mail->line('- Made '.$results['budget_adjustments'].' budget adjustment(s)');
+            foreach ($results['budget_changes'] as $change) {
+                $platform = ConfirmedBudgetChanges::PLATFORMS[$change['platform']];
+                $old = ConfirmedBudgetChanges::dailyAmount($change['old_budget_micros'], $change['currency']);
+                $new = ConfirmedBudgetChanges::dailyAmount($change['new_budget_micros'], $change['currency']);
+                $mail->line("- {$platform} budget: **{$old} → {$new}**. Reason: ".$change['reason']);
             }
             if (! empty($results['creative_adjustments'])) {
                 $mail->line('- Generated '.$results['creative_adjustments'].' new ad creative variation(s)');
@@ -90,7 +94,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
             }
         }
 
-        $mail->line('No action is required on your part. All changes are applied automatically to improve campaign performance.');
+        $mail->line('The changes listed above have been applied. You can review your campaign settings in your dashboard.');
 
         return $mail->salutation($this->teamSalutation());
     }
@@ -100,7 +104,28 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
         return [
             'type' => 'maintenance_summary',
             'campaigns_processed' => $this->campaignsProcessed,
-            'changes' => $this->changeSummary,
+            'changes' => $this->confirmedSummary(),
         ];
+    }
+
+    private function confirmedSummary(): array
+    {
+        $summary = [];
+        foreach ($this->changeSummary as $campaign => $results) {
+            $results['budget_changes'] = ConfirmedBudgetChanges::from($results['budget_changes'] ?? []);
+            $results['budget_adjustments'] = count($results['budget_changes']);
+            // Recompute the total rather than trusting an old count-only payload.
+            $results['total_changes'] = $results['budget_adjustments'];
+            foreach (['healed', 'keywords_added', 'negatives_added', 'creative_adjustments'] as $key) {
+                $results[$key] = max(0, (int) ($results[$key] ?? 0));
+                $results['total_changes'] += $results[$key];
+            }
+            $results['total_changes'] += empty($results['strategy_graduated']) ? 0 : 1;
+            if ($results['total_changes'] > 0) {
+                $summary[$campaign] = $results;
+            }
+        }
+
+        return $summary;
     }
 }

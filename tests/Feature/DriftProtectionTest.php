@@ -156,7 +156,7 @@ class DriftProtectionTest extends TestCase
             'Campaign B' => ['total_changes' => 2, 'keywords_added' => 2],
         ], 2))->toMail($user);
 
-        $this->assertSame('5 improvement(s) made across your campaigns today', $mail->subject);
+        $this->assertSame('5 change(s) made across your campaigns today', $mail->subject);
         $html = $mail->render();
         $this->assertStringContainsString('2 wasted-spend term(s) blocked', $html);
         $this->assertStringContainsString('2 new keyword(s) mined from real searches', $html);

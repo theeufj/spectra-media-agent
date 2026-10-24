@@ -3,6 +3,7 @@
 namespace Tests\Unit\Agents;
 
 use App\Contracts\Ads\BudgetMutator;
+use App\Contracts\Ads\ReportsBudgetChanges;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Ads\CustomerRoutedAdsServiceFactory;
@@ -67,26 +68,78 @@ class BudgetIntelligenceAgentTest extends TestCase
     public function test_time_of_day_multiplier_cannot_exceed_the_approved_budget(): void
     {
         $campaign = $this->campaign();
-        $budgets = new RecordingBudgetMutator;
+        $budgets = new RecordingBudgetMutator(currentMicros: 80_000_000);
 
         $result = $this->agent(1.3, $budgets)->optimize($campaign);
 
         $this->assertEquals(1.3, $result['multiplier_applied']);
         $this->assertEmpty($result['errors']);
         $this->assertSame([['1234567890', 'customers/1234567890/campaigns/111222333', 100_000_000.0]], $budgets->writes);
-        $this->assertSame(100.0, collect($result['adjustments'])->firstWhere('type', 'budget_updated')['adjusted_budget']);
+        $change = collect($result['adjustments'])->firstWhere('type', 'budget_updated');
+        $this->assertSame(80_000_000, $change['old_budget_micros']);
+        $this->assertSame(100_000_000, $change['new_budget_micros']);
+        $this->assertTrue($change['verified']);
+        $this->assertStringContainsString('measured time-of-day pattern', $change['reason']);
+        $this->assertStringContainsString('proposed amount was capped', $change['reason']);
     }
 
-    public function test_a_neutral_multiplier_writes_the_base_budget_back_to_the_platform(): void
+    public function test_a_neutral_multiplier_restores_a_previous_reduction_and_reports_the_actual_change(): void
     {
-        $budgets = new RecordingBudgetMutator;
+        $budgets = new RecordingBudgetMutator(currentMicros: 50_000_000);
 
-        $result = $this->agent(1.0, $budgets)->optimize($this->campaign());
+        $agent = $this->agent(1.0, $budgets);
+        $campaign = $this->campaign();
+        $result = $agent->optimize($campaign);
 
         $this->assertEquals(1.0, $result['multiplier_applied']);
         $this->assertEmpty($result['errors']);
         $this->assertSame([['1234567890', 'customers/1234567890/campaigns/111222333', 100_000_000.0]], $budgets->writes);
         $this->assertContains('budget_updated', array_column($result['adjustments'], 'type'));
+        $change = collect($result['adjustments'])->firstWhere('type', 'budget_updated');
+        $this->assertSame(50_000_000, $change['old_budget_micros']);
+        $this->assertSame(100_000_000, $change['new_budget_micros']);
+        $this->assertSame('AUD', $change['currency']);
+        $this->assertStringContainsString('while the campaign is learning', $change['reason']);
+        $repeat = $agent->optimize($campaign);
+        $this->assertNotContains('budget_updated', array_column($repeat['adjustments'], 'type'));
+    }
+
+    public function test_an_unchanged_learning_budget_is_not_reported_as_an_adjustment(): void
+    {
+        $budgets = new RecordingBudgetMutator;
+
+        $result = $this->agent(1.0, $budgets)->optimize($this->campaign());
+
+        $this->assertEmpty($result['errors']);
+        $this->assertNotContains('budget_updated', array_column($result['adjustments'], 'type'));
+        $this->assertSame('learning_hold', $result['adjustments'][0]['source']);
+    }
+
+    public function test_a_budget_reduction_records_the_actual_platform_amounts_and_reason(): void
+    {
+        $result = $this->agent(0.5, new RecordingBudgetMutator)->optimize($this->campaign());
+
+        $change = collect($result['adjustments'])->firstWhere('type', 'budget_updated');
+        $this->assertSame(100_000_000, $change['old_budget_micros']);
+        $this->assertSame(50_000_000, $change['new_budget_micros']);
+        $this->assertSame('customers/1234567890/campaigns/111222333', $change['resource_name']);
+        $this->assertStringContainsString('measured time-of-day pattern (0.5x)', $change['reason']);
+    }
+
+    public function test_success_without_confirmed_amounts_does_not_claim_a_budget_change(): void
+    {
+        $budgets = new class implements BudgetMutator
+        {
+            public function updateDailyBudget(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
+            {
+                return true;
+            }
+        };
+
+        $result = $this->agent(0.5, $budgets)->optimize($this->campaign());
+
+        $this->assertEmpty($result['errors']);
+        $this->assertNotContains('budget_updated', array_column($result['adjustments'], 'type'));
     }
 
     public function test_handles_campaigns_with_no_google_ads_id(): void
@@ -157,11 +210,25 @@ class BudgetIntelligenceAgentTest extends TestCase
     }
 }
 
-class RecordingBudgetMutator implements BudgetMutator
+class RecordingBudgetMutator implements ReportsBudgetChanges
 {
     public array $writes = [];
 
-    public function __construct(private bool $accepted = true, private ?\Throwable $error = null) {}
+    public function __construct(private bool $accepted = true, private ?\Throwable $error = null, private int $currentMicros = 100_000_000) {}
+
+    public function updateDailyBudgetWithChanges(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): array
+    {
+        $success = $this->updateDailyBudget($customerId, $campaignResourceName, $newDailyBudgetMicros);
+        $newMicros = (int) $newDailyBudgetMicros;
+        $changes = [];
+        if ($success && $this->currentMicros !== $newMicros) {
+            $changes[] = ['platform' => 'google', 'resource_name' => $campaignResourceName,
+                'old_budget_micros' => $this->currentMicros, 'new_budget_micros' => $newMicros, 'currency' => 'AUD'];
+            $this->currentMicros = $newMicros;
+        }
+
+        return ['success' => $success, 'changes' => $changes];
+    }
 
     public function updateDailyBudget(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
     {

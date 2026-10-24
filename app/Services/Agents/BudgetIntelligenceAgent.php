@@ -122,10 +122,26 @@ class BudgetIntelligenceAgent
         $results['platform'] = 'multi_platform';
         try {
             $writer = new \App\Services\Campaigns\CampaignBudgetService($this->ads());
-            $target = min($writer->ceiling($campaign), (float) $campaign->daily_budget * max(0, $combinedMultiplier));
-            if ($writer->apply($campaign, $target)) {
-                $results['adjustments'][] = ['type' => 'budget_updated', 'adjusted_budget' => $target];
-            } else {
+            $proposed = (float) $campaign->daily_budget * max(0, $combinedMultiplier);
+            $ceiling = $writer->ceiling($campaign);
+            $target = min($ceiling, $proposed);
+            $outcome = $writer->applyWithChanges($campaign, $target);
+            $reason = $combinedMultiplier === 1.0
+                ? ($learningHold
+                    ? 'Matched the configured campaign budget while the campaign is learning.'
+                    : 'Matched the configured campaign budget because no measured reduction applies at this time.')
+                : $this->getAdjustmentReason($timeMultiplier, $dayMultiplier, $seasonalMultiplier);
+            if ($proposed > $ceiling) {
+                $reason .= ' The proposed amount was capped by the approved budget and billing allowance.';
+            }
+            foreach ($outcome['changes'] as $change) {
+                $results['adjustments'][] = array_merge($change, [
+                    'type' => 'budget_updated',
+                    'verified' => true,
+                    'reason' => $reason,
+                ]);
+            }
+            if (! $outcome['success']) {
                 $results['errors'][] = 'One or more platforms rejected the budget update.';
                 report(new \RuntimeException('Campaign '.$campaign->id.': platform budget reconciliation failed.'));
                 Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id]);
@@ -202,17 +218,17 @@ class BudgetIntelligenceAgent
         $reasons = [];
 
         if ($time !== 1.0) {
-            $reasons[] = "Time of day adjustment ({$time}x)";
+            $reasons[] = "Applied the measured time-of-day pattern ({$time}x)";
         }
 
         if ($seasonal !== 1.0) {
-            $reasons[] = "Seasonal event ({$seasonal}x)";
+            $reasons[] = "Applied the seasonal pattern ({$seasonal}x)";
         } elseif ($day !== 1.0) {
             $dayName = ucfirst(now()->utc()->format('l'));
-            $reasons[] = "{$dayName} adjustment ({$day}x)";
+            $reasons[] = "Applied the measured {$dayName} pattern ({$day}x)";
         }
 
-        return implode(', ', $reasons) ?: 'Standard adjustment';
+        return implode('; ', $reasons).'. All adjustments stay within the approved budget and billing allowance.';
     }
 
     /**

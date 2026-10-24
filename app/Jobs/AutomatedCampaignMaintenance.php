@@ -17,6 +17,7 @@ use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Support\ConfirmedBudgetChanges;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -88,6 +89,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             'keywords_added' => 0,
             'negatives_added' => 0,
             'budget_adjustments' => 0,
+            'bid_adjustments' => 0,
             'creative_adjustments' => 0,
             'ad_strength_repairs' => 0,
             'ad_strength_unresolved' => 0,
@@ -186,7 +188,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 // 2d. Bid adjustments by device and daypart (Google only)
                 if ($campaign->google_ads_campaign_id) {
                     $bidResults = $bidAgent->optimize($campaign);
-                    $summary['budget_adjustments'] += count($bidResults['adjustments'] ?? []);
+                    $summary['bid_adjustments'] += count($bidResults['adjustments'] ?? []);
                 }
 
                 // 2e. Quality Score improvement — diagnose and act on low-QS keywords (Google only)
@@ -213,10 +215,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
                 // 3. Run Budget Intelligence
                 $budgetResults = $budgetAgent->optimize($campaign);
-                $summary['budget_adjustments'] += count(array_filter(
-                    $budgetResults['adjustments'] ?? [],
-                    fn ($a) => $a['type'] === 'budget_updated'
-                ));
+                $budgetChanges = ConfirmedBudgetChanges::from($budgetResults['adjustments'] ?? []);
+                $summary['budget_adjustments'] += count($budgetChanges);
                 $summary['errors'] += count($budgetResults['errors'] ?? []);
 
                 // 4. Run Creative Intelligence
@@ -234,7 +234,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $healed = count($healingResults['actions_taken'] ?? []);
                 $kwAdded = count($miningResults['keywords_added'] ?? []);
                 $negAdded = count($miningResults['negatives_added'] ?? []);
-                $budgetAdj = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => ($a['type'] ?? '') === 'budget_updated'));
+                $budgetAdj = count($budgetChanges);
                 $creative = count($creativeResults['recommendations'] ?? [])
                             + count($creativeResults['new_variations']['headlines'] ?? [])
                             + count($creativeResults['new_variations']['descriptions'] ?? []);
@@ -245,6 +245,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     'keywords_added' => $kwAdded ?: null,
                     'negatives_added' => $negAdded ?: null,
                     'budget_adjustments' => $budgetAdj ?: null,
+                    'budget_changes' => $budgetChanges,
                     'creative_adjustments' => $creative ?: null,
                 ];
 
@@ -265,7 +266,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $healingActionCount = count($healingResults['actions_taken'] ?? []);
                 $keywordsAdded = count($miningResults['keywords_added'] ?? []);
                 $negativesAdded = count($miningResults['negatives_added'] ?? []);
-                $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => $a['type'] === 'budget_updated'));
+                $budgetChangeCount = count($budgetChanges);
                 $creativeGenCount = count($creativeResults['new_variations']['headlines'] ?? []) + count($creativeResults['new_variations']['descriptions'] ?? []);
 
                 if ($healingActionCount > 0) {
@@ -275,7 +276,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     AgentActivity::record('keyword', 'mined_search_terms', "Added {$keywordsAdded} keyword(s) and {$negativesAdded} negative(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id);
                 }
                 if ($budgetChangeCount > 0) {
-                    AgentActivity::record('budget', 'adjusted_budget', "Made {$budgetChangeCount} budget adjustment(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['adjustments' => $budgetResults['adjustments'] ?? []]);
+                    AgentActivity::record('budget', 'adjusted_budget', "Made {$budgetChangeCount} budget adjustment(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['adjustments' => $budgetChanges]);
                 }
                 if ($creativeGenCount > 0) {
                     AgentActivity::record('creative', 'creative_optimized', "Generated {$creativeGenCount} new ad variations based on performance data for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id);
@@ -327,7 +328,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             }
 
             $processed = count($campaignChanges);
-            if ($processed > 0) {
+            if (array_sum(array_column($campaignChanges, 'total_changes')) > 0) {
                 // Notify all users on the account, not just the first.
                 foreach ($customer->users as $user) {
                     $user->notify(new MaintenanceSummaryNotification($customer, $campaignChanges, $processed));
@@ -337,7 +338,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
         $totalActions = ($summary['healing_actions'] ?? 0) + ($summary['keywords_added'] ?? 0)
             + ($summary['negatives_added'] ?? 0) + ($summary['creative_adjustments'] ?? 0)
-            + ($summary['budget_adjustments'] ?? 0) + $summary['ad_strength_repairs'];
+            + ($summary['budget_adjustments'] ?? 0) + $summary['bid_adjustments'] + $summary['ad_strength_repairs'];
         $this->finishRun($runStart,
             actions: $totalActions,
             errors: $summary['errors'] ?? 0,
