@@ -261,6 +261,39 @@ class ApprovedAiMaxPilotActivationTest extends TestCase
         $this->assertFalse($activation->ownerRequestAllowsActivation($fresh, $pilot));
     }
 
+    public function test_obsolete_terminal_cleanup_cannot_pause_a_different_installed_pilot(): void
+    {
+        foreach ([null, 'another-owner-request'] as $newOwner) {
+            [$campaign, $strategy, $activation, $request] = $this->fixture();
+            $state = $campaign->search_delivery_state;
+            $state['ai_max_request'] = [...$state['ai_max_request'], 'status' => 'cancelled', 'enabled' => false,
+                'pause_started_at' => now()->subMinute()->toIso8601String()];
+            $newPilot = ['enabled' => true, 'approval' => 'A later explicit operator approval.',
+                ...($newOwner === null ? [] : ['owner_request_nonce' => $newOwner])];
+            $campaign->update(['search_delivery_state' => $state,
+                'spend_guardrails' => [...$campaign->spend_guardrails, 'ai_max_pilot' => $newPilot]]);
+            $before = $campaign->fresh()->only(['status', 'platform_status', 'spend_safety_hold', 'search_delivery_state', 'spend_guardrails']);
+            $this->assertSame('superseded', $activation->exhaust($campaign->id, $request['nonce'])['status']);
+            $this->assertSame($before, $campaign->fresh()->only(array_keys($before)));
+            $this->assertSame(0, $activation->containmentCalls);
+        }
+    }
+
+    public function test_terminal_cleanup_still_contains_an_unknown_write_owned_by_the_installed_pilot(): void
+    {
+        [$campaign, $strategy, $activation, $request] = $this->fixture();
+        $state = $campaign->search_delivery_state;
+        $state['ai_max_request'] = [...$state['ai_max_request'], 'status' => 'activating',
+            'pause_started_at' => now()->subMinute()->toIso8601String()];
+        $campaign->update(['search_delivery_state' => $state,
+            'spend_guardrails' => [...$campaign->spend_guardrails,
+                'ai_max_pilot' => ['enabled' => true, 'owner_request_nonce' => $request['nonce']]]]);
+        $this->assertSame('needs_review', $activation->exhaust($campaign->id, $request['nonce'])['status']);
+        $this->assertSame(CampaignStatus::Paused, $campaign->fresh()->status);
+        $this->assertSame('ai_max_owner_activation_unverified', $campaign->fresh()->spend_safety_hold['reason']);
+        $this->assertSame(1, $activation->containmentCalls);
+    }
+
     public function test_queue_job_records_expected_wait_and_releases_without_reporting_a_failure(): void
     {
         [$campaign, $strategy, $activation, $request] = $this->fixture();

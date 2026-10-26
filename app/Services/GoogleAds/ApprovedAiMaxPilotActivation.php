@@ -430,6 +430,13 @@ class ApprovedAiMaxPilotActivation
             if (! $campaign instanceof Campaign || ($request['nonce'] ?? null) !== $nonce) {
                 return ['campaign' => null, 'status' => 'revoked', 'message' => 'The owner request no longer exists.'];
             }
+            $installed = $campaign->spend_guardrails['ai_max_pilot'] ?? null;
+            if (is_array($installed) && $installed !== [] && ($installed['owner_request_nonce'] ?? null) !== $nonce) {
+                // A later explicit approval owns this campaign now. Cleanup from an
+                // obsolete queued attempt must not pause it or replace its status.
+                return ['campaign' => null, 'status' => 'superseded',
+                    'message' => 'A different approved AI Max pilot superseded this activation request.'];
+            }
             if (in_array($request['status'] ?? null, ['active', 'completed'], true)) {
                 return ['campaign' => null, 'status' => $request['status'], 'message' => $request['message'] ?? $reason];
             }

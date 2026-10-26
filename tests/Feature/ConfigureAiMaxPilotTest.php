@@ -7,6 +7,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Services\Campaigns\GoogleCampaignSpendSafety;
 use App\Services\GoogleAds\ConfigureAiMaxPilot;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
@@ -33,7 +34,7 @@ class ConfigureAiMaxPilotTest extends TestCase
 
     private function fixture(): array
     {
-        $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890', 'currency_code' => 'AUD',
+        $customer = Customer::where('google_ads_customer_id', '1234567890')->first() ?? Customer::factory()->create(['google_ads_customer_id' => '1234567890', 'currency_code' => 'AUD',
             'timezone' => 'Australia/Sydney', 'service_type' => 'managed']);
         $old = ['enabled' => true, 'max_daily_budget_micros' => 50_000_000, 'max_cpc_bid_micros' => 10_000_000,
             'currency_code' => 'AUD', 'approved_at' => now()->subHour()->toIso8601String(), 'source' => 'owner_approved_cost_repair'];
@@ -135,6 +136,84 @@ class ConfigureAiMaxPilotTest extends TestCase
         $this->assertSame(1, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'ai_max_pilot_activated')->count());
     }
 
+    public function test_real_spend_monitor_recognizes_only_the_verified_post_enable_handshake(): void
+    {
+        [$campaign, $pilot, $coordinator] = $this->fixture();
+        $coordinator->useRealSpendSafety = true;
+        $campaign->update(['search_delivery_state' => ['ai_max_request' => ['enabled' => true, 'nonce' => 'old-cancelled-request', 'status' => 'cancelled']]]);
+        $safety = new CoordinatorSpendSafetyProbe($coordinator);
+        $this->app->instance(GoogleCampaignSpendSafety::class, $safety);
+        $this->assertTrue($coordinator->prepare($campaign, $pilot)['ready']);
+        $result = $coordinator->activate($campaign);
+        $this->assertSame('active', $result['status']);
+        $this->assertSame(CampaignStatus::Active, $campaign->fresh()->status);
+        $this->assertSame(1, $coordinator->enableCalls);
+        $this->assertSame(0, $safety->pauseCalls);
+        $this->assertNull($campaign->fresh()->spend_safety_hold);
+        $this->assertContains([CampaignStatus::Paused, 2], $safety->states, 'The real monitor must evaluate local Paused while Google has just become Enabled.');
+        $this->assertSame(2, $campaign->fresh()->search_delivery_state['ai_max_monitor']['google_status']);
+
+        // Once activation completed, an explicit local pause is protected normally.
+        $campaign->fresh()->update(['status' => CampaignStatus::Paused]);
+        $this->assertSame('manual_pause_drift', $safety->check($campaign)['reason']);
+        $this->assertSame(1, $safety->pauseCalls);
+        $this->assertSame(3, $coordinator->remote['status']);
+    }
+
+    public function test_real_spend_monitor_preserves_owner_hold_and_purchase_spend_stops_during_handshake(): void
+    {
+        foreach (['owner_hold', 'spend_review', 'configuration', 'stale_journal', 'wrong_scope', 'changed_approval', 'hold_during_read', 'bound_nonce_revoked', 'policy_during_read'] as $failure) {
+            [$campaign, $pilot, $coordinator] = $this->fixture();
+            $coordinator->useRealSpendSafety = true;
+            $safety = new CoordinatorSpendSafetyProbe($coordinator);
+            $this->app->instance(GoogleCampaignSpendSafety::class, $safety);
+            $this->assertTrue($coordinator->prepare($campaign, $pilot)['ready']);
+            $coordinator->beforeEnable = function () use ($campaign, $safety, $failure): void {
+                $fresh = $campaign->fresh();
+                $state = $fresh->search_delivery_state;
+                if ($failure === 'owner_hold') {
+                    $fresh->update(['spend_safety_hold' => ['reason' => 'manual_pause', 'requested_at' => now()->toIso8601String()]]);
+                } elseif ($failure === 'spend_review') {
+                    $safety->additionalCost = 200_000_000;
+                } elseif ($failure === 'configuration') {
+                    $safety->ready = false;
+                } elseif ($failure === 'stale_journal') {
+                    $state['ai_max_setup']['activation_started_at'] = now()->subMinutes(11)->toIso8601String();
+                    $fresh->update(['search_delivery_state' => $state]);
+                } elseif ($failure === 'wrong_scope') {
+                    $state['ai_max_setup']['campaign_resource'] = 'customers/1234567890/campaigns/123';
+                    $fresh->update(['search_delivery_state' => $state]);
+                } elseif ($failure === 'hold_during_read') {
+                    $safety->duringReadiness = function () use ($campaign): void {
+                        $campaign->fresh()->update(['spend_safety_hold' => ['reason' => 'manual_pause', 'keep' => 'owner intent']]);
+                    };
+                } elseif ($failure === 'policy_during_read') {
+                    $safety->duringReadiness = function () use ($campaign): void {
+                        $fresh = $campaign->fresh();
+                        $policy = $fresh->spend_guardrails;
+                        $policy['ai_max_pilot']['review_spend_micros'] = 100_000_000;
+                        $fresh->update(['spend_guardrails' => $policy]);
+                    };
+                } elseif ($failure === 'bound_nonce_revoked') {
+                    $policy = $fresh->spend_guardrails;
+                    $policy['ai_max_pilot']['owner_request_nonce'] = 'revoked-owner-request';
+                    $state['ai_max_request'] = ['enabled' => true, 'nonce' => 'revoked-owner-request', 'status' => 'cancelled'];
+                    $fresh->update(['spend_guardrails' => $policy, 'search_delivery_state' => $state]);
+                } else {
+                    $state['ai_max_setup']['pilot_hash'] = 'changed';
+                    $fresh->update(['search_delivery_state' => $state]);
+                }
+            };
+            $this->assertFalse($coordinator->activate($campaign)['ready'], $failure);
+            $this->assertSame(3, $coordinator->remote['status'], $failure);
+            $this->assertSame(CampaignStatus::Paused, $campaign->fresh()->status, $failure);
+            $this->assertNotEmpty($campaign->fresh()->spend_safety_hold, $failure);
+            if (in_array($failure, ['owner_hold', 'hold_during_read'], true)) {
+                $this->assertSame('manual_pause', $campaign->fresh()->spend_safety_hold['reason']);
+            }
+        }
+    }
+
     public function test_spend_exhaustion_and_owner_holds_prevent_or_safely_stop_activation(): void
     {
         [$campaign, $pilot, $coordinator] = $this->fixture();
@@ -214,6 +293,8 @@ class ScriptedAiMaxCoordinator extends ConfigureAiMaxPilot
 
     public bool $throwBeforeApply = false;
 
+    public bool $useRealSpendSafety = false;
+
     public bool $throwAfterEnable = false;
 
     public int $enableCalls = 0;
@@ -256,7 +337,12 @@ class ScriptedAiMaxCoordinator extends ConfigureAiMaxPilot
                 'resourceName' => 'customers/1234567890/adGroups/10', 'status' => 'ENABLED', 'type' => 'SEARCH_STANDARD']]]]];
     }
 
-    protected function spendCheck(Campaign $campaign): void {}
+    protected function spendCheck(Campaign $campaign): void
+    {
+        if ($this->useRealSpendSafety) {
+            parent::spendCheck($campaign);
+        }
+    }
 
     protected function mutate(Campaign $campaign, array $operations, bool $validateOnly): void
     {
@@ -332,5 +418,54 @@ class ScriptedAiMaxSnapshotAdapter extends ConfigureAiMaxPilot
             'campaign' => new \Google\Ads\GoogleAds\V26\Resources\Campaign(['resource_name' => $resource]),
             'metrics' => new \Google\Ads\GoogleAds\V26\Common\Metrics(['cost_micros' => $this->cost]),
         ])];
+    }
+}
+
+/** Real spend policy with an in-memory provider transport, sharing the coordinator's remote state. */
+class CoordinatorSpendSafetyProbe extends GoogleCampaignSpendSafety
+{
+    public int $pauseCalls = 0;
+
+    public array $states = [];
+
+    public int $additionalCost = 0;
+
+    public bool $ready = true;
+
+    public ?\Closure $duringReadiness = null;
+
+    public function __construct(private ScriptedAiMaxCoordinator $coordinator) {}
+
+    protected function snapshot(Campaign $campaign): array
+    {
+        $remote = $this->coordinator->remote;
+        $this->states[] = [$campaign->status, $remote['status']];
+
+        return ['status' => $remote['status'], 'campaign_type' => 2, 'daily_budget_micros' => $remote['daily_budget_micros'],
+            'bidding_strategy' => $remote['bidding_strategy'], 'cost_micros' => $remote['reported_lifetime_cost_micros'] + $this->additionalCost,
+            'window_matured_cost_micros' => $remote['reported_lifetime_cost_micros'], 'window_conversions' => 0.0,
+            'currency_code' => $remote['currency_code'], 'account_timezone' => $remote['time_zone']];
+    }
+
+    protected function pilotReadiness(Campaign $campaign, array $pilot): array
+    {
+        if ($this->duringReadiness) {
+            ($this->duringReadiness)();
+        }
+
+        return ['ready' => $this->ready, 'fingerprint' => hash('sha256', 'configured'), 'checked_at' => now()->toIso8601String()];
+    }
+
+    protected function pause(Campaign $campaign): bool
+    {
+        $this->pauseCalls++;
+        $this->coordinator->remote['status'] = 3;
+
+        return true;
+    }
+
+    protected function isPaused(Campaign $campaign): bool
+    {
+        return $this->coordinator->remote['status'] === 3;
     }
 }

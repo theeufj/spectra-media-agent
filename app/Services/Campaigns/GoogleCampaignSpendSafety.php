@@ -6,6 +6,7 @@ use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\SpectraConversionEvent;
+use App\Services\GoogleAds\ApprovedAiMaxPilotActivation;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
@@ -34,6 +35,8 @@ class GoogleCampaignSpendSafety
                 return ['action' => 'skipped', 'reason' => 'account is not under automatic management'];
             }
 
+            $accountId = $customer->cleanGoogleCustomerId();
+            $resource = $campaign->googleAdsResourceName();
             $snapshot = $this->snapshot($campaign);
             if ($snapshot['status'] === GoogleStatus::REMOVED) {
                 $campaign->applyPlatformStatus('REMOVED');
@@ -42,6 +45,14 @@ class GoogleCampaignSpendSafety
             }
             $hold = $campaign->spend_safety_hold;
             $reason = $hold['reason'] ?? $this->stopReason($campaign, $snapshot);
+            // Configuration reads may be slow. A newer owner hold always wins,
+            // including one placed while validating the activation handshake.
+            $campaign->refresh()->load('customer');
+            if ($campaign->customer?->cleanGoogleCustomerId() !== $accountId || $campaign->googleAdsResourceName() !== $resource) {
+                throw new \RuntimeException('Campaign ownership changed during its spend safety read.');
+            }
+            $hold = $campaign->spend_safety_hold;
+            $reason = $hold['reason'] ?? $reason;
             if ($reason === null) {
                 if ($snapshot['status'] === GoogleStatus::PAUSED) {
                     $campaign->applyPlatformStatus('PAUSED');
@@ -70,11 +81,22 @@ class GoogleCampaignSpendSafety
 
             // Save intent first. A rejected pause or failed read-back still
             // blocks automatic enabling and is retried by the next safety run.
-            $campaign->update(['spend_safety_hold' => [
-                'reason' => $reason,
-                'requested_at' => $hold['requested_at'] ?? now()->toIso8601String(),
-                'snapshot' => $snapshot,
-            ]]);
+            $intent = DB::transaction(function () use ($campaign, $reason, $snapshot, $accountId, $resource): array {
+                $locked = Campaign::withoutCustomerScope()->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+                if (! $locked instanceof Campaign || $locked->customer?->cleanGoogleCustomerId() !== $accountId
+                    || $locked->googleAdsResourceName() !== $resource) {
+                    throw new \RuntimeException('Campaign ownership changed before its protective pause.');
+                }
+                $latest = $locked->spend_safety_hold ?? [];
+                $intent = [...$latest, 'reason' => $latest['reason'] ?? $reason,
+                    'requested_at' => $latest['requested_at'] ?? now()->toIso8601String(), 'snapshot' => $snapshot];
+                unset($intent['verified_at']); // The latest Enabled read needs a fresh pause confirmation.
+                $locked->update(['spend_safety_hold' => $intent]);
+
+                return $intent;
+            });
+            $reason = $intent['reason'];
+            $campaign->refresh()->load('customer');
             if ($snapshot['status'] !== GoogleStatus::PAUSED && ! $this->pause($campaign)) {
                 throw new \RuntimeException("Google rejected the spend safety pause for campaign {$campaign->id}.");
             }
@@ -192,6 +214,14 @@ class GoogleCampaignSpendSafety
             return 'approved_end_date_passed';
         }
         if ($respectLocalPause && $campaign->status === CampaignStatus::Paused && $snapshot['status'] === GoogleStatus::ENABLED) {
+            // Google can confirm the authorized enable before local lifecycle readback
+            // is committed. This exact, short journalled handshake is not a new
+            // manual pause. Every actual hold and every other safety check still wins.
+            $activation = $this->approvedAiMaxActivation($campaign);
+            if ($activation !== null) {
+                return $this->pilotStopReason($campaign, $snapshot, false, $activation);
+            }
+
             return 'manual_pause_drift';
         }
         if (CampaignSpendGuardrails::aiMaxPilot($campaign) !== null) {
@@ -229,7 +259,7 @@ class GoogleCampaignSpendSafety
             ? 'no_conversions_after_matured_spend' : null;
     }
 
-    private function pilotStopReason(Campaign $campaign, array &$snapshot, bool $allowPausedPreparation): ?string
+    private function pilotStopReason(Campaign $campaign, array &$snapshot, bool $allowPausedPreparation, ?array $activationReadiness = null): ?string
     {
         $pilot = CampaignSpendGuardrails::aiMaxPilot($campaign);
         if (! $pilot || ! CampaignSpendGuardrails::validAiMaxPilot($campaign)) {
@@ -260,7 +290,7 @@ class GoogleCampaignSpendSafety
             return 'ai_max_serving_limits_changed';
         }
         try {
-            $readiness = $this->pilotReadiness($campaign, $pilot);
+            $readiness = $activationReadiness ?? $this->pilotReadiness($campaign, $pilot);
             $snapshot['ai_max_configuration'] = array_intersect_key($readiness, array_flip(['ready', 'issues', 'fingerprint', 'checked_at']));
             if (($readiness['ready'] ?? null) !== true) {
                 return 'ai_max_configuration_unverified';
@@ -274,6 +304,63 @@ class GoogleCampaignSpendSafety
         }
 
         return $this->pilotTrackingFailure($campaign, $pilot);
+    }
+
+    /** A provider readback exception, never permission for an unjournalled or stale enable. */
+    private function approvedAiMaxActivation(Campaign $campaign): ?array
+    {
+        try {
+            $fresh = $campaign->fresh(['customer']);
+            $pilot = $fresh ? CampaignSpendGuardrails::aiMaxPilot($fresh) : null;
+            if (! $fresh || ! $pilot || CampaignSpendGuardrails::aiMaxPilot($campaign) !== $pilot
+                || ! $this->activationJournalMatches($fresh, $pilot)) {
+                return null;
+            }
+            $readiness = $this->pilotReadiness($fresh, $pilot);
+            if (($readiness['ready'] ?? null) !== true || ($readiness['fingerprint'] ?? null) !== $pilot['settings_fingerprint']) {
+                return null;
+            }
+            // An owner may pause/cancel while native configuration is being read.
+            $again = $campaign->fresh(['customer']);
+            if (! $again || CampaignSpendGuardrails::aiMaxPilot($again) !== $pilot
+                || ! $this->activationJournalMatches($again, $pilot)) {
+                return null;
+            }
+
+            return $readiness;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+    }
+
+    private function activationJournalMatches(Campaign $campaign, array $pilot): bool
+    {
+        $journal = $campaign->search_delivery_state['ai_max_setup'] ?? [];
+        if ($campaign->status !== CampaignStatus::Paused || $campaign->spend_safety_hold
+            || $campaign->customer?->service_type !== 'managed' || $campaign->customer->is_sandbox
+            || $campaign->customer->google_ads_link_status === 'revoked'
+            || ! CampaignSpendGuardrails::canEnable($campaign, true)
+            || ($journal['status'] ?? null) !== 'activation_pending' || ! empty($journal['activated_at'])
+            || ($journal['customer_id'] ?? null) !== $campaign->customer->cleanGoogleCustomerId()
+            || ($journal['campaign_resource'] ?? null) !== $campaign->googleAdsResourceName()
+            || ! is_string($pilot['settings_fingerprint'] ?? null) || $pilot['settings_fingerprint'] === ''
+            || ($journal['settings_fingerprint'] ?? null) !== $pilot['settings_fingerprint']
+            || ! is_string($journal['activation_started_at'] ?? null) || ! is_string($journal['prepared_at'] ?? null)) {
+            return false;
+        }
+        $activation = CarbonImmutable::parse($journal['activation_started_at']);
+        if ($activation->lt(now()->subMinutes(10)) || $activation->gt(now())
+            || CarbonImmutable::parse($journal['prepared_at'])->gt($activation)) {
+            return false;
+        }
+        $approval = $pilot;
+        unset($approval['settings_fingerprint']);
+        ksort($approval);
+
+        return ($journal['pilot_hash'] ?? null) === hash('sha256', json_encode($approval, JSON_THROW_ON_ERROR))
+            && app(ApprovedAiMaxPilotActivation::class)->ownerRequestAllowsActivation($campaign, $pilot);
     }
 
     protected function pilotReadiness(Campaign $campaign, array $pilot): array
