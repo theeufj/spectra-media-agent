@@ -86,12 +86,15 @@ class CampaignConversionTrackingHealth
         // The selected, remotely inspected goal and each receipt's pinned
         // destination are evidence. A changed global mapping must not erase
         // an earlier upload failure for this exact account/action.
-        $events = match ($category) {
-            'SIGNUP' => ['signup'],
-            'PURCHASE' => ['paid_subscription', 'paid_setup'],
-            default => match ($action) {
-                Setting::get('conversion_resource_name.signup_import') => ['signup'],
-                Setting::get('conversion_resource_name.paid_subscription') => ['paid_subscription', 'paid_setup'],
+        $events = match ($action) {
+            Setting::get('conversion_resource_name.paid_setup') => ['paid_setup'],
+            // Older setup receipts deliberately retain this destination. Keep
+            // observing them here even after new checkouts use a separate action.
+            Setting::get('conversion_resource_name.paid_subscription') => ['paid_subscription', 'paid_setup'],
+            Setting::get('conversion_resource_name.signup_import') => ['signup'],
+            default => match ($category) {
+                'SIGNUP' => ['signup'],
+                'PURCHASE' => ['paid_subscription', 'paid_setup'],
                 default => null,
             },
         };

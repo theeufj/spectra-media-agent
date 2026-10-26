@@ -18,6 +18,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Laravel\Pennant\Feature;
 
 /** Each campaign has an independent observation/repair job, never a scheduler API call. */
@@ -81,10 +82,7 @@ class CheckGoogleSearchDelivery implements ShouldBeUnique, ShouldQueue
                 $state['status'] = 'needs_review';
                 $state['blocked_reason'] = $cost['reason'] ?? 'search_cost_review_required';
             }
-            $current = $campaign->fresh();
-            if ($current) {
-                $current->update(['search_delivery_state' => [...($current->search_delivery_state ?? []), ...$state]]);
-            }
+            $state = $this->saveObservation($campaign, $freshState, $state);
             $status = $state['status'];
             $rankActions = $state['ad_rank']['repair']['metadata']['actions_taken'] ?? 0;
             $this->finishRun($started,
@@ -107,6 +105,38 @@ class CheckGoogleSearchDelivery implements ShouldBeUnique, ShouldQueue
         }
     }
 
+    /** Merge only this observation's changes; independent writers own their current namespaces. */
+    private function saveObservation(Campaign $campaign, array $baseline, array $observation): array
+    {
+        return DB::transaction(function () use ($campaign, $baseline, $observation): array {
+            $current = Campaign::withoutCustomerScope()->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            if (! $current instanceof Campaign) {
+                throw new \RuntimeException('The campaign is unavailable while saving its delivery observation.');
+            }
+            $state = $current->search_delivery_state ?? [];
+            foreach ($observation as $key => $value) {
+                if (in_array($key, ['ai_max_request', 'ai_max_setup', 'ai_max_monitor', 'market_research'], true)
+                    || (array_key_exists($key, $baseline) && $baseline[$key] === $value)) {
+                    continue;
+                }
+                // A newer write to the same key wins over this earlier observation.
+                if (array_key_exists($key, $state) && (! array_key_exists($key, $baseline) || $state[$key] !== $baseline[$key])
+                    && $state[$key] !== $value) {
+                    continue;
+                }
+                $state[$key] = $value;
+            }
+            if (CampaignSpendGuardrails::aiMaxPilot($current) !== null || CampaignSpendGuardrails::pendingAiMaxRequest($current) !== null) {
+                $pilot = CampaignSpendGuardrails::aiMaxPilot($current) !== null;
+                $state = [...$state, 'status' => $pilot ? 'native_automation' : 'pending_native_automation',
+                    'blocked_reason' => $pilot ? 'ai_max_pilot_owns_optimization' : 'ai_max_request_pending', 'mutation_allowed' => false];
+            }
+            $current->update(['search_delivery_state' => $state]);
+
+            return $state;
+        }, 3);
+    }
+
     /** Sparse expensive queries are reviewed between daily sweeps, never on every hourly retry. */
     private function reviewSearchTerms(Campaign $campaign, array $cost): ?array
     {
@@ -121,15 +151,31 @@ class CheckGoogleSearchDelivery implements ShouldBeUnique, ShouldQueue
             || ! Feature::for($campaign->customer)->active(AutoHealing::class)) {
             return null;
         }
-        $previous = $campaign->search_delivery_state['search_term_review'] ?? [];
-        if (! empty($previous['checked_at']) && CarbonImmutable::parse($previous['checked_at'])->gt(
-            now()->subHours(max(1, (int) config('optimization.search_cost_protection.mining_cooldown_hours', 24))))) {
-            return null;
-        }
         // Persist the claim before provider calls. A retry after an unknown keyword
         // mutation must not start a second mining batch immediately.
         $review = ['status' => 'running', 'checked_at' => now()->toIso8601String(), 'actions_taken' => 0];
-        $campaign->update(['search_delivery_state' => [...($campaign->search_delivery_state ?? []), 'search_term_review' => $review]]);
+        $campaign = DB::transaction(function () use ($campaign, $review): ?Campaign {
+            $current = Campaign::withoutCustomerScope()->with('customer')->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            if (! $current instanceof Campaign) {
+                throw new \RuntimeException('The campaign is unavailable while claiming its search-term review.');
+            }
+            if ($current->status !== CampaignStatus::Active || $current->hasPassedEndDate()
+                || CampaignSpendGuardrails::automaticChangesSuspended($current)) {
+                return null;
+            }
+            $state = $current->search_delivery_state ?? [];
+            $previous = $state['search_term_review'] ?? [];
+            if (! empty($previous['checked_at']) && CarbonImmutable::parse($previous['checked_at'])->gt(
+                now()->subHours(max(1, (int) config('optimization.search_cost_protection.mining_cooldown_hours', 24))))) {
+                return null;
+            }
+            $current->update(['search_delivery_state' => [...$state, 'search_term_review' => $review]]);
+
+            return $current;
+        }, 3);
+        if ($campaign === null) {
+            return null;
+        }
         $result = app(SearchTermMiningAgent::class)->mine($campaign, true);
         $review['status'] = ! empty($result['requires_review']) || ! empty($result['errors']) ? 'needs_review' : 'checked';
         $review['actions_taken'] = count($result['keywords_added'] ?? []) + count($result['negatives_added'] ?? []);

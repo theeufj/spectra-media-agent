@@ -49,7 +49,7 @@ class OwnSitePurchaseTracking
         $identifiers = $user->googleAdIdentifiers();
         $serverRoute = $identifiers !== null
             && preg_match('/\A[A-Za-z0-9._~+\/=\-]{1,255}\z/D', reset($identifiers)) === 1;
-        $destination = $serverRoute ? RecordSiteGoogleConversion::canonicalPurchaseDestination() : null;
+        $destination = $serverRoute ? RecordSiteGoogleConversion::setupPurchaseDestination() : null;
         $event = SpectraConversionEvent::firstOrCreate(['deduplication_key' => 'paid_setup:'.$session['id']], [
             'event' => 'paid_setup', 'user_id' => $user->id, 'mode' => $serverRoute ? 'server_google' : 'verified_purchase',
             'value' => intdiv($amount, 100).'.'.str_pad((string) ($amount % 100), 2, '0', STR_PAD_LEFT),

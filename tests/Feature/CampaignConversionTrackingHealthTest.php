@@ -228,6 +228,23 @@ class CampaignConversionTrackingHealthTest extends TestCase
         $this->assertNull($this->customer->fresh()->conversion_tracking_verified_at);
     }
 
+    public function test_dedicated_setup_goal_observes_only_setup_receipts_for_its_exact_destination(): void
+    {
+        $action = 'customers/'.self::CUSTOMER_ID.'/conversionActions/79';
+        Setting::set('conversion_resource_name.paid_setup', $action);
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => $action]]);
+        $this->event(['event' => 'paid_setup', 'value' => '999.00', 'google_conversion_resource' => $action,
+            'upload_error' => 'Actual setup delivery failed']);
+        $this->event(['event' => 'paid_subscription', 'value' => '250.00', 'google_conversion_resource' => $action,
+            'upload_error' => 'Subscription is not the selected product']);
+        $state = $this->health(['intent' => ['mode' => 'custom', 'category' => 'PURCHASE', 'action_resource' => $action]])
+            ->inspect($this->strategy, $this->tracking(action: $action), $this->account());
+
+        $this->assertSame('delivery_failed', $state['status']);
+        $this->assertSame(['paid_setup'], $state['delivery']['events']);
+        $this->assertSame(['upload_failed' => 1], $state['delivery']['statuses']);
+    }
+
     public function test_unrelated_actions_accounts_modes_events_and_old_records_do_not_trigger_failures(): void
     {
         $this->event(['upload_error' => 'Wrong action', 'google_conversion_resource' => 'customers/1234567890/conversionActions/78']);

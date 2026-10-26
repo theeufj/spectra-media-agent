@@ -92,6 +92,60 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertSame('preserve', $this->campaign->fresh()->search_delivery_state['diagnosis']);
     }
 
+    public function test_an_enabled_native_pilot_cannot_reuse_or_generate_manual_bidding_quotes(): void
+    {
+        $queued = $this->workflow->request($this->campaign);
+        $before = $this->campaign->fresh()->search_delivery_state;
+        $this->campaign->update(['spend_guardrails' => ['ai_max_pilot' => ['enabled' => true]]]);
+        $this->workflow->run($this->campaign, $queued['request_id']);
+        $this->assertSame($before, $this->campaign->fresh()->search_delivery_state);
+        $status = $this->workflow->status($this->campaign);
+        $this->assertSame('native_automation', $status['status']);
+        $this->assertFalse($status['approvable']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->workflow->request($this->campaign, true, dailyCents: 5000);
+    }
+
+    public function test_research_finishing_after_native_ownership_cannot_publish_a_legacy_quote(): void
+    {
+        $provider = $this->createMock(CampaignMarketResearch::class);
+        $provider->method('fingerprint')->willReturn('reviewed-input');
+        $provider->method('research')->willReturnCallback(function (): array {
+            $current = $this->campaign->fresh();
+            $current->update(['search_delivery_state' => [...$current->search_delivery_state,
+                'ai_max_request' => ['enabled' => true, 'nonce' => 'new-owner-request', 'status' => 'waiting_for_conversion'],
+                'ai_max_setup' => ['status' => 'reserved'], 'ai_max_monitor' => ['checked_at' => 'fresh-check']]]);
+
+            return [...$this->proposal, 'fingerprint' => 'reviewed-input'];
+        });
+        $workflow = new CampaignMarketResearchWorkflow($provider);
+        $queued = $workflow->request($this->campaign);
+        $workflow->run($this->campaign, $queued['request_id']);
+        $state = $this->campaign->fresh()->search_delivery_state;
+        $this->assertSame('new-owner-request', $state['ai_max_request']['nonce']);
+        $this->assertSame('reserved', $state['ai_max_setup']['status']);
+        $this->assertSame('fresh-check', $state['ai_max_monitor']['checked_at']);
+        $this->assertSame('researching', $state['market_research']['status']);
+        $this->assertNull($state['market_research']['result']);
+        $this->assertFalse($workflow->status($this->campaign)['approvable']);
+    }
+
+    public function test_stale_proposal_cannot_apply_after_a_native_request_is_recorded(): void
+    {
+        $status = $this->researched();
+        $current = $this->campaign->fresh();
+        $current->update(['search_delivery_state' => [...$current->search_delivery_state,
+            'ai_max_request' => ['enabled' => true, 'nonce' => 'new-owner-request', 'status' => 'waiting_for_conversion']]]);
+        $before = $current->fresh()->getAttributes();
+        try {
+            $this->workflow->applyApprovedProposal($this->campaign, collect([$this->strategy]), $status['result']);
+            $this->fail('A stale proposal must not mutate the native-owned campaign.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertSame($before, $this->campaign->fresh()->getAttributes());
+            $this->assertSame('old keyword', $this->strategy->fresh()->bidding_strategy['keywords'][0]['text']);
+        }
+    }
+
     public function test_manual_campaign_accepts_only_its_exact_researched_plan_and_budget(): void
     {
         $status = $this->researched();

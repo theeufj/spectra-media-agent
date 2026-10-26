@@ -155,6 +155,65 @@ class GoogleCampaignReadinessTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_inactive_campaign_findings_remain_available_without_routine_readiness_emails(): void
+    {
+        $this->adminRecipient();
+        foreach (['paused', 'draft', 'ended', 'completed', 'pending_admin_deployment'] as $status) {
+            [$campaign, , $strategy] = $this->workspace(['status' => $status]);
+            [$goals, $strength, $verifier] = $this->services();
+            $issue = ['code' => 'conversion_goal_intent_missing', 'message' => 'Choose an explicit supported conversion goal before using conversion bidding.'];
+            $goals->expects($this->once())->method('inspect')->willReturn($this->goals(['ready' => false,
+                'status' => 'needs_review', 'issues' => [$issue]]));
+            $goals->expects($this->never())->method('reconcile');
+            $strength->expects($this->never())->method('checkAdStrength');
+            // Even a delayed after-activation check cannot override a later pause.
+            (new CheckGoogleCampaignReadiness($campaign->id, afterActivation: true))->handle($strength, $verifier);
+
+            $this->assertContains($issue, $this->snapshot($strategy)['issues']);
+            $this->assertSame('needs_review', $this->snapshot($strategy)['status']);
+            $this->assertSame(0, AgentActivity::where('campaign_id', $campaign->id)->where('action', 'google_readiness_alerted')->count());
+        }
+        Notification::assertNothingSent();
+    }
+
+    public function test_known_remote_pause_suppresses_routine_mail_when_local_status_is_stale_active(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $issue = ['code' => 'conversion_goal_intent_missing', 'message' => 'Select a conversion goal.'];
+        $goals->expects($this->once())->method('reconcile')->willReturn($this->goals(['ready' => false,
+            'status' => 'needs_review', 'issues' => [$issue]]));
+        $strength->expects($this->once())->method('checkAdStrength')->willReturn($this->strength([
+            'checked' => true, 'verified' => false, 'skipped' => 'google_campaign_not_enabled',
+            'unresolved' => [['reason' => 'google_campaign_paused']],
+        ]));
+        (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+
+        $this->assertContains($issue, $this->snapshot($strategy)['issues']);
+        $this->assertSame('active', $campaign->fresh()->status->value);
+        $this->assertSame('ENABLED', $campaign->fresh()->platform_status);
+        Notification::assertNothingSent();
+    }
+
+    public function test_pause_during_readiness_checks_prevents_escalation_of_the_completed_goal_observation(): void
+    {
+        [$campaign, , $strategy] = $this->workspace();
+        $this->adminRecipient();
+        [$goals, $strength, $verifier] = $this->services();
+        $issue = ['code' => 'missing_goal', 'message' => 'The selected goal needs review.'];
+        $goals->expects($this->once())->method('reconcile')->willReturnCallback(function () use ($campaign, $issue): array {
+            $campaign->update(['status' => 'paused']);
+
+            return $this->goals(['ready' => false, 'status' => 'needs_review', 'issues' => [$issue]]);
+        });
+        $strength->expects($this->never())->method('checkAdStrength');
+        (new CheckGoogleCampaignReadiness($campaign->id))->handle($strength, $verifier);
+
+        $this->assertContains($issue, $this->snapshot($strategy)['issues']);
+        Notification::assertNothingSent();
+    }
+
     public function test_strength_failure_preserves_completed_goal_work_and_is_reported(): void
     {
         [$campaign, $customer, $strategy] = $this->workspace();

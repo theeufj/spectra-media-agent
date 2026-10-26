@@ -50,6 +50,45 @@ class GoogleSearchReachRecoveryTest extends TestCase
         return $campaign->load('customer');
     }
 
+    public function test_stale_delivery_save_preserves_new_owner_request_and_its_durable_journals(): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->snapshot();
+        $snapshot['status'] = 3; // Observe only; no legacy repair should be attempted.
+        $watchdog = $this->watchdog($snapshot, $this->diagnosis());
+        $owned = ['ai_max_request' => ['enabled' => true, 'nonce' => 'new-owner-request', 'status' => 'preparing'],
+            'ai_max_setup' => ['status' => 'preparing', 'prepare_started_at' => now()->toIso8601String()],
+            'ai_max_monitor' => ['reported_spend_micros' => 12_000_000],
+            'market_research' => ['request_id' => 'new-research'], 'cost_protection' => ['verified_at' => now()->toIso8601String()]];
+        $watchdog->onInspect = function (Campaign $observed) use ($owned): void {
+            $observed->update(['search_delivery_state' => $owned]);
+        };
+        $result = $watchdog->check($campaign);
+        foreach ($owned as $key => $value) {
+            $this->assertSame($value, $campaign->fresh()->search_delivery_state[$key], $key);
+        }
+        $this->assertSame('pending_native_automation', $result['status']);
+        $this->assertFalse($result['mutation_allowed']);
+        $this->assertSame([], $watchdog->added);
+    }
+
+    public function test_stale_delivery_save_cannot_restore_removed_owner_namespaces(): void
+    {
+        $campaign = $this->makeCampaign();
+        $campaign->update(['search_delivery_state' => ['ai_max_request' => ['enabled' => true, 'nonce' => 'old-request', 'status' => 'cancelled'],
+            'ai_max_setup' => ['status' => 'old'], 'ai_max_monitor' => ['reported_spend_micros' => 2]]]);
+        $snapshot = $this->snapshot();
+        $snapshot['status'] = 3;
+        $watchdog = $this->watchdog($snapshot, $this->diagnosis());
+        $watchdog->onInspect = function (Campaign $observed): void {
+            $observed->update(['search_delivery_state' => []]);
+        };
+        $watchdog->check($campaign);
+        foreach (['ai_max_request', 'ai_max_setup', 'ai_max_monitor'] as $key) {
+            $this->assertArrayNotHasKey($key, $campaign->fresh()->search_delivery_state);
+        }
+    }
+
     private function snapshot(): array
     {
         return ['status' => 2, 'channel' => 2, 'google_search_enabled' => true,

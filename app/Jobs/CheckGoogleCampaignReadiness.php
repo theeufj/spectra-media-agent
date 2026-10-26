@@ -18,6 +18,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\ReconcileSearchAudienceObservation;
+use App\Services\Notifications\GoogleReadinessAlertEligibility;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -396,6 +397,11 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
 
     private function escalate(Campaign $campaign, Strategy $strategy, array $snapshot): void
     {
+        $scope = ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id,
+            'strategy_id' => $strategy->id, 'campaign_resource' => $snapshot['campaign_resource'], 'issues' => $snapshot['issues']];
+        if (! GoogleReadinessAlertEligibility::allows($scope)) {
+            return; // Persisted findings remain available for the next launch review.
+        }
         // The repair loop already notifies customers/admins when a bounded
         // per-ad repair is exhausted. Keep that evidence in readiness, but do
         // not send it again from this aggregate check.
@@ -453,7 +459,7 @@ class CheckGoogleCampaignReadiness implements ShouldBeUniqueUntilProcessing, Sho
         $subject = $affected === [] ? 'Deployment verification' : implode(', ', $affected);
         CriticalAgentAlert::deliver('google_campaign_readiness', 'Google campaign readiness needs attention',
             'Review '.$subject.' for "'.$campaign->name.'". See the reported issues. This readiness check has not changed campaign pause or budget settings.',
-            ['campaign_id' => $campaign->id, 'customer_id' => $campaign->customer_id, 'strategy_id' => $strategy->id, 'issues' => $notificationIssues, 'action_url' => route('admin.campaigns.show', $campaign), 'dedupe_key' => $fingerprint],
+            [...$scope, 'issues' => $notificationIssues, 'action_url' => route('admin.campaigns.show', $campaign), 'dedupe_key' => $fingerprint],
             CriticalAgentAlert::RECIPIENTS_ADMINS, $campaign->customer);
         AgentActivity::record('google_readiness', 'google_readiness_alerted', 'Unresolved Google readiness issues escalated for review.',
             $campaign->customer_id, $campaign->id, ['strategy_id' => $strategy->id, 'fingerprint' => $fingerprint, 'issues' => $notificationIssues], 'needs_review');

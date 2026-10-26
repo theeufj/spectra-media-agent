@@ -54,6 +54,10 @@ class SettleDeployedCampaign
      */
     public function settle(Campaign $campaign): bool
     {
+        $campaign->refresh()->load('customer');
+        if ($this->aiMaxOwnsCampaign($campaign)) {
+            return false;
+        }
         $customer = $campaign->customer;
 
         if (! $customer) {
@@ -84,7 +88,8 @@ class SettleDeployedCampaign
         $staged = $campaign->strategies()->where('campaign_type', 'search')->orderBy('id')->get()
             ->filter(fn ($strategy) => ! empty($strategy->execution_result['metadata']['google_search_staging']));
         if ($staged->isNotEmpty()) {
-            if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)) {
+            if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
+                || $this->aiMaxOwnsCampaign($campaign)) {
                 return false;
             }
             if (CampaignStatusHelper::getGoogleAdsStatus(null, $customer) !== GoogleCampaignStatus::ENABLED
@@ -102,7 +107,8 @@ class SettleDeployedCampaign
                 // Restore it if Google rejects activation; a failed request is
                 // never recorded as a successful live campaign.
                 $campaign->refresh();
-                if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)) {
+                if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
+                    || $this->aiMaxOwnsCampaign($campaign)) {
                     return false;
                 }
                 $campaign->update(['status' => CampaignStatus::Active]);
@@ -158,12 +164,15 @@ class SettleDeployedCampaign
                         // A concurrent owner pause wins over this rollback.
                         Campaign::whereKey($campaign->id)->where('status', CampaignStatus::Active->value)->update(['status' => $previousStatus->value]);
                     } else {
-                        $campaign->refresh();
-                        $campaign->update(['status' => CampaignStatus::Active, 'spend_safety_hold' => [
-                            'reason' => 'deployment_activation_pause_unverified', 'requested_at' => now()->toIso8601String(),
-                            'campaign_resources' => array_column($attempted, 'resource')],
-                            'search_delivery_state' => [...($campaign->search_delivery_state ?? []), 'status' => 'needs_review',
-                                'blocked_reason' => 'deployment_activation_pause_unverified', 'mutation_allowed' => false]]);
+                        DB::transaction(function () use ($campaign, $attempted): void {
+                            $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+                            $hold = ['reason' => 'deployment_activation_pause_unverified', 'requested_at' => now()->toIso8601String(),
+                                'campaign_resources' => array_column($attempted, 'resource')];
+                            $current->update(['status' => $current->status === CampaignStatus::Paused ? CampaignStatus::Paused : CampaignStatus::Active,
+                                'spend_safety_hold' => $current->spend_safety_hold ?: $hold,
+                                'search_delivery_state' => [...($current->search_delivery_state ?? []), 'status' => 'needs_review',
+                                    'blocked_reason' => 'deployment_activation_pause_unverified', 'mutation_allowed' => false]]);
+                        }, 3);
                     }
                     AgentActivity::record('deployment', 'search_stage_activation_needs_review',
                         $allPaused ? 'Search activation failed. Google confirmed all attempted stages are paused.' : 'Search activation failed and some safety pauses remain unverified. The campaign stays visible as active until live status is resolved.',
@@ -195,6 +204,15 @@ class SettleDeployedCampaign
         RecordSiteConversion::dispatch($customer, 'campaign_live');
 
         return true;
+    }
+
+    /** Observes lifecycle state that remote work and refresh() can change.
+     *
+     * @phpstan-impure
+     */
+    private function aiMaxOwnsCampaign(Campaign $campaign): bool
+    {
+        return CampaignSpendGuardrails::aiMaxPilot($campaign) !== null || CampaignSpendGuardrails::pendingAiMaxRequest($campaign) !== null;
     }
 
     /** Publish only fresh observations, without overwriting a concurrent owner pause. */

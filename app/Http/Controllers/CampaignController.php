@@ -17,6 +17,7 @@ use App\Services\Deployment\DeploymentStatusPresenter;
 use App\Services\StorageHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -526,6 +527,7 @@ class CampaignController extends Controller
 
         // Add generation status
         $campaignData = $campaign->toArray();
+        $campaignData['ai_max_performance'] = $this->aiMaxPerformance($campaign);
         $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
         $campaignData['collateral_summary'] = [
             'ad_copies' => $totalAdCopies,
@@ -929,9 +931,34 @@ class CampaignController extends Controller
 
         // Add generation status to response
         $campaignData = $campaign->toArray();
+        $campaignData['ai_max_performance'] = $this->aiMaxPerformance($campaign);
         $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
 
         return response()->json($campaignData);
+    }
+
+    /** Optional reporting is isolated from activation and spend-safety decisions. */
+    private function aiMaxPerformance(Campaign $campaign): ?array
+    {
+        if (($campaign->spend_guardrails['ai_max_pilot']['enabled'] ?? false) !== true
+            || empty($campaign->search_delivery_state['ai_max_setup']['activated_at'])) {
+            return null;
+        }
+        try {
+            if (! $campaign->customer) {
+                throw new \RuntimeException('The pilot reporting customer is unavailable.');
+            }
+            $key = 'ai-max-report:'.$campaign->customer_id.':'.$campaign->id.':'.hash('sha256', json_encode([
+                $campaign->spend_guardrails['ai_max_pilot'], $campaign->search_delivery_state['ai_max_setup']['activated_at'],
+            ], JSON_THROW_ON_ERROR));
+
+            return Cache::remember($key, now()->addMinutes(15), fn () => app(\App\Services\GoogleAds\GetAiMaxPilotPerformance::class,
+                ['customer' => $campaign->customer])->inspect($campaign));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['status' => 'unavailable', 'checked_at' => now()->toIso8601String(), 'metrics' => null, 'period' => null];
+        }
     }
 
     /**

@@ -64,6 +64,131 @@ class CampaignConversionGoalReconciliationTest extends TestCase
         $this->assertSame(0, $this->service->created);
     }
 
+    public function test_dedicated_setup_action_requires_import_validation_and_keeps_campaign_specific_intent(): void
+    {
+        config(['conversions.google_ads_customer_id' => '123']);
+        $action = 'customers/123/conversionActions/909';
+        Setting::set('conversion_resource_name.paid_setup', $action);
+        $this->service->actions[] = ['resourceName' => $action, 'status' => 'ENABLED', 'type' => 'UPLOAD_CLICKS',
+            'category' => 'PURCHASE', 'origin' => 'WEBSITE', 'primaryForGoal' => false];
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => $action,
+            'selection_mode' => 'exact_action']]);
+        foreach ([false, true] as $ready) {
+            $delivery = $this->createMock(DataManagerService::class);
+            $delivery->expects($this->once())->method('ingestConversion')->willReturnCallback(function (...$arguments) use ($ready): array {
+                $this->assertSame('123', $arguments[0]);
+                $this->assertSame('909', $arguments[1]);
+                $this->assertTrue($arguments[7]);
+
+                return ['success' => $ready];
+            });
+            $this->app->instance(DataManagerService::class, $delivery);
+            $state = $this->service->prepare($this->strategy->fresh());
+            $this->assertSame($ready, $state['ready']);
+            $this->assertSame('custom', $state['intent']['mode']);
+            $this->assertSame($action, $state['intent']['action_resource']);
+        }
+        $this->assertTrue($this->service->actions[0]['primaryForGoal']);
+        $this->assertFalse($this->service->actions[3]['primaryForGoal']);
+        $this->assertSame([], $this->service->operations);
+    }
+
+    private function approvedAiMaxRequest(): array
+    {
+        config(['conversions.google_ads_customer_id' => '123']);
+        $action = 'customers/123/conversionActions/909';
+        Setting::set('conversion_resource_name.paid_setup', $action);
+        $this->service->actions[] = ['resourceName' => $action, 'status' => 'ENABLED', 'type' => 'UPLOAD_CLICKS',
+            'category' => 'PURCHASE', 'origin' => 'WEBSITE', 'primaryForGoal' => false];
+        $this->campaign->update(['status' => 'paused', 'platform_status' => 'PAUSED']);
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'PURCHASE',
+            'action_resource' => $action, 'selection_mode' => 'exact_action']]);
+        $this->service->remoteStatus = 'PAUSED';
+        $delivery = $this->createMock(DataManagerService::class);
+        $delivery->method('ingestConversion')->willReturn(['success' => true]);
+        $this->app->instance(DataManagerService::class, $delivery);
+        $request = ['nonce' => 'approved-owner-request', 'enabled' => true, 'status' => 'goals_pending',
+            'approved_at' => now()->subMinute()->toIso8601String(), 'expires_at' => now()->addDay()->toIso8601String(),
+            'customer_id' => $this->customer->id, 'google_customer_id' => '123',
+            'campaign_resource' => 'customers/123/campaigns/9', 'strategy_id' => $this->strategy->id,
+            'selected_conversion_action' => $action,
+            'expected_conversion_goals' => $this->strategy->fresh()->conversion_goals];
+        $this->campaign->update(['search_delivery_state' => ['ai_max_request' => $request]]);
+
+        return $request;
+    }
+
+    public function test_owner_approved_ai_max_request_configures_only_the_exact_secondary_purchase_goal_while_paused(): void
+    {
+        $request = $this->approvedAiMaxRequest();
+        $request['expected_conversion_goals'] = array_reverse($request['expected_conversion_goals'], true);
+        $this->campaign->update(['search_delivery_state' => ['ai_max_request' => $request]]);
+        $actions = $this->service->actions;
+        $state = $this->service->reconcileForAiMaxRequest($this->strategy->fresh(), 'customers/123/campaigns/9', $request['nonce']);
+
+        $this->assertTrue($state['ready']);
+        $this->assertSame('custom', $state['intent']['mode']);
+        $this->assertSame(['customers/123/conversionActions/909'], $this->service->customs[0]['conversionActions']);
+        $this->assertSame($actions, $this->service->actions);
+        $this->assertSame('paused', $this->campaign->fresh()->status->value);
+        $this->assertSame('PAUSED', $this->service->remoteStatus);
+        $this->assertTrue($this->service->reconcileForAiMaxRequest($this->strategy->fresh(), 'customers/123/campaigns/9', $request['nonce'])['ready']);
+        $this->assertSame(1, $this->service->created);
+        $this->assertCount(1, $this->service->operations);
+    }
+
+    public function test_cancelled_expired_or_changed_ai_max_requests_and_google_unpause_cannot_write_goals(): void
+    {
+        $request = $this->approvedAiMaxRequest();
+        foreach (['nonce', 'expired', 'disabled', 'customer', 'action', 'expected_intent', 'google_enabled'] as $case) {
+            $current = $request;
+            $this->service->remoteStatus = 'PAUSED';
+            match ($case) {
+                'nonce' => $current['nonce'] = 'another-owner-request',
+                'expired' => $current['expires_at'] = now()->subSecond()->toIso8601String(),
+                'disabled' => $current['enabled'] = false,
+                'customer' => $current['customer_id'] = $this->customer->id + 1,
+                'action' => $current['selected_conversion_action'] = 'customers/123/conversionActions/7',
+                'expected_intent' => $current['expected_conversion_goals']['primary_goal'] = 'SIGNUP',
+                'google_enabled' => $this->service->remoteStatus = 'ENABLED',
+            };
+            $this->campaign->update(['search_delivery_state' => ['ai_max_request' => $current]]);
+            $state = $this->service->reconcileForAiMaxRequest($this->strategy->fresh(), 'customers/123/campaigns/9', $request['nonce']);
+            $this->assertFalse($state['ready'], $case);
+            $this->assertSame(0, $this->service->created, $case);
+            $this->assertSame([], $this->service->operations, $case);
+        }
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('aiMaxGoalChanges')]
+    public function test_ai_max_request_is_rechecked_after_custom_creation_before_linking(string $change): void
+    {
+        $request = $this->approvedAiMaxRequest();
+        $this->service->afterCustomCreated = function () use ($change): void {
+            $fresh = $this->campaign->fresh();
+            $state = $fresh->search_delivery_state;
+            if ($change === 'hold') {
+                $fresh->update(['spend_safety_hold' => true]);
+            } elseif ($change === 'intent') {
+                $this->strategy->update(['conversion_goals' => ['primary_goal' => 'SIGNUP']]);
+            } else {
+                $state['ai_max_request'][$change === 'nonce' ? 'nonce' : 'expires_at'] = $change === 'nonce'
+                    ? 'replacement-owner-request' : now()->subSecond()->toIso8601String();
+                $fresh->update(['search_delivery_state' => $state]);
+            }
+        };
+        $state = $this->service->reconcileForAiMaxRequest($this->strategy->fresh(), 'customers/123/campaigns/9', $request['nonce']);
+        $this->assertFalse($state['ready']);
+        $this->assertSame(1, $this->service->created);
+        $this->assertSame([], $this->service->operations);
+        $this->assertArrayNotHasKey('customConversionGoal', $this->service->configuration);
+    }
+
+    public static function aiMaxGoalChanges(): array
+    {
+        return [['nonce'], ['expires'], ['hold'], ['intent']];
+    }
+
     public function test_reconciles_only_campaign_category_and_origin_then_verifies_and_is_idempotent(): void
     {
         $actions = $this->service->actions;

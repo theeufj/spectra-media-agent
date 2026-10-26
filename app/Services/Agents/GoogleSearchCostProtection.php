@@ -138,6 +138,8 @@ class GoogleSearchCostProtection
             && $campaign->googleCampaignNumericId() && $campaign->customer->cleanGoogleCustomerId()
             && ! $campaign->spend_safety_hold && ! $campaign->hasPassedEndDate()
             && CampaignSpendGuardrails::activeTrial($campaign) === null
+            && CampaignSpendGuardrails::aiMaxPilot($campaign) === null
+            && CampaignSpendGuardrails::pendingAiMaxRequest($campaign) === null
             && Feature::for($campaign->customer)->active(AutoHealing::class);
     }
 

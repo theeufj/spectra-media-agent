@@ -3,6 +3,8 @@ import { dateTime } from '@/utils/format';
 import { usePolling } from '@/hooks/usePolling';
 
 const statuses = {
+    pending_native_automation: ['Preparing Google AI Max', 'Purchase-import validation and campaign checks must complete before native bidding can be activated.'],
+    native_automation: ['Google AI Max manages this pilot', 'Google manages bidding and search matching. Spending and purchase-delivery checks continue during the approved pilot.'],
     collecting_evidence: ['Gathering delivery evidence', 'We are measuring a complete reporting period before deciding whether a repair is needed.'],
     delivering: ['Ads are receiving traffic', 'Google reported traffic in the measured period. This does not confirm that the campaign is generating signups or sales.'],
     low_reach: ['Limited search reach', 'The campaign is receiving little traffic. The diagnosis below explains the constraints and possible next steps.'],
@@ -17,6 +19,8 @@ const statuses = {
 };
 
 const holdReasons = {
+    ai_max_request_pending: 'AI Max setup is pending. The current spending limits remain in place while purchase imports and the approved configuration are checked.',
+    ai_max_pilot_owns_optimization: 'Google manages this pilot. Review measured setup purchases and acquisition cost; manual keyword forecasts do not predict AI Max results.',
     approved_bounded_trial: 'Automatic changes are on hold to preserve the approved test. Keyword research and delivery checks continue.',
     active_trial: 'Automatic changes are on hold to preserve the approved test. Keyword research and delivery checks continue.',
     spend_safety_hold: 'Spending is on hold for review. Research does not restart the campaign or increase its spending limits.',

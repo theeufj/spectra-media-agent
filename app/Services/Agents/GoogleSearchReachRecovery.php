@@ -21,6 +21,7 @@ use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V26\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V26\Services\MutateAdGroupCriteriaRequest;
 use Google\Protobuf\FieldMask;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 
@@ -43,6 +44,17 @@ class GoogleSearchReachRecovery
             }
             if (! $campaign->customer?->google_ads_customer_id || ! $campaign->googleCampaignNumericId()) {
                 throw new \RuntimeException('The Google customer or campaign identifier is unavailable.');
+            }
+            if (CampaignSpendGuardrails::pendingAiMaxRequest($campaign) !== null && CampaignSpendGuardrails::aiMaxPilot($campaign) === null) {
+                return $this->save($campaign, [...$state, 'status' => 'pending_native_automation',
+                    'blocked_reason' => 'ai_max_request_pending', 'mutation_allowed' => false]);
+            }
+            if (CampaignSpendGuardrails::aiMaxPilot($campaign) !== null) {
+                // The separate spend-safety job keeps checking money, tracking
+                // and configuration. Keyword/creative recovery cannot take over
+                // an owner-approved native learning period.
+                return $this->save($campaign, [...$state, 'status' => 'native_automation',
+                    'blocked_reason' => 'ai_max_pilot_owns_optimization', 'mutation_allowed' => false]);
             }
             // A partial mining batch may change the settings fingerprint itself.
             // That change must never erase its unresolved verification journal.
@@ -875,9 +887,30 @@ class GoogleSearchReachRecovery
 
     private function save(Campaign $campaign, array $state): array
     {
-        $campaign->update(['search_delivery_state' => $state]);
+        return DB::transaction(function () use ($campaign, $state): array {
+            $locked = Campaign::withoutCustomerScope()->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            if (! $locked instanceof Campaign) {
+                throw new \RuntimeException('The campaign is no longer available while saving delivery evidence.');
+            }
+            // These namespaces have independent writers and durable write journals.
+            // Never erase or roll them back with an earlier delivery snapshot.
+            $fresh = $locked->search_delivery_state ?? [];
+            foreach (['ai_max_request', 'ai_max_setup', 'ai_max_monitor', 'cost_protection', 'market_research'] as $key) {
+                unset($state[$key]);
+                if (array_key_exists($key, $fresh)) {
+                    $state[$key] = $fresh[$key];
+                }
+            }
+            if (CampaignSpendGuardrails::aiMaxPilot($locked) !== null || CampaignSpendGuardrails::pendingAiMaxRequest($locked) !== null) {
+                $pilot = CampaignSpendGuardrails::aiMaxPilot($locked) !== null;
+                $state = [...$state, 'status' => $pilot ? 'native_automation' : 'pending_native_automation',
+                    'blocked_reason' => $pilot ? 'ai_max_pilot_owns_optimization' : 'ai_max_request_pending', 'mutation_allowed' => false];
+            }
+            $locked->update(['search_delivery_state' => $state]);
+            $campaign->setAttribute('search_delivery_state', $state);
 
-        return $state;
+            return $state;
+        });
     }
 
     private function alertAndSave(Campaign $campaign, array $state): array

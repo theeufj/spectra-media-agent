@@ -188,10 +188,16 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             throw new \RuntimeException('No relevant Search keywords could be selected. Review the campaign keywords before retrying.');
         }
         $result->addMetadata('selected_keywords', $keywords);
-        $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
+        $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result, $campaign);
+        if (! $result->success) {
+            return;
+        }
 
         // 3.2 Add negative keywords at campaign creation time
         $this->keywords->addInitialNegativeKeywords($customerId, $campaignResourceName, $campaign, $strategy, $result);
+        if (! $result->success) {
+            return;
+        }
 
         // 3.5 Add Audience Targeting
         $this->audiences->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);

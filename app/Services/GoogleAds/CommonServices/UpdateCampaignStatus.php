@@ -3,7 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleCampaignSpendSafety;
+use App\Services\GoogleAds\ApprovedAiMaxPilotActivation;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\InspectAiMaxPilot;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Resources\Campaign;
@@ -30,6 +33,17 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
             $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
             if ($local && ! CampaignSpendGuardrails::canEnable($local, $this->ownerApprovedRestart)) {
                 return ['success' => false, 'error' => 'Campaign is deliberately paused or held by spend safety. Review its limits and approve the restart first.'];
+            }
+            if ($local && ($pilot = CampaignSpendGuardrails::aiMaxPilot($local)) !== null) {
+                try {
+                    if (! $this->pilotRestartReady($local, $pilot)) {
+                        return ['success' => false, 'error' => 'AI Max pilot spending and configuration must be freshly verified before activation.'];
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+
+                    return ['success' => false, 'error' => 'AI Max pilot activation could not be verified; the campaign was not enabled.'];
+                }
             }
         }
         $this->ensureClient();
@@ -84,6 +98,31 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    protected function pilotRestartReady(\App\Models\Campaign $campaign, array $pilot): bool
+    {
+        if (! app(ApprovedAiMaxPilotActivation::class)->ownerRequestAllowsActivation($campaign, $pilot)) {
+            return false;
+        }
+        $this->checkPilotSpend($campaign);
+        $readiness = $this->inspectPilot($campaign, $pilot);
+        $fresh = $campaign->fresh(['customer']);
+
+        return ($readiness['ready'] ?? null) === true && $fresh !== null
+            && CampaignSpendGuardrails::canEnable($fresh, $this->ownerApprovedRestart)
+            && CampaignSpendGuardrails::aiMaxPilot($fresh) === $pilot
+            && app(ApprovedAiMaxPilotActivation::class)->ownerRequestAllowsActivation($fresh, $pilot);
+    }
+
+    protected function checkPilotSpend(\App\Models\Campaign $campaign): void
+    {
+        app(GoogleCampaignSpendSafety::class)->check($campaign);
+    }
+
+    protected function inspectPilot(\App\Models\Campaign $campaign, array $pilot): array
+    {
+        return (new InspectAiMaxPilot($campaign->customer))->inspect($campaign, $pilot);
     }
 
     /**

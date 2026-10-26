@@ -22,6 +22,10 @@ class CampaignMarketResearchWorkflow
 
     public function request(Campaign $campaign, bool $force = false, bool $prepareAccount = false, ?int $dailyCents = null): array
     {
+        $current = $campaign->fresh() ?? $campaign;
+        if ($this->nativeManaged($current)) {
+            throw ValidationException::withMessages(['daily_budget' => 'Review the active AI Max pilot before changing its approved budget or campaign plan.']);
+        }
         if ($dailyCents !== null && ($dailyCents < 500 || $dailyCents > 1_000_000)) {
             throw ValidationException::withMessages(['daily_budget' => 'Research a daily budget between 5.00 and 10,000.00.']);
         }
@@ -29,6 +33,7 @@ class CampaignMarketResearchWorkflow
         $dispatch = false;
         $requestId = DB::transaction(function () use ($campaign, $force, $requestedMicros, &$dispatch): string {
             $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $this->assertLegacyResearch($current);
             $current->setRelation('strategies', $current->strategies()->orderBy('id')->lockForUpdate()->get());
             $fingerprint = $this->research->fingerprint($current, $requestedMicros);
             $previous = $this->stored($current);
@@ -68,9 +73,13 @@ class CampaignMarketResearchWorkflow
     public function run(Campaign $campaign, string $requestId): void
     {
         Cache::lock('campaign-market-research:'.$campaign->id, 660)->block(5, function () use ($campaign, $requestId): void {
+            $current = $campaign->fresh() ?? $campaign;
+            if ($this->nativeManaged($current)) {
+                return; // A queued Manual CPC quote cannot describe or replace a native pilot.
+            }
             $fingerprint = DB::transaction(function () use ($campaign, $requestId): ?string {
                 $current = Campaign::whereKey($campaign->id)->lockForUpdate()->first();
-                if (! $current || ($this->stored($current)['request_id'] ?? null) !== $requestId) {
+                if (! $current || $this->nativeManaged($current) || ($this->stored($current)['request_id'] ?? null) !== $requestId) {
                     return null;
                 }
                 // Account preparation may have completed since dispatch. Bind
@@ -87,7 +96,7 @@ class CampaignMarketResearchWorkflow
             $result = $this->research->research($campaign->fresh(), $this->stored($campaign->fresh())['requested_daily_budget_micros'] ?? null);
             DB::transaction(function () use ($campaign, $requestId, $fingerprint, $result): void {
                 $current = Campaign::whereKey($campaign->id)->lockForUpdate()->first();
-                if (! $current || ($this->stored($current)['request_id'] ?? null) !== $requestId) {
+                if (! $current || $this->nativeManaged($current) || ($this->stored($current)['request_id'] ?? null) !== $requestId) {
                     return;
                 }
                 $current->setRelation('strategies', $current->strategies()->orderBy('id')->lockForUpdate()->get());
@@ -108,6 +117,10 @@ class CampaignMarketResearchWorkflow
         $current = $campaign->fresh();
         if (! $current) {
             return ['status' => 'unknown', 'current' => false, 'approved' => false, 'approvable' => false];
+        }
+        if ($this->nativeManaged($current)) {
+            return ['status' => 'native_automation', 'current' => false, 'approved' => false, 'approvable' => false,
+                'message' => 'AI Max is evaluated using reported setup purchases and acquisition cost. Manual bidding forecasts do not estimate this pilot.'];
         }
         $stored = $this->stored($current);
         $approved = ($stored['status'] ?? null) === 'ready' && ($stored['result']['status'] ?? null) === 'ready'
@@ -174,6 +187,21 @@ class CampaignMarketResearchWorkflow
 
     /** @param Collection<int, Strategy> $strategies */
     public function applyApprovedProposal(Campaign $campaign, Collection $strategies, array $proposal): void
+    {
+        DB::transaction(function () use ($campaign, $strategies, $proposal): void {
+            $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $this->assertLegacyResearch($current);
+            $selected = $current->strategies()->orderBy('id')->lockForUpdate()->get();
+            if ($selected->pluck('id')->sort()->values()->all() !== $strategies->pluck('id')->sort()->values()->all()) {
+                throw ValidationException::withMessages(['daily_budget' => 'The campaign strategy selection changed before approval.']);
+            }
+            $this->applyLockedProposal($current, $selected, $proposal);
+            $campaign->setRawAttributes($current->getAttributes(), true);
+        });
+    }
+
+    /** @param Collection<int, Strategy> $strategies */
+    private function applyLockedProposal(Campaign $campaign, Collection $strategies, array $proposal): void
     {
         $rows = collect($proposal['strategies'] ?? [])->keyBy('strategy_id');
         if ($rows->count() !== $strategies->count()) {
@@ -387,9 +415,29 @@ class CampaignMarketResearchWorkflow
         }
     }
 
+    private function nativeManaged(Campaign $campaign): bool
+    {
+        return CampaignSpendGuardrails::aiMaxPilot($campaign) !== null || CampaignSpendGuardrails::pendingAiMaxRequest($campaign) !== null;
+    }
+
+    private function assertLegacyResearch(Campaign $campaign): void
+    {
+        if ($this->nativeManaged($campaign)) {
+            throw ValidationException::withMessages(['daily_budget' => 'Review the active AI Max pilot before changing its approved budget or campaign plan.']);
+        }
+    }
+
     private function write(Campaign $campaign, array $research): void
     {
-        $campaign->update(['search_delivery_state' => [...($campaign->search_delivery_state ?? []), 'market_research' => $research]]);
+        DB::transaction(function () use ($campaign, $research): void {
+            $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            if ($this->nativeManaged($current)) {
+                return; // A slow legacy quote must not replace native ownership or its approval.
+            }
+            $state = [...($current->search_delivery_state ?? []), 'market_research' => $research];
+            $current->update(['search_delivery_state' => $state]);
+            $campaign->setAttribute('search_delivery_state', $state)->syncOriginalAttribute('search_delivery_state');
+        });
     }
 
     private function fresh(array $stored): bool

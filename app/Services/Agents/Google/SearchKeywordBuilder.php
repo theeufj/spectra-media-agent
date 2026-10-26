@@ -21,6 +21,7 @@ use App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -75,12 +76,20 @@ class SearchKeywordBuilder
     /**
      * Add keywords to ad group
      */
-    public function addKeywords(string $customerId, string $adGroupResourceName, array $keywords, ExecutionResult $result): void
+    public function addKeywords(string $customerId, string $adGroupResourceName, array $keywords, ExecutionResult $result, ?Campaign $campaign = null): void
     {
-        $addCriterionService = new AddAdGroupCriterion($this->customer);
+        if ($campaign === null) {
+            $result->addError('search_keyword_campaign_required', 'Keyword deployment requires its current customer campaign.');
+
+            return;
+        }
+        $addCriterionService = null;
 
         foreach ($keywords as $keyword) {
             try {
+                if (! $this->legacyKeywordWritesAllowed($campaign, $customerId, $result)) {
+                    return;
+                }
                 $keywordText = is_array($keyword) ? ($keyword['text'] ?? $keyword['keyword'] ?? '') : $keyword;
                 $matchType = is_array($keyword) && isset($keyword['match_type'])
                     ? $keyword['match_type']
@@ -90,6 +99,7 @@ class SearchKeywordBuilder
                     continue;
                 }
 
+                $addCriterionService ??= app(AddAdGroupCriterion::class, ['customer' => $this->customer]);
                 $criterionResourceName = ($addCriterionService)($customerId, $adGroupResourceName, [
                     'type' => 'KEYWORD',
                     'text' => $keywordText,
@@ -138,6 +148,9 @@ class SearchKeywordBuilder
     public function preflightReach(Campaign $campaign, Strategy $strategy, string $customerId, string $campaignResource, ExecutionResult $result): bool
     {
         $campaign->refresh()->load('customer');
+        if (! $this->legacyKeywordWritesAllowed($campaign, $customerId, $result)) {
+            return false;
+        }
         if ($campaign->customer?->cleanGoogleCustomerId() !== $customerId
             || $campaign->customer_id !== $this->customer->id
             || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#', $campaignResource)) {
@@ -171,8 +184,9 @@ class SearchKeywordBuilder
                 || $campaign->hasPassedEndDate() || in_array($campaign->status, [CampaignStatus::Completed, CampaignStatus::Ended], true)) {
                 $gate = $this->holdGate($gate, 'search_reach_launch_authorization_changed', 'The owner paused or ended this campaign while researching reach. Review the current launch authorization.');
             }
-            $result->addMetadata('search_reach_preflight', [...$assessment, 'gate' => $gate,
-                'validated_campaign_resource' => $campaignResource, 'validated_settings_fingerprint' => GoogleSearchReachGate::settingsFingerprint($snapshot)]);
+            if ($this->aiMaxOwnsCampaign($campaign)) {
+                $gate = $this->holdGate($gate, 'search_reach_native_automation_owned', 'The approved AI Max workflow owns this campaign. Legacy keyword deployment is held.');
+            }
             $blocked = ! $gate['ready'];
             $firstGateIssue = $gate['issues'][0] ?? null;
             $state = [
@@ -188,8 +202,14 @@ class SearchKeywordBuilder
             // The campaign card monitors its primary Google campaign. A second
             // Search strategy keeps its own assessment in execution metadata.
             if ($campaign->googleAdsResourceName() === $campaignResource || ! $campaign->google_ads_campaign_id) {
-                $this->savePreflightState($campaign, $state);
+                if (! $this->savePreflightState($campaign, $state)) {
+                    $gate = $this->holdGate($gate, 'search_reach_native_automation_owned', 'AI Max approval changed during the reach check. Legacy deployment is held.');
+                    $blocked = true;
+                    $firstGateIssue = $gate['issues'][0];
+                }
             }
+            $result->addMetadata('search_reach_preflight', [...$assessment, 'gate' => $gate,
+                'validated_campaign_resource' => $campaignResource, 'validated_settings_fingerprint' => GoogleSearchReachGate::settingsFingerprint($snapshot)]);
             foreach (\App\Services\Agents\AgentIssue::list($assessment['issues'] ?? []) as $assessmentIssue) {
                 $result->addWarning($assessmentIssue->code, $assessmentIssue->message);
             }
@@ -234,6 +254,9 @@ class SearchKeywordBuilder
     {
         try {
             $campaign->refresh()->load('customer');
+            if (! $this->legacyKeywordWritesAllowed($campaign, $customerId, $result)) {
+                return false;
+            }
             $snapshot = $this->inspectStage($campaign, $customerId, $campaignResource);
             // Inspection itself may outlast an owner change to budget or pause.
             $campaign->refresh()->load('customer');
@@ -246,6 +269,7 @@ class SearchKeywordBuilder
                 $gate = $this->holdGate($gate, 'search_reach_activation_settings_changed', 'The staged Search settings no longer match their validated reach proof. Repeat the check before activation.');
             }
             if (($snapshot['status'] ?? null) !== GoogleCampaignStatus::PAUSED || ! CampaignSpendGuardrails::canEnable($campaign)
+                || $this->aiMaxOwnsCampaign($campaign)
                 || CampaignSpendGuardrails::activeTrial($campaign) || CampaignStatusHelper::getGoogleAdsStatus(null, $campaign->customer) !== GoogleCampaignStatus::ENABLED) {
                 $gate = $this->holdGate($gate, 'search_reach_activation_authorization_changed', 'Current campaign pause, end date, spending hold or launch settings do not allow activation.');
             }
@@ -296,16 +320,53 @@ class SearchKeywordBuilder
         return $gate;
     }
 
-    private function savePreflightState(Campaign $campaign, array $assessment): void
+    private function savePreflightState(Campaign $campaign, array $assessment): bool
     {
-        // Retrying deployment against the same Google resource must not erase
-        // a durable remote-write attempt or its unresolved read-back errors.
-        $state = [...($campaign->search_delivery_state ?? []), ...$assessment, 'measurement' => null];
-        if (! empty($state['repair']['errors'])) {
-            $state['status'] = 'needs_review';
-            $state['blocked_reason'] = 'partial_repair_unresolved';
+        return DB::transaction(function () use ($campaign, $assessment): bool {
+            $current = Campaign::withoutCustomerScope()->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            if (! $current instanceof Campaign) {
+                throw new \RuntimeException('The campaign is unavailable while saving its preflight observation.');
+            }
+            if ($this->aiMaxOwnsCampaign($current)) {
+                return false;
+            }
+            // Assessment contains only this preflight's fields. Merge it into
+            // the locked current row, retaining independent write journals.
+            $state = [...($current->search_delivery_state ?? []), ...$assessment, 'measurement' => null];
+            if (! empty($state['repair']['errors'])) {
+                $state['status'] = 'needs_review';
+                $state['blocked_reason'] = 'partial_repair_unresolved';
+            }
+            $current->update(['search_delivery_state' => $state]);
+
+            return true;
+        }, 3);
+    }
+
+    private function aiMaxOwnsCampaign(Campaign $campaign): bool
+    {
+        return CampaignSpendGuardrails::aiMaxPilot($campaign) !== null || CampaignSpendGuardrails::pendingAiMaxRequest($campaign) !== null;
+    }
+
+    /** Re-read after research and before each keyword mutation, including retries.
+     *
+     * @phpstan-impure
+     */
+    private function legacyKeywordWritesAllowed(Campaign $campaign, string $customerId, ExecutionResult $result): bool
+    {
+        $campaign->refresh()->load('customer');
+        if ($campaign->customer_id !== $this->customer->id || $campaign->customer?->cleanGoogleCustomerId() !== $customerId) {
+            $result->addError('search_keyword_account_changed', 'The current campaign no longer matches this Google customer account.');
+
+            return false;
         }
-        $campaign->update(['search_delivery_state' => $state]);
+        if ($this->aiMaxOwnsCampaign($campaign)) {
+            $result->addError('search_keyword_native_automation_owned', 'The approved AI Max workflow owns this campaign. Legacy keyword deployment is held.');
+
+            return false;
+        }
+
+        return true;
     }
 
     protected function normalizeKeywords(array $keywords, bool $allowBroad = true): array
@@ -378,6 +439,9 @@ class SearchKeywordBuilder
     public function addInitialNegativeKeywords(string $customerId, string $campaignResourceName, Campaign $campaign, Strategy $strategy, ExecutionResult $result): void
     {
         try {
+            if (! $this->legacyKeywordWritesAllowed($campaign, $customerId, $result)) {
+                return;
+            }
             if (! config('services.gemini.api_key')) {
                 return;
             }
@@ -397,6 +461,9 @@ class SearchKeywordBuilder
             $added = 0;
             foreach ($negatives as $negative) {
                 try {
+                    if (! $this->legacyKeywordWritesAllowed($campaign, $customerId, $result)) {
+                        return;
+                    }
                     $resourceName = ($addNegativeService)($customerId, $campaignResourceName, $negative, $this->negativeMatchType($negative));
                     if ($resourceName) {
                         $added++;

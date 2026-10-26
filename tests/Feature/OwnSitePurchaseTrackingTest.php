@@ -217,6 +217,54 @@ class OwnSitePurchaseTrackingTest extends TestCase
         $this->assertFalse($receipt->fresh()->uploaded_to_google);
     }
 
+    public function test_dedicated_setup_mapping_routes_only_new_checkout_receipts_and_never_reroutes_history(): void
+    {
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/789');
+        $this->owner->update(['gclid' => 'fixture-click']);
+        $old = $this->service()->recordSetupPurchase($this->owner, $this->customer,
+            $this->checkoutSession(['id' => 'cs_before_split']), now()->timestamp);
+        Setting::set('conversion_resource_name.paid_setup', 'customers/999/conversionActions/909');
+        $new = $this->service()->recordSetupPurchase($this->owner, $this->customer,
+            $this->checkoutSession(['id' => 'cs_after_split', 'amount_total' => 89900]), now()->timestamp);
+        $this->assertSame('customers/999/conversionActions/789', $old->google_conversion_resource);
+        $this->assertSame('customers/999/conversionActions/909', $new->google_conversion_resource);
+        $this->assertSame('899.00', $new->value, 'The event carries the verified payment, not an invented package value.');
+        $this->assertSame('paid_setup', RecordSiteGoogleConversion::actionKey('paid_setup'));
+        Setting::set('conversion_resource_name.paid_setup', 'customers/999/conversionActions/111');
+        $replayed = $this->service()->recordSetupPurchase($this->owner, $this->customer,
+            $this->checkoutSession(['id' => 'cs_after_split']), now()->timestamp);
+        $this->assertSame($new->id, $replayed->id);
+        $this->assertSame('customers/999/conversionActions/909', $replayed->google_conversion_resource);
+        $destinations = [];
+        $delivery = $this->createMock(DataManagerService::class);
+        $delivery->expects($this->exactly(2))->method('ingestConversion')->willReturnCallback(function (...$arguments) use (&$destinations): array {
+            $destinations[] = $arguments[1];
+
+            return ['success' => true, 'requestId' => 'purchase-'.$arguments[1]];
+        });
+        foreach ([$old, $new] as $receipt) {
+            (new RecordSiteGoogleConversion($this->owner, 'paid_setup', $receipt->occurred_at, $receipt->id))->handle($delivery);
+        }
+        $this->assertSame(['789', '909'], $destinations);
+        $this->assertSame(2, SpectraConversionEvent::where('event', 'paid_setup')->count());
+    }
+
+    public function test_invalid_dedicated_setup_mapping_does_not_silently_fall_back_to_subscription_goal(): void
+    {
+        config(['conversions.google_ads_customer_id' => '999']);
+        Setting::set('conversion_resource_name.paid_subscription', 'customers/999/conversionActions/789');
+        $this->owner->update(['gclid' => 'fixture-click']);
+        foreach (['customers/888/conversionActions/909', '', 'customers/999/conversionActions/789'] as $index => $destination) {
+            Setting::set('conversion_resource_name.paid_setup', $destination);
+            $receipt = $this->service()->recordSetupPurchase($this->owner, $this->customer,
+                $this->checkoutSession(['id' => 'cs_invalid_'.$index]), now()->timestamp);
+            $this->assertSame('server_google', $receipt->mode);
+            $this->assertNull($receipt->google_conversion_resource);
+            $this->assertNotEmpty($receipt->upload_error);
+        }
+    }
+
     public function test_replayed_legacy_native_receipt_is_not_rerouted_after_click_identifiers_become_available(): void
     {
         $this->install();

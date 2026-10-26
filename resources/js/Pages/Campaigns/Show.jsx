@@ -265,6 +265,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => (
 
 export default function Show({ auth, campaign, policyStatus = campaign?.policy_checks, canRegenerate = true, conversionTracking = null, selfFunded = false, setupOnly = false, marketResearch = null, marketResearchStatusUrl = null, marketResearchRefreshUrl = null }) {
     const [campaigns, setCampaign] = useState(campaign);
+    const nativePilotOwned = campaigns.spend_guardrails?.ai_max_pilot?.enabled === true || campaigns.search_delivery_state?.ai_max_request?.enabled === true;
     // Saves return fresh Inertia props without remounting this page. Keep the
     // review card in sync so it shows the brief that was actually saved.
     useEffect(() => {
@@ -546,8 +547,8 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
             <Head title={`Your campaign — ${campaigns.name}`} />
             {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={1} /></div>}
             {(campaigns.google_ads_campaign_id || campaigns.facebook_ads_campaign_id || policyStatus) && <div className="mx-auto max-w-7xl px-4 py-6"><PolicyStatusCard campaign={campaigns} policyStatus={campaigns.policy_checks ?? policyStatus} /></div>}
-            {(campaigns.spend_guardrails || campaigns.spend_safety_hold) && <div className="mx-auto max-w-7xl px-4 pb-6"><CampaignSpendSafetyCard campaign={campaigns} /></div>}
-            {campaigns.search_delivery_state && <div className="mx-auto max-w-7xl px-4 pb-6"><SearchDeliveryCard campaign={campaigns} /></div>}
+            {(campaigns.spend_guardrails || campaigns.spend_safety_hold || nativePilotOwned) && <div className="mx-auto max-w-7xl px-4 pb-6"><CampaignSpendSafetyCard campaign={campaigns} /></div>}
+            {campaigns.search_delivery_state && !nativePilotOwned && <div className="mx-auto max-w-7xl px-4 pb-6"><SearchDeliveryCard campaign={campaigns} /></div>}
 
             {/* Leads the page for campaigns we generated: it is the one thing
                 standing between the customer and deploying, and without it they
@@ -572,7 +573,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                 </div>
             )}
 
-            {budgetStage && strategiesReady && (
+            {budgetStage && strategiesReady && !nativePilotOwned && (
                 <div className="mx-auto max-w-7xl">
                     <BudgetConfirmation
                         campaign={campaigns}
@@ -614,7 +615,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                             {campaign.currency_code || 'USD'} {Number(campaign.daily_budget || 0).toFixed(2)}
                             {selfFunded && <span className="text-gray-500"> — billed to you by Google, not by us</span>}
                         </p>
-                        {strategiesReady && <div className="flex items-center gap-4">
+                        {strategiesReady && !nativePilotOwned && <div className="flex items-center gap-4">
                             <button
                                 type="button"
                                 onClick={() => setShowResearch(v => !v)}
@@ -631,7 +632,7 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                         </div>}
                     </div>
 
-                    {showResearch && strategiesReady && (
+                    {showResearch && strategiesReady && !nativePilotOwned && (
                         <MarketResearchPanel
                             className="mt-3"
                             research={currentMarketResearch || campaigns.search_delivery_state?.market_research}

@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Customer;
 use App\Models\NotificationTemplate;
+use App\Services\Notifications\GoogleReadinessAlertEligibility;
 use App\Services\NotificationTemplateService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -112,6 +113,9 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         if (! empty($this->details['test_preview'])) {
             return ['mail'];
         }
+        if ($this->alertType === 'google_campaign_readiness' && ! GoogleReadinessAlertEligibility::allows($this->details, $notifiable)) {
+            return [];
+        }
 
         // Deduplicate: same alert type + campaign within 24 hours sends only once per user
         $campaignId = $this->details['campaign_id'] ?? 'global';
@@ -125,6 +129,13 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         Cache::put($cacheKey, true, now()->addHours(24));
 
         return ['mail'];
+    }
+
+    /** Laravel invokes this again when queued delivery actually runs. */
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        return ! empty($this->details['test_preview']) || $this->alertType !== 'google_campaign_readiness'
+            || GoogleReadinessAlertEligibility::allows($this->details, $notifiable);
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -53,15 +53,32 @@ class RecordSiteGoogleConversion implements ShouldQueue
     private const UPLOAD_ACTIONS = [
         'signup' => 'signup_import',
         'paid_subscription' => 'paid_subscription',
-        // Both verified acquisitions use the reviewed canonical Purchase action.
-        'paid_setup' => 'paid_subscription',
+        'paid_setup' => 'paid_setup',
         'campaign_live' => 'campaign_live',
         'seven_day_return' => 'seven_day_return',
     ];
 
     public static function actionKey(string $event): ?string
     {
+        // Existing installations keep their reviewed Purchase mapping until the
+        // dedicated action has been provisioned. A present but invalid mapping
+        // must fail visibly instead of silently changing the intended product.
+        if ($event === 'paid_setup' && Setting::get('conversion_resource_name.paid_setup') === null) {
+            return 'paid_subscription';
+        }
+
         return self::UPLOAD_ACTIONS[$event] ?? null;
+    }
+
+    public static function setupPurchaseDestination(): ?string
+    {
+        $resource = Setting::get('conversion_resource_name.paid_setup');
+        if ($resource === null) {
+            return self::canonicalPurchaseDestination();
+        }
+
+        return self::isCanonicalPurchaseDestination($resource)
+            && $resource !== Setting::get('conversion_resource_name.paid_subscription') ? $resource : null;
     }
 
     public static function canonicalPurchaseDestination(): ?string

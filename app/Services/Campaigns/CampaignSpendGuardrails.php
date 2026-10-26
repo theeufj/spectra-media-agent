@@ -4,6 +4,7 @@ namespace App\Services\Campaigns;
 
 use App\Enums\CampaignStatus;
 use App\Models\Campaign;
+use Carbon\CarbonImmutable;
 
 /** Shared mutation limits, so an optimiser cannot undo an approved bounded trial. */
 class CampaignSpendGuardrails
@@ -49,17 +50,84 @@ class CampaignSpendGuardrails
         return is_array($limits) && ($limits['enabled'] ?? false) === true ? $limits : null;
     }
 
+    /** Invalid enabled envelopes remain visible and keep legacy automation blocked. */
+    public static function aiMaxPilot(Campaign $campaign): ?array
+    {
+        $pilot = $campaign->spend_guardrails['ai_max_pilot'] ?? null;
+
+        return is_array($pilot) && ($pilot['enabled'] ?? false) === true ? $pilot : null;
+    }
+
+    /** A queued owner request freezes competing optimizers without relaxing CPC limits. */
+    public static function pendingAiMaxRequest(Campaign $campaign): ?array
+    {
+        $request = $campaign->search_delivery_state['ai_max_request'] ?? null;
+
+        return is_array($request) && ($request['enabled'] ?? false) === true
+            && is_string($request['nonce'] ?? null) && trim($request['nonce']) !== ''
+            && ! in_array($request['status'] ?? null, ['active', 'completed', 'cancelled', 'revoked'], true)
+            ? $request : null;
+    }
+
+    public static function validAiMaxPilot(Campaign $campaign): bool
+    {
+        $pilot = self::aiMaxPilot($campaign);
+        $customerId = $campaign->customer?->cleanGoogleCustomerId();
+        if (! $pilot || ! $customerId || self::activeTrial($campaign) !== null
+            || ($pilot['permits_conversion_bidding'] ?? null) !== true
+            || ($pilot['acknowledges_no_cpc_cap'] ?? null) !== true
+            || ! is_int($pilot['max_daily_budget_micros'] ?? null) || $pilot['max_daily_budget_micros'] <= 0
+            || ! is_int($pilot['baseline_cost_micros'] ?? null) || $pilot['baseline_cost_micros'] < 0
+            || ! is_int($pilot['review_spend_micros'] ?? null) || $pilot['review_spend_micros'] <= 0
+            || ! is_string($pilot['currency_code'] ?? null)
+            || $pilot['currency_code'] !== strtoupper((string) $campaign->customer->currency_code)
+            || ! preg_match('/^[A-Z]{3}$/D', $pilot['currency_code'])
+            || ! $campaign->budget_confirmed_at
+            || $pilot['max_daily_budget_micros'] > self::moneyToMicros($campaign->approved_daily_budget)
+            || ! is_string($pilot['source'] ?? null) || trim($pilot['source']) === ''
+            || ! is_string($pilot['approval'] ?? null) || trim($pilot['approval']) === ''
+            || ! is_string($pilot['account_timezone'] ?? null)
+            || ! in_array($pilot['account_timezone'], timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+            || ! is_string($pilot['approved_at'] ?? null) || trim($pilot['approved_at']) === ''
+            || ! is_string($pilot['starts_at'] ?? null) || trim($pilot['starts_at']) === ''
+            || ! is_string($pilot['ends_at'] ?? null) || trim($pilot['ends_at']) === ''
+            || ! is_string($pilot['selected_conversion_action'] ?? null)
+            || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/conversionActions/[0-9]+$#D', $pilot['selected_conversion_action'])) {
+            return false;
+        }
+        try {
+            $approved = CarbonImmutable::parse($pilot['approved_at']);
+            $start = CarbonImmutable::parse($pilot['starts_at']);
+            $end = CarbonImmutable::parse($pilot['ends_at']);
+
+            return $approved->lte(now()) && $approved->lte($start) && $end->gt($start)
+                && $end->lte($start->addDays(14));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public static function automaticChangesSuspended(Campaign $campaign): bool
     {
         $current = $campaign->exists ? $campaign->fresh() : $campaign;
 
-        return $current === null || $current->spend_safety_hold || self::activeTrial($current) !== null;
+        return $current === null || $current->spend_safety_hold || self::activeTrial($current) !== null
+            || self::aiMaxPilot($current) !== null || self::pendingAiMaxRequest($current) !== null;
     }
 
     public static function canEnable(Campaign $campaign, bool $ownerApprovedRestart = false): bool
     {
         if ($campaign->spend_safety_hold || $campaign->hasPassedEndDate()
             || in_array($campaign->status, [CampaignStatus::Draft, CampaignStatus::PendingAdminDeployment, CampaignStatus::Completed, CampaignStatus::Ended], true)) {
+            return false;
+        }
+        if (self::pendingAiMaxRequest($campaign) !== null && self::aiMaxPilot($campaign) === null) {
+            return false;
+        }
+        if (($pilot = self::aiMaxPilot($campaign)) !== null && (! $ownerApprovedRestart
+            || ! self::validAiMaxPilot($campaign)
+            || CarbonImmutable::parse($pilot['starts_at'])->gt(now())
+            || CarbonImmutable::parse($pilot['ends_at'])->lte(now()))) {
             return false;
         }
 
@@ -83,6 +151,10 @@ class CampaignSpendGuardrails
         $approved = self::moneyToMicros($current->approved_daily_budget);
         if ($current->budget_confirmed_at && ($approved <= 0 || $micros > $approved)) {
             return false;
+        }
+        if (($pilot = self::aiMaxPilot($current)) !== null) {
+            return self::validAiMaxPilot($current) && ! $current->spend_safety_hold
+                && $micros === $pilot['max_daily_budget_micros'];
         }
         if ($limits && (! self::validAutomationLimits($current, $limits) || $micros > $limits['max_daily_budget_micros'])) {
             return false;
@@ -114,6 +186,9 @@ class CampaignSpendGuardrails
         if ($current === null || $micros <= 0) {
             return false;
         }
+        if (self::aiMaxPilot($current) !== null) {
+            return false; // Conversion bidding does not retain per-keyword CPC limits.
+        }
         $trial = self::activeTrial($current);
         $limits = self::automationLimits($current);
         if ($limits && (! self::validAutomationLimits($current, $limits) || $micros > $limits['max_cpc_bid_micros'])) {
@@ -127,6 +202,9 @@ class CampaignSpendGuardrails
     {
         $current = $campaign->exists ? $campaign->fresh() : $campaign;
         if ($current === null || $current->spend_safety_hold || ! is_finite($multiplier) || $multiplier < 0) {
+            return false;
+        }
+        if (self::aiMaxPilot($current) !== null) {
             return false;
         }
 
@@ -149,6 +227,12 @@ class CampaignSpendGuardrails
         $trial = self::activeTrial($current);
         $limits = self::automationLimits($current);
         $strategy = strtoupper(trim($strategy));
+        if (($pilot = self::aiMaxPilot($current)) !== null) {
+            return self::validAiMaxPilot($current) && ! $current->spend_safety_hold
+                && ! $current->hasPassedEndDate() && $strategy === 'MAXIMIZE_CONVERSIONS' && $ceiling === null
+                && CarbonImmutable::parse($pilot['starts_at'])->lte(now())
+                && CarbonImmutable::parse($pilot['ends_at'])->gt(now());
+        }
         if ($limits && (! self::validAutomationLimits($current, $limits)
             || ! in_array($strategy, ['MANUAL_CPC', 'MAXIMIZE_CLICKS'], true)
             || $ceiling === null || ! self::permitsKeywordBid($current, $ceiling))) {

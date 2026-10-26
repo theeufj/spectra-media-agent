@@ -58,6 +58,15 @@ return [
             'mode' => 'server',
             'resource_name' => null,
         ],
+        // One-time setup checkouts have their own Purchase action. The destination
+        // is pinned on each verified Stripe receipt so retries cannot reroute it.
+        'paid_setup' => [
+            'label' => null,
+            'value' => 0,
+            'currency' => 'USD',
+            'mode' => 'server',
+            'resource_name' => null,
+        ],
         // Uploaded server-side by RecordSiteGoogleConversion on registration, so
         // it carries no gtag label. The WEBPAGE twin ("Spectra — Signup") stays
         // provisioned but unfired — counting both would double every signup.

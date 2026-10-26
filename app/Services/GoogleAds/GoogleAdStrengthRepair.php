@@ -70,6 +70,8 @@ class GoogleAdStrengthRepair
                 ->where('action', 'ad_rank_repair')->whereIn('status', ['running', 'pending', 'needs_review'])
                 ->where('created_at', '>=', now()->subDays(7))->exists() => 'ad_rank_replacement_pending',
             (bool) $fresh->spend_safety_hold => 'spend_safety_hold',
+            \App\Services\Campaigns\CampaignSpendGuardrails::aiMaxPilot($fresh) !== null => 'ai_max_pilot_owns_optimization',
+            \App\Services\Campaigns\CampaignSpendGuardrails::pendingAiMaxRequest($fresh) !== null => 'ai_max_request_pending',
             \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh) !== null
                 && (! $stagedRankCreative || ($fresh->spend_guardrails['allow_ad_rank_repairs'] ?? false) !== true) => 'approved_bounded_trial',
             $customer->service_type === 'setup_only' => 'setup_only',

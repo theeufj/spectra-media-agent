@@ -8,6 +8,7 @@ use App\Models\EnabledPlatform;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Services\Agents\AgentIssue;
+use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\CustomConversionGoalStatusEnum\CustomConversionGoalStatus;
 use Google\Ads\GoogleAds\V26\Resources\CampaignConversionGoal;
 use Google\Ads\GoogleAds\V26\Resources\ConversionGoalCampaignConfig;
@@ -27,6 +28,8 @@ use Laravel\Pennant\Feature;
 class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
 {
     private bool $pausedSetupRequest = false;
+
+    private ?string $aiMaxRequestNonce = null;
 
     private bool $preparingActions = false;
 
@@ -78,6 +81,17 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             return $this->reconcile($strategy, $resource, allowInactive: true);
         } finally {
             $this->pausedSetupRequest = false;
+        }
+    }
+
+    /** Only an unexpired owner request may configure the exact staged AI Max purchase goal. */
+    public function reconcileForAiMaxRequest(Strategy $strategy, string $resource, string $nonce): array
+    {
+        $this->aiMaxRequestNonce = $nonce;
+        try {
+            return $this->reconcile($strategy, $resource, allowInactive: true);
+        } finally {
+            $this->aiMaxRequestNonce = null;
         }
     }
 
@@ -247,6 +261,23 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
     /** Re-read holds after remote work, immediately before each recurring write. */
     private function mutationHold(Strategy $strategy, string $customerId, string $resource, array $intent, bool $allowInactive): ?array
     {
+        if ($this->aiMaxRequestNonce !== null) {
+            if (! $this->aiMaxRequestIsCurrent($strategy, $customerId, $resource, $intent)) {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_ai_max_request_changed',
+                    'The owner-approved AI Max request or its exact purchase goal changed. No goal update was authorized.')]);
+            }
+            $rows = $this->readRows($customerId, "SELECT campaign.status FROM campaign WHERE campaign.resource_name = '{$resource}'");
+            if (($rows[0]['campaign']['status'] ?? null) !== 'PAUSED') {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_ai_max_pause_required',
+                    'Google must confirm this AI Max campaign is paused immediately before a goal update.')]);
+            }
+            if (! $this->aiMaxRequestIsCurrent($strategy, $customerId, $resource, $intent)) {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_ai_max_request_changed',
+                    'The AI Max request changed during its Google status check. No goal update was authorized.')]);
+            }
+
+            return null;
+        }
         if ($this->pausedSetupRequest) {
             if (! $this->pausedSetupIsCurrent($strategy, $customerId, $resource)) {
                 return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_paused_setup_changed', 'The reviewed paid setup campaign changed. Goal updates require another check.')]);
@@ -309,6 +340,74 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
         return null;
     }
 
+    /** Fresh database authorization is deliberately re-read around every remote effect.
+     *
+     * @phpstan-impure
+     */
+    private function aiMaxRequestIsCurrent(Strategy $strategy, string $customerId, string $resource, array $intent): bool
+    {
+        $fresh = Strategy::with('campaign.customer')->findOrFail($strategy->id);
+        $campaign = $fresh->campaign;
+        $customer = $campaign->customer;
+        if (! $customer) {
+            return false;
+        }
+        $request = $campaign->search_delivery_state['ai_max_request'] ?? [];
+        $currentResource = $fresh->reusableGoogleCampaignId();
+        $currentResource = $currentResource && ctype_digit($currentResource)
+            ? "customers/{$customerId}/campaigns/{$currentResource}" : $currentResource;
+        if (! is_array($request) || ! is_string($request['nonce'] ?? null) || $this->aiMaxRequestNonce === ''
+            || ! hash_equals($request['nonce'], $this->aiMaxRequestNonce ?? '')
+            || ($request['enabled'] ?? false) !== true || ($request['status'] ?? null) !== 'goals_pending'
+            || ! $this->sameIdentifier($request['customer_id'] ?? null, $customer->id)
+            || ($request['google_customer_id'] ?? null) !== $customerId
+            || ($request['campaign_resource'] ?? null) !== $resource
+            || ! $this->sameIdentifier($request['strategy_id'] ?? null, $fresh->id)
+            || ($request['selected_conversion_action'] ?? null) !== ($intent['action_resource'] ?? null)
+            || ($intent['action_resource'] ?? null) !== Setting::get('conversion_resource_name.paid_setup')
+            || ($intent['mode'] ?? null) !== 'custom' || ($intent['category'] ?? null) !== 'PURCHASE'
+            || ($fresh->conversion_goals['selection_mode'] ?? null) !== 'exact_action'
+            || ! is_array($request['expected_conversion_goals'] ?? null)
+            || $this->orderedIntent($request['expected_conversion_goals']) !== $this->orderedIntent($fresh->conversion_goals ?? [])
+            || $this->orderedIntent($fresh->conversion_goals ?? []) !== $this->orderedIntent($strategy->conversion_goals ?? [])
+            || $customer->id !== $this->customer?->id || $customer->cleanGoogleCustomerId() !== $customerId
+            || $customerId !== (string) config('conversions.google_ads_customer_id') || $currentResource !== $resource
+            || $campaign->status->value !== 'paused' || $campaign->spend_safety_hold || $campaign->hasPassedEndDate()
+            || ! $fresh->signed_off_at || in_array($fresh->deployment_status, ['queued', 'deploying'], true)
+            || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true)) {
+            return false;
+        }
+        try {
+            $approved = is_string($request['approved_at'] ?? null) ? CarbonImmutable::parse($request['approved_at']) : null;
+            $expires = is_string($request['expires_at'] ?? null) ? CarbonImmutable::parse($request['expires_at']) : null;
+            $now = CarbonImmutable::instance(now());
+
+            return $approved && $expires && $approved->lessThanOrEqualTo($now) && $expires->greaterThan($now)
+                && $expires->greaterThan($approved);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function orderedIntent(array $intent): array
+    {
+        if (! array_is_list($intent)) {
+            ksort($intent);
+        }
+        foreach ($intent as &$value) {
+            if (is_array($value)) {
+                $value = $this->orderedIntent($value);
+            }
+        }
+
+        return $intent;
+    }
+
+    private function sameIdentifier(mixed $value, int|string $expected): bool
+    {
+        return (is_string($value) || is_int($value)) && (string) $value === (string) $expected;
+    }
+
     /**
      * Fresh database state can change across the intervening Google status request.
      *
@@ -360,7 +459,7 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
     {
         $event = null;
         if ($customerId === (string) config('conversions.google_ads_customer_id')) {
-            foreach (['paid_subscription', 'signup_import'] as $candidate) {
+            foreach (['paid_setup', 'paid_subscription', 'signup_import'] as $candidate) {
                 if (($action['resourceName'] ?? '') === Setting::get('conversion_resource_name.'.$candidate)) {
                     $event = $candidate;
                     break;
@@ -370,7 +469,7 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
         if (! $event) {
             return null;
         }
-        if (($action['type'] ?? '') !== 'UPLOAD_CLICKS' || ($action['category'] ?? '') !== ($event === 'paid_subscription' ? 'PURCHASE' : 'SIGNUP')) {
+        if (($action['type'] ?? '') !== 'UPLOAD_CLICKS' || ($action['category'] ?? '') !== (in_array($event, ['paid_subscription', 'paid_setup'], true) ? 'PURCHASE' : 'SIGNUP')) {
             return new AgentIssue('conversion_goal_delivery_type', 'The selected server-side action has an unexpected delivery type or category.');
         }
         $id = basename($action['resourceName']);

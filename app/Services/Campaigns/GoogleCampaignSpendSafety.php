@@ -5,9 +5,12 @@ namespace App\Services\Campaigns;
 use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\SpectraConversionEvent;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
+use App\Services\GoogleAds\InspectAiMaxPilot;
+use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
@@ -26,7 +29,8 @@ class GoogleCampaignSpendSafety
                 throw new \RuntimeException("Campaign {$campaign->id} has no valid customer account for spend safety.");
             }
             if ($customer->is_sandbox || $customer->google_ads_link_status === 'revoked'
-                || ($customer->service_type === 'setup_only' && ! CampaignSpendGuardrails::activeTrial($campaign))) {
+                || ($customer->service_type === 'setup_only' && ! CampaignSpendGuardrails::activeTrial($campaign)
+                    && ! CampaignSpendGuardrails::aiMaxPilot($campaign))) {
                 return ['action' => 'skipped', 'reason' => 'account is not under automatic management'];
             }
 
@@ -41,6 +45,19 @@ class GoogleCampaignSpendSafety
             if ($reason === null) {
                 if ($snapshot['status'] === GoogleStatus::PAUSED) {
                     $campaign->applyPlatformStatus('PAUSED');
+                }
+                if (($pilot = CampaignSpendGuardrails::aiMaxPilot($campaign)) !== null) {
+                    DB::transaction(function () use ($campaign, $snapshot, $pilot) {
+                        $current = Campaign::withoutCustomerScope()->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+                        $state = $current->search_delivery_state ?? [];
+                        $state['ai_max_monitor'] = ['checked_at' => now()->toIso8601String(),
+                            'reported_spend_micros' => max(0, $snapshot['cost_micros'] - $pilot['baseline_cost_micros']),
+                            'review_spend_micros' => $pilot['review_spend_micros'],
+                            'configuration' => $snapshot['ai_max_configuration'] ?? null,
+                            'google_status' => $snapshot['status'],
+                            'reporting_note' => 'Reported spend can lag; the review threshold is not a hard billing cap.'];
+                        $current->update(['search_delivery_state' => $state, 'last_checked_at' => now()]);
+                    });
                 }
 
                 return ['action' => 'observed', 'cost_micros' => $snapshot['cost_micros']];
@@ -66,13 +83,16 @@ class GoogleCampaignSpendSafety
             }
 
             $trial = CampaignSpendGuardrails::activeTrial($campaign);
-            $spend = $trial ? max(0, $snapshot['cost_micros'] - (int) $trial['baseline_cost_micros']) : $snapshot['window_matured_cost_micros'];
-            $overshoot = $trial ? max(0, $spend - (int) $trial['max_spend_micros']) : 0;
+            $pilot = CampaignSpendGuardrails::aiMaxPilot($campaign);
+            $baseline = $trial['baseline_cost_micros'] ?? $pilot['baseline_cost_micros'] ?? null;
+            $threshold = $trial['max_spend_micros'] ?? $pilot['review_spend_micros'] ?? null;
+            $spend = is_int($baseline) ? max(0, $snapshot['cost_micros'] - $baseline) : $snapshot['window_matured_cost_micros'];
+            $overshoot = is_int($threshold) ? max(0, $spend - $threshold) : 0;
             $verified = $campaign->spend_safety_hold;
             $verified['verified_at'] = now()->toIso8601String();
             $verified['observed_cap_overshoot_micros'] = $overshoot;
             $verified['last_alerted_overshoot_micros'] = $overshoot;
-            DB::transaction(function () use ($campaign, $verified, $reason, $snapshot, $trial, $spend, $overshoot) {
+            DB::transaction(function () use ($campaign, $verified, $reason, $snapshot, $trial, $pilot, $spend, $overshoot) {
                 $campaign->applyPlatformStatus('PAUSED');
                 $campaign->update(['spend_safety_hold' => $verified, 'primary_status' => 'PAUSED', 'last_checked_at' => now()]);
                 AgentActivity::record('spend_safety', 'campaign_spend_safety_paused',
@@ -80,6 +100,7 @@ class GoogleCampaignSpendSafety
                     $campaign->customer_id, $campaign->id, [
                         'reason' => $reason, 'verified_platform_status' => 'PAUSED', 'snapshot' => $snapshot,
                         'trial_spend_micros' => $trial ? $spend : null,
+                        'pilot_spend_micros' => $pilot ? $spend : null,
                         'observed_cap_overshoot_micros' => $overshoot,
                         'reporting_note' => 'Google reports spend with a delay. This stop is checked every 15 minutes and is not a hard billing cap.',
                     ]);
@@ -165,13 +186,16 @@ class GoogleCampaignSpendSafety
         });
     }
 
-    private function stopReason(Campaign $campaign, array $snapshot, bool $respectLocalPause = true): ?string
+    private function stopReason(Campaign $campaign, array &$snapshot, bool $respectLocalPause = true): ?string
     {
         if ($campaign->hasPassedEndDate()) {
             return 'approved_end_date_passed';
         }
         if ($respectLocalPause && $campaign->status === CampaignStatus::Paused && $snapshot['status'] === GoogleStatus::ENABLED) {
             return 'manual_pause_drift';
+        }
+        if (CampaignSpendGuardrails::aiMaxPilot($campaign) !== null) {
+            return $this->pilotStopReason($campaign, $snapshot, $respectLocalPause);
         }
         $trial = CampaignSpendGuardrails::activeTrial($campaign);
         if ($trial) {
@@ -205,6 +229,75 @@ class GoogleCampaignSpendSafety
             ? 'no_conversions_after_matured_spend' : null;
     }
 
+    private function pilotStopReason(Campaign $campaign, array &$snapshot, bool $allowPausedPreparation): ?string
+    {
+        $pilot = CampaignSpendGuardrails::aiMaxPilot($campaign);
+        if (! $pilot || ! CampaignSpendGuardrails::validAiMaxPilot($campaign)) {
+            return 'ai_max_approval_unverified';
+        }
+        if (CarbonImmutable::parse($pilot['ends_at'])->lte(now())) {
+            return 'ai_max_approved_end_reached';
+        }
+        if (($snapshot['currency_code'] ?? null) !== $pilot['currency_code']
+            || ($snapshot['account_timezone'] ?? null) !== $pilot['account_timezone']
+            || ! is_int($snapshot['cost_micros'] ?? null) || $snapshot['cost_micros'] < $pilot['baseline_cost_micros']) {
+            return 'ai_max_spend_evidence_unverified';
+        }
+        if ($pilot['review_spend_micros'] <= $snapshot['cost_micros'] - $pilot['baseline_cost_micros']) {
+            return 'ai_max_reported_spend_review_reached';
+        }
+        // Preparation is performed while Google is paused. The owner service
+        // validates configuration before activation; this monitor never enables.
+        if ($allowPausedPreparation && $snapshot['status'] === GoogleStatus::PAUSED) {
+            return null;
+        }
+        if (CarbonImmutable::parse($pilot['starts_at'])->gt(now())) {
+            return 'ai_max_started_before_approved_window';
+        }
+        if ($snapshot['campaign_type'] !== AdvertisingChannelType::SEARCH
+            || $snapshot['daily_budget_micros'] !== $pilot['max_daily_budget_micros']
+            || $snapshot['bidding_strategy'] !== BiddingStrategyType::MAXIMIZE_CONVERSIONS) {
+            return 'ai_max_serving_limits_changed';
+        }
+        try {
+            $readiness = $this->pilotReadiness($campaign, $pilot);
+            $snapshot['ai_max_configuration'] = array_intersect_key($readiness, array_flip(['ready', 'issues', 'fingerprint', 'checked_at']));
+            if (($readiness['ready'] ?? null) !== true) {
+                return 'ai_max_configuration_unverified';
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $snapshot['ai_max_configuration'] = ['ready' => false, 'checked_at' => now()->toIso8601String(),
+                'issues' => ['Native configuration could not be read; review the failure before restarting.']];
+
+            return 'ai_max_configuration_unverified';
+        }
+
+        return $this->pilotTrackingFailure($campaign, $pilot);
+    }
+
+    protected function pilotReadiness(Campaign $campaign, array $pilot): array
+    {
+        return (new InspectAiMaxPilot($campaign->customer))->inspect($campaign, $pilot);
+    }
+
+    private function pilotTrackingFailure(Campaign $campaign, array $pilot): ?string
+    {
+        if ($campaign->customer?->cleanGoogleCustomerId() !== (string) config('conversions.google_ads_customer_id')) {
+            return null;
+        }
+        $events = SpectraConversionEvent::where('event', 'paid_setup')->where('mode', 'server_google')
+            ->where('google_conversion_resource', $pilot['selected_conversion_action'])
+            ->where('created_at', '>=', CarbonImmutable::parse($pilot['starts_at']))->lazyById(200);
+        foreach ($events as $event) {
+            if (in_array($event->googleDeliveryStatus(), ['upload_failed', 'processing_failed', 'processing_unknown', 'legacy_unverified'], true)) {
+                return 'ai_max_purchase_delivery_failed';
+            }
+        }
+
+        return null;
+    }
+
     protected function snapshot(Campaign $campaign): array
     {
         return app()->makeWith(GetCampaignSpendSafety::class, ['customer' => $campaign->customer])->forCampaign($campaign);
@@ -213,12 +306,15 @@ class GoogleCampaignSpendSafety
     private function recordDelayedSpend(Campaign $campaign, array $snapshot): void
     {
         $trial = CampaignSpendGuardrails::activeTrial($campaign);
-        if (! $trial) {
+        $pilot = CampaignSpendGuardrails::aiMaxPilot($campaign);
+        $baseline = $trial['baseline_cost_micros'] ?? $pilot['baseline_cost_micros'] ?? null;
+        $threshold = $trial['max_spend_micros'] ?? $pilot['review_spend_micros'] ?? null;
+        if (! is_int($baseline) || ! is_int($threshold)) {
             return;
         }
         $hold = $campaign->spend_safety_hold;
-        $spend = max(0, $snapshot['cost_micros'] - (int) $trial['baseline_cost_micros']);
-        $overshoot = max(0, $spend - (int) $trial['max_spend_micros']);
+        $spend = max(0, $snapshot['cost_micros'] - $baseline);
+        $overshoot = max(0, $spend - $threshold);
         $alert = $overshoot - (int) ($hold['last_alerted_overshoot_micros'] ?? 0)
             >= (int) config('optimization.campaign_spend_safety.overshoot_alert_micros', 1_000_000);
         $hold['latest_snapshot'] = $snapshot;

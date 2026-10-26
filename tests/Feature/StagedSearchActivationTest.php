@@ -166,6 +166,43 @@ class StagedSearchActivationTest extends TestCase
         Queue::assertPushed(CheckGoogleCampaignReadiness::class, 1);
     }
 
+    public static function aiMaxOwners(): array
+    {
+        return [['pending'], ['pilot']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('aiMaxOwners')]
+    public function test_a_stale_legacy_settlement_cannot_take_over_pending_or_active_ai_max_campaigns(string $mode): void
+    {
+        [$campaign, , $builder, $reader, $writer, $settler] = $this->fixture();
+        $state = ['ai_max_request' => ['enabled' => true, 'nonce' => 'owner-approved', 'status' => 'goals_pending'],
+            'ai_max_setup' => ['mutation_started_at' => 'durable'], 'ai_max_monitor' => ['status' => 'verified']];
+        $campaign->fresh()->update(['search_delivery_state' => $state,
+            'spend_guardrails' => $mode === 'pilot' ? ['ai_max_pilot' => ['enabled' => true]] : null]);
+
+        $this->assertFalse($settler->settle($campaign));
+        $this->assertSame(0, $builder->calls);
+        $this->assertSame(0, $reader->calls);
+        $this->assertSame([], $writer->enabled);
+        $this->assertSame([], $writer->paused);
+        $this->assertEquals($state, $campaign->fresh()->search_delivery_state);
+        $this->assertSame(CampaignStatus::Draft, $campaign->fresh()->status);
+    }
+
+    public function test_ai_max_approval_during_a_legacy_reach_check_prevents_activation(): void
+    {
+        [$campaign, , $builder, , $writer, $settler] = $this->fixture();
+        $state = ['ai_max_request' => ['enabled' => true, 'nonce' => 'owner-approved', 'status' => 'goals_pending']];
+        $builder->duringCheck = function () use ($campaign, $state): void {
+            $campaign->fresh()->update(['search_delivery_state' => $state]);
+        };
+
+        $this->assertFalse($settler->settle($campaign));
+        $this->assertSame([], $writer->enabled);
+        $this->assertEquals($state, $campaign->fresh()->search_delivery_state);
+        $this->assertSame(CampaignStatus::Draft, $campaign->fresh()->status);
+    }
+
     public function test_owner_pause_during_the_enable_readback_is_preserved_and_compensated_before_status_sync(): void
     {
         [$campaign, $strategy, , $reader, $writer, $settler] = $this->fixture();

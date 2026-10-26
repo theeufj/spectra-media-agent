@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\QualityScoreImprovementAgent;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\ApplyRecommendation;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
@@ -29,8 +30,7 @@ use Illuminate\Support\Facades\Log;
  *  AUTO-FIX    — ad copy issues routed to the reviewed RSA repair loop.
  *                Recommendations remain open until strength is verified.
  *
- *  AUTO-DISMISS — things our agents already handle (broad match expansion,
- *                 budget reallocation). Dismissed so they don't clutter the UI.
+ *  REVIEW — keyword/match suggestions and unhandled types remain visible.
  *
  *  NOTIFY CLIENT — budget increases. It's the client's money; they decide.
  *                  Sends an in-app notification to the customer's user.
@@ -62,8 +62,6 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     ];
 
     private const AUTO_DISMISS = [
-        RecommendationType::KEYWORD_MATCH_TYPE,
-        RecommendationType::USE_BROAD_MATCH_KEYWORD,
         RecommendationType::MOVE_UNUSED_BUDGET,
     ];
 
@@ -132,6 +130,15 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
         foreach ($allRecs as $rec) {
             $type = $rec['type'];
+            $campaign = ! empty($rec['campaign_resource'])
+                ? CampaignSpendGuardrails::forGoogleResource($customerId, $rec['campaign_resource']) : null;
+            if ($campaign && CampaignSpendGuardrails::aiMaxPilot($campaign) !== null) {
+                // Google's recommendations are evidence, not permission to
+                // change an owner's pilot or erase suggestions before review.
+                $this->retainRecommendation($customer, $rec, 'ai_max_pilot_review');
+
+                continue;
+            }
 
             if (in_array($type, self::AUTO_APPLY)) {
                 $toApply[] = $rec['resource_name'];
@@ -163,20 +170,15 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
                 continue;
             }
 
-            // Everything else: log for visibility and dismiss so the UI stays clean
-            $toDismiss[] = $rec['resource_name'];
-            AgentActivity::record(
-                'google_ads_recommendations',
-                'recommendation_dismissed',
-                "Dismissed unhandled recommendation type {$type} for customer \"{$customer->name}\"",
-                $customer->id
-            );
+            $this->retainRecommendation($customer, $rec, 'recommendation_needs_review');
         }
 
-        // Auto-apply bidding/CPA recommendations
+        // Auto-apply bidding/CPA recommendations only after the writer's fresh policy check.
+        $applied = 0;
         if (! empty($toApply)) {
             $ok = ($apply)($customerId, $toApply);
             if ($ok) {
+                $applied = count($toApply);
                 AgentActivity::record(
                     'google_ads_recommendations',
                     'recommendations_applied',
@@ -206,9 +208,24 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
             $this->notifyAdminHumanRequired($customer, $humanNeeded);
         }
 
-        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: ".count($toApply).', dismissed: '.count($toDismiss).', creative-fix: '.count($creativeCampaigns).', human-needed: '.count($humanNeeded));
+        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: ".$applied.', dismissed: '.$dismissed.', creative-fix: '.count($creativeCampaigns).', human-needed: '.count($humanNeeded));
 
-        return count($toApply) + $dismissed + $repairActions;
+        return $applied + $dismissed + $repairActions;
+    }
+
+    private function retainRecommendation(Customer $customer, array $recommendation, string $reason): void
+    {
+        if (AgentActivity::where('customer_id', $customer->id)->where('action', 'recommendation_retained')
+            ->where('details->recommendation_resource', $recommendation['resource_name'])
+            ->where('created_at', '>=', now()->subDay())->exists()) {
+            return;
+        }
+        AgentActivity::record('google_ads_recommendations', 'recommendation_retained',
+            'Retained a Google recommendation for review; no campaign setting was changed.',
+            $customer->id, null, ['recommendation_resource' => $recommendation['resource_name'],
+                'campaign_resource' => $recommendation['campaign_resource'] ?? null,
+                'type' => $recommendation['type'], 'reason' => $reason,
+                'keyword' => $recommendation['keyword'] ?? null], 'needs_review');
     }
 
     private function notifyClientBudget(Customer $customer, array $rec): void
