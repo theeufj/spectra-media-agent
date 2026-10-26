@@ -646,6 +646,166 @@ class GoogleSearchReachRecoveryTest extends TestCase
         Http::assertNothingSent();
     }
 
+    private function ongoingLimits(Campaign $campaign): void
+    {
+        $campaign->customer->update(['currency_code' => 'AUD']);
+        $campaign->update(['spend_guardrails' => ['automation_limits' => [
+            'enabled' => true, 'max_cpc_bid_micros' => 3_000_000, 'max_daily_budget_micros' => 10_000_000,
+            'currency_code' => 'AUD', 'approved_at' => now()->toIso8601String(), 'source' => 'approved_market_research',
+        ]]]);
+    }
+
+    public function test_rank_loss_does_not_starve_affordable_keyword_discovery_when_capped_forecast_is_independently_insufficient(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->ongoingLimits($campaign);
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['forecast'] = ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 0.4, 'period_days' => 4];
+        $diagnosis['issues'] = [['code' => 'insufficient_forecast_reach', 'message' => 'The current capped portfolio has little reach.']];
+        $watchdog = $this->watchdog($this->rankSnapshot(), $diagnosis);
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame([false, true], $this->researchCalls);
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame('forecasted_relevant_keywords_required', $state['blocked_reason']);
+    }
+
+    public function test_sufficient_capped_reach_keeps_rank_repair_priority_for_a_new_creative_problem(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->ongoingLimits($campaign);
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['forecast'] = ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 4.7, 'period_days' => 4];
+        $watchdog = $this->watchdog($this->rankSnapshot(), $diagnosis);
+
+        $watchdog->check($campaign);
+
+        $this->assertSame([false], $this->researchCalls);
+        $this->assertCount(1, $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+    }
+
+    public function test_a_pending_creative_attempt_still_blocks_competing_keyword_research_and_mutations(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->ongoingLimits($campaign);
+        AgentActivity::record('ad_rank', 'ad_rank_repair', 'Unknown activation is awaiting readback.', $campaign->customer_id, $campaign->id,
+            ['phase' => 'activating', 'started_at' => now()->subMinutes(20)->toIso8601String()], 'pending');
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['forecast'] = ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 0.4, 'period_days' => 4];
+        $watchdog = $this->watchdog($this->rankSnapshot(), $diagnosis);
+
+        $watchdog->check($campaign);
+
+        $this->assertSame([], $this->researchCalls);
+        $this->assertCount(1, $watchdog->rankCalls);
+        $this->assertSame([], $watchdog->added);
+    }
+
+    public function test_a_pending_keyword_attempt_is_measured_before_starting_a_new_rank_repair(): void
+    {
+        $campaign = $this->makeCampaign();
+        $this->ongoingLimits($campaign);
+        $snapshot = $this->rankSnapshot();
+        $snapshot['keywords'][] = [...$snapshot['keywords'][0], 'text' => 'paid search agency',
+            'resource_name' => 'customers/1234567890/adGroupCriteria/10~20'];
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['forecast'] = ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 4.7, 'period_days' => 4];
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+        $campaign->update(['search_delivery_state' => [
+            'evaluation_started_at' => $snapshot['measurement']['started_at'],
+            'config_fingerprint' => (new \ReflectionMethod(GoogleSearchReachRecovery::class, 'fingerprint'))->invoke($watchdog, $campaign, $snapshot),
+            'repair' => ['started_at' => $snapshot['measurement']['started_at'], 'errors' => [],
+                'added_keywords' => [['resource' => 'customers/1234567890/adGroupCriteria/10~20',
+                    'text' => 'paid search agency', 'match_type' => 'EXACT']]],
+        ]]);
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('rank_limited', $state['ad_rank']['diagnosis']['status']);
+        $this->assertSame('repair_did_not_restore_search_traffic', $state['blocked_reason']);
+        $this->assertSame(13, $state['verification']['impressions']);
+        $this->assertSame([], $watchdog->rankCalls);
+        $this->assertSame([], $this->researchCalls);
+        $this->assertSame([], $watchdog->added);
+
+        $state['status'] = 'recovered';
+        $state['repair']['delivery_verified_at'] = now()->toIso8601String();
+        $campaign->update(['search_delivery_state' => $state]);
+        $watchdog->check($campaign);
+        $this->assertCount(1, $watchdog->rankCalls, 'Completed keyword verification cannot starve a subsequent creative repair.');
+    }
+
+    public function test_a_useful_short_forecast_is_not_a_reach_failure_merely_because_individual_keywords_have_low_volume(): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->snapshot();
+        $snapshot['measurement']['impressions'] = 10;
+        $snapshot['measurement']['clicks'] = 3;
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['forecast'] = ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 4.7, 'period_days' => 4];
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+
+        $state = $watchdog->check($campaign);
+
+        $this->assertSame('delivering', $state['status']);
+        $this->assertSame([false], $this->researchCalls);
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $watchdog->rankCalls);
+    }
+
+    public function test_a_legacy_completed_keyword_trial_resumes_ordinary_checks_without_becoming_pending_again(): void
+    {
+        $campaign = $this->makeCampaign();
+        $snapshot = $this->snapshot();
+        $snapshot['measurement']['impressions'] = 10;
+        $snapshot['measurement']['clicks'] = 3;
+        $diagnosis = $this->diagnosis(0);
+        $diagnosis['issues'] = [];
+        $diagnosis['forecast']['clicks'] = 60;
+        $watchdog = $this->watchdog($snapshot, $diagnosis);
+        $completedAt = now()->subHours(2)->toIso8601String();
+        $repair = ['started_at' => $snapshot['measurement']['started_at'], 'purpose' => 'bounded_expansion',
+            'errors' => [], 'added_keywords' => [['resource' => 'customers/1234567890/adGroupCriteria/10~20']]];
+        $campaign->update(['search_delivery_state' => ['status' => 'recovered', 'checked_at' => $completedAt,
+            'evaluation_started_at' => $snapshot['measurement']['started_at'], 'repair' => $repair,
+            'config_fingerprint' => (new \ReflectionMethod(GoogleSearchReachRecovery::class, 'fingerprint'))->invoke($watchdog, $campaign, $snapshot)]]);
+
+        $healthy = $watchdog->check($campaign);
+        $watchdog->snapshot['measurement']['clicks'] = 0;
+        $lowTraffic = $watchdog->check($campaign);
+        $again = $watchdog->check($campaign);
+
+        $this->assertSame('delivering', $healthy['status']);
+        $this->assertSame('low_traffic', $lowTraffic['status']);
+        $this->assertSame('low_traffic', $again['status']);
+        $this->assertSame([false, false, false], $this->researchCalls, 'Completed trials must use current ordinary diagnostics on every tick.');
+        $this->assertSame($completedAt, $again['repair']['delivery_verified_at']);
+        $this->assertSame('legacy_recovered_state', $again['repair']['delivery_verification_source']);
+        $this->assertSame($repair['added_keywords'], $again['repair']['added_keywords']);
+        $this->assertSame([], $again['repair']['errors']);
+        $this->assertArrayNotHasKey('verification', $again);
+
+        $watchdog->snapshot['actual_cpc_ceiling_micros'] = 2_000_000;
+        $changed = $watchdog->check($campaign);
+
+        $this->assertSame(0, $changed['measurement']['complete_hours']);
+        $this->assertSame($completedAt, $changed['repair']['delivery_verified_at']);
+        $this->assertSame($repair['added_keywords'], $changed['repair']['added_keywords']);
+        $this->assertSame([], $changed['repair']['errors'], 'Later legitimate configuration changes cannot reopen a completed repair.');
+        $this->assertSame([], $watchdog->added);
+
+        $campaign->update(['search_delivery_state' => ['status' => 'recovered', 'repair' => $repair]]);
+        $watchdog->onInspect = fn () => throw new \RuntimeException('Provider unreachable after a legacy completed trial');
+        $failed = $watchdog->check($campaign);
+
+        $this->assertSame('unavailable', $failed['status']);
+        $this->assertNotEmpty($failed['repair']['delivery_verified_at']);
+        $this->assertSame([], $failed['repair']['errors'], 'A later provider outage cannot reopen a completed repair as a partial write.');
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('unverifiedRankEvidence')]
     public function test_partial_stale_missing_or_prior_configuration_rank_evidence_cannot_delegate_a_new_repair(array $override): void
     {

@@ -329,7 +329,8 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             }
         }
 
-        $measurement = $this->measurement($customerId, $campaignId, $startedAt, $settings['time_zone']);
+        $measurement = $this->measurement($customerId, $campaignId, $startedAt, $settings['time_zone'],
+            $this->boundedVerificationWindowHours($campaign, $since, $startedAt));
         sort($approvedAdResources);
 
         return $settings + [
@@ -393,7 +394,32 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         return $latest;
     }
 
-    private function measurement(string $customerId, string $campaignId, ?CarbonImmutable $startedAt, string $timezone): array
+    private function boundedVerificationWindowHours(Campaign $campaign, ?DateTimeInterface $since, ?CarbonImmutable $startedAt): ?int
+    {
+        $state = $campaign->search_delivery_state ?? [];
+        $repair = $state['repair'] ?? [];
+        if (! $since || ! $startedAt || ($repair['purpose'] ?? null) !== 'bounded_expansion'
+            || ! empty($repair['delivery_verified_at'])
+            || in_array('recovered', [$state['reach_status'] ?? null, $state['status'] ?? null], true)
+            || ! is_string($repair['started_at'] ?? null)
+            || ! is_int($repair['verification_after_hours'] ?? null)
+            || $repair['verification_after_hours'] < 1 || $repair['verification_after_hours'] > 168) {
+            return null;
+        }
+        try {
+            $repairAt = CarbonImmutable::parse($repair['started_at']);
+            if ($repairAt->lessThanOrEqualTo(CarbonImmutable::now())
+                && $repairAt->equalTo($since) && $repairAt->equalTo($startedAt)) {
+                return 168;
+            }
+        } catch (\Throwable) {
+            // Malformed local journals cannot change the ordinary rolling window.
+        }
+
+        return null;
+    }
+
+    private function measurement(string $customerId, string $campaignId, ?CarbonImmutable $startedAt, string $timezone, ?int $boundedWindowHours = null): array
     {
         $lag = max(0, (int) config('optimization.search_delivery.reporting_lag_hours', 3));
         $through = CarbonImmutable::now($timezone)->subHours($lag)->startOfHour();
@@ -401,12 +427,18 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         if ($from && ! $from->equalTo($from->startOfHour())) {
             $from = $from->addHour()->startOfHour();
         }
-        // Keep watching for a later stop: a few impressions after restart cannot
-        // certify delivery forever. The original start remains in the snapshot.
-        $windowHours = max(1, (int) config('optimization.search_delivery.measurement_window_hours', 48));
-        $windowStart = $through->subHours($windowHours);
-        if ($from && $from->lessThan($windowStart)) {
-            $from = $windowStart;
+        if ($boundedWindowHours !== null && $from) {
+            // A bounded repair can need more than 48h to reach its click target.
+            // Keep its entire trial, including early primary conversions. Freeze
+            // at the maximum horizon rather than rolling old conversions away.
+            $through = $through->min($from->addHours($boundedWindowHours));
+        } else {
+            // Ordinary diagnostics still watch for a later stop after a restart.
+            $windowHours = max(1, (int) config('optimization.search_delivery.measurement_window_hours', 48));
+            $windowStart = $through->subHours($windowHours);
+            if ($from && $from->lessThan($windowStart)) {
+                $from = $windowStart;
+            }
         }
         $hours = $from ? max(0, (int) (($through->getTimestamp() - $from->getTimestamp()) / 3600)) : 0;
         $measurement = ['started_at' => $startedAt?->toIso8601String(), 'from' => $from?->toIso8601String(),

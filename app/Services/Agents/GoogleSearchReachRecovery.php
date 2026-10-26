@@ -32,7 +32,7 @@ class GoogleSearchReachRecovery
     public function check(Campaign $campaign): array
     {
         $campaign = $campaign->fresh(['customer']) ?? $campaign;
-        $previous = $campaign->search_delivery_state ?? [];
+        $previous = $this->preserveLegacyKeywordCompletion($campaign->search_delivery_state ?? []);
         $state = [...$previous, 'checked_at' => now()->toIso8601String(),
             'stale_after_hours' => (int) config('optimization.search_delivery.stale_after_hours', 3),
             'mutation_allowed' => false, 'errors' => []];
@@ -87,13 +87,13 @@ class GoogleSearchReachRecovery
                 $snapshot['measurement'] = ['started_at' => $started->toIso8601String(),
                     'from' => $started->toIso8601String(), 'through' => $started->toIso8601String(),
                     'complete_hours' => 0, 'impressions' => 0, 'clicks' => 0, 'cost_micros' => 0, 'conversions' => 0];
-                if (! empty($state['repair']['started_at'])) {
+                if ($this->keywordVerificationPending($state)) {
                     // A partial or unverified remote write changes the keyword
                     // fingerprint itself. That cannot erase the failed attempt.
                     $state['repair']['errors'][] = ['code' => 'repair_configuration_changed',
                         'message' => 'Live settings changed after a repair started. Review its outcome before resetting this incident.'];
                 } else {
-                    unset($state['repair'], $state['verification'], $state['diagnosis'], $state['alert_key'], $state['last_alert_at']);
+                    unset($state['verification'], $state['diagnosis'], $state['alert_key'], $state['last_alert_at']);
                 }
             }
             $measurement = $snapshot['measurement'] ?? null;
@@ -121,15 +121,28 @@ class GoogleSearchReachRecovery
             $state['ad_rank']['diagnosis'] = $rank;
             $pendingRankRepair = ($state['ad_rank']['repair']['status'] ?? null) === 'verifying'
                 || $this->hasPendingRankRepair($campaign);
-            if ($pendingRankRepair || $rank['status'] === 'rank_limited') {
+            $pendingKeywordVerification = $this->keywordVerificationPending($state);
+            if (! $pendingRankRepair && $pendingKeywordVerification && ! $campaign->spend_safety_hold) {
+                // Observe an existing keyword attempt before starting a new
+                // creative mutation that would change its measurement baseline.
+                return $this->verify($campaign, $snapshot, $state);
+            }
+            $rankBaseline = null;
+            if (! $pendingRankRepair && $rank['status'] === 'rank_limited'
+                && CampaignSpendGuardrails::automationLimits($campaign) !== null
+                && ! CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                // Repeated creative repairs cannot make an expensive keyword
+                // theme affordable. Read its capped reach before starting a new
+                // rank mutation; an in-flight creative attempt still owns recovery.
+                $rankBaseline = $this->planner->assess($campaign, $snapshot);
+            }
+            if ($pendingRankRepair || ($rank['status'] === 'rank_limited'
+                && ! $this->knownInsufficientForecast($rankBaseline ?? []))) {
                 // Creative repair has its own narrow permissions and durable
                 // read-back workflow. A passing reach forecast cannot hide rank loss.
                 $result = $this->repairAdRank($campaign, $snapshot, $rank);
 
                 return $this->saveRankResult($campaign, $state, $result);
-            }
-            if (! empty($state['repair']['started_at']) && ! $campaign->spend_safety_hold) {
-                return $this->verify($campaign, $snapshot, $state);
             }
             $mature = (int) $measurement['complete_hours'] >= (int) config('optimization.search_delivery.diagnosis_after_hours', 12);
             $enoughTraffic = (int) $measurement['impressions'] >= (int) config('optimization.search_delivery.min_impressions', 5);
@@ -138,12 +151,9 @@ class GoogleSearchReachRecovery
             $researchDue = empty($state['last_research_at'])
                 || CarbonImmutable::parse($state['last_research_at'])->lte(now()->subHours((int) config('optimization.search_delivery.research_cooldown_hours', 24)));
             $research = $mature && $researchDue && (! $enoughTraffic || $campaign->spend_safety_hold);
-            $diagnosis = $this->planner->assess($campaign, $snapshot, $research);
+            $diagnosis = ! $research && $rankBaseline !== null ? $rankBaseline : $this->planner->assess($campaign, $snapshot, $research);
             $reachRisk = $this->hasReachRisk($diagnosis);
-            $knownInsufficientReach = in_array('insufficient_forecast_reach', array_column($diagnosis['issues'] ?? [], 'code'), true)
-                && ($diagnosis['status'] ?? null) === 'evidence_ready'
-                && ($diagnosis['forecast']['success'] ?? null) === true
-                && ($diagnosis['forecast']['source'] ?? null) === 'google_keyword_forecast';
+            $knownInsufficientReach = $this->knownInsufficientForecast($diagnosis);
             if (! $research && ($mature || $knownInsufficientReach) && $researchDue && $reachRisk) {
                 // A little traffic is not proof that the existing keyword theme
                 // has enough forecast reach for an economically useful test.
@@ -218,9 +228,9 @@ class GoogleSearchReachRecovery
             Log::error('Search delivery watchdog could not complete', ['campaign_id' => $campaign->id, 'error' => $e->getMessage()]);
             // A remote write may precede a failed read-back. Keep its durable
             // attempt, so a retry cannot silently add the same keywords again.
-            $state = [...$state, ...($campaign->fresh()->search_delivery_state ?? []),
-                'checked_at' => now()->toIso8601String()];
-            if (! empty($state['repair']['started_at'])) {
+            $state = $this->preserveLegacyKeywordCompletion([...$state, ...($campaign->fresh()->search_delivery_state ?? []),
+                'checked_at' => now()->toIso8601String()]);
+            if ($this->keywordVerificationPending($state)) {
                 $state['repair']['errors'][] = ['code' => 'repair_readback_unavailable',
                     'message' => 'Repair read-back could not finish. Review the live keywords before retrying.'];
             }
@@ -230,6 +240,26 @@ class GoogleSearchReachRecovery
             return $this->alertAndSave($campaign, [...$state, 'status' => 'unavailable',
                 'mutation_allowed' => false, 'blocked_reason' => 'search_delivery_check_unavailable']);
         }
+    }
+
+    private function keywordVerificationPending(array $state): bool
+    {
+        return ! empty($state['repair']['started_at'])
+            && (empty($state['repair']['delivery_verified_at']) || ! empty($state['repair']['errors']));
+    }
+
+    private function preserveLegacyKeywordCompletion(array $state): array
+    {
+        if (! empty($state['repair']['started_at']) && empty($state['repair']['delivery_verified_at'])
+            && empty($state['repair']['errors'])
+            && in_array('recovered', [$state['reach_status'] ?? null, $state['status'] ?? null], true)) {
+            // Preserve a legacy completed outcome when ordinary delivery checks
+            // replace its display status. This migrates history, not fresh proof.
+            $state['repair']['delivery_verified_at'] = $state['checked_at'] ?? now()->toIso8601String();
+            $state['repair']['delivery_verification_source'] = 'legacy_recovered_state';
+        }
+
+        return $state;
     }
 
     private function evaluationStart(Campaign $campaign, array $previous): CarbonImmutable
@@ -260,9 +290,25 @@ class GoogleSearchReachRecovery
         // collectively deliver enough forecast traffic under the actual limits.
         $forecast = $diagnosis['forecast'] ?? [];
 
-        return in_array('limited_keyword_demand', $codes, true)
-            && (($forecast['success'] ?? false) !== true
-                || ($forecast['clicks'] ?? 0) < (int) config('optimization.search_delivery.min_forecast_clicks', 30));
+        $days = $forecast['period_days'] ?? 30;
+        $clicks = $forecast['clicks'] ?? null;
+        $useful = ($forecast['success'] ?? false) === true && is_int($days) && $days > 0
+            && is_numeric($clicks) && is_finite((float) $clicks) && $clicks >= 0
+            && $clicks * 30 / $days >= (int) config('optimization.search_delivery.min_forecast_clicks', 30);
+
+        return in_array('limited_keyword_demand', $codes, true) && ! $useful;
+    }
+
+    private function knownInsufficientForecast(array $diagnosis): bool
+    {
+        $forecast = $diagnosis['forecast'] ?? [];
+        $days = $forecast['period_days'] ?? null;
+        $clicks = $forecast['clicks'] ?? null;
+
+        return ($diagnosis['status'] ?? null) === 'evidence_ready'
+            && ($forecast['success'] ?? null) === true && ($forecast['source'] ?? null) === 'google_keyword_forecast'
+            && is_int($days) && $days > 0 && is_numeric($clicks) && is_finite((float) $clicks) && $clicks >= 0
+            && $clicks * 30 / $days < (int) config('optimization.search_delivery.min_forecast_clicks', 30);
     }
 
     private function rankDiagnosis(array $snapshot): array
@@ -404,7 +450,7 @@ class GoogleSearchReachRecovery
         return app(GoogleAdRankRepair::class)->repair($campaign, $snapshot, $rankDiagnosis);
     }
 
-    private function mutationBlocked(Campaign $campaign, array $snapshot, array $diagnosis, array $state): ?string
+    private function mutationBlocked(Campaign $campaign, array $snapshot, array $diagnosis, array $state, bool $requiresOngoingLimits = false): ?string
     {
         $current = $campaign->fresh(['customer']);
         if (! $current || $current->hasPassedEndDate()) {
@@ -427,6 +473,12 @@ class GoogleSearchReachRecovery
         }
         if ((int) ($snapshot['actual_cpc_ceiling_micros'] ?? 0) <= 0) {
             return 'existing_cpc_cap_required';
+        }
+        $limits = CampaignSpendGuardrails::automationLimits($current);
+        if (($requiresOngoingLimits && $limits === null)
+            || ($limits !== null && (! CampaignSpendGuardrails::permitsKeywordBid($current, (int) $snapshot['actual_cpc_ceiling_micros'])
+                || ! CampaignSpendGuardrails::permitsDailyBudget($current, (int) ($snapshot['daily_budget_micros'] ?? 0))))) {
+            return 'approved_automation_limits_changed';
         }
         if (($snapshot['google_search_enabled'] ?? false) !== true) {
             return 'search_inventory_unavailable';
@@ -547,7 +599,7 @@ class GoogleSearchReachRecovery
         if (! $live || $this->fingerprint($fresh, $live) !== $state['config_fingerprint']) {
             return $this->alertAndSave($fresh, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'configuration_changed_during_diagnosis']);
         }
-        if (($blocked = $this->mutationBlocked($fresh, $live, $state['diagnosis'], $state)) !== null) {
+        if (($blocked = $this->mutationBlocked($fresh, $live, $state['diagnosis'], $state, $bounded)) !== null) {
             return $this->alertAndSave($fresh, [...$state, 'status' => 'approval_required', 'blocked_reason' => $blocked, 'mutation_allowed' => false]);
         }
         $state['repair_attempts'] = array_values(array_filter($state['repair_attempts'] ?? [],
@@ -561,12 +613,14 @@ class GoogleSearchReachRecovery
             $verificationHours = max($verificationHours, min(168, (int) ceil(
                 max(1, (int) config('optimization.search_delivery.min_meaningful_clicks', 3)) * 24 * $forecast['period_days'] / $forecast['clicks'])));
         }
-        if ($bounded && ! $this->evaluationHorizonFits($fresh, $live, CarbonImmutable::now()->addHours($verificationHours))) {
+        $admissionHours = $verificationHours + max(0, (int) config('optimization.search_delivery.reporting_lag_hours', 3)) + 2;
+        if ($bounded && ! $this->evaluationHorizonFits($fresh, $live, CarbonImmutable::now()->addHours($admissionHours))) {
             return $this->alertAndSave($fresh, [...$state, 'status' => 'approval_required',
                 'blocked_reason' => 'insufficient_evaluation_horizon', 'mutation_allowed' => false,
                 'required_verification_hours' => $verificationHours]);
         }
         $state['repair_attempts'][] = now()->toIso8601String();
+        $state['reach_status'] = 'verifying';
         $state['repair'] = ['started_at' => now()->toIso8601String(), 'added_keywords' => [], 'errors' => [],
             ...($bounded ? ['purpose' => 'bounded_expansion', 'baseline_fingerprint' => $state['config_fingerprint'],
                 'baseline_keyword_resources' => array_map(fn ($keyword) => $keyword['resource_name'] ?? $keyword['resource'] ?? null, $live['keywords']),
@@ -575,7 +629,7 @@ class GoogleSearchReachRecovery
         $this->save($fresh, $state); // Durable attempt before the first remote write.
         foreach ($candidates as $candidate) {
             try {
-                if (($blocked = $this->mutationBlocked($fresh, $live, $state['diagnosis'], [...$state, 'repair_attempts' => []])) !== null) {
+                if (($blocked = $this->mutationBlocked($fresh, $live, $state['diagnosis'], [...$state, 'repair_attempts' => []], $bounded)) !== null) {
                     throw new \RuntimeException('Campaign authorization changed: '.$blocked);
                 }
                 $candidate['set_keyword_bid'] = ($live['bidding_strategy'] ?? null) === BiddingStrategyType::MANUAL_CPC;
@@ -665,6 +719,8 @@ class GoogleSearchReachRecovery
                     'Google Search traffic was observed after the keyword repair.',
                     $campaign->customer_id, $campaign->id, ['measurement' => $after['measurement']]);
             }
+
+            $state['repair']['delivery_verified_at'] ??= now()->toIso8601String();
 
             return $this->save($campaign, [...$state, 'status' => 'recovered', 'blocked_reason' => null]);
         }

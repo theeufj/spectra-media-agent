@@ -141,6 +141,81 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertTrue(InspectSearchDelivery::isStalled($snapshot, CarbonImmutable::parse('2026-10-01')));
     }
 
+    public function test_bounded_repair_measures_more_than_48_hours_and_keeps_early_primary_conversions(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-15T00:12:00Z');
+        config(['optimization.search_delivery.reporting_lag_hours' => 3, 'optimization.search_delivery.measurement_window_hours' => 48]);
+        $campaign = $this->campaign();
+        $repairAt = CarbonImmutable::parse('2026-10-12T06:15:00Z');
+        $campaign->search_delivery_state = ['repair' => ['purpose' => 'bounded_expansion',
+            'started_at' => $repairAt->toIso8601String(), 'verification_after_hours' => 62]];
+        $snapshot = $this->inspector([
+            $this->hour('2026-10-12', 17, 100), // Partial repair hour cannot count.
+            $this->hour('2026-10-12', 18, 1), // A primary conversion older than 48h.
+        ])->inspect($campaign, $repairAt);
+
+        $this->assertSame('2026-10-12T18:00:00+11:00', $snapshot['measurement']['from']);
+        $this->assertSame('2026-10-15T08:00:00+11:00', $snapshot['measurement']['through']);
+        $this->assertSame(62, $snapshot['measurement']['complete_hours']);
+        $this->assertSame(1, $snapshot['measurement']['impressions']);
+        $this->assertSame(1, $snapshot['measurement']['clicks']);
+        $this->assertSame(0.5, $snapshot['measurement']['conversions']);
+        $this->assertSame(48, config('optimization.search_delivery.measurement_window_hours'));
+    }
+
+    public function test_overdue_bounded_repair_freezes_its_whole_maximum_trial_instead_of_dropping_early_conversions(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-22T00:12:00Z');
+        $campaign = $this->campaign();
+        $repairAt = CarbonImmutable::parse('2026-10-12T06:15:00Z');
+        $campaign->search_delivery_state = ['repair' => ['purpose' => 'bounded_expansion',
+            'started_at' => $repairAt->toIso8601String(), 'verification_after_hours' => 168]];
+        $snapshot = $this->inspector([
+            $this->hour('2026-10-12', 18, 1),
+            $this->hour('2026-10-19', 17, 1),
+            $this->hour('2026-10-19', 18, 100), // Beyond the fixed maximum trial.
+        ])->inspect($campaign, $repairAt);
+
+        $this->assertSame('2026-10-12T18:00:00+11:00', $snapshot['measurement']['from']);
+        $this->assertSame('2026-10-19T18:00:00+11:00', $snapshot['measurement']['through']);
+        $this->assertSame(168, $snapshot['measurement']['complete_hours']);
+        $this->assertSame(2, $snapshot['measurement']['impressions']);
+        $this->assertSame(1.0, $snapshot['measurement']['conversions']);
+    }
+
+    public function test_bounded_journal_does_not_extend_ordinary_or_unrelated_diagnostic_requests(): void
+    {
+        CarbonImmutable::setTestNow('2026-10-15T00:12:00Z');
+        config(['optimization.search_delivery.reporting_lag_hours' => 3, 'optimization.search_delivery.measurement_window_hours' => 48]);
+        $repairAt = CarbonImmutable::parse('2026-10-12T06:15:00Z');
+        foreach (['ordinary', 'different_since', 'later_settings', 'legacy', 'invalid_hours', 'invalid_date',
+            'delivery_verified', 'recovered_reach', 'recovered_status'] as $case) {
+            $campaign = $this->campaign();
+            $campaign->search_delivery_state = ['repair' => ['purpose' => $case === 'legacy' ? 'legacy_repair' : 'bounded_expansion',
+                'started_at' => $case === 'invalid_date' ? 'not-a-date' : $repairAt->toIso8601String(),
+                'verification_after_hours' => $case === 'invalid_hours' ? 169 : 62]];
+            if ($case === 'delivery_verified') {
+                $campaign->search_delivery_state = ['repair' => [...$campaign->search_delivery_state['repair'],
+                    'delivery_verified_at' => '2026-10-13T00:00:00Z']];
+            } elseif (in_array($case, ['recovered_reach', 'recovered_status'], true)) {
+                $campaign->search_delivery_state = [...$campaign->search_delivery_state,
+                    $case === 'recovered_reach' ? 'reach_status' : 'status' => 'recovered'];
+            }
+            if ($case === 'later_settings') {
+                $campaign->last_budget_changed_at = \Carbon\Carbon::parse('2026-10-12T07:00:00Z');
+            }
+            $since = match ($case) {
+                'ordinary' => null,
+                'different_since' => $repairAt->addHour(),
+                default => $repairAt,
+            };
+            $snapshot = $this->inspector([$this->hour('2026-10-12', 18, 1)])->inspect($campaign, $since);
+
+            $this->assertSame(48, $snapshot['measurement']['complete_hours'], $case);
+            $this->assertSame(0.0, $snapshot['measurement']['conversions'], $case);
+        }
+    }
+
     public function test_unset_device_bid_and_confirmed_audience_observation_are_neutral(): void
     {
         CarbonImmutable::setTestNow('2026-10-11T00:12:00Z');

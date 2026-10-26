@@ -168,6 +168,63 @@ class SearchReachPlannerTest extends TestCase
         $this->assertCount(1, $research->calls, 'A useful affordable portfolio needs no additional discovery.');
     }
 
+    public function test_the_quota_balances_cheaper_quotes_with_real_demand_and_reviewed_category_heads(): void
+    {
+        Cache::flush();
+        $cheap = array_map(fn ($i) => ['text' => 'cheap niche task '.$i, 'match_type' => 'PHRASE',
+            'selection_reason' => 'The same offered service.', 'average_cpc_micros' => 500_000], range(1, 12));
+        $head = ['text' => 'established commercial agency', 'match_type' => 'PHRASE',
+            'selection_reason' => 'A validated provider category for this service.', 'discovery_category_head' => true,
+            'average_cpc_micros' => 19_000_000];
+        $demand = ['text' => 'established paid category', 'match_type' => 'PHRASE',
+            'selection_reason' => 'The actual paid market.', 'average_cpc_micros' => 25_000_000];
+        $research = new ProfiledReachKeywordResearch(['cost_candidates' => $cheap, 'keywords' => [...$cheap, $head, $demand]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true,
+            'clicks' => in_array($head['text'], array_column($keywords, 'text'), true) ? 40 : 0,
+            'cost_micros' => 20_000_000, 'auto_repair_safe' => true]);
+        $planner->metrics[$head['text']] = ['text' => $head['text'], 'avg_monthly_searches' => 2000, 'low_top_of_page_bid_micros' => 19_000_000];
+        $planner->metrics[$demand['text']] = ['text' => $demand['text'], 'avg_monthly_searches' => 10000, 'low_top_of_page_bid_micros' => 25_000_000];
+        $snapshot = $this->snapshot();
+        $snapshot['cpc_bid_ceiling_micros'] = 10_000_000;
+        $snapshot['daily_budget_micros'] = 50_000_000;
+
+        $result = $planner->assess($this->campaign(), $snapshot, true);
+
+        $this->assertCount(6, $result['researched_candidates']);
+        $this->assertSame(['measured_cost', 'positive_demand', 'reviewed_category_head'],
+            array_column(array_slice($result['researched_candidates'], 0, 3), 'forecast_selection_bucket'));
+        $this->assertContains($head['text'], array_column($result['researched_candidates'], 'text'));
+        $this->assertContains($demand['text'], array_column($result['researched_candidates'], 'text'));
+        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertSame([$head['text']], array_column($result['candidate_keywords'], 'text'));
+        $this->assertSame([10_000_000], array_values(array_unique(array_column($planner->requests, 'ceiling'))),
+            'A higher historical quote never raises the actual bid or prevents a capped forecast.');
+    }
+
+    public function test_a_cheaper_canonical_alias_cannot_erase_reviewed_category_head_provenance(): void
+    {
+        Cache::flush();
+        $alias = ['text' => 'narrow provider variant', 'match_type' => 'PHRASE',
+            'selection_reason' => 'Same paid service.', 'average_cpc_micros' => 500_000];
+        $head = ['text' => 'established paid category', 'match_type' => 'PHRASE',
+            'selection_reason' => 'Independently reviewed provider category.', 'discovery_category_head' => true,
+            'average_cpc_micros' => 19_000_000];
+        $research = new ProfiledReachKeywordResearch(['cost_candidates' => [$alias], 'category_candidates' => [$head]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true, 'clicks' => in_array($head['text'], array_column($keywords, 'text'), true) ? 40 : 0,
+            'cost_micros' => 1_000_000, 'auto_repair_safe' => true]);
+        foreach ([$head['text'], $alias['text']] as $text) {
+            $planner->metrics[$text] = ['text' => 'canonical paid market', 'avg_monthly_searches' => 1000,
+                'low_top_of_page_bid_micros' => 19_000_000];
+        }
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertCount(1, $result['researched_candidates']);
+        $this->assertSame($head['text'], $result['researched_candidates'][0]['text']);
+        $this->assertTrue($result['researched_candidates'][0]['discovery_category_head']);
+        $this->assertTrue($result['auto_repair_safe']);
+    }
+
     public function test_many_terms_with_tiny_positive_forecasts_still_trigger_one_alternative_theme_pass(): void
     {
         Cache::flush();
@@ -209,6 +266,42 @@ class SearchReachPlannerTest extends TestCase
 
         $this->assertCount(2, $result['researched_candidates']);
         $this->assertSame(['different buying task'], array_column($result['candidate_keywords'], 'text'));
+        $this->assertTrue($result['auto_repair_safe']);
+    }
+
+    public function test_a_failed_discovery_exact_variant_does_not_hide_a_qualified_phrase_variant_in_the_rescue_pass(): void
+    {
+        Cache::flush();
+        $term = ['text' => 'commercial paid provider', 'match_type' => 'EXACT', 'selection_reason' => 'Same offered category.'];
+        $research = new ProfiledReachKeywordResearch(['keywords' => [$term]],
+            ['cost_candidates' => [array_replace($term, ['match_type' => 'PHRASE'])]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true,
+            'clicks' => in_array('PHRASE', array_column($keywords, 'match_type'), true) ? 60 : 0,
+            'cost_micros' => 1_000_000, 'auto_repair_safe' => true]);
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertSame(['EXACT', 'PHRASE'], array_column($result['researched_candidates'], 'match_type'));
+        $this->assertSame(['PHRASE'], array_column($result['candidate_keywords'], 'match_type'));
+        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertSame(['ordinary', 'affordable'], array_column($research->calls, 'kind'));
+    }
+
+    public function test_a_more_useful_phrase_variant_does_not_add_the_same_canonical_term_twice(): void
+    {
+        Cache::flush();
+        $term = ['text' => 'commercial paid provider', 'match_type' => 'EXACT', 'selection_reason' => 'Same offered category.'];
+        $research = new ProfiledReachKeywordResearch(['keywords' => [$term]],
+            ['cost_candidates' => [array_replace($term, ['match_type' => 'PHRASE'])]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true,
+            'clicks' => in_array('PHRASE', array_column($keywords, 'match_type'), true) ? 60 : 5,
+            'cost_micros' => 1_000_000, 'auto_repair_safe' => true]);
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertSame(['EXACT', 'PHRASE'], array_column($result['researched_candidates'], 'match_type'));
+        $this->assertSame(['PHRASE'], array_column($result['candidate_keywords'], 'match_type'));
+        $this->assertCount(2, $result['tested_portfolios']);
         $this->assertTrue($result['auto_repair_safe']);
     }
 

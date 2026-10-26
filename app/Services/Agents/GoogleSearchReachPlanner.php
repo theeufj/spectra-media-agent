@@ -107,6 +107,12 @@ class GoogleSearchReachPlanner
         }
         $business = ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
             'goals' => $campaign->goals, 'existing_keywords' => array_column($existing, 'text'),
+            'measured_existing_keywords' => array_values(array_filter(array_map(function ($keyword) use ($result): ?array {
+                $metric = self::historicalMetric($result['historical']['keywords'] ?? [], $keyword['text']);
+
+                return is_numeric($metric['avg_monthly_searches'] ?? null) && $metric['avg_monthly_searches'] > 0
+                    ? ['text' => $keyword['text'], 'avg_monthly_searches' => $metric['avg_monthly_searches']] : null;
+            }, $existing))),
             'reviewed_business_profile' => $customer->exists ? $customer->brandGuideline?->only(['unique_selling_propositions', 'target_audience', 'service_lines']) : null,
             'daily_budget_micros' => $context['daily_budget_micros'], 'max_cpc_bid_micros' => $ceiling];
         $research = $this->discover($campaign, $existing, $context, $business);
@@ -127,7 +133,7 @@ class GoogleSearchReachPlanner
                     'checked_at' => $history['checked_at'] ?? null,
                     'keywords' => [...($candidateHistorical['keywords'] ?? []), ...($history['keywords'] ?? [])]];
                 $pool = $this->rankCandidatePool($pool, $history, $ceiling);
-                foreach (array_slice($pool, 0, $poolSize) as $candidate) {
+                foreach ($this->selectForecastCandidates($pool, $poolSize) as $candidate) {
                     $bid = $manual ? $candidate['cpc_bid_micros'] : $ceiling;
                     $forecastContext = $manual ? array_replace($context, ['cpc_bid_ceiling_micros' => $bid]) : $context;
                     $candidate['forecast'] = $this->forecast($customer, [$candidate], $bid, $forecastContext);
@@ -139,9 +145,13 @@ class GoogleSearchReachPlanner
             $available = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecasted']
                 && $this->monthlyClicks($candidate['forecast']) >= 1
                 && ($candidate['historical_metrics']['avg_monthly_searches'] ?? 0) > 0));
+            $available = $this->distinctForecastVariants($available);
             $cohorts = $this->candidateCohorts($available, $limit);
             foreach ($cohorts as $cohort) {
-                $key = implode('|', array_column($cohort, 'text'));
+                $identities = array_map(fn ($keyword) => [mb_strtolower(trim($keyword['text'])), $keyword['match_type'],
+                    $keyword['ad_group_resource'], $keyword['cpc_bid_micros'] ?? null], $cohort);
+                sort($identities);
+                $key = hash('sha256', json_encode($identities, JSON_THROW_ON_ERROR));
                 if (isset($portfolios[$key])) {
                     continue;
                 }
@@ -210,7 +220,7 @@ class GoogleSearchReachPlanner
     private function discover(Campaign $campaign, array $existing, array $context, array $business, bool $affordable = false): array
     {
         $customer = $campaign->customer;
-        $key = 'search_reach:research:v2:'.$campaign->id.':'.hash('sha256', json_encode([$existing, $context, $business, $affordable]));
+        $key = 'search_reach:research:v4:'.$campaign->id.':'.hash('sha256', json_encode([$existing, $context, $business, $affordable]));
 
         return Cache::remember($key, now()->addHours(24), function () use ($campaign, $customer, $context, $business, $affordable): array {
             $provider = $this->researchProvider($customer);
@@ -225,20 +235,23 @@ class GoogleSearchReachPlanner
 
     private function candidatePool(array $research, array $existing, array $snapshot, string $group, ?int $manualBid, string $origin, array $tested): array
     {
-        $excluded = array_map(fn ($keyword) => mb_strtolower(trim($keyword['text'])), [...$existing, ...$tested]);
+        $existingTexts = array_map(fn ($keyword) => mb_strtolower(trim($keyword['text'])), $existing);
+        $testedVariants = array_map(fn ($keyword) => mb_strtolower(trim($keyword['text'])).'|'.strtoupper($keyword['match_type']), $tested);
         $pool = [];
-        foreach ([...($research['cost_candidates'] ?? []), ...($research['keywords'] ?? [])] as $keyword) {
+        foreach ([...($research['category_candidates'] ?? []), ...($research['cost_candidates'] ?? []), ...($research['keywords'] ?? [])] as $keyword) {
             $text = is_string($keyword['text'] ?? null) ? trim($keyword['text']) : '';
             $match = strtoupper($keyword['match_type'] ?? '');
             if ($text === '' || ! in_array($match, ['EXACT', 'PHRASE'], true)
                 || ! is_string($keyword['selection_reason'] ?? null) || trim($keyword['selection_reason']) === ''
-                || in_array(mb_strtolower($text), $excluded, true)
+                || in_array(mb_strtolower($text), $existingTexts, true)
+                || in_array(mb_strtolower($text).'|'.$match, $testedVariants, true)
                 || self::negativeConflict($text, $snapshot['negative_keywords'] ?? [], $group)) {
                 continue;
             }
             $candidate = ['text' => $text, 'match_type' => $match, 'ad_group_resource' => $group,
                 'relevant' => true, 'negative_conflict' => false, 'selection_reason' => $keyword['selection_reason'],
-                'forecasted' => false, 'origin' => $origin];
+                'forecasted' => false, 'origin' => $origin,
+                'discovery_category_head' => ($keyword['discovery_category_head'] ?? false) === true];
             if ($manualBid !== null) {
                 $candidate += ['cpc_bid_micros' => $manualBid, 'set_keyword_bid' => true];
             }
@@ -249,7 +262,7 @@ class GoogleSearchReachPlanner
                     break;
                 }
             }
-            $pool[mb_strtolower($text)] ??= $candidate;
+            $pool[mb_strtolower($text).'|'.$match] ??= $candidate;
         }
 
         return array_values($pool);
@@ -282,7 +295,74 @@ class GoogleSearchReachPlanner
         $distinct = [];
         foreach ($pool as $candidate) {
             $canonical = mb_strtolower(trim($candidate['historical_metrics']['text'] ?? $candidate['text']));
-            $distinct[$canonical] ??= $candidate;
+            if (! isset($distinct[$canonical]) || ($candidate['discovery_category_head'] && ! $distinct[$canonical]['discovery_category_head'])) {
+                // Keep a reviewed category-head representative rather than
+                // losing its provenance behind a cheaper close-variant alias.
+                $distinct[$canonical] = $candidate;
+            }
+        }
+
+        return array_values($distinct);
+    }
+
+    /** Historical prices choose a share of the quota; demand and real category heads get independent opportunities. */
+    private function selectForecastCandidates(array $pool, int $limit): array
+    {
+        $demand = array_values(array_filter($pool, fn ($candidate) => ($candidate['historical_metrics']['avg_monthly_searches'] ?? 0) > 0));
+        usort($demand, fn ($a, $b) => ($b['historical_metrics']['avg_monthly_searches'] ?? 0)
+            <=> ($a['historical_metrics']['avg_monthly_searches'] ?? 0));
+        $buckets = ['measured_cost' => array_values(array_filter($pool, fn ($candidate) => isset($candidate['cost_evidence'])
+            && ($candidate['historical_metrics']['avg_monthly_searches'] ?? 0) > 0)),
+            'positive_demand' => $demand,
+            'reviewed_category_head' => array_values(array_filter($demand, fn ($candidate) => $candidate['discovery_category_head']))];
+        $selected = [];
+        while (count($selected) < $limit) {
+            $added = false;
+            foreach ($buckets as $bucket => &$rows) {
+                while ($rows !== []) {
+                    $candidate = array_shift($rows);
+                    $key = mb_strtolower($candidate['text']).'|'.$candidate['match_type'];
+                    if (isset($selected[$key])) {
+                        continue;
+                    }
+                    $selected[$key] = $candidate + ['forecast_selection_bucket' => $bucket];
+                    $added = true;
+                    break;
+                }
+                if (count($selected) >= $limit) {
+                    break;
+                }
+            }
+            unset($rows);
+            if (! $added) {
+                break;
+            }
+        }
+        // Unknown measurements are not cheap or zero demand. A remaining read-only
+        // slot may investigate one, but it cannot displace measured opportunities.
+        foreach ($pool as $candidate) {
+            if (count($selected) >= $limit) {
+                break;
+            }
+            $key = mb_strtolower($candidate['text']).'|'.$candidate['match_type'];
+            $selected[$key] ??= $candidate + ['forecast_selection_bucket' => 'measurement_gap'];
+        }
+
+        return array_values($selected);
+    }
+
+    private function distinctForecastVariants(array $candidates): array
+    {
+        $distinct = [];
+        foreach ($candidates as $candidate) {
+            $canonical = mb_strtolower(trim($candidate['historical_metrics']['text'] ?? $candidate['text']));
+            $old = $distinct[$canonical] ?? null;
+            $clicks = $this->monthlyClicks($candidate['forecast']);
+            $oldClicks = $old ? $this->monthlyClicks($old['forecast']) : 0;
+            $bothUseful = $old && min($clicks, $oldClicks) >= $this->minimumClicks();
+            if (! $old || ($bothUseful ? $this->forecastCpc($candidate['forecast']) < $this->forecastCpc($old['forecast']) : $clicks > $oldClicks)) {
+                $distinct[$canonical] = $candidate;
+            }
         }
 
         return array_values($distinct);

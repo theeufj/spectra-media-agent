@@ -215,6 +215,93 @@ class GoogleBoundedKeywordExpansionTest extends TestCase
         $this->assertSame($end, $watchdog->snapshot['end_date']);
         $this->assertSame('50.00', $campaign->fresh()->approved_daily_budget);
     }
+
+    public function test_lowered_or_disabled_ongoing_limits_during_post_proof_read_prevent_keyword_creation(): void
+    {
+        foreach (['cpc', 'budget', 'disabled'] as $case) {
+            [$campaign, $guard] = $this->fixture();
+            $snapshot = $guard->snapshot;
+            $at = now()->subHours(30)->toIso8601String();
+            $snapshot['measurement'] = ['started_at' => $at, 'from' => $at, 'through' => now()->subHours(3)->toIso8601String(),
+                'complete_hours' => 27, 'impressions' => 1, 'clicks' => 0, 'cost_micros' => 0, 'conversions' => 0];
+            Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
+                'campaign_type' => 'search', 'deployment_status' => 'active', 'deployed_at' => now()->subDays(3)]);
+            $candidate = ['text' => 'google ads for landscapers', 'match_type' => 'PHRASE',
+                'ad_group_resource' => 'customers/1234567890/adGroups/7', 'selection_reason' => 'Paid search setup for landscaping businesses.',
+                'relevant' => true, 'negative_conflict' => false, 'forecasted' => true, 'cpc_bid_micros' => 10_000_000,
+                'forecast' => ['success' => true, 'clicks' => 60]];
+            $diagnosis = ['status' => 'evidence_ready', 'issues' => [['code' => 'insufficient_forecast_reach', 'message' => 'The current set has little traffic.']],
+                'forecast' => ['success' => true, 'source' => 'google_keyword_forecast', 'clicks' => 1, 'period_days' => 30],
+                'candidate_keywords' => [$candidate]];
+            $planner = new class($diagnosis) extends GoogleSearchReachPlanner
+            {
+                public function __construct(private array $diagnosis) {}
+
+                public function assess(Campaign $campaign, array $snapshot, bool $research = false): array
+                {
+                    return $this->diagnosis;
+                }
+            };
+            $watchdog = new BoundedRollbackWatchdog($planner, $snapshot);
+            $fingerprint = (new \ReflectionMethod(GoogleSearchReachRecovery::class, 'fingerprint'))->invoke($watchdog, $campaign, $snapshot);
+            $campaign->update(['search_delivery_state' => ['evaluation_started_at' => $at, 'config_fingerprint' => $fingerprint]]);
+            $proof = $this->createMock(GoogleSearchMutationGuard::class);
+            $proof->expects($this->once())->method('assessBoundedExpansion')->willReturn([
+                'ready' => true, 'reach_gate' => ['ready' => true],
+                'assessment' => ['forecast' => ['clicks' => 60, 'period_days' => 30]],
+            ]);
+            $this->app->instance(GoogleSearchMutationGuard::class, $proof);
+            $watchdog->onInspection = function (int $count) use ($campaign, $case): void {
+                if ($count === 3) {
+                    $profile = $campaign->fresh()->spend_guardrails;
+                    $profile['automation_limits'][match ($case) {
+                        'cpc' => 'max_cpc_bid_micros', 'budget' => 'max_daily_budget_micros', 'disabled' => 'enabled',
+                    }] = match ($case) {
+                        'cpc' => 8_000_000, 'budget' => 40_000_000, 'disabled' => false
+                    };
+                    $campaign->update(['spend_guardrails' => $profile]);
+                }
+            };
+
+            $state = $watchdog->check($campaign);
+
+            $this->assertSame('approved_automation_limits_changed', $state['blocked_reason'], $case.' '.json_encode($state));
+            $this->assertSame([], $watchdog->added, $case);
+            $this->assertArrayNotHasKey('repair', $campaign->fresh()->search_delivery_state, $case);
+        }
+    }
+
+    public function test_admission_reserves_reporting_lag_and_an_hourly_check_before_the_campaign_ends(): void
+    {
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-26T23:00:00+11:00'));
+        config(['optimization.search_delivery.reporting_lag_hours' => 3]);
+        [$campaign, $guard, $planner] = $this->fixture();
+        $snapshot = $guard->snapshot;
+        $snapshot['end_date'] = '2026-10-27';
+        $snapshot['end_date_time'] = '2026-10-27 23:59:59';
+        $watchdog = new BoundedRollbackWatchdog($planner, $snapshot);
+        $candidate = ['text' => 'google ads for landscapers', 'match_type' => 'PHRASE',
+            'ad_group_resource' => 'customers/1234567890/adGroups/7', 'selection_reason' => 'Paid setup for landscaping businesses.',
+            'relevant' => true, 'negative_conflict' => false, 'forecasted' => true, 'cpc_bid_micros' => 10_000_000,
+            'forecast' => ['success' => true, 'clicks' => 3]];
+        $proof = $this->createMock(GoogleSearchMutationGuard::class);
+        $proof->expects($this->once())->method('assessBoundedExpansion')->willReturn([
+            'ready' => true, 'reach_gate' => ['ready' => true],
+            'assessment' => ['forecast' => ['clicks' => 3, 'period_days' => 1]],
+        ]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $proof);
+        $state = ['evaluation_started_at' => now()->subHours(20)->toIso8601String(), 'repair_attempts' => [],
+            'diagnosis' => ['candidate_keywords' => [$candidate]],
+            'config_fingerprint' => (new \ReflectionMethod(GoogleSearchReachRecovery::class, 'fingerprint'))->invoke($watchdog, $campaign, $snapshot)];
+
+        $result = (new \ReflectionMethod(GoogleSearchReachRecovery::class, 'repair'))->invoke($watchdog, $campaign, $snapshot, $state);
+
+        $this->assertSame('insufficient_evaluation_horizon', $result['blocked_reason']);
+        $this->assertSame(24, $result['required_verification_hours']);
+        $this->assertSame([], $watchdog->added);
+        $this->assertSame([], $result['repair_attempts']);
+        $this->assertSame('2026-10-27 23:59:59', $watchdog->snapshot['end_date_time']);
+    }
 }
 
 class BoundedExpansionMutationGuard extends GoogleSearchMutationGuard
@@ -280,6 +367,8 @@ class BoundedRollbackWatchdog extends GoogleSearchReachRecovery
 {
     public array $pauses = [];
 
+    public array $added = [];
+
     public bool $unknownResult = false;
 
     public ?\Closure $onInspection = null;
@@ -307,5 +396,15 @@ class BoundedRollbackWatchdog extends GoogleSearchReachRecovery
                 throw new \RuntimeException('Unknown remote result after the pause.');
             }
         }
+    }
+
+    protected function addKeyword(Customer $customer, array $candidate, int $cap): ?string
+    {
+        $this->added[] = $candidate;
+        $resource = 'customers/1234567890/adGroupCriteria/7~2';
+        $this->snapshot['keywords'][] = [...$this->snapshot['keywords'][0], 'text' => $candidate['text'],
+            'match_type' => $candidate['match_type'], 'resource_name' => $resource];
+
+        return $resource;
     }
 }
