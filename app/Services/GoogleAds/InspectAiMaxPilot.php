@@ -13,6 +13,8 @@ use Google\Ads\GoogleAds\V26\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetTy
 /** Fresh configuration evidence only. Never enables, repairs or spends on a campaign. */
 class InspectAiMaxPilot extends BaseGoogleAdsService
 {
+    private const TRACKING_QUERY_PARAMETERS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
     public function inspect(Campaign $campaign, array $pilot): array
     {
         $issues = [];
@@ -257,8 +259,14 @@ class InspectAiMaxPilot extends BaseGoogleAdsService
             return null;
         }
 
+        // Compare the offer destination separately from conventional campaign
+        // attribution. Preserve every other raw pair: parsing/rebuilding the
+        // query could silently discard duplicate or offer-selecting parameters.
+        $query = isset($parts['query']) ? array_values(array_filter(explode('&', $parts['query']),
+            fn (string $pair): bool => ! in_array(rawurldecode(explode('=', $pair, 2)[0]), self::TRACKING_QUERY_PARAMETERS, true))) : [];
+
         return 'https://'.mb_strtolower($parts['host']).(isset($parts['port']) ? ':'.$parts['port'] : '')
-            .(rtrim($parts['path'] ?? '/', '/') ?: '/').(isset($parts['query']) ? '?'.$parts['query'] : '');
+            .(rtrim($parts['path'] ?? '/', '/') ?: '/').($query !== [] ? '?'.implode('&', $query) : '');
     }
 
     private function sorted(mixed $value): mixed

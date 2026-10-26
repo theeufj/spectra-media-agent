@@ -79,6 +79,50 @@ class InspectAiMaxPilotTest extends TestCase
         $this->assertNotSame($first['observed']['ads'], $next['observed']['ads']);
     }
 
+    public function test_conventional_utm_parameters_match_the_offer_but_remain_observed_and_fingerprinted(): void
+    {
+        $campaign = $this->campaign();
+        $inspector = new ScriptedAiMaxInspector($campaign->customer);
+        $url = 'https://example.com/one-time-setup?utm_source=google&utm_medium=search&utm_campaign=spectra_65&utm_content=strategy_775&utm_term=setup';
+        $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = [$url];
+        $inspector->keywordUrls[0]['adGroupCriterion']['finalMobileUrls'] = [$url];
+        $first = $inspector->inspect($campaign, $this->pilot());
+        $this->assertTrue($first['ready']);
+        $this->assertSame([$url], $first['observed']['ads'][0]['adGroupAd']['ad']['finalUrls']);
+        $this->assertSame([$url], $first['observed']['keyword_urls'][0]['adGroupCriterion']['finalMobileUrls']);
+
+        $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = [str_replace('utm_campaign=spectra_65', 'utm_campaign=changed', $url)];
+        $next = $inspector->inspect($campaign, [...$this->pilot(), 'settings_fingerprint' => $first['fingerprint']]);
+        $this->assertFalse($next['ready']);
+        $this->assertNotSame($first['fingerprint'], $next['fingerprint']);
+        $this->assertSame(['The Google campaign configuration changed after pilot approval.'], $next['issues']);
+    }
+
+    public function test_utm_normalization_preserves_offer_and_unknown_parameters_and_url_safety(): void
+    {
+        foreach (['plan=monthly', 'redirect=https%3A%2F%2Fexample.com%2Fmonthly', 'offer=other', 'utm_offer=monthly',
+            'utm_source%5Bplan%5D=monthly'] as $query) {
+            $campaign = $this->campaign();
+            $inspector = new ScriptedAiMaxInspector($campaign->customer);
+            $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = ['https://example.com/one-time-setup?utm_source=google&'.$query];
+            $this->assertFalse($inspector->inspect($campaign, $this->pilot())['ready'], $query);
+        }
+        foreach (['https://example.com/one-time-setup?utm_source=google#monthly',
+            'https://user:pass@example.com/one-time-setup?utm_source=google'] as $url) {
+            $campaign = $this->campaign();
+            $inspector = new ScriptedAiMaxInspector($campaign->customer);
+            $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = [$url];
+            $this->assertFalse($inspector->inspect($campaign, $this->pilot())['ready'], $url);
+        }
+        $campaign = $this->campaign();
+        $inspector = new ScriptedAiMaxInspector($campaign->customer);
+        $pilot = [...$this->pilot(), 'landing_page' => 'https://example.com/one-time-setup?offer=setup&offer=approved'];
+        $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = [$pilot['landing_page'].'&utm_source=google'];
+        $this->assertTrue($inspector->inspect($campaign, $pilot)['ready']);
+        $inspector->ads[0]['adGroupAd']['ad']['finalUrls'] = ['https://example.com/one-time-setup?offer=setup&utm_source=google'];
+        $this->assertFalse($inspector->inspect($campaign, $pilot)['ready']);
+    }
+
     public function test_missing_approval_inputs_and_foreign_scope_fail_before_any_provider_read(): void
     {
         foreach (['strategy_id', 'landing_page', 'geo_target_constants', 'selected_conversion_action', 'max_daily_budget_micros', 'ends_at'] as $key) {
