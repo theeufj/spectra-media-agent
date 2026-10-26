@@ -149,6 +149,123 @@ class SearchReachPlannerTest extends TestCase
         $this->assertFalse($result['auto_repair_safe']);
     }
 
+    public function test_measured_affordable_candidates_survive_the_first_six_keyword_quota(): void
+    {
+        Cache::flush();
+        $expensive = array_map(fn ($i) => ['text' => 'expensive buyer service '.$i, 'match_type' => 'EXACT',
+            'selection_reason' => 'Directly buys the offered service.', 'average_cpc_micros' => 20_000_000], range(1, 12));
+        $cheap = ['text' => 'affordable relevant provider', 'match_type' => 'PHRASE',
+            'selection_reason' => 'Same paid service through a different buying task.', 'average_cpc_micros' => 500_000];
+        $research = new ProfiledReachKeywordResearch(['keywords' => $expensive, 'cost_candidates' => [$cheap]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true, 'clicks' => count($keywords) > 1
+            ? 80 : ($keywords[0]['text'] === $cheap['text'] ? 40 : 0), 'auto_repair_safe' => true]);
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertSame($cheap['text'], $planner->requests[1]['keywords'][0]['text']);
+        $this->assertSame([$cheap['text']], array_column($result['candidate_keywords'], 'text'));
+        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertCount(1, $research->calls, 'A useful affordable portfolio needs no additional discovery.');
+    }
+
+    public function test_many_terms_with_tiny_positive_forecasts_still_trigger_one_alternative_theme_pass(): void
+    {
+        Cache::flush();
+        $initial = array_map(fn ($i) => ['text' => 'expensive buyer service '.$i, 'match_type' => 'EXACT',
+            'selection_reason' => 'Offered service with costly terminology.'], range(1, 15));
+        $alternative = ['text' => 'another supported buying task', 'match_type' => 'PHRASE',
+            'selection_reason' => 'Direct paid task supported by the same offer.'];
+        $research = new ProfiledReachKeywordResearch(['keywords' => $initial], ['cost_candidates' => [$alternative], 'keywords' => [$alternative]]);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true,
+            'clicks' => in_array($alternative['text'], array_column($keywords, 'text'), true) ? (count($keywords) > 1 ? 70 : 40) : 0.1,
+            'cost_micros' => 1_000_000, 'auto_repair_safe' => true]);
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertSame(['ordinary', 'affordable'], array_column($research->calls, 'kind'));
+        $this->assertTrue($result['affordable_discovery']['attempted']);
+        $this->assertSame([$alternative['text']], array_column($result['candidate_keywords'], 'text'));
+        $this->assertTrue($result['auto_repair_safe']);
+        $this->assertSame(10_000_000, $research->calls[1]['business']['daily_budget_micros']);
+        $this->assertSame(3_000_000, $research->calls[1]['business']['max_cpc_bid_micros']);
+        $this->assertCount(6, $research->calls[1]['business']['failed_candidates']);
+        $this->assertLessThanOrEqual(15, count($planner->requests), 'Discovery has a fixed two-pass forecast budget.');
+    }
+
+    public function test_canonical_close_variants_do_not_consume_every_affordable_forecast_slot(): void
+    {
+        $aliases = array_map(fn ($i) => ['text' => 'provider alias '.$i, 'match_type' => 'EXACT',
+            'selection_reason' => 'Same offered task.'], range(1, 8));
+        $planner = $this->planner([...$aliases, ['text' => 'different buying task', 'match_type' => 'EXACT',
+            'selection_reason' => 'Another task actually delivered.']], fn ($keywords) => ['success' => true,
+                'clicks' => in_array('different buying task', array_column($keywords, 'text'), true) ? 40 : 0,
+                'auto_repair_safe' => true]);
+        foreach ($aliases as $alias) {
+            $planner->metrics[$alias['text']] = ['text' => 'canonical offered task', 'avg_monthly_searches' => 500,
+                'low_top_of_page_bid_micros' => 1_000_000];
+        }
+
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertCount(2, $result['researched_candidates']);
+        $this->assertSame(['different buying task'], array_column($result['candidate_keywords'], 'text'));
+        $this->assertTrue($result['auto_repair_safe']);
+    }
+
+    public function test_manual_candidates_use_the_verified_group_bid_and_preserve_lower_existing_bids(): void
+    {
+        $planner = $this->planner([['text' => 'supported paid task', 'match_type' => 'EXACT', 'selection_reason' => 'Actual paid offer.']]);
+        $snapshot = $this->snapshot();
+        $snapshot['bidding_strategy'] = 3;
+        $snapshot['cpc_bid_ceiling_micros'] = 2_000_000;
+        $snapshot['keywords'][0] += ['ad_group_cpc_bid_micros' => 2_000_000, 'cpc_bid_micros' => 1_000_000];
+
+        $result = $planner->assess($this->campaign(), $snapshot, true);
+
+        $candidate = $result['candidate_keywords'][0];
+        $this->assertSame(2_000_000, $candidate['cpc_bid_micros']);
+        $this->assertTrue($candidate['set_keyword_bid']);
+        $combined = $planner->requests[array_key_last($planner->requests)];
+        $this->assertSame([1_000_000, 2_000_000], array_column($combined['keywords'], 'cpc_bid_micros'));
+        $this->assertSame(2_000_000, $combined['context']['cpc_bid_ceiling_micros']);
+
+        $snapshot['keywords'][0]['ad_group_cpc_bid_micros'] = 4_000_000;
+        $result = $planner->assess($this->campaign(), $snapshot, true);
+        $this->assertSame([], $result['candidate_keywords']);
+        $this->assertStringContainsString('inherited Manual CPC', implode(' ', $result['proposal']['blocked_by']));
+    }
+
+    public function test_over_budget_combined_traffic_is_not_a_useful_repair_and_optional_discovery_failure_preserves_evidence(): void
+    {
+        Cache::flush();
+        $research = new ProfiledReachKeywordResearch(['keywords' => [['text' => 'supported paid task', 'match_type' => 'EXACT',
+            'selection_reason' => 'Actual paid offer.']]], failure: true);
+        $planner = new FakeReachPlanner($research, fn ($keywords) => ['success' => true, 'clicks' => count($keywords) > 1 ? 60 : 5,
+            'cost_micros' => 999_000_000, 'auto_repair_safe' => true]);
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertSame('evidence_ready', $result['status']);
+        $this->assertSame('unavailable', $result['affordable_discovery']['status']);
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertSame(999_000_000, $result['combined_forecast']['cost_micros']);
+        $this->assertCount(2, $research->calls);
+    }
+
+    public function test_the_known_negative_limitation_is_retained_for_a_bounded_candidate_without_claiming_safe_reach(): void
+    {
+        $message = 'Google cannot model retained negative keywords.';
+        $planner = $this->planner([['text' => 'supported paid task', 'match_type' => 'EXACT', 'selection_reason' => 'Actual offer.']],
+            fn ($keywords) => ['success' => true, 'clicks' => count($keywords) > 1 ? 60 : 5,
+                'auto_repair_safe' => false, 'caveats' => [$message],
+                'limitations' => [['code' => 'negative_keywords_unmodeled', 'message' => $message]]]);
+        $result = $planner->assess($this->campaign(), $this->snapshot(), true);
+
+        $this->assertFalse($result['auto_repair_safe']);
+        $this->assertTrue($result['bounded_expansion_candidate']);
+        $this->assertSame([$message], $result['combined_forecast']['caveats']);
+        $this->assertFalse($result['combined_forecast']['auto_repair_safe']);
+    }
+
     public function test_mutation_check_refreshes_both_providers_instead_of_reusing_a_good_cached_assessment(): void
     {
         Cache::flush();
@@ -327,22 +444,27 @@ class FakeReachPlanner extends GoogleSearchReachPlanner
 {
     public array $requests = [];
 
+    public array $metrics = [];
+
     public function __construct(private KeywordResearchService $research, private ?\Closure $response) {}
 
     protected function historical(Customer $customer, array $texts, array $context): array
     {
-        return ['success' => true, 'keywords' => array_map(fn ($text) => [
+        return ['success' => true, 'checked_at' => now()->toIso8601String(), 'keywords' => array_combine(array_map('mb_strtolower', $texts), array_map(fn ($text) => $this->metrics[mb_strtolower($text)] ?? [
             'text' => $text, 'avg_monthly_searches' => 20, 'low_top_of_page_bid_micros' => 7_000_000,
-        ], $texts)];
+        ], $texts))];
     }
 
     protected function forecast(Customer $customer, array $keywords, int $ceiling, array $context): array
     {
         $this->requests[] = compact('keywords', 'ceiling', 'context');
 
-        return $this->response ? ($this->response)($keywords, $ceiling, $context)
+        $forecast = $this->response ? ($this->response)($keywords, $ceiling, $context)
             : ['success' => true, 'clicks' => count($keywords) > 1 ? 60 : 5, 'impressions' => 100,
                 'period_days' => 30, 'auto_repair_safe' => true];
+
+        return $forecast + ['cost_micros' => ($forecast['clicks'] ?? 0) > 0 ? 1_000_000 : 0,
+            'period_days' => 30];
     }
 
     protected function researchProvider(Customer $customer): KeywordResearchService
@@ -375,5 +497,33 @@ class ProviderSeamReachPlanner extends GoogleSearchReachPlanner
     protected function forecastProvider(Customer $customer): GenerateKeywordForecast
     {
         return $this->forecastApi;
+    }
+}
+
+class ProfiledReachKeywordResearch extends KeywordResearchService
+{
+    public array $calls = [];
+
+    public function __construct(private array $ordinary, private array $affordable = [], private bool $failure = false) {}
+
+    public function research(string $customerId, string $businessName, ?string $industry = null,
+        ?string $landingPageUrl = null, ?string $language = 'languageConstants/1000', array $geoTargets = [],
+        int $maxKeywords = 20, array $userSeedKeywords = [], array $businessContext = []): array
+    {
+        $this->calls[] = ['kind' => 'ordinary', 'business' => $businessContext];
+
+        return $this->ordinary;
+    }
+
+    public function researchAffordableAlternatives(string $customerId, string $businessName, ?string $industry = null,
+        ?string $landingPageUrl = null, ?string $language = 'languageConstants/1000', array $geoTargets = [],
+        int $maxKeywords = 20, array $userSeedKeywords = [], array $businessContext = []): array
+    {
+        $this->calls[] = ['kind' => 'affordable', 'business' => $businessContext];
+        if ($this->failure) {
+            throw new \RuntimeException('Alternative provider unavailable.');
+        }
+
+        return $this->affordable;
     }
 }

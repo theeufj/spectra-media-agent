@@ -29,7 +29,13 @@ class GoogleSearchMutationGuard
         return $this->assessChanges($campaign, $changes, false, true);
     }
 
-    private function assessChanges(Campaign $campaign, array $changes, bool $approvedByUser, bool $costContainment): array
+    /** Add a small researched set under ongoing limits; actual delivery must subsequently be observed. */
+    public function assessBoundedExpansion(Campaign $campaign, array $changes): array
+    {
+        return $this->assessChanges($campaign, $changes, false, false, true);
+    }
+
+    private function assessChanges(Campaign $campaign, array $changes, bool $approvedByUser, bool $costContainment, bool $boundedExpansion = false): array
     {
         try {
             $campaign = $campaign->fresh(['customer']) ?? $campaign;
@@ -40,6 +46,9 @@ class GoogleSearchMutationGuard
             if ($costContainment && ! $this->costExclusionsAuthorized($campaign, $changes)) {
                 return $this->blocked('Protective cost exclusions require an approved automation profile and exact campaign exclusions only.');
             }
+            if ($boundedExpansion && ! $this->boundedExpansionAuthorized($campaign, $changes)) {
+                return $this->blocked('Bounded keyword expansion requires approved ongoing limits and at most three researched exact or phrase additions.');
+            }
             $snapshot = $this->inspect($campaign);
             if (! $snapshot || ($snapshot['channel'] ?? null) !== 2 || ($snapshot['google_search_enabled'] ?? null) !== true
                 || ($snapshot['approved_ads'] ?? 0) < 1 || ! $approvedByUser && ($snapshot['status'] ?? null) !== 2) {
@@ -48,6 +57,9 @@ class GoogleSearchMutationGuard
             $costEvidence = $costContainment ? $this->costExclusionEvidence($campaign, $snapshot, $changes) : null;
             if ($costContainment && $costEvidence === null) {
                 return $this->blocked('Fresh matured spend, zero recent conversion evidence and a nonconflicting exact exclusion could not be verified.');
+            }
+            if ($boundedExpansion && ! $this->boundedExpansionBids($campaign, $snapshot, $changes)) {
+                return $this->blocked('Keyword additions cannot increase existing effective bids or exceed approved limits.');
             }
             if (CampaignSpendGuardrails::activeTrial($campaign)) {
                 $spend = $this->spend($campaign);
@@ -60,9 +72,16 @@ class GoogleSearchMutationGuard
             if ($keywords === []) {
                 return $this->blocked('The proposed changes leave no active Search keywords. Review a replacement portfolio before applying them.');
             }
+            $baseline = $boundedExpansion ? $this->planner->assessMutation($campaign, $snapshot,
+                array_values(array_filter($snapshot['keywords'], fn ($keyword) => ($keyword['status'] ?? null) === 'ENABLED'
+                    && ($keyword['ad_group_status'] ?? null) === 'ENABLED'))) : null;
             $assessment = $this->planner->assessMutation($campaign, $proposed, $keywords);
-            $result = $costContainment ? $this->gate->evaluateCostContainment($campaign, $proposed, $assessment)
-                : $this->gate->evaluate($campaign, $proposed, $assessment);
+            if ($boundedExpansion && ! $this->boundedExpansionEvidence($campaign, $snapshot, $baseline, $assessment, $changes)) {
+                return $this->blocked('Fresh demand and a material whole-portfolio traffic improvement within the current limits were not demonstrated.');
+            }
+            $result = $boundedExpansion ? $this->gate->evaluateBoundedExpansion($campaign, $proposed, $assessment)
+                : ($costContainment ? $this->gate->evaluateCostContainment($campaign, $proposed, $assessment)
+                    : $this->gate->evaluate($campaign, $proposed, $assessment));
 
             if ($result['ready']) {
                 $fresh = $campaign->fresh(['customer']);
@@ -94,19 +113,27 @@ class GoogleSearchMutationGuard
                     }
                     $after = $finalSnapshot;
                 }
+                if ($boundedExpansion && (! $this->boundedExpansionAuthorized($fresh, $changes)
+                    || ! $this->boundedExpansionBids($fresh, $after, $changes))) {
+                    return $this->blocked('Bounded expansion limits or authorization changed during research.');
+                }
                 $proposed = $this->project($fresh, $after, $changes);
                 $snapshot = $after;
-                $result = $costContainment ? $this->gate->evaluateCostContainment($fresh, $proposed, $assessment)
-                    : $this->gate->evaluate($fresh, $proposed, $assessment);
+                $result = $boundedExpansion ? $this->gate->evaluateBoundedExpansion($fresh, $proposed, $assessment)
+                    : ($costContainment ? $this->gate->evaluateCostContainment($fresh, $proposed, $assessment)
+                        : $this->gate->evaluate($fresh, $proposed, $assessment));
             }
 
             return ['ready' => $result['ready'], 'status' => $result['status'], 'issues' => $result['issues'],
-                'message' => $result['ready'] ? ($costContainment
+                'message' => $result['ready'] ? ($boundedExpansion
+                    ? 'The bounded researched additions fit approved limits. The indicative forecast requires subsequent live traffic verification.'
+                    : ($costContainment
                     ? 'Only the verified protective exact exclusions are eligible. The indicative forecast does not verify remaining reach.'
-                    : 'The proposed Search changes have current demand and affordable forecast evidence.')
+                    : 'The proposed Search changes have current demand and affordable forecast evidence.'))
                     : AgentIssue::toSentence($result['issues']),
                 'snapshot' => $proposed, 'observed_snapshot' => $snapshot, 'assessment' => $assessment, 'reach_gate' => $result,
-                ...($costContainment ? ['cost_containment_only' => true, 'reach_not_verified' => true, 'cost_containment_evidence' => $costEvidence] : [])];
+                ...($costContainment ? ['cost_containment_only' => true, 'reach_not_verified' => true, 'cost_containment_evidence' => $costEvidence] : []),
+                ...($boundedExpansion ? ['bounded_expansion' => true, 'reach_not_verified' => true, 'baseline' => $baseline] : [])];
         } catch (\Throwable $e) {
             report($e);
 
@@ -224,6 +251,95 @@ class GoogleSearchMutationGuard
     private function fingerprint(array $snapshot): string
     {
         return GoogleSearchReachGate::settingsFingerprint($snapshot);
+    }
+
+    private function boundedExpansionAuthorized(Campaign $campaign, array $changes): bool
+    {
+        $customer = $campaign->customer;
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        $cap = $limits['max_cpc_bid_micros'] ?? null;
+        if ($changes === [] || count($changes) > 3 || ! $customer || $customer->service_type !== 'managed'
+            || $customer->is_sandbox || $customer->google_ads_link_status === 'revoked'
+            || $campaign->status !== CampaignStatus::Active || $campaign->spend_safety_hold || $campaign->hasPassedEndDate()
+            || CampaignSpendGuardrails::activeTrial($campaign) || ! $limits || ! is_int($cap)
+            || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)
+            || ! Feature::for($customer)->active(AutoHealing::class)) {
+            return false;
+        }
+        foreach ($changes as $change) {
+            if (! is_array($change) || array_diff(array_keys($change), ['action', 'text', 'match_type', 'ad_group_resource', 'selection_reason', 'bid_micros']) !== []
+                || ($change['action'] ?? null) !== 'add' || ! in_array($change['match_type'] ?? null, ['EXACT', 'PHRASE'], true)
+                || ! is_string($change['selection_reason'] ?? null) || trim($change['selection_reason']) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function boundedExpansionBids(Campaign $campaign, array $snapshot, array $changes): bool
+    {
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        $cap = $snapshot['actual_cpc_ceiling_micros'] ?? null;
+        $budget = $snapshot['daily_budget_micros'] ?? null;
+        if (($snapshot['account_time_zone_verified'] ?? null) !== true
+            || ($snapshot['currency_code'] ?? null) !== ($limits['currency_code'] ?? null)
+            || ! is_int($cap) || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)
+            || ! is_int($budget) || ! CampaignSpendGuardrails::permitsDailyBudget($campaign, $budget)) {
+            return false;
+        }
+        if (($snapshot['bidding_strategy'] ?? null) !== BiddingStrategyType::MANUAL_CPC) {
+            return ($snapshot['bidding_strategy'] ?? null) === BiddingStrategyType::TARGET_SPEND;
+        }
+        foreach ($changes as $change) {
+            $groups = array_filter($snapshot['keywords'] ?? [], fn ($keyword) => ($keyword['ad_group_resource'] ?? null) === ($change['ad_group_resource'] ?? null)
+                && ($keyword['ad_group_status'] ?? null) === 'ENABLED');
+            $bids = array_column($groups, 'ad_group_cpc_bid_micros');
+            $inherited = $bids === [] ? 0 : max($bids);
+            $bid = $change['bid_micros'] ?? $inherited;
+            if (! is_int($inherited) || $inherited <= 0 || ! is_int($bid) || $bid <= 0
+                || $bid > min($cap, $inherited) || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $bid)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function boundedExpansionEvidence(Campaign $campaign, array $snapshot, ?array $baseline, array $assessment, array $changes): bool
+    {
+        if (! $baseline) {
+            return false;
+        }
+        // The old portfolio may have insufficient traffic, but every other piece
+        // of baseline evidence must be current and compatible with the proposal.
+        $oldGate = $this->gate->evaluateBoundedExpansion($campaign, $snapshot, $baseline);
+        $allowed = ['search_reach_below_useful_threshold', 'search_reach_no_forecast_traffic', 'search_reach_no_forecast_impressions'];
+        if (array_diff(array_column($oldGate['issues'], 'code'), $allowed) !== []) {
+            return false;
+        }
+        $old = $baseline['forecast'] ?? [];
+        $new = $assessment['forecast'] ?? [];
+        $days = $old['period_days'] ?? null;
+        if (! is_int($days) || $days <= 0 || ($new['period_days'] ?? null) !== $days
+            || ($old['forecast_period'] ?? null) !== ($new['forecast_period'] ?? null)
+            || ! is_numeric($old['clicks'] ?? null) || ! is_numeric($new['clicks'] ?? null)
+            || ! is_finite((float) $old['clicks']) || ! is_finite((float) $new['clicks']) || $old['clicks'] < 0) {
+            return false;
+        }
+        $before = $old['clicks'] * 30 / $days;
+        $after = $new['clicks'] * 30 / $days;
+        if ($after < $before + max(1, $before * 0.2)) {
+            return false;
+        }
+        foreach ($changes as $change) {
+            $metric = GoogleSearchReachPlanner::historicalMetric($assessment['historical']['keywords'] ?? [], $change['text'] ?? '');
+            if (! is_numeric($metric['avg_monthly_searches'] ?? null) || $metric['avg_monthly_searches'] <= 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function costExclusionsAuthorized(Campaign $campaign, array $changes): bool

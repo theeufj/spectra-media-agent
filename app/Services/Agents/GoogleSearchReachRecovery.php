@@ -20,6 +20,7 @@ use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V26\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V26\Services\MutateAdGroupCriteriaRequest;
+use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 
@@ -49,6 +50,11 @@ class GoogleSearchReachRecovery
                 || (! empty($previous['cost_protection']['mutation_started_at']) && empty($previous['cost_protection']['verified_at']))) {
                 return $this->save($campaign, [...$state, 'status' => 'needs_review',
                     'blocked_reason' => ! empty($previous['verification']['errors']) ? 'partial_repair_unresolved' : 'cost_reduction_outcome_unverified']);
+            }
+            if (! empty($previous['repair']['rollback']['started_at'])) {
+                return $this->save($campaign, [...$state, 'status' => 'needs_review',
+                    'blocked_reason' => ($previous['repair']['rollback']['status'] ?? null) === 'verified'
+                        ? 'bounded_expansion_rolled_back' : 'bounded_expansion_rollback_unverified']);
             }
             if (! $campaign->strategies()->where('campaign_type', 'search')
                 ->whereIn('deployment_status', ['active', 'verified', 'deployed'])->exists()) {
@@ -134,7 +140,11 @@ class GoogleSearchReachRecovery
             $research = $mature && $researchDue && (! $enoughTraffic || $campaign->spend_safety_hold);
             $diagnosis = $this->planner->assess($campaign, $snapshot, $research);
             $reachRisk = $this->hasReachRisk($diagnosis);
-            if (! $research && $mature && $researchDue && $reachRisk) {
+            $knownInsufficientReach = in_array('insufficient_forecast_reach', array_column($diagnosis['issues'] ?? [], 'code'), true)
+                && ($diagnosis['status'] ?? null) === 'evidence_ready'
+                && ($diagnosis['forecast']['success'] ?? null) === true
+                && ($diagnosis['forecast']['source'] ?? null) === 'google_keyword_forecast';
+            if (! $research && ($mature || $knownInsufficientReach) && $researchDue && $reachRisk) {
                 // A little traffic is not proof that the existing keyword theme
                 // has enough forecast reach for an economically useful test.
                 $research = true;
@@ -521,7 +531,13 @@ class GoogleSearchReachRecovery
             && ($keyword['ad_group_status'] ?? null) === 'ENABLED')),
             ...array_map(fn ($candidate) => $candidate + ['status' => 'ENABLED', 'ad_group_status' => 'ENABLED']
                 + (($live['bidding_strategy'] ?? null) === BiddingStrategyType::MANUAL_CPC ? ['cpc_bid_micros' => $live['actual_cpc_ceiling_micros']] : []), $candidates)];
-        $proof = $this->mutationReach($fresh, $proposed);
+        $bounded = CampaignSpendGuardrails::automationLimits($fresh) !== null;
+        $changes = array_map(fn ($candidate) => ['action' => 'add', 'text' => $candidate['text'],
+            'match_type' => $candidate['match_type'], 'ad_group_resource' => $candidate['ad_group_resource'],
+            'selection_reason' => $candidate['selection_reason']]
+            + (isset($candidate['cpc_bid_micros']) ? ['bid_micros' => $candidate['cpc_bid_micros']] : []), $candidates);
+        $proof = $bounded ? app(GoogleSearchMutationGuard::class)->assessBoundedExpansion($fresh, $changes)
+            : $this->mutationReach($fresh, $proposed);
         $state['repair_reach_gate'] = $proof;
         if (! ($proof['reach_gate']['ready'] ?? false)) {
             return $this->alertAndSave($fresh, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'repair_reach_unverified', 'mutation_allowed' => false]);
@@ -536,8 +552,26 @@ class GoogleSearchReachRecovery
         }
         $state['repair_attempts'] = array_values(array_filter($state['repair_attempts'] ?? [],
             fn ($at) => CarbonImmutable::parse($at)->gte(now()->subDays(7))));
+        $forecast = $proof['assessment']['forecast'] ?? [];
+        $verificationHours = max(1, (int) config('optimization.search_delivery.verify_hours', 24));
+        if ($bounded && is_numeric($forecast['clicks'] ?? null) && $forecast['clicks'] > 0
+            && is_int($forecast['period_days'] ?? null) && $forecast['period_days'] > 0) {
+            // A portfolio forecast for one click per day cannot be judged
+            // against a three-click recovery target after just one day.
+            $verificationHours = max($verificationHours, min(168, (int) ceil(
+                max(1, (int) config('optimization.search_delivery.min_meaningful_clicks', 3)) * 24 * $forecast['period_days'] / $forecast['clicks'])));
+        }
+        if ($bounded && ! $this->evaluationHorizonFits($fresh, $live, CarbonImmutable::now()->addHours($verificationHours))) {
+            return $this->alertAndSave($fresh, [...$state, 'status' => 'approval_required',
+                'blocked_reason' => 'insufficient_evaluation_horizon', 'mutation_allowed' => false,
+                'required_verification_hours' => $verificationHours]);
+        }
         $state['repair_attempts'][] = now()->toIso8601String();
-        $state['repair'] = ['started_at' => now()->toIso8601String(), 'added_keywords' => [], 'errors' => []];
+        $state['repair'] = ['started_at' => now()->toIso8601String(), 'added_keywords' => [], 'errors' => [],
+            ...($bounded ? ['purpose' => 'bounded_expansion', 'baseline_fingerprint' => $state['config_fingerprint'],
+                'baseline_keyword_resources' => array_map(fn ($keyword) => $keyword['resource_name'] ?? $keyword['resource'] ?? null, $live['keywords']),
+                'estimated_reach_only' => true, 'verification_after_hours' => $verificationHours,
+                'forecast_caveats' => $proof['assessment']['forecast']['caveats'] ?? []] : [])];
         $this->save($fresh, $state); // Durable attempt before the first remote write.
         foreach ($candidates as $candidate) {
             try {
@@ -583,7 +617,7 @@ class GoogleSearchReachRecovery
             $state['repair']['errors'][] = ['code' => 'configuration_changed_after_repair',
                 'message' => 'Other live campaign settings changed during keyword creation. Review them before declaring delivery recovered.'];
         }
-        $state['repair']['readback_reach'] = $this->mutationReach($fresh, $after);
+        $state['repair']['readback_reach'] = $this->mutationReach($fresh, $after, $bounded);
         if (! ($state['repair']['readback_reach']['reach_gate']['ready'] ?? false)) {
             $state['repair']['errors'][] = ['code' => 'repair_reach_readback_unverified',
                 'message' => 'The actual repaired keyword portfolio did not pass a fresh demand and affordable reach check. Review it before another automatic repair.'];
@@ -634,16 +668,127 @@ class GoogleSearchReachRecovery
 
             return $this->save($campaign, [...$state, 'status' => 'recovered', 'blocked_reason' => null]);
         }
-        if ((int) ($after['measurement']['complete_hours'] ?? 0) >= (int) config('optimization.search_delivery.verify_hours', 24)) {
+        $verificationHours = max(1, (int) config('optimization.search_delivery.verify_hours', 24));
+        if (($state['repair']['purpose'] ?? null) === 'bounded_expansion') {
+            $verificationHours = max($verificationHours, min(168, (int) ($state['repair']['verification_after_hours'] ?? $verificationHours)));
+            if (! $this->evaluationHorizonFits($campaign, $after, $repairAt->addHours($verificationHours))) {
+                return $this->alertAndSave($campaign, [...$state, 'status' => 'needs_review',
+                    'blocked_reason' => 'insufficient_evaluation_horizon']);
+            }
+        }
+        if ((int) ($after['measurement']['complete_hours'] ?? 0) >= $verificationHours) {
+            if (($state['repair']['purpose'] ?? null) === 'bounded_expansion'
+                && is_numeric($after['measurement']['conversions'] ?? null)
+                && (float) $after['measurement']['conversions'] === 0.0) {
+                return $this->rollbackBoundedExpansion($campaign, $after, $state);
+            }
+
             return $this->alertAndSave($campaign, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'repair_did_not_restore_search_traffic']);
         }
 
         return $this->save($campaign, [...$state, 'status' => 'verifying', 'blocked_reason' => null]);
     }
 
+    private function rollbackBoundedExpansion(Campaign $campaign, array $snapshot, array $state): array
+    {
+        $current = $campaign->fresh(['customer']);
+        if (! $current || ! $this->rollbackAuthorized($current, $snapshot)) {
+            return $this->alertAndSave($campaign, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_not_authorized']);
+        }
+        $resources = array_column($state['repair']['added_keywords'] ?? [], 'resource');
+        $original = $state['repair']['baseline_keyword_resources'] ?? [];
+        $customerId = $current->customer->cleanGoogleCustomerId();
+        if ($resources === [] || count($resources) > 3 || count(array_unique($resources)) !== count($resources)
+            || array_intersect($resources, $original) !== []) {
+            return $this->alertAndSave($current, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_scope_unverified']);
+        }
+        foreach ($resources as $resource) {
+            if (! is_string($resource) || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/adGroupCriteria/[0-9]+~[0-9]+$#D', $resource)) {
+                return $this->alertAndSave($current, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_scope_unverified']);
+            }
+            $rows = array_filter($snapshot['keywords'] ?? [], fn ($keyword) => ($keyword['resource_name'] ?? $keyword['resource'] ?? null) === $resource
+                && ($keyword['status'] ?? null) === 'ENABLED');
+            if (count($rows) !== 1) {
+                return $this->alertAndSave($current, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_scope_unverified']);
+            }
+        }
+        $this->pauseNewKeywords($current->customer, $resources, true);
+        $live = $this->inspect($current, CarbonImmutable::parse($state['repair']['started_at']));
+        $current = $current->fresh(['customer']);
+        if (! $current || ! $live || ! $this->rollbackAuthorized($current, $live)
+            || $this->fingerprint($current, $live) !== $state['config_fingerprint']) {
+            return $this->alertAndSave($campaign, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_settings_changed']);
+        }
+        $state['repair']['rollback'] = ['started_at' => now()->toIso8601String(), 'status' => 'pending',
+            'resources' => $resources, 'automatic_replay_allowed' => false];
+        $this->save($current, $state);
+        $this->pauseNewKeywords($current->customer, $resources, false);
+        $after = $this->inspect($current, CarbonImmutable::parse($state['repair']['started_at']));
+        $expected = $live;
+        foreach ($expected['keywords'] as &$keyword) {
+            if (in_array($keyword['resource_name'] ?? $keyword['resource'] ?? null, $resources, true)) {
+                $keyword['status'] = 'PAUSED';
+            }
+        }
+        unset($keyword);
+        if (! $after || $this->fingerprint($current, $expected) !== $this->fingerprint($current, $after)) {
+            return $this->alertAndSave($current, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rollback_unverified']);
+        }
+        $state['repair']['rollback']['status'] = 'verified';
+        $state['repair']['rollback']['verified_at'] = now()->toIso8601String();
+        $state['config_fingerprint'] = $this->fingerprint($current, $after);
+        AgentActivity::record('search_delivery', 'bounded_expansion_rolled_back',
+            'Paused only the newly researched keywords after the subsequent measurement did not demonstrate useful traffic. Original keywords, budgets and bids were preserved.',
+            $current->customer_id, $current->id, ['resources' => $resources, 'measurement' => $state['verification']]);
+
+        return $this->alertAndSave($current, [...$state, 'status' => 'needs_review', 'blocked_reason' => 'bounded_expansion_rolled_back']);
+    }
+
+    private function rollbackAuthorized(Campaign $campaign, array $snapshot): bool
+    {
+        $cap = $snapshot['actual_cpc_ceiling_micros'] ?? null;
+        $budget = $snapshot['daily_budget_micros'] ?? null;
+
+        return $campaign->status === CampaignStatus::Active && ! $campaign->spend_safety_hold && ! $campaign->hasPassedEndDate()
+            && $campaign->customer?->service_type === 'managed' && ! $campaign->customer->is_sandbox
+            && $campaign->customer->google_ads_link_status !== 'revoked'
+            && CampaignSpendGuardrails::activeTrial($campaign) === null
+            && CampaignSpendGuardrails::automationLimits($campaign) !== null
+            && Feature::for($campaign->customer)->active(AutoHealing::class)
+            && ($snapshot['status'] ?? null) === 2 && ($snapshot['channel'] ?? null) === AdvertisingChannelType::SEARCH
+            && is_int($cap) && CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)
+            && is_int($budget) && CampaignSpendGuardrails::permitsDailyBudget($campaign, $budget);
+    }
+
+    private function evaluationHorizonFits(Campaign $campaign, array $snapshot, CarbonImmutable $requiredThrough): bool
+    {
+        try {
+            $timezone = $snapshot['time_zone'];
+            $ends = [$campaign->getAttribute('end_date'), $snapshot['end_date'] ?? null];
+            foreach ($ends as $value) {
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                $date = $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : $value;
+                if (! is_string($date) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)
+                    || CarbonImmutable::parse($date, $timezone)->endOfDay()->lt($requiredThrough)) {
+                    return false;
+                }
+            }
+            if (is_string($snapshot['end_date_time'] ?? null) && $snapshot['end_date_time'] !== ''
+                && CarbonImmutable::parse($snapshot['end_date_time'], $timezone)->lt($requiredThrough)) {
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function fingerprint(Campaign $campaign, array $snapshot): string
     {
-        $settings = array_intersect_key($snapshot, array_flip(['status', 'channel', 'bidding_strategy', 'google_search_enabled', 'search_partners_enabled',
+        $settings = array_intersect_key($snapshot, array_flip(['status', 'start_date', 'end_date', 'start_date_time', 'end_date_time', 'channel', 'bidding_strategy', 'google_search_enabled', 'search_partners_enabled',
             'daily_budget_micros', 'actual_cpc_ceiling_micros', 'currency_code', 'time_zone', 'keywords', 'approved_ads', 'approved_ad_resources',
             'negative_keywords', 'geo_target_constants', 'excluded_geo_target_constants', 'included_geos', 'excluded_geos', 'language_constants', 'languages', 'ad_schedule',
             'device_bid_modifiers', 'unsupported_targeting', 'positive_geo_target_type', 'negative_geo_target_type', 'targeting_setting',
@@ -726,13 +871,15 @@ class GoogleSearchReachRecovery
         return app(InspectSearchDelivery::class, ['customer' => $campaign->customer])->inspect($campaign, $since);
     }
 
-    private function mutationReach(Campaign $campaign, array $snapshot): array
+    private function mutationReach(Campaign $campaign, array $snapshot, bool $boundedExpansion = false): array
     {
         $keywords = array_values(array_filter($snapshot['keywords'] ?? [], fn ($keyword) => ($keyword['status'] ?? null) === 'ENABLED'
             && ($keyword['ad_group_status'] ?? null) === 'ENABLED'));
         $assessment = $this->planner->assessMutation($campaign, $snapshot, $keywords);
 
-        return ['assessment' => $assessment, 'reach_gate' => (new GoogleSearchReachGate)->evaluate($campaign, $snapshot, $assessment)];
+        return ['assessment' => $assessment, 'reach_gate' => $boundedExpansion
+            ? (new GoogleSearchReachGate)->evaluateBoundedExpansion($campaign, $snapshot, $assessment)
+            : (new GoogleSearchReachGate)->evaluate($campaign, $snapshot, $assessment)];
     }
 
     protected function addKeyword(Customer $customer, array $candidate, int $cap): ?string
@@ -747,7 +894,11 @@ class GoogleSearchReachRecovery
                         'match_type' => $candidate['match_type'] === 'EXACT' ? KeywordMatchType::EXACT : KeywordMatchType::PHRASE]),
                     'status' => 2]);
                 if ($candidate['set_keyword_bid'] ?? false) {
-                    $criterion->setCpcBidMicros($cap);
+                    $bid = $candidate['cpc_bid_micros'] ?? $cap;
+                    if (! is_int($bid) || $bid <= 0 || $bid > $cap) {
+                        throw new \RuntimeException('The researched keyword bid exceeds the verified ceiling.');
+                    }
+                    $criterion->setCpcBidMicros($bid);
                 }
                 $operation = new AdGroupCriterionOperation;
                 $operation->setCreate($criterion);
@@ -758,14 +909,38 @@ class GoogleSearchReachRecovery
                 }
                 $request = new MutateAdGroupCriteriaRequest(['customer_id' => $customerId,
                     'operations' => [$operation], 'validate_only' => true]);
-                $api->mutateAdGroupCriteria($request);
+                $options = ['retrySettings' => ['retriesEnabled' => false, 'noRetriesRpcTimeoutMillis' => 30000]];
+                $api->mutateAdGroupCriteria($request, $options);
                 $request->setValidateOnly(false);
-                $result = $api->mutateAdGroupCriteria($request);
+                $result = $api->mutateAdGroupCriteria($request, $options);
 
                 return count($result->getResults()) > 0 ? $result->getResults()[0]->getResourceName() : null;
             }
         };
 
         return $service->add($candidate, $cap);
+    }
+
+    protected function pauseNewKeywords(Customer $customer, array $resources, bool $validateOnly): void
+    {
+        $service = new class($customer) extends BaseGoogleAdsService
+        {
+            public function pause(array $resources, bool $validateOnly): void
+            {
+                $this->ensureClient();
+                $operations = array_map(fn ($resource) => new AdGroupCriterionOperation([
+                    'update' => new AdGroupCriterion(['resource_name' => $resource, 'status' => 3]),
+                    'update_mask' => new FieldMask(['paths' => ['status']]),
+                ]), $resources);
+                $response = $this->client->getAdGroupCriterionServiceClient()->mutateAdGroupCriteria(new MutateAdGroupCriteriaRequest([
+                    'customer_id' => $this->customer->cleanGoogleCustomerId(), 'operations' => $operations,
+                    'partial_failure' => false, 'validate_only' => $validateOnly,
+                ]), ['retrySettings' => ['retriesEnabled' => false, 'noRetriesRpcTimeoutMillis' => 30000]]);
+                if ($response->hasPartialFailureError() || ! $validateOnly && count($response->getResults()) !== count($resources)) {
+                    throw new \RuntimeException('Google did not confirm the bounded keyword rollback.');
+                }
+            }
+        };
+        $service->pause($resources, $validateOnly);
     }
 }

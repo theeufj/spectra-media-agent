@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V26\Common\HistoricalMetricsOptions;
 use Google\Ads\GoogleAds\V26\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
 use Google\Ads\GoogleAds\V26\Services\GenerateKeywordIdeasRequest;
 use Google\Ads\GoogleAds\V26\Services\KeywordAndUrlSeed;
@@ -39,7 +40,7 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
         int $pageSize = 50
     ): array {
         // Cache keyword ideas for 24 hours to avoid redundant API calls
-        $cacheKey = 'keyword_ideas:'.$customerId.':'.md5(json_encode($seedKeywords).$url.$language.json_encode($geoTargets).$pageSize);
+        $cacheKey = 'keyword_ideas:priced:v26:'.$customerId.':'.md5(json_encode($seedKeywords).$url.$language.json_encode($geoTargets).$pageSize);
 
         return Cache::remember($cacheKey, now()->addHours(24), function () use ($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize) {
             return $this->fetchKeywordIdeas($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize);
@@ -60,6 +61,7 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
             'customer_id' => $customerId,
             'keyword_plan_network' => KeywordPlanNetwork::GOOGLE_SEARCH,
             'page_size' => $pageSize,
+            'historical_metrics_options' => new HistoricalMetricsOptions(['include_average_cpc' => true]),
         ]);
 
         if ($language) {
@@ -100,12 +102,12 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
 
                 $idea = [
                     'keyword' => $result->getText(),
-                    'avg_monthly_searches' => $metrics ? $metrics->getAvgMonthlySearches() : null,
+                    'avg_monthly_searches' => $metrics?->hasAvgMonthlySearches() ? $metrics->getAvgMonthlySearches() : null,
                     'competition' => $metrics ? $metrics->getCompetition() : null,
-                    'competition_index' => $metrics ? $metrics->getCompetitionIndex() : null,
-                    'low_top_of_page_bid_micros' => $metrics ? $metrics->getLowTopOfPageBidMicros() : null,
-                    'high_top_of_page_bid_micros' => $metrics ? $metrics->getHighTopOfPageBidMicros() : null,
-                    'average_cpc_micros' => $metrics ? $metrics->getAverageCpcMicros() : null,
+                    'competition_index' => $metrics?->hasCompetitionIndex() ? $metrics->getCompetitionIndex() : null,
+                    'low_top_of_page_bid_micros' => $metrics?->hasLowTopOfPageBidMicros() ? $metrics->getLowTopOfPageBidMicros() : null,
+                    'high_top_of_page_bid_micros' => $metrics?->hasHighTopOfPageBidMicros() ? $metrics->getHighTopOfPageBidMicros() : null,
+                    'average_cpc_micros' => $metrics?->hasAverageCpcMicros() ? $metrics->getAverageCpcMicros() : null,
                 ];
 
                 $results[] = $idea;

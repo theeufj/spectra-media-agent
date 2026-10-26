@@ -12,12 +12,7 @@ class CampaignKeywordResearch extends KeywordResearchService
 {
     public function discover(Campaign $campaign, Strategy $strategy, array $context, array $selected, bool $categoryOnly = false): array
     {
-        $business = ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
-            'goals' => $campaign->goals, 'platform' => $strategy->platform, 'channel' => $strategy->campaign_type,
-            'reviewed_business_profile' => $this->customer->brandGuideline?->only(['brand_voice', 'unique_selling_propositions', 'target_audience', 'service_lines']),
-            'target_locations' => $campaign->geographic_targeting ?: $strategy->targetingConfig?->geo_locations,
-            'geo_target_constants' => $context['geo_target_constants'] ?? [],
-            'existing_keywords' => array_column($selected, 'text')];
+        $business = $this->businessContextFor($campaign, $strategy, $context, $selected);
         $landingPage = $campaign->landing_page_url ?: $this->customer->website;
         $sets = [];
         $costCandidates = [];
@@ -94,6 +89,40 @@ class CampaignKeywordResearch extends KeywordResearchService
             'note' => empty($context['customer_id'])
                 ? 'No account-scoped platform demand, pricing or reach estimates were available.'
                 : 'Google keyword demand is proxy evidence for other platforms, never their reach or pricing.'];
+    }
+
+    /** One bounded new-theme discovery after ordinary profiles fail their affordable-reach test. */
+    public function discoverAffordableAlternatives(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
+    {
+        if (empty($context['customer_id'])) {
+            return ['keywords' => [], 'cost_candidates' => [], 'negative_keywords' => [],
+                'discovery' => ['affordable_recovery_attempted' => true],
+                'reason' => 'Affordable alternatives need an identified platform account. No demand or pricing was assumed.'];
+        }
+        $result = $this->researchAffordableAlternatives($context['customer_id'], $this->customer->name,
+            $this->customer->business_type, $campaign->landing_page_url ?: $this->customer->website,
+            count($context['language_constants'] ?? []) === 1 ? $context['language_constants'][0] : null,
+            $context['geo_target_constants'] ?? [], 12, [],
+            $this->businessContextFor($campaign, $strategy, $context, $selected));
+
+        return [...$result, 'discovery' => [...($result['discovery'] ?? []), 'affordable_recovery_attempted' => true],
+            'source' => 'google_keyword_planner_and_business_relevance',
+            'note' => 'Alternative buyer themes remain proposals until their full-portfolio traffic and costs are forecast within the retained limits.'];
+    }
+
+    private function businessContextFor(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
+    {
+        return ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
+            'goals' => $campaign->goals, 'platform' => $strategy->platform, 'channel' => $strategy->campaign_type,
+            'reviewed_business_profile' => $this->customer->brandGuideline?->only(['brand_voice', 'unique_selling_propositions', 'target_audience', 'service_lines']),
+            'target_locations' => $campaign->geographic_targeting ?: $strategy->targetingConfig?->geo_locations,
+            'geo_target_constants' => $context['geo_target_constants'] ?? [],
+            'existing_keywords' => array_column($selected, 'text'),
+            'daily_budget_micros' => $context['daily_budget_micros'] ?? null,
+            'max_cpc_bid_micros' => $context['max_cpc_bid_micros'] ?? null,
+            'currency_code' => $context['currency_code'] ?? null,
+            'failed_candidates' => $context['failed_candidates'] ?? [],
+            'failed_forecasts' => $context['failed_forecasts'] ?? []];
     }
 
     /** Keep lower-volume specific buying terms alongside category discovery. */

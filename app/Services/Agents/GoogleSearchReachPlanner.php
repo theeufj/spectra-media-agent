@@ -10,6 +10,7 @@ use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Carbon\CarbonImmutable;
+use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Cache;
 
 /** Research is read-only, including during spending holds and controlled trials. */
@@ -96,59 +97,83 @@ class GoogleSearchReachPlanner
 
             return $result;
         }
-        $cacheKey = 'search_reach:research:'.$campaign->id.':'.hash('sha256', json_encode([$existing, $context, $campaign->product_focus, $campaign->target_market, $customer->description]));
-        $research = Cache::remember($cacheKey, now()->addHours(24), fn () => $this->researchProvider($customer)->research(
-            $customer->cleanGoogleCustomerId(), $customer->name, $customer->business_type,
-            $campaign->landing_page_url ?: $customer->website,
-            language: count($context['language_constants']) === 1 ? $context['language_constants'][0] : null,
-            geoTargets: $context['geo_target_constants'], maxKeywords: 15,
-            businessContext: ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
-                'goals' => $campaign->goals, 'existing_keywords' => array_column($existing, 'text'),
-                'daily_budget_micros' => $context['daily_budget_micros'], 'max_cpc_bid_micros' => $ceiling],
-        ));
-        $existingKeys = array_map(fn ($keyword) => mb_strtolower(trim($keyword['text'])), $existing);
-        $candidates = [];
-        foreach ($research['keywords'] ?? [] as $keyword) {
-            $text = trim($keyword['text'] ?? '');
-            $match = strtoupper($keyword['match_type'] ?? '');
-            // A relevance review and commercial connection are required, never a volume-only selection.
-            if ($text === '' || ! in_array($match, ['EXACT', 'PHRASE'], true)
-                || ! is_string($keyword['selection_reason'] ?? null) || trim($keyword['selection_reason']) === ''
-                || in_array(mb_strtolower($text), $existingKeys, true)
-                || self::negativeConflict($text, $snapshot['negative_keywords'] ?? [], $groups[0])) {
-                continue;
-            }
-            $candidates[mb_strtolower($text)] = ['text' => $text, 'match_type' => $match,
-                'ad_group_resource' => $groups[0], 'relevant' => true, 'negative_conflict' => false,
-                'selection_reason' => $keyword['selection_reason'], 'forecasted' => false];
+        $manual = in_array($context['bidding_strategy'] ?? null, [BiddingStrategyType::MANUAL_CPC, 'MANUAL_CPC', 'ManualCpc'], true);
+        $groupBids = array_values(array_unique(array_column($existing, 'ad_group_cpc_bid_micros')));
+        $inherited = $manual ? ($groupBids[0] ?? null) : null;
+        if ($manual && (count($groupBids) !== 1 || ! is_int($inherited) || $inherited <= 0 || $inherited > $ceiling)) {
+            $result['proposal']['blocked_by'][] = 'The new keyword’s inherited Manual CPC bid must be verified within the approved ceiling.';
+
+            return $result;
         }
+        $business = ['offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
+            'goals' => $campaign->goals, 'existing_keywords' => array_column($existing, 'text'),
+            'reviewed_business_profile' => $customer->exists ? $customer->brandGuideline?->only(['unique_selling_propositions', 'target_audience', 'service_lines']) : null,
+            'daily_budget_micros' => $context['daily_budget_micros'], 'max_cpc_bid_micros' => $ceiling];
+        $research = $this->discover($campaign, $existing, $context, $business);
         $limit = max(1, min(3, (int) config('optimization.search_delivery.max_keywords_per_repair', 3)));
-        // Investigate more terms than we can add. Early candidates may have no
-        // affordable reach; that must not hide a viable later keyword.
         $poolSize = max($limit, min(12, (int) config('optimization.search_delivery.max_candidates_to_forecast', 6)));
-        $candidates = array_values(array_slice($candidates, 0, $poolSize));
-        foreach ($candidates as &$candidate) {
-            if ($ceiling > 0) {
-                $candidate['forecast'] = $this->forecast($customer, [$candidate], $ceiling, $context);
-                $candidate['forecasted'] = ($candidate['forecast']['success'] ?? false)
-                    && ($candidate['forecast']['clicks'] ?? 0) > 0;
-            }
-        }
-        unset($candidate);
-        $viable = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecasted']));
-        usort($viable, fn ($a, $b) => ($b['forecast']['clicks'] ?? 0) <=> ($a['forecast']['clicks'] ?? 0));
-        $viable = array_slice($viable, 0, $limit);
-        $candidateHistorical = $viable !== [] ? $this->historical($customer, array_column($viable, 'text'), $context) : null;
-        foreach ($viable as &$candidate) {
-            $metric = self::historicalMetric($candidateHistorical['keywords'] ?? [], $candidate['text']);
-            $candidate['historical_metrics'] = $metric;
-            $candidate['historical_checked_at'] = $candidateHistorical['checked_at'] ?? null;
-        }
-        unset($candidate);
-        $combined = $viable !== [] ? $this->forecast($customer, [...$existing, ...$viable], $ceiling, $context) : null;
+        $candidates = $viable = $portfolios = [];
+        $combined = $candidateHistorical = null;
         $baseline = $this->monthlyClicks($result['forecast'] ?? []);
-        $improved = ($combined['success'] ?? false) && $this->monthlyClicks($combined) >= $this->minimumClicks()
-            && $this->monthlyClicks($combined) >= $baseline + max(1, $baseline * 0.2);
+        $improved = false;
+        // One initial pool and one independent alternative-theme pass. A long
+        // list of expensive terms or a tiny positive forecast cannot end discovery.
+        foreach ([0, 1] as $pass) {
+            $pool = $this->candidatePool($research, $existing, $snapshot, $groups[0], $inherited,
+                $pass === 0 ? 'initial_research' : 'affordable_alternatives', $candidates);
+            if ($pool !== [] && $ceiling > 0) {
+                $history = $this->historical($customer, array_column($pool, 'text'), $context);
+                $candidateHistorical = ['success' => ($history['success'] ?? false) === true,
+                    'checked_at' => $history['checked_at'] ?? null,
+                    'keywords' => [...($candidateHistorical['keywords'] ?? []), ...($history['keywords'] ?? [])]];
+                $pool = $this->rankCandidatePool($pool, $history, $ceiling);
+                foreach (array_slice($pool, 0, $poolSize) as $candidate) {
+                    $bid = $manual ? $candidate['cpc_bid_micros'] : $ceiling;
+                    $forecastContext = $manual ? array_replace($context, ['cpc_bid_ceiling_micros' => $bid]) : $context;
+                    $candidate['forecast'] = $this->forecast($customer, [$candidate], $bid, $forecastContext);
+                    $candidate['forecasted'] = ($candidate['forecast']['success'] ?? false)
+                        && ($candidate['forecast']['clicks'] ?? 0) > 0;
+                    $candidates[] = $candidate;
+                }
+            }
+            $available = array_values(array_filter($candidates, fn ($candidate) => $candidate['forecasted']
+                && $this->monthlyClicks($candidate['forecast']) >= 1
+                && ($candidate['historical_metrics']['avg_monthly_searches'] ?? 0) > 0));
+            $cohorts = $this->candidateCohorts($available, $limit);
+            foreach ($cohorts as $cohort) {
+                $key = implode('|', array_column($cohort, 'text'));
+                if (isset($portfolios[$key])) {
+                    continue;
+                }
+                $forecast = $this->forecast($customer, [...$existing, ...$cohort], $ceiling, $context);
+                $portfolios[$key] = ['keywords' => $cohort, 'forecast' => $forecast];
+            }
+            $best = $this->bestPortfolio(array_values($portfolios), $baseline, $context);
+            if ($best !== null) {
+                $viable = $best['keywords'];
+                $combined = $best['forecast'];
+                $improved = $this->usefulImprovement($combined, $baseline, $context);
+            }
+            if ($improved || $pass === 1 || $ceiling <= 0) {
+                break;
+            }
+            $failed = array_map(fn ($candidate) => ['text' => $candidate['text'],
+                'forecast_clicks' => $candidate['forecast']['clicks'] ?? null,
+                'forecast_period_days' => $candidate['forecast']['period_days'] ?? null,
+                'historical_cost' => $candidate['cost_evidence'] ?? null], $candidates);
+            try {
+                $research = $this->discover($campaign, $existing, $context,
+                    $business + ['failed_candidates' => $failed, 'minimum_monthly_forecast_clicks' => $this->minimumClicks()], true);
+            } catch (\Throwable $e) {
+                report($e);
+                $result['affordable_discovery'] = ['attempted' => true, 'status' => 'unavailable',
+                    'checked_at' => now()->toIso8601String(), 'max_passes' => 2];
+
+                break; // An optional discovery failure cannot erase the verified baseline.
+            }
+            $result['affordable_discovery'] = ['attempted' => true, 'checked_at' => now()->toIso8601String(),
+                'discovery' => $research['discovery'] ?? [], 'candidate_limit_per_pass' => $poolSize, 'max_passes' => 2];
+        }
         $blocked = [];
         if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
             $blocked[] = $campaign->spend_safety_hold ? 'The campaign has a spending hold.' : 'This controlled test requires review before keyword changes.';
@@ -167,6 +192,9 @@ class GoogleSearchReachPlanner
         $result['combined_forecast'] = $combined;
         $result['candidate_historical'] = $candidateHistorical;
         $result['auto_repair_safe'] = $improved && ($combined['auto_repair_safe'] ?? false) && $blocked === [];
+        $result['bounded_expansion_candidate'] = $improved && ! CampaignSpendGuardrails::automaticChangesSuspended($campaign)
+            && $ceiling > 0 && $this->soleNegativeLimitation($combined ?? []);
+        $result['tested_portfolios'] = array_values($portfolios);
         $result['proposal'] = [
             'summary' => $improved
                 ? 'Add '.count($viable).' relevant keywords at the existing CPC ceiling, then verify that Google Search traffic follows.'
@@ -177,6 +205,150 @@ class GoogleSearchReachPlanner
         ];
 
         return $result;
+    }
+
+    private function discover(Campaign $campaign, array $existing, array $context, array $business, bool $affordable = false): array
+    {
+        $customer = $campaign->customer;
+        $key = 'search_reach:research:v2:'.$campaign->id.':'.hash('sha256', json_encode([$existing, $context, $business, $affordable]));
+
+        return Cache::remember($key, now()->addHours(24), function () use ($campaign, $customer, $context, $business, $affordable): array {
+            $provider = $this->researchProvider($customer);
+            $arguments = [$customer->cleanGoogleCustomerId(), $customer->name, $customer->business_type,
+                $campaign->landing_page_url ?: $customer->website,
+                count($context['language_constants']) === 1 ? $context['language_constants'][0] : null,
+                $context['geo_target_constants'], 15, [], $business];
+
+            return $affordable ? $provider->researchAffordableAlternatives(...$arguments) : $provider->research(...$arguments);
+        });
+    }
+
+    private function candidatePool(array $research, array $existing, array $snapshot, string $group, ?int $manualBid, string $origin, array $tested): array
+    {
+        $excluded = array_map(fn ($keyword) => mb_strtolower(trim($keyword['text'])), [...$existing, ...$tested]);
+        $pool = [];
+        foreach ([...($research['cost_candidates'] ?? []), ...($research['keywords'] ?? [])] as $keyword) {
+            $text = is_string($keyword['text'] ?? null) ? trim($keyword['text']) : '';
+            $match = strtoupper($keyword['match_type'] ?? '');
+            if ($text === '' || ! in_array($match, ['EXACT', 'PHRASE'], true)
+                || ! is_string($keyword['selection_reason'] ?? null) || trim($keyword['selection_reason']) === ''
+                || in_array(mb_strtolower($text), $excluded, true)
+                || self::negativeConflict($text, $snapshot['negative_keywords'] ?? [], $group)) {
+                continue;
+            }
+            $candidate = ['text' => $text, 'match_type' => $match, 'ad_group_resource' => $group,
+                'relevant' => true, 'negative_conflict' => false, 'selection_reason' => $keyword['selection_reason'],
+                'forecasted' => false, 'origin' => $origin];
+            if ($manualBid !== null) {
+                $candidate += ['cpc_bid_micros' => $manualBid, 'set_keyword_bid' => true];
+            }
+            foreach (['average_cpc_micros', 'low_top_of_page_bid_micros', 'high_top_of_page_bid_micros'] as $basis) {
+                $cost = $keyword[$basis] ?? null;
+                if (is_int($cost) && $cost > 0) {
+                    $candidate['cost_evidence'] = ['basis' => $basis, 'amount_micros' => $cost];
+                    break;
+                }
+            }
+            $pool[mb_strtolower($text)] ??= $candidate;
+        }
+
+        return array_values($pool);
+    }
+
+    /** Rank known prices before a bounded forecast quota, merging Google's canonical close variants. */
+    private function rankCandidatePool(array $pool, array $historical, int $ceiling): array
+    {
+        foreach ($pool as &$candidate) {
+            $metric = self::historicalMetric($historical['keywords'] ?? [], $candidate['text']);
+            $candidate['historical_metrics'] = $metric;
+            $candidate['historical_checked_at'] = $historical['checked_at'] ?? null;
+            if (! isset($candidate['cost_evidence'])) {
+                foreach (['average_cpc_micros', 'low_top_of_page_bid_micros', 'high_top_of_page_bid_micros'] as $basis) {
+                    if (is_int($metric[$basis] ?? null) && $metric[$basis] > 0) {
+                        $candidate['cost_evidence'] = ['basis' => $basis, 'amount_micros' => $metric[$basis]];
+                        break;
+                    }
+                }
+            }
+        }
+        unset($candidate);
+        usort($pool, function ($a, $b) use ($ceiling): int {
+            $costA = $a['cost_evidence']['amount_micros'] ?? PHP_INT_MAX;
+            $costB = $b['cost_evidence']['amount_micros'] ?? PHP_INT_MAX;
+
+            return [$costA > $ceiling, $costA, -($a['historical_metrics']['avg_monthly_searches'] ?? 0), mb_strtolower($a['text'])]
+                <=> [$costB > $ceiling, $costB, -($b['historical_metrics']['avg_monthly_searches'] ?? 0), mb_strtolower($b['text'])];
+        });
+        $distinct = [];
+        foreach ($pool as $candidate) {
+            $canonical = mb_strtolower(trim($candidate['historical_metrics']['text'] ?? $candidate['text']));
+            $distinct[$canonical] ??= $candidate;
+        }
+
+        return array_values($distinct);
+    }
+
+    /** Test both a cheaper cohort and a traffic cohort as complete portfolios, never sum isolated estimates. */
+    private function candidateCohorts(array $candidates, int $limit): array
+    {
+        if ($candidates === []) {
+            return [];
+        }
+        $traffic = $candidates;
+        usort($traffic, fn ($a, $b) => $this->monthlyClicks($b['forecast']) <=> $this->monthlyClicks($a['forecast']));
+        usort($candidates, function ($a, $b): int {
+            $clicksA = $this->monthlyClicks($a['forecast']);
+            $clicksB = $this->monthlyClicks($b['forecast']);
+            $costA = $this->forecastCpc($a['forecast']);
+            $costB = $this->forecastCpc($b['forecast']);
+
+            return [$clicksA < $this->minimumClicks(), $costA, -$clicksA]
+                <=> [$clicksB < $this->minimumClicks(), $costB, -$clicksB];
+        });
+
+        return [array_slice($candidates, 0, $limit), array_slice($traffic, 0, $limit)];
+    }
+
+    private function bestPortfolio(array $portfolios, float $baseline, array $context): ?array
+    {
+        $portfolios = array_values(array_filter($portfolios, fn ($portfolio) => ($portfolio['forecast']['success'] ?? false)
+            && ($portfolio['forecast']['clicks'] ?? 0) > 0));
+        usort($portfolios, function ($a, $b) use ($baseline, $context): int {
+            return [! $this->usefulImprovement($a['forecast'], $baseline, $context), $this->forecastCpc($a['forecast']), -$this->monthlyClicks($a['forecast'])]
+                <=> [! $this->usefulImprovement($b['forecast'], $baseline, $context), $this->forecastCpc($b['forecast']), -$this->monthlyClicks($b['forecast'])];
+        });
+
+        return $portfolios[0] ?? null;
+    }
+
+    private function usefulImprovement(array $forecast, float $baseline, array $context): bool
+    {
+        $cost = $forecast['cost_micros'] ?? null;
+        $days = $forecast['period_days'] ?? null;
+        $budget = $context['daily_budget_micros'] ?? null;
+
+        return ($forecast['success'] ?? false) && $this->monthlyClicks($forecast) >= $this->minimumClicks()
+            && $this->monthlyClicks($forecast) >= $baseline + max(1, $baseline * 0.2)
+            && is_int($cost) && $cost > 0 && is_int($days) && $days > 0
+            && is_int($budget) && $budget > 0 && $cost <= $budget * $days;
+    }
+
+    private function forecastCpc(array $forecast): float
+    {
+        $cost = $forecast['cost_micros'] ?? null;
+        $clicks = $forecast['clicks'] ?? null;
+
+        return is_int($cost) && $cost > 0 && is_numeric($clicks) && $clicks > 0 ? $cost / $clicks : (float) PHP_INT_MAX;
+    }
+
+    private function soleNegativeLimitation(array $forecast): bool
+    {
+        $limitations = $forecast['limitations'] ?? [];
+
+        return ($forecast['auto_repair_safe'] ?? null) === false && count($limitations) === 1
+            && ($limitations[0]['code'] ?? null) === 'negative_keywords_unmodeled'
+            && is_string($limitations[0]['message'] ?? null) && trim($limitations[0]['message']) !== ''
+            && ($forecast['caveats'] ?? null) === [$limitations[0]['message']];
     }
 
     /** Google can group close variants under one canonical text; keyed lookups retain the requested term. */

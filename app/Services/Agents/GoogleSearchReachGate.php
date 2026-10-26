@@ -66,7 +66,13 @@ class GoogleSearchReachGate
         return $this->evaluateReach($campaign, $snapshot, $assessment, null, false, true);
     }
 
-    private function evaluateReach(Campaign $campaign, array $snapshot, array $assessment, ?array $forecast, bool $initialLaunch, bool $costContainment = false): array
+    /** Small approved-limit additions use an indicative estimate followed by measured delivery verification. */
+    public function evaluateBoundedExpansion(Campaign $campaign, array $snapshot, array $assessment): array
+    {
+        return $this->evaluateReach($campaign, $snapshot, $assessment, null, false, false, true);
+    }
+
+    private function evaluateReach(Campaign $campaign, array $snapshot, array $assessment, ?array $forecast, bool $initialLaunch, bool $costContainment = false, bool $boundedExpansion = false): array
     {
         $forecast ??= $assessment['forecast'] ?? [];
         $issues = [];
@@ -189,7 +195,7 @@ class GoogleSearchReachGate
         $clicks = $forecast['clicks'] ?? null;
         $cost = $forecast['cost_micros'] ?? null;
         $limitations = $forecast['limitations'] ?? [];
-        $negativeOnly = ($initialLaunch || $costContainment) && ! CampaignSpendGuardrails::activeTrial($campaign)
+        $negativeOnly = ($initialLaunch || $costContainment || $boundedExpansion) && ! CampaignSpendGuardrails::activeTrial($campaign)
             && is_array($limitations) && count($limitations) === 1 && is_array($limitations[0] ?? null)
             && ($limitations[0]['code'] ?? null) === 'negative_keywords_unmodeled'
             && is_string($limitations[0]['message'] ?? null) && trim($limitations[0]['message']) !== ''
@@ -302,16 +308,22 @@ class GoogleSearchReachGate
         if ($limitedEstimate) {
             $metadata += ['forecast_limitations' => $limitations, 'negative_keyword_effect_verified' => false];
             $warnings[] = (new AgentIssue('search_reach_negative_keywords_unmodeled',
-                $limitations[0]['message'].($costContainment
+                $limitations[0]['message'].($boundedExpansion
+                    ? ' Only bounded additions within approved ongoing limits are eligible. Actual reach remains unverified until subsequent traffic is measured.'
+                    : ($costContainment
                     ? ' This indicative estimate does not verify remaining reach. Only independently verified protective exact exclusions are eligible; no expansion is authorized.'
-                    : ' Traffic may be lower than this indicative estimate. The negatives were retained; this evidence does not authorize automatic keyword repairs.')))->jsonSerialize();
+                    : ' Traffic may be lower than this indicative estimate. The negatives were retained; this evidence does not authorize automatic keyword repairs.'))))->jsonSerialize();
         }
         if ($costContainment) {
             $metadata += ['cost_containment_only' => true, 'reach_not_verified' => true,
                 'forecast_caveats' => $forecast['caveats'] ?? []];
         }
+        if ($boundedExpansion) {
+            $metadata += ['bounded_expansion' => true, 'reach_not_verified' => true,
+                'forecast_caveats' => $forecast['caveats'] ?? []];
+        }
 
-        return ['ready' => $issues === [], 'status' => $issues === [] ? ($costContainment ? 'cost_containment_only' : ($limitedEstimate ? 'estimated_with_limitations' : 'ready')) : ($unknown ? 'unavailable' : 'blocked'),
+        return ['ready' => $issues === [], 'status' => $issues === [] ? ($boundedExpansion ? 'bounded_expansion' : ($costContainment ? 'cost_containment_only' : ($limitedEstimate ? 'estimated_with_limitations' : 'ready'))) : ($unknown ? 'unavailable' : 'blocked'),
             'issues' => $issues, 'warnings' => $warnings, 'metadata' => $metadata];
     }
 

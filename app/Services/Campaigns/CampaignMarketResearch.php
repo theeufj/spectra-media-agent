@@ -13,7 +13,7 @@ class CampaignMarketResearch
 {
     // Unapproved quotes must be rerun when optimizer semantics change. This
     // version deliberately does not enter durable customer approval hashes.
-    private const RESEARCH_VERSION = 4;
+    private const RESEARCH_VERSION = 5;
 
     public function fingerprint(Campaign $campaign, ?int $requestedDailyBudgetMicros = null): string
     {
@@ -99,7 +99,8 @@ class CampaignMarketResearch
                 }
                 $selected = $this->keywords($inputs['keywords'] ?? []);
                 $row['current_keywords'] = $row['proposed_keywords'] = $selected;
-                $context = [...$account, ...array_diff_key($inputs, ['keywords' => true])];
+                $context = [...$account, ...array_diff_key($inputs, ['keywords' => true]),
+                    ...$this->discoveryLimits($campaign, $strategy, $selected, $budget)];
                 $business = $this->businessResearch($campaign, $strategy, $context, $selected);
                 $row['evidence']['business_research'] = $business;
                 $row['evidence']['input_context'] = $context;
@@ -268,6 +269,15 @@ class CampaignMarketResearch
             return $row;
         }
         $cap = $cap === null ? null : (int) $cap;
+        if ($limits = CampaignSpendGuardrails::automationLimits($campaign)) {
+            $approvedCap = $limits['max_cpc_bid_micros'] ?? null;
+            if (! is_int($approvedCap) || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $approvedCap)) {
+                $row['reasons'][] = 'The approved ongoing CPC limit could not be verified. Review it before researching replacement keywords.';
+
+                return $row;
+            }
+            $cap = min($cap ?? $approvedCap, $approvedCap);
+        }
         $keywordCap = null;
         foreach ($selected as $keyword) {
             $limit = $keyword['cpc_bid_micros'] ?? null;
@@ -328,30 +338,41 @@ class CampaignMarketResearch
                 $candidates[] = ['set' => $set, 'budget' => $budget, 'estimate' => $estimate];
             }
         }
-        // Recover ordinary buying vocabulary before recommending more spend,
-        // even if discovery produced several niche terms. Every set competes
-        // at the current budget first; higher-budget fallbacks remain intact.
-        if ($candidates === [] && ! array_key_exists('keyword_sets', $business) && ($business['discovery']['category_recovery_attempted'] ?? null) === false) {
+        // A tiny positive estimate is not useful reach. Exhaust one bounded,
+        // cost-aware new-theme pass before settling on limited traffic or a
+        // higher-budget comparison, even when the first profiles contain many terms.
+        if (! $this->hasUsefulForecast($candidates) && ($business['discovery']['affordable_recovery_attempted'] ?? false) !== true) {
+            $recoveryContext = [...$context, 'daily_budget_micros' => $budget,
+                'max_cpc_bid_micros' => $cap ?? ($context['max_cpc_bid_micros'] ?? null),
+                'failed_candidates' => array_map(fn ($tested) => ['kind' => $tested['kind'],
+                    'keywords' => array_column($tested['keywords'], 'text')], array_values($testedSets)),
+                'failed_forecasts' => array_map(fn ($tested) => ['kind' => $tested['kind'],
+                    'observations' => array_map(fn ($trial) => ['budget_micros' => $trial['budget_micros'],
+                        'ready' => $trial['result']['ready'] ?? false,
+                        'forecast' => $trial['result']['evidence']['forecast'] ?? null], $tested['budgets'])], array_values($testedSets))];
             try {
-                $recovery = $this->businessResearchRecovery($campaign, $strategy, $context, $selected);
+                $recovery = $this->businessResearchRecovery($campaign, $strategy, $recoveryContext, $selected);
             } catch (\Throwable $e) {
                 report($e);
                 $recovery = ['keywords' => [], 'status' => 'unavailable',
-                    'reason' => 'Additional category research was unavailable; the original tested choices were retained.'];
+                    'reason' => 'Additional affordable-theme research was unavailable; the original tested choices were retained.'];
             }
             $row['evidence']['business_recovery'] = $recovery;
-            $recovered = $this->keywords($recovery['keywords'] ?? [], true);
-            if ($keywordCap !== null) {
-                $recovered = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $keywordCap]), $recovered);
-            }
-            if ($recovered !== [] && ! in_array($recovered, $sets, true)) {
-                $sets[] = $recovered;
-                $setKinds[] = 'category_recovery';
-                $set = array_key_last($sets);
-                $estimate = $planner->estimate($campaign, $recovered, $context, $budget, $cap);
-                $testedSets[$set] = ['kind' => $setKinds[$set], 'keywords' => $recovered, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
-                if (($estimate['ready'] ?? false) === true) {
-                    $candidates[] = ['set' => $set, 'budget' => $budget, 'estimate' => $estimate];
+            $recoverySets = ['affordable_recovery' => $this->keywords($recovery['keywords'] ?? [], true),
+                'affordable_cost_recovery' => $this->keywords(array_slice($recovery['cost_candidates'] ?? [], 0, 6), true)];
+            foreach ($recoverySets as $kind => $recovered) {
+                if ($keywordCap !== null) {
+                    $recovered = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $keywordCap]), $recovered);
+                }
+                if ($recovered !== [] && ! in_array($recovered, $sets, true)) {
+                    $sets[] = $recovered;
+                    $setKinds[] = $kind;
+                    $set = array_key_last($sets);
+                    $estimate = $planner->estimate($campaign, $recovered, $context, $budget, $cap);
+                    $testedSets[$set] = ['kind' => $setKinds[$set], 'keywords' => $recovered, 'budgets' => [['budget_micros' => $budget, 'result' => $estimate]]];
+                    if (($estimate['ready'] ?? false) === true) {
+                        $candidates[] = ['set' => $set, 'budget' => $budget, 'estimate' => $estimate];
+                    }
                 }
             }
         }
@@ -405,7 +426,47 @@ class CampaignMarketResearch
 
     protected function businessResearchRecovery(Campaign $campaign, Strategy $strategy, array $context, array $selected): array
     {
-        return app(CampaignKeywordResearch::class, ['customer' => $campaign->customer])->discover($campaign, $strategy, $context, $selected, true);
+        return app(CampaignKeywordResearch::class, ['customer' => $campaign->customer])->discoverAffordableAlternatives($campaign, $strategy, $context, $selected);
+    }
+
+    private function hasUsefulForecast(array $candidates): bool
+    {
+        foreach ($candidates as $candidate) {
+            $forecast = $candidate['estimate']['evidence']['forecast'] ?? null;
+            if (is_array($forecast) && InitialSearchBidPlanner::trafficEvidence($forecast)['meets_traffic_threshold']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Supply research with its actual cost bounds, not an invitation to invent a higher budget. */
+    private function discoveryLimits(Campaign $campaign, Strategy $strategy, array $selected, int $budget): array
+    {
+        $values = [$strategy->bidding_strategy['parameters']['cpcBidCeilingMicros'] ?? $strategy->bidding_strategy['cpc_bid_ceiling_micros'] ?? null];
+        foreach ($selected as $keyword) {
+            if (($keyword['cpc_bid_micros'] ?? null) !== null && $keyword['cpc_bid_micros'] !== 0 && $keyword['cpc_bid_micros'] !== '0') {
+                $values[] = $keyword['cpc_bid_micros'];
+            }
+        }
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        if ($limits) {
+            $values[] = $limits['max_cpc_bid_micros'] ?? 'unverified';
+        }
+        $caps = [];
+        foreach ($values as $value) {
+            if ($value === null) {
+                continue;
+            }
+            if ((! is_int($value) && (! is_string($value) || ! preg_match('/^\d{1,16}$/D', $value))) || (int) $value <= 0) {
+                return ['daily_budget_micros' => $budget, 'max_cpc_bid_micros' => null];
+            }
+            $caps[] = (int) $value;
+        }
+        $cap = $caps === [] ? intdiv($budget, max(1, (int) config('optimization.search_cost_protection.min_clicks_per_day', 5))) : min($caps);
+
+        return ['daily_budget_micros' => $budget, 'max_cpc_bid_micros' => min($budget, $cap)];
     }
 
     protected function bidPlanner(): InitialSearchBidPlanner

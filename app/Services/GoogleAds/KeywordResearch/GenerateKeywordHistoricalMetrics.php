@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V26\Common\HistoricalMetricsOptions;
 use Google\Ads\GoogleAds\V26\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
 use Google\Ads\GoogleAds\V26\Services\GenerateKeywordHistoricalMetricsRequest;
 
@@ -22,6 +23,7 @@ class GenerateKeywordHistoricalMetrics extends BaseGoogleAdsService
             'keywords' => array_slice($texts, 0, 100),
             'geo_target_constants' => $geoTargets,
             'keyword_plan_network' => KeywordPlanNetwork::GOOGLE_SEARCH,
+            'historical_metrics_options' => new HistoricalMetricsOptions(['include_average_cpc' => true]),
         ]);
         if ($language) {
             $request->setLanguage($language);
@@ -37,6 +39,7 @@ class GenerateKeywordHistoricalMetrics extends BaseGoogleAdsService
                 'avg_monthly_searches' => $metrics?->hasAvgMonthlySearches() ? $metrics->getAvgMonthlySearches() : null,
                 'low_top_of_page_bid_micros' => $metrics?->hasLowTopOfPageBidMicros() ? $metrics->getLowTopOfPageBidMicros() : null,
                 'high_top_of_page_bid_micros' => $metrics?->hasHighTopOfPageBidMicros() ? $metrics->getHighTopOfPageBidMicros() : null,
+                'average_cpc_micros' => $metrics?->hasAverageCpcMicros() ? $metrics->getAverageCpcMicros() : null,
             ];
             foreach ([$result->getText(), ...iterator_to_array($result->getCloseVariants())] as $text) {
                 $rows[mb_strtolower(trim($text))] = $entry;
