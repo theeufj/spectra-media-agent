@@ -87,6 +87,13 @@ return [
         ],
     ],
 
+    'search_cost_protection' => [
+        // Spread a new test across several clicks instead of bidding the whole day on one.
+        'min_clicks_per_day' => 5,
+        'min_observed_clicks' => 1,
+        'mining_cooldown_hours' => 24,
+    ],
+
     'search_terms' => [
         'min_impressions' => 300,
         'min_clicks' => 5,
@@ -95,6 +102,9 @@ return [
         'negative_ctr_threshold' => 0.002,
         'negative_min_impressions' => 500,
         'negative_match_type' => 'PHRASE',
+        'negative_daily_budget_fraction' => 0.5,
+        'conversion_lag_days' => 2,
+        'negative_min_clicks' => 2,
     ],
 
     'quality_score' => [

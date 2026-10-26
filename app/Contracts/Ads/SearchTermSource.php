@@ -20,8 +20,15 @@ interface SearchTermSource
      *     impressions: int,
      *     clicks: int,
      *     cost: float,
+     *     cost_micros?: int|string,
      *     conversions: float,
+     *     all_conversions?: float,
      *     ctr: float,
+     *     matured?: bool,
+     *     account_timezone?: string,
+     *     reported_from?: string,
+     *     reported_through?: string,
+     *     matured_through?: string,
      *     campaign_resource_name?: string,
      *     ad_group_resource_name?: string
      * }>

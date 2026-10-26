@@ -72,7 +72,8 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
     {
         $guard = $this->createMock(GoogleSearchMutationGuard::class);
         $call = 0;
-        $guard->expects($this->exactly($recheckNegatives ? 2 : 1))->method('assess')->willReturnCallback(function ($actual, array $proposals) use ($campaign, $ready, $changes, $action, &$call): array {
+        $method = $action === 'negative' && ! $recheckNegatives ? 'assessCostExclusions' : 'assess';
+        $guard->expects($this->exactly($recheckNegatives ? 2 : 1))->method($method)->willReturnCallback(function ($actual, array $proposals) use ($campaign, $ready, $changes, $action, &$call): array {
             $this->assertSame($campaign->id, $actual->id);
             if (++$call > 1) {
                 $this->assertSame(['negative'], array_column($proposals, 'action'), 'Exclusions must be checked against the actual installed replacement portfolio.');
@@ -94,14 +95,15 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
 
     private function terms(): array
     {
-        return [
-            ['search_term' => 'google ads management software', 'impressions' => 1000, 'clicks' => 70,
-                'cost' => 10.0, 'conversions' => 12.0, 'ctr' => 0.07, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
-            ['search_term' => 'affordable google ads management', 'impressions' => 1000, 'clicks' => 80,
-                'cost' => 10.0, 'conversions' => 6.0, 'ctr' => 0.08, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
-            ['search_term' => 'free enterprise consulting jobs', 'impressions' => 1000, 'clicks' => 20,
-                'cost' => 100.0, 'conversions' => 0.0, 'ctr' => 0.02, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
-        ];
+        return array_map(fn ($term) => $term + ['matured' => true, 'account_timezone' => 'Australia/Sydney',
+            'matured_through' => now('Australia/Sydney')->startOfDay()->subDays(3)->toDateString()], [
+                ['search_term' => 'google ads management software', 'impressions' => 1000, 'clicks' => 70,
+                    'cost' => 10.0, 'conversions' => 12.0, 'ctr' => 0.07, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
+                ['search_term' => 'affordable google ads management', 'impressions' => 1000, 'clicks' => 80,
+                    'cost' => 10.0, 'conversions' => 6.0, 'ctr' => 0.08, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
+                ['search_term' => 'free enterprise consulting jobs', 'impressions' => 1000, 'clicks' => 20,
+                    'cost' => 100.0, 'conversions' => 0.0, 'ctr' => 0.02, 'ad_group_resource_name' => 'customers/1234567890/adGroups/7'],
+            ]);
     }
 
     public function test_mining_defers_additions_and_exclusions_without_verified_remaining_affordable_reach(): void
@@ -129,6 +131,146 @@ class AutomaticSearchKeywordReachGuardTest extends TestCase
 
         $this->assertCount(2, $result['keywords_added']);
         $this->assertSame([KeywordMatchType::EXACT, KeywordMatchType::PHRASE], array_column($factory->mutator->writes, 'match_type'));
+    }
+
+    public function test_sparse_matured_spend_uses_the_confirmed_budget_threshold_and_exact_exclusions_after_reach_verification(): void
+    {
+        $campaign = $this->campaign(['approved_daily_budget' => '50.00', 'daily_budget' => '50.00']);
+        $term = array_replace($this->terms()[2], ['impressions' => 20, 'clicks' => 2, 'cost' => 30.0, 'ctr' => 0.1]);
+        $this->guard($campaign, true, 1, 'negative');
+        $factory = new SearchKeywordGuardFactory([$term]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(1, $result['negatives_added']);
+        $this->assertSame(KeywordMatchType::EXACT, $factory->mutator->writes[0]['match_type']);
+    }
+
+    public function test_zero_cost_low_ctr_query_does_not_block_a_proven_cost_exclusion_batch(): void
+    {
+        $campaign = $this->campaign(['approved_daily_budget' => '50.00', 'daily_budget' => '50.00']);
+        $expensive = array_replace($this->terms()[2], ['impressions' => 20, 'clicks' => 2, 'cost' => 30.0, 'ctr' => 0.1]);
+        $lowCtr = array_replace($this->terms()[2], ['search_term' => 'what are local ads',
+            'impressions' => 600, 'clicks' => 0, 'cost' => 0.0, 'ctr' => 0.0]);
+        $this->guard($campaign, true, 1, 'negative');
+        $factory = new SearchKeywordGuardFactory([$expensive, $lowCtr]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(1, $result['negatives_added']);
+        $this->assertSame('free enterprise consulting jobs', $factory->mutator->writes[0]['text']);
+        $this->assertSame('what are local ads', $result['review_candidates'][0]['search_term']);
+        $this->assertArrayNotHasKey('requires_review', $result);
+    }
+
+    public function test_new_conversion_in_another_group_protects_the_same_search_text_from_campaign_wide_exclusion(): void
+    {
+        $campaign = $this->campaign();
+        $waste = $this->terms()[2];
+        $newConversion = array_replace($waste, ['impressions' => 1, 'clicks' => 1, 'cost' => 1,
+            'conversions' => 0.5, 'ad_group_resource_name' => 'customers/1234567890/adGroups/8']);
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->never())->method('assess');
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$waste, $newConversion], [$waste]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame([], $factory->mutator->writes);
+    }
+
+    public function test_secondary_conversion_today_protects_older_zero_conversion_spend(): void
+    {
+        $campaign = $this->campaign();
+        $matured = $this->terms()[2];
+        $recent = array_replace($matured, ['all_conversions' => 1]);
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->never())->method('assess');
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$recent], [$matured]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame([], $factory->mutator->writes);
+    }
+
+    public function test_recent_expensive_traffic_without_matured_evidence_cannot_create_negative_proposals(): void
+    {
+        $campaign = $this->campaign();
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->never())->method('assess');
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$this->terms()[2]], []);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame([], $factory->mutator->writes);
+    }
+
+    public function test_a_repeated_mining_run_does_not_resend_a_verified_campaign_exclusion(): void
+    {
+        $campaign = $this->campaign();
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->once())->method('assessCostExclusions')->willReturn(['ready' => true,
+            'observed_snapshot' => ['negative_keywords' => [['scope' => 'campaign',
+                'text' => 'FREE ENTERPRISE CONSULTING JOBS', 'match_type' => 'EXACT']]]]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$this->terms()[2]]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame([], $factory->mutator->writes);
+        $this->assertArrayNotHasKey('requires_review', $result);
+    }
+
+    public function test_a_negative_in_a_different_group_does_not_hide_a_campaign_exclusion_proposal(): void
+    {
+        $campaign = $this->campaign();
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->once())->method('assessCostExclusions')->willReturn(['ready' => true,
+            'observed_snapshot' => ['negative_keywords' => [['scope' => 'ad_group',
+                'ad_group_resource' => 'customers/1234567890/adGroups/8',
+                'text' => 'free enterprise consulting jobs', 'match_type' => 'EXACT']]]]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$this->terms()[2]]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(1, $result['negatives_added']);
+        $this->assertCount(1, $factory->mutator->writes);
+    }
+
+    public function test_an_existing_campaign_phrase_exclusion_already_covers_its_observed_exact_query(): void
+    {
+        $campaign = $this->campaign();
+        $guard = $this->createMock(GoogleSearchMutationGuard::class);
+        $guard->expects($this->once())->method('assessCostExclusions')->willReturn(['ready' => true,
+            'observed_snapshot' => ['negative_keywords' => [['scope' => 'campaign',
+                'text' => 'enterprise consulting', 'match_type' => 'PHRASE']]]]);
+        $this->app->instance(GoogleSearchMutationGuard::class, $guard);
+        $factory = new SearchKeywordGuardFactory([$this->terms()[2]]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertSame([], $result['negatives_added']);
+        $this->assertSame([], $factory->mutator->writes);
+        $this->assertArrayNotHasKey('requires_review', $result);
+    }
+
+    public function test_one_converted_query_is_promoted_as_exact_instead_of_broad(): void
+    {
+        $campaign = $this->campaign();
+        $this->guard($campaign, true, 1);
+        $factory = new SearchKeywordGuardFactory([array_replace($this->terms()[0], ['conversions' => 1])]);
+
+        $result = (new SearchTermMiningAgent($factory))->mine($campaign);
+
+        $this->assertCount(1, $result['keywords_added']);
+        $this->assertSame(KeywordMatchType::EXACT, $factory->mutator->writes[0]['match_type']);
     }
 
     public function test_mining_safety_negatives_can_proceed_when_remaining_traffic_is_verified(): void
@@ -587,20 +729,20 @@ class SearchKeywordGuardFactory extends CustomerRoutedAdsServiceFactory
 {
     public SearchKeywordGuardMutator $mutator;
 
-    public function __construct(private array $terms)
+    public function __construct(private array $terms, private ?array $maturedTerms = null)
     {
         $this->mutator = new SearchKeywordGuardMutator;
     }
 
     public function searchTerms(Customer $customer): SearchTermSource
     {
-        return new class($this->terms) implements SearchTermSource
+        return new class($this->terms, $this->maturedTerms) implements SearchTermSource
         {
-            public function __construct(private array $terms) {}
+            public function __construct(private array $terms, private ?array $maturedTerms) {}
 
             public function __invoke(string $customerId, string $campaignResourceName, string $dateRange = 'LAST_30_DAYS'): array
             {
-                return $this->terms;
+                return $dateRange === 'MATURED_LAST_30_DAYS' ? ($this->maturedTerms ?? $this->terms) : $this->terms;
             }
         };
     }

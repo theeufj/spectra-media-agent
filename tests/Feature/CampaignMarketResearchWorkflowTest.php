@@ -103,8 +103,109 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertSame(3_000_000, $this->strategy->fresh()->bidding_strategy['parameters']['cpcBidCeilingMicros']);
         $this->assertSame(2_000_000, $this->strategy->fresh()->bidding_strategy['parameters']['initialCpcBidMicros']);
         $this->assertSame('ManualCpc', $this->strategy->fresh()->bidding_strategy['name']);
+        $limits = $this->campaign->fresh()->spend_guardrails['automation_limits'];
+        $this->assertTrue($limits['enabled']);
+        $this->assertSame(10_000_000, $limits['max_daily_budget_micros']);
+        $this->assertSame(2_000_000, $limits['max_cpc_bid_micros']);
+        $this->assertSame(strtoupper($this->customer->currency_code), $limits['currency_code']);
+        $this->assertSame('approved_market_research', $limits['source']);
+        $this->assertNotEmpty($limits['approved_at']);
         $this->workflow->assertApproved($this->campaign);
         $this->assertTrue($this->workflow->status($this->campaign)['approved']);
+    }
+
+    public function test_new_search_approval_retains_the_largest_reviewed_bid_and_total_budget_without_erasing_other_guardrails(): void
+    {
+        $this->campaign->update(['spend_guardrails' => ['operator_note' => 'preserve']]);
+        $second = Strategy::factory()->create(['campaign_id' => $this->campaign->id, 'platform' => 'Google Ads',
+            'campaign_type' => 'search', 'daily_budget' => '5.00', 'bidding_strategy' => []]);
+        $this->proposal['proposed_daily_budget_micros'] = 15_000_000;
+        $this->proposal['strategies'][] = [...$this->proposal['strategies'][0], 'strategy_id' => $second->id,
+            'budget_micros' => 5_000_000, 'cpc_bid_micros' => 1_000_000];
+        $status = $this->researched();
+
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '15.00',
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
+            'accept_proposal' => true])->assertSessionHasNoErrors();
+
+        $guardrails = $this->campaign->fresh()->spend_guardrails;
+        $this->assertSame('preserve', $guardrails['operator_note']);
+        $this->assertSame(15_000_000, $guardrails['automation_limits']['max_daily_budget_micros']);
+        $this->assertSame(2_000_000, $guardrails['automation_limits']['max_cpc_bid_micros']);
+        $this->assertSame(1_000_000, $second->fresh()->bidding_strategy['parameters']['initialCpcBidMicros']);
+    }
+
+    public function test_a_new_draft_approval_cannot_raise_existing_automation_limits_or_replace_their_provenance(): void
+    {
+        $this->customer->update(['currency_code' => 'AUD']);
+        $existing = ['enabled' => true, 'max_daily_budget_micros' => 7_000_000, 'max_cpc_bid_micros' => 1_000_000,
+            'currency_code' => 'AUD', 'approved_at' => now()->subDay()->toIso8601String(), 'source' => 'owner_repair',
+            'operator_note' => 'keep this approval'];
+        $this->campaign->update(['spend_guardrails' => ['automation_limits' => $existing, 'operator_note' => 'preserve']]);
+        $status = $this->researched();
+
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00',
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
+            'accept_proposal' => true])->assertSessionHasNoErrors();
+
+        $actual = $this->campaign->fresh()->spend_guardrails['automation_limits'];
+        ksort($existing);
+        ksort($actual);
+        $this->assertSame($existing, $actual);
+        $this->assertSame('preserve', $this->campaign->fresh()->spend_guardrails['operator_note']);
+    }
+
+    public function test_draft_approval_preserves_a_disabled_profile_or_fixed_trial_instead_of_enabling_management(): void
+    {
+        foreach ([['automation_limits' => ['enabled' => false, 'operator_note' => 'owner disabled']],
+            ['enabled' => true, 'max_daily_budget_micros' => 5_000_000, 'max_cpc_bid_micros' => 500_000]] as $guardrails) {
+            $this->campaign->update(['spend_guardrails' => $guardrails]);
+            $status = $this->researched();
+            $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00',
+                'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
+                'accept_proposal' => true])->assertSessionHasNoErrors();
+            $actual = $this->campaign->fresh()->spend_guardrails;
+            ksort($guardrails);
+            ksort($actual);
+            $this->assertSame($guardrails, $actual);
+        }
+    }
+
+    public function test_a_mixed_existing_and_new_search_approval_does_not_rewrite_existing_campaign_limits(): void
+    {
+        $this->campaign->update(['keywords' => null, 'spend_guardrails' => ['operator_note' => 'existing campaign review']]);
+        $this->strategy->recordGoogleCampaignId('customers/123/campaigns/61');
+        $second = Strategy::factory()->create(['campaign_id' => $this->campaign->id, 'platform' => 'Google Ads',
+            'campaign_type' => 'search', 'daily_budget' => '5.00', 'bidding_strategy' => []]);
+        $newRow = [...$this->proposal['strategies'][0], 'strategy_id' => $second->id,
+            'budget_micros' => 5_000_000, 'cpc_bid_micros' => 1_000_000];
+        $oldKeywords = [['text' => 'old keyword', 'match_type' => 'EXACT']];
+        $this->proposal['strategies'] = [[...$this->proposal['strategies'][0], 'status' => 'preserved',
+            'budget_micros' => 5_000_000, 'cpc_bid_micros' => null, 'forecast' => null,
+            'current_keywords' => $oldKeywords, 'proposed_keywords' => $oldKeywords], $newRow];
+        $status = $this->researched();
+
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00',
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
+            'accept_proposal' => true])->assertSessionHasNoErrors();
+
+        $this->assertSame(['operator_note' => 'existing campaign review'], $this->campaign->fresh()->spend_guardrails);
+        $this->assertSame('customers/123/campaigns/61', $this->strategy->fresh()->reusableGoogleCampaignId());
+        $this->assertSame(1_000_000, $second->fresh()->bidding_strategy['parameters']['initialCpcBidMicros']);
+    }
+
+    public function test_a_non_search_draft_approval_does_not_invent_a_google_keyword_bid_limit(): void
+    {
+        $this->strategy->update(['platform' => 'Facebook Ads', 'campaign_type' => 'display']);
+        $this->proposal['strategies'][0] = [...$this->proposal['strategies'][0], 'platform' => 'Facebook Ads',
+            'channel' => 'display', 'cpc_bid_micros' => null];
+        $status = $this->researched();
+
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00',
+            'research_id' => $status['request_id'], 'research_fingerprint' => $status['input_fingerprint'],
+            'accept_proposal' => true])->assertSessionHasNoErrors();
+
+        $this->assertNull($this->campaign->fresh()->spend_guardrails);
     }
 
     private function researchedOptions(array $bids = [2_000_000, 2_000_000, 2_000_000], ?int $reference = null): array

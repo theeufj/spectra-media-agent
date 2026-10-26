@@ -43,6 +43,13 @@ class GoogleSearchReachRecovery
             if (! $campaign->customer?->google_ads_customer_id || ! $campaign->googleCampaignNumericId()) {
                 throw new \RuntimeException('The Google customer or campaign identifier is unavailable.');
             }
+            // A partial mining batch may change the settings fingerprint itself.
+            // That change must never erase its unresolved verification journal.
+            if (! empty($previous['verification']['errors'])
+                || (! empty($previous['cost_protection']['mutation_started_at']) && empty($previous['cost_protection']['verified_at']))) {
+                return $this->save($campaign, [...$state, 'status' => 'needs_review',
+                    'blocked_reason' => ! empty($previous['verification']['errors']) ? 'partial_repair_unresolved' : 'cost_reduction_outcome_unverified']);
+            }
             if (! $campaign->strategies()->where('campaign_type', 'search')
                 ->whereIn('deployment_status', ['active', 'verified', 'deployed'])->exists()) {
                 return $this->save($campaign, [...$state, 'status' => 'paused', 'blocked_reason' => 'not_deployed_search_campaign']);

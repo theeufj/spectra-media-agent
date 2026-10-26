@@ -180,6 +180,8 @@ class CampaignMarketResearchWorkflow
             throw ValidationException::withMessages(['daily_budget' => 'The campaign strategy selection changed. Research the current selection before approval.']);
         }
         $search = $strategies->filter(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google') && $strategy->campaign_type === 'search');
+        $hasExistingFootprint = $strategies->contains(fn ($strategy) => $strategy->hasDeploymentFootprint() || $strategy->reusableGoogleCampaignId() !== null);
+        $reviewedSearchCaps = [];
         if ($search->count() > 1 && ! empty($campaign->keywords)
             && $search->contains(fn ($strategy) => $this->keywordSelection($campaign->keywords) !== $this->keywordSelection($rows->get($strategy->id)['proposed_keywords'] ?? []))) {
             if ($search->contains(fn ($strategy) => $strategy->hasDeploymentFootprint() || $strategy->reusableGoogleCampaignId() !== null)) {
@@ -233,6 +235,7 @@ class CampaignMarketResearchWorkflow
                         $bidding['parameters']['cpcBidCeilingMicros'] = $cap;
                     }
                     $bidding['parameters']['initialCpcBidMicros'] = $cap;
+                    $reviewedSearchCaps[] = $cap;
                 } else {
                     throw ValidationException::withMessages(['daily_budget' => 'The researched initial Search bid is missing.']);
                 }
@@ -250,9 +253,43 @@ class CampaignMarketResearchWorkflow
             || $total !== CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget)) {
             throw ValidationException::withMessages(['daily_budget' => 'The researched strategy allocations do not match the approved daily budget.']);
         }
+        if ($reviewedSearchCaps !== [] && ! $hasExistingFootprint && ! CampaignSpendGuardrails::activeTrial($campaign)) {
+            $this->retainApprovedAutomationLimits($campaign, $total, max($reviewedSearchCaps));
+        }
         $this->write($campaign, [...$this->stored($campaign), 'result' => $proposal, 'approved_at' => now()->toIso8601String(),
             'approved_request_id' => $this->stored($campaign)['request_id'],
             'approved_fingerprint' => $this->research->approvalFingerprint($campaign->fresh())]);
+    }
+
+    private function retainApprovedAutomationLimits(Campaign $campaign, int $dailyBudgetMicros, int $cpcMicros): void
+    {
+        $guardrails = $campaign->spend_guardrails ?? [];
+        $existing = $guardrails['automation_limits'] ?? null;
+        if ($existing !== null) {
+            // A disabled profile is an explicit management choice. An invalid
+            // enabled one needs review, never replacement with looser defaults.
+            if (! is_array($existing) || ($existing['enabled'] ?? false) !== true) {
+                return;
+            }
+            if (! is_int($existing['max_cpc_bid_micros'] ?? null)
+                || ! is_int($existing['max_daily_budget_micros'] ?? null)
+                || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $existing['max_cpc_bid_micros'])) {
+                throw ValidationException::withMessages(['daily_budget' => 'Review the existing automation spending limits before accepting a new campaign proposal.']);
+            }
+            $limits = [...$existing,
+                'max_daily_budget_micros' => min($dailyBudgetMicros, $existing['max_daily_budget_micros']),
+                'max_cpc_bid_micros' => min($cpcMicros, $existing['max_cpc_bid_micros']),
+            ];
+        } else {
+            $currency = strtoupper((string) $campaign->customer?->currency_code);
+            if (! preg_match('/^[A-Z]{3}$/', $currency)) {
+                throw ValidationException::withMessages(['daily_budget' => 'The account currency must be verified before retaining approved spending limits.']);
+            }
+            $limits = ['enabled' => true, 'max_daily_budget_micros' => $dailyBudgetMicros,
+                'max_cpc_bid_micros' => $cpcMicros, 'currency_code' => $currency,
+                'approved_at' => now()->toIso8601String(), 'source' => 'approved_market_research'];
+        }
+        $campaign->update(['spend_guardrails' => [...$guardrails, 'automation_limits' => $limits]]);
     }
 
     public function assertApproved(Campaign $campaign): void

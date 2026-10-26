@@ -22,12 +22,12 @@ class InitialSearchBidEstimateTest extends TestCase
         $forecast = $this->createMock(GenerateKeywordForecast::class);
         $forecast->expects($this->exactly(3))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) {
             $this->assertSame('1234567890', $id);
-            $this->assertLessThanOrEqual(1_250_000, $context['cpc_bid_ceiling_micros']);
+            $this->assertLessThanOrEqual(1_000_000, $context['cpc_bid_ceiling_micros']);
             $this->assertSame(5_000_000, $context['daily_budget_micros']);
             $this->assertArrayNotHasKey('ad_group_resource', $keywords[0]);
             $this->assertArrayNotHasKey('campaign_resource', $context);
 
-            $credible = $context['cpc_bid_ceiling_micros'] === 1_250_000;
+            $credible = $context['cpc_bid_ceiling_micros'] === 1_000_000;
 
             return ['success' => true, 'clicks' => $credible ? 40 : 5, 'cost_micros' => $credible ? 20_000_000 : 10_000, 'period_days' => $days,
                 'context' => $context + ['keywords' => $keywords], 'caveats' => [],
@@ -38,7 +38,7 @@ class InitialSearchBidEstimateTest extends TestCase
         $result = $this->planner($historical, $forecast)->estimate($campaign, $this->keywords(), $context, 5_000_000);
 
         $this->assertTrue($result['ready'], json_encode($result));
-        $this->assertSame([1_250_000, 620_000, 930_000], array_column($result['evidence']['candidates'], 'cpc_bid_micros'));
+        $this->assertSame([1_000_000, 500_000, 750_000], array_column($result['evidence']['candidates'], 'cpc_bid_micros'));
         $this->assertTrue($result['evidence']['proposal_only']);
         $this->assertFalse($result['activation_ready']);
         $this->assertNull($campaign->approved_daily_budget);

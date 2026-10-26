@@ -32,7 +32,7 @@ class InitialSearchBidPlannerTest extends TestCase
             ->willReturn($this->historical());
         $forecast = $this->createMock(GenerateKeywordForecast::class);
         $bids = [];
-        $forecast->expects($this->exactly(6))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
+        $forecast->expects($this->exactly(4))->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$bids, $snapshot) {
             $this->assertSame('1234567890', $id);
             $this->assertSame(['PHRASE', 'EXACT'], array_column($keywords, 'match_type'));
             $this->assertSame($snapshot['negative_keywords'], $context['negative_keywords']);
@@ -51,7 +51,8 @@ class InitialSearchBidPlannerTest extends TestCase
         $result = $this->planner($historical, $forecast)->plan($this->campaign(), $snapshot);
 
         $this->assertTrue($result['ready'], json_encode($result));
-        $this->assertSame([500_000, 1_000_000, 2_000_000, 3_000_000, 750_000, 620_000], $bids);
+        $this->assertSame([500_000, 1_000_000, 750_000, 620_000], $bids);
+        $this->assertSame(1_000_000, $result['evidence']['max_cpc_bid_micros']);
         $this->assertSame(620_000, $result['cpc_bid_micros']);
         $this->assertFalse($result['activation_ready']);
         $this->assertFalse($result['auto_repair_safe']);
@@ -67,6 +68,62 @@ class InitialSearchBidPlannerTest extends TestCase
         $this->assertTrue($result['ready']);
         $this->assertSame(120_000, $result['cpc_bid_micros']);
         $this->assertGreaterThan(10_000, $result['cpc_bid_micros']);
+    }
+
+    public function test_an_unbounded_initial_bid_keeps_room_for_five_clicks_in_the_daily_allocation(): void
+    {
+        $campaign = $this->campaign()->forceFill(['approved_daily_budget' => '50.00']);
+        $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 50_000_000,
+            'authorized_daily_budget_micros' => 50_000_000, 'approved_cpc_ceiling_micros' => null];
+        $historical = $this->createMock(GenerateKeywordHistoricalMetrics::class);
+        $historical->method('__invoke')->willReturn(['success' => true, 'keywords' => [
+            'paid search agency' => ['low_top_of_page_bid_micros' => 40_000_000],
+            'advertising agency' => ['low_top_of_page_bid_micros' => 50_000_000],
+        ]]);
+        $forecast = $this->createMock(GenerateKeywordForecast::class);
+        $observed = [];
+        $forecast->method('__invoke')->willReturnCallback(function ($id, $keywords, $maxCpc, $rate, $days, $context) use (&$observed) {
+            $observed[] = $context['cpc_bid_ceiling_micros'];
+            $this->assertLessThanOrEqual(10_000_000, $context['cpc_bid_ceiling_micros']);
+
+            return $this->forecast($keywords, $context, $days);
+        });
+
+        $result = $this->planner($historical, $forecast)->plan($campaign, $snapshot);
+
+        $this->assertTrue($result['ready']);
+        $this->assertSame(10_000_000, $result['evidence']['max_cpc_bid_micros']);
+        $this->assertSame(10_000_000, max($observed));
+        $this->assertSame('50.00', $campaign->approved_daily_budget);
+    }
+
+    public function test_an_explicit_owner_ceiling_is_retained_instead_of_silently_replaced_by_the_default_policy(): void
+    {
+        $campaign = $this->campaign()->forceFill(['approved_daily_budget' => '50.00']);
+        $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 50_000_000,
+            'authorized_daily_budget_micros' => 50_000_000, 'approved_cpc_ceiling_micros' => 30_000_000];
+
+        $result = $this->withEstimates()->plan($campaign, $snapshot);
+
+        $this->assertTrue($result['ready']);
+        $this->assertSame(30_000_000, $result['evidence']['max_cpc_bid_micros']);
+        $this->assertSame(30_000_000, $result['evidence']['snapshot']['approved_cpc_ceiling_micros']);
+    }
+
+    public function test_retained_automation_limits_bound_initial_bids_without_suspending_management(): void
+    {
+        $campaign = $this->campaign()->forceFill(['spend_guardrails' => ['automation_limits' => [
+            'enabled' => true, 'max_daily_budget_micros' => 5_000_000, 'max_cpc_bid_micros' => 250_000,
+            'currency_code' => 'AUD', 'approved_at' => now()->toIso8601String(), 'source' => 'approved_market_research',
+        ]]]);
+
+        $result = $this->withEstimates()->plan($campaign, $this->snapshot());
+
+        $this->assertTrue($result['ready']);
+        $this->assertSame(250_000, $result['evidence']['max_cpc_bid_micros']);
+        $this->assertLessThanOrEqual(250_000, $result['cpc_bid_micros']);
+        $campaign->forceFill(['spend_guardrails' => ['automation_limits' => ['enabled' => true]]]);
+        $this->assertFalse($this->neverEstimate()->plan($campaign, $this->snapshot())['ready']);
     }
 
     public function test_economic_selection_refines_sparse_historical_bids_for_cheaper_useful_traffic(): void
@@ -88,7 +145,8 @@ class InitialSearchBidPlannerTest extends TestCase
             return [...$this->forecast($keywords, $context, $days, $clicks), 'cost_micros' => $cost];
         });
         $campaign = $this->campaign()->forceFill(['approved_daily_budget' => '62.50', 'start_date' => '2026-10-25', 'end_date' => '2026-10-30']);
-        $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 62_500_000, 'authorized_daily_budget_micros' => 62_500_000];
+        $snapshot = [...$this->snapshot(), 'daily_budget_micros' => 62_500_000, 'authorized_daily_budget_micros' => 62_500_000,
+            'approved_cpc_ceiling_micros' => 62_500_000];
         $result = $this->planner($historical, $forecast)->plan($campaign, $snapshot);
         $this->assertTrue($result['ready']);
         $this->assertSame(9_660_000, $result['cpc_bid_micros']);
@@ -176,7 +234,7 @@ class InitialSearchBidPlannerTest extends TestCase
 
                 return $this->forecast($keywords, $context, $days, 40);
             });
-            $snapshot = [...$this->snapshot(), 'approved_cpc_ceiling_micros' => null];
+            $snapshot = [...$this->snapshot(), 'approved_cpc_ceiling_micros' => 5_000_000];
             $result = $this->planner($historical, $forecast)->plan($this->campaign(), $snapshot);
             $this->assertTrue($result['ready'], json_encode($result));
             $this->assertSame(500_000, $result['cpc_bid_micros']);
@@ -383,7 +441,7 @@ class InitialSearchBidPlannerTest extends TestCase
             'status' => CampaignStatus::PAUSED, 'channel' => AdvertisingChannelType::SEARCH,
             'bidding_strategy' => BiddingStrategyType::MANUAL_CPC, 'account_time_zone_verified' => true,
             'currency_code' => 'AUD', 'time_zone' => 'Australia/Sydney', 'daily_budget_micros' => 5_000_000,
-            'authorized_daily_budget_micros' => 5_000_000, 'geo_target_constants' => ['geoTargetConstants/2036'],
+            'authorized_daily_budget_micros' => 5_000_000, 'approved_cpc_ceiling_micros' => 5_000_000, 'geo_target_constants' => ['geoTargetConstants/2036'],
             'excluded_geo_target_constants' => [], 'language_constants' => ['languageConstants/1000'],
             'negative_keywords' => [], 'ad_schedule' => [], 'device_bid_modifiers' => [],
             'unsupported_targeting' => [], 'search_partners_enabled' => false,

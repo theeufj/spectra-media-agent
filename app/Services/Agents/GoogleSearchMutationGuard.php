@@ -3,12 +3,15 @@
 namespace App\Services\Agents;
 
 use App\Enums\CampaignStatus;
+use App\Features\AutoHealing;
 use App\Models\Campaign;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
+use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Laravel\Pennant\Feature;
 
 /** Demand and affordable reach for the complete proposed Search portfolio, never authorization by itself. */
 class GoogleSearchMutationGuard
@@ -17,16 +20,34 @@ class GoogleSearchMutationGuard
 
     public function assess(Campaign $campaign, array $changes, bool $approvedByUser = false): array
     {
+        return $this->assessChanges($campaign, $changes, $approvedByUser, false);
+    }
+
+    /** Only proven, matured, campaign-level exact exclusions; never additional spend or reach. */
+    public function assessCostExclusions(Campaign $campaign, array $changes): array
+    {
+        return $this->assessChanges($campaign, $changes, false, true);
+    }
+
+    private function assessChanges(Campaign $campaign, array $changes, bool $approvedByUser, bool $costContainment): array
+    {
         try {
             $campaign = $campaign->fresh(['customer']) ?? $campaign;
             if (! $campaign->customer || ! CampaignSpendGuardrails::canEnable($campaign, $approvedByUser) || $campaign->hasPassedEndDate() || $campaign->spend_safety_hold
                 || ! $approvedByUser && ($campaign->customer->service_type !== 'managed' || $campaign->status !== CampaignStatus::Active || CampaignSpendGuardrails::automaticChangesSuspended($campaign))) {
                 return $this->blocked('Campaign changes require review: the campaign is inactive, ended, or under an approved spending hold or trial.');
             }
+            if ($costContainment && ! $this->costExclusionsAuthorized($campaign, $changes)) {
+                return $this->blocked('Protective cost exclusions require an approved automation profile and exact campaign exclusions only.');
+            }
             $snapshot = $this->inspect($campaign);
             if (! $snapshot || ($snapshot['channel'] ?? null) !== 2 || ($snapshot['google_search_enabled'] ?? null) !== true
                 || ($snapshot['approved_ads'] ?? 0) < 1 || ! $approvedByUser && ($snapshot['status'] ?? null) !== 2) {
                 return $this->blocked('Current Google Search settings could not be verified.', 'unavailable');
+            }
+            $costEvidence = $costContainment ? $this->costExclusionEvidence($campaign, $snapshot, $changes) : null;
+            if ($costContainment && $costEvidence === null) {
+                return $this->blocked('Fresh matured spend, zero recent conversion evidence and a nonconflicting exact exclusion could not be verified.');
             }
             if (CampaignSpendGuardrails::activeTrial($campaign)) {
                 $spend = $this->spend($campaign);
@@ -40,7 +61,8 @@ class GoogleSearchMutationGuard
                 return $this->blocked('The proposed changes leave no active Search keywords. Review a replacement portfolio before applying them.');
             }
             $assessment = $this->planner->assessMutation($campaign, $proposed, $keywords);
-            $result = $this->gate->evaluate($campaign, $proposed, $assessment);
+            $result = $costContainment ? $this->gate->evaluateCostContainment($campaign, $proposed, $assessment)
+                : $this->gate->evaluate($campaign, $proposed, $assessment);
 
             if ($result['ready']) {
                 $fresh = $campaign->fresh(['customer']);
@@ -61,15 +83,30 @@ class GoogleSearchMutationGuard
                     || ! $approvedByUser && ($fresh->customer?->service_type !== 'managed' || CampaignSpendGuardrails::automaticChangesSuspended($fresh))) {
                     return $this->blocked('Campaign authorization changed during the final spend verification. Review the current limits before applying the proposal.');
                 }
+                if ($costContainment) {
+                    $costEvidence = $this->costExclusionsAuthorized($fresh, $changes)
+                        ? $this->costExclusionEvidence($fresh, $after, $changes) : null;
+                    $finalSnapshot = $costEvidence !== null ? $this->inspect($fresh) : null;
+                    $fresh = $fresh->fresh(['customer']);
+                    if ($costEvidence === null || ! $fresh || ! $this->costExclusionsAuthorized($fresh, $changes)
+                        || ! $finalSnapshot || $this->fingerprint($after) !== $this->fingerprint($finalSnapshot)) {
+                        return $this->blocked('Protective exclusion evidence or authorization changed during the final verification.');
+                    }
+                    $after = $finalSnapshot;
+                }
                 $proposed = $this->project($fresh, $after, $changes);
                 $snapshot = $after;
-                $result = $this->gate->evaluate($fresh, $proposed, $assessment);
+                $result = $costContainment ? $this->gate->evaluateCostContainment($fresh, $proposed, $assessment)
+                    : $this->gate->evaluate($fresh, $proposed, $assessment);
             }
 
             return ['ready' => $result['ready'], 'status' => $result['status'], 'issues' => $result['issues'],
-                'message' => $result['ready'] ? 'The proposed Search changes have current demand and affordable forecast evidence.'
+                'message' => $result['ready'] ? ($costContainment
+                    ? 'Only the verified protective exact exclusions are eligible. The indicative forecast does not verify remaining reach.'
+                    : 'The proposed Search changes have current demand and affordable forecast evidence.')
                     : AgentIssue::toSentence($result['issues']),
-                'snapshot' => $proposed, 'observed_snapshot' => $snapshot, 'assessment' => $assessment, 'reach_gate' => $result];
+                'snapshot' => $proposed, 'observed_snapshot' => $snapshot, 'assessment' => $assessment, 'reach_gate' => $result,
+                ...($costContainment ? ['cost_containment_only' => true, 'reach_not_verified' => true, 'cost_containment_evidence' => $costEvidence] : [])];
         } catch (\Throwable $e) {
             report($e);
 
@@ -189,6 +226,126 @@ class GoogleSearchMutationGuard
         return GoogleSearchReachGate::settingsFingerprint($snapshot);
     }
 
+    private function costExclusionsAuthorized(Campaign $campaign, array $changes): bool
+    {
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        $customer = $campaign->customer;
+        $cap = $limits['max_cpc_bid_micros'] ?? null;
+        if ($changes === [] || count($changes) > 20 || ! $limits || ! is_int($cap)
+            || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)
+            || $campaign->status !== CampaignStatus::Active || ! $customer || $customer->service_type !== 'managed'
+            || $customer->is_sandbox || $customer->google_ads_link_status === 'revoked'
+            || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign) || $campaign->hasPassedEndDate()
+            || ! Feature::for($customer)->active(AutoHealing::class)
+            || $campaign->googleAdsResourceName() !== 'customers/'.$customer->cleanGoogleCustomerId().'/campaigns/'.$campaign->googleCampaignNumericId()) {
+            return false;
+        }
+        $seen = [];
+        foreach ($changes as $change) {
+            if (! is_array($change) || array_diff(array_keys($change), ['action', 'text', 'match_type', 'scope', 'reason']) !== []
+                || ($change['action'] ?? null) !== 'negative' || ($change['match_type'] ?? null) !== 'EXACT'
+                || ($change['scope'] ?? null) !== 'campaign' || ! is_string($change['text'] ?? null) || trim($change['text']) === '') {
+                return false;
+            }
+            $text = mb_strtolower(trim($change['text']));
+            if (isset($seen[$text])) {
+                return false;
+            }
+            $seen[$text] = true;
+        }
+
+        return true;
+    }
+
+    /** Provider observations, not producer-supplied cost claims, authorize exact cost exclusions. */
+    private function costExclusionEvidence(Campaign $campaign, array $snapshot, array $changes): ?array
+    {
+        $timezone = $snapshot['time_zone'] ?? null;
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        $cap = $snapshot['actual_cpc_ceiling_micros'] ?? null;
+        $budget = $snapshot['daily_budget_micros'] ?? null;
+        if (($snapshot['account_time_zone_verified'] ?? null) !== true || ! is_string($timezone)
+            || ! in_array($timezone, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+            || ($snapshot['currency_code'] ?? null) !== ($limits['currency_code'] ?? null)
+            || ! is_int($budget) || ! CampaignSpendGuardrails::permitsDailyBudget($campaign, $budget)
+            || ! is_int($cap) || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)) {
+            return null;
+        }
+        $newNegatives = array_map(fn ($change) => ['text' => trim($change['text']), 'match_type' => 'EXACT', 'scope' => 'campaign'], $changes);
+        foreach ($snapshot['keywords'] ?? [] as $keyword) {
+            if (($keyword['status'] ?? null) === 'ENABLED' && ($keyword['ad_group_status'] ?? null) === 'ENABLED'
+                && GoogleSearchReachPlanner::negativeConflict($keyword['text'] ?? '', $newNegatives, $keyword['ad_group_resource'] ?? '')) {
+                return null;
+            }
+        }
+        $fallback = CampaignSpendGuardrails::moneyToMicros(config('optimization.search_terms.negative_cost_threshold', 50));
+        $fraction = config('optimization.search_terms.negative_daily_budget_fraction', 0.5);
+        if ($fallback <= 0 || ! is_numeric($fraction) || ! is_finite((float) $fraction) || $fraction <= 0 || $fraction > 1) {
+            return null;
+        }
+        $approved = min($budget, CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget), $limits['max_daily_budget_micros']);
+        $basisPoints = (int) floor((float) $fraction * 10_000);
+        $threshold = max(1, min($fallback, intdiv($approved, 10_000) * $basisPoints + intdiv(($approved % 10_000) * $basisPoints, 10_000)));
+        $today = CarbonImmutable::now($timezone)->startOfDay();
+        $from = $today->subDays(30)->toDateString();
+        $through = $today->subDays(max(1, (int) config('optimization.search_terms.conversion_lag_days', 2)) + 1)->toDateString();
+        $requested = array_fill_keys(array_map(fn ($change) => mb_strtolower(trim($change['text'])), $changes), true);
+        $observations = [];
+        foreach (['LAST_30_DAYS_INCLUDING_TODAY' => false, 'MATURED_LAST_30_DAYS' => true] as $range => $matured) {
+            $seen = [];
+            foreach ($this->searchTermReport($campaign, $range) as $row) {
+                $text = mb_strtolower(trim($row['search_term'] ?? ''));
+                if (! isset($requested[$text])) {
+                    continue;
+                }
+                $group = $row['ad_group_resource_name'] ?? '';
+                if (($row['campaign_resource_name'] ?? null) !== $campaign->googleAdsResourceName()
+                    || ! is_string($group) || ! preg_match('#^customers/'.preg_quote($campaign->customer->cleanGoogleCustomerId(), '#').'/adGroups/[1-9][0-9]*$#D', $group)
+                    || ($row['account_timezone'] ?? null) !== $timezone || ($row['reported_from'] ?? null) !== $from
+                    || ($row['matured'] ?? null) !== $matured
+                    || ($matured ? ($row['matured_through'] ?? null) !== $through : ($row['reported_through'] ?? null) !== $today->toDateString())
+                    || isset($seen[$text.'|'.$group])) {
+                    return null;
+                }
+                $seen[$text.'|'.$group] = true;
+                foreach (['conversions', 'all_conversions'] as $metric) {
+                    if (! is_numeric($row[$metric] ?? null) || ! is_finite((float) $row[$metric]) || (float) $row[$metric] !== 0.0) {
+                        return null;
+                    }
+                }
+                $observations[$text] ??= ['recent_verified' => false, 'matured_clicks' => 0, 'matured_cost_micros' => 0];
+                if (! $matured) {
+                    $observations[$text]['recent_verified'] = true;
+
+                    continue;
+                }
+                $clicks = $this->integerMetric($row['clicks'] ?? null);
+                $cost = $this->integerMetric($row['cost_micros'] ?? null);
+                if ($clicks === null || $cost === null || $cost > PHP_INT_MAX - $observations[$text]['matured_cost_micros']) {
+                    return null;
+                }
+                $observations[$text]['matured_clicks'] += $clicks;
+                $observations[$text]['matured_cost_micros'] += $cost;
+            }
+        }
+        foreach ($requested as $text => $_) {
+            $observation = $observations[$text] ?? [];
+            if (($observation['recent_verified'] ?? false) !== true
+                || $observation['matured_clicks'] < max(2, (int) config('optimization.search_terms.negative_min_clicks', 2))
+                || $observation['matured_cost_micros'] < $threshold) {
+                return null;
+            }
+        }
+
+        return ['checked_at' => now()->toIso8601String(), 'account_timezone' => $timezone,
+            'matured_through' => $through, 'cost_threshold_micros' => $threshold, 'terms' => $observations];
+    }
+
+    private function integerMetric(mixed $value): ?int
+    {
+        return (is_int($value) && $value >= 0) || (is_string($value) && preg_match('/^[0-9]{1,16}$/D', $value)) ? (int) $value : null;
+    }
+
     private function blocked(string $message, string $status = 'blocked'): array
     {
         return ['ready' => false, 'status' => $status, 'message' => $message,
@@ -203,5 +360,11 @@ class GoogleSearchMutationGuard
     protected function spend(Campaign $campaign): array
     {
         return app(GetCampaignSpendSafety::class, ['customer' => $campaign->customer])->forCampaign($campaign);
+    }
+
+    protected function searchTermReport(Campaign $campaign, string $range): array
+    {
+        return app(GetSearchTermsReport::class, ['customer' => $campaign->customer])(
+            $campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName(), $range);
     }
 }

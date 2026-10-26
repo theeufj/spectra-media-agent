@@ -5,6 +5,7 @@ namespace Tests\Unit\Agents;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\SearchTermMiningAgent;
+use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Mockery;
 use Tests\TestCase;
 
@@ -79,6 +80,7 @@ class SearchTermMiningAgentTest extends TestCase
 
         $agentMock->shouldReceive('addAsKeyword')
             ->once()
+            ->with($customer, '1234567890', 'customers/1234567890/adGroups/222', 'best marketing tool', KeywordMatchType::EXACT, Mockery::any())
             ->andReturnUsing(function ($cust, $custId, $adGroup, $keyword, $matchType, &$results) {
                 $results['keywords_added'][] = [
                     'keyword' => $keyword,
@@ -127,6 +129,7 @@ class SearchTermMiningAgentTest extends TestCase
             'conversions' => 0,
             'ctr' => 0.01,
             'ad_group_resource_name' => 'customers/1234567890/adGroups/222',
+            'matured' => true,
         ];
 
         $agentMock = Mockery::mock(SearchTermMiningAgent::class)
@@ -223,5 +226,84 @@ class SearchTermMiningAgentTest extends TestCase
         $this->assertEmpty($results['keywords_added']);
         $this->assertEmpty($results['negatives_added']);
         $this->assertEquals(0, $results['terms_analyzed']);
+    }
+
+    private function evaluate(array $changes, ?Campaign $campaign, bool $expectExclusion): void
+    {
+        config(['optimization.search_terms.negative_daily_budget_fraction' => 0.5,
+            'optimization.search_terms.negative_min_clicks' => 2]);
+        $customer = new Customer(['google_ads_customer_id' => '1234567890']);
+        $agent = $this->getMockBuilder(SearchTermMiningAgent::class)->onlyMethods(['addAsKeyword', 'addAsNegative'])->getMock();
+        $agent->expects($this->never())->method('addAsKeyword');
+        if ($expectExclusion) {
+            $agent->expects($this->once())->method('addAsNegative')->with($customer, '1234567890',
+                'customers/1234567890/campaigns/111', 'irrelevant research query', $this->anything(), $this->anything(), 'EXACT');
+        } else {
+            $agent->expects($this->never())->method('addAsNegative');
+        }
+        $term = array_replace(['search_term' => 'irrelevant research query', 'impressions' => 20, 'clicks' => 2,
+            'cost' => 30, 'cost_micros' => 30_000_000, 'conversions' => 0, 'all_conversions' => 0,
+            'ctr' => 0.1, 'matured' => true, 'ad_group_resource_name' => 'customers/1234567890/adGroups/222'], $changes);
+        $results = ['keywords_added' => [], 'negatives_added' => []];
+        (new \ReflectionMethod(SearchTermMiningAgent::class, 'evaluateSearchTerm'))
+            ->invokeArgs($agent, [$customer, '1234567890', 'customers/1234567890/campaigns/111', $term, &$results, 'google', $campaign]);
+    }
+
+    private function approvedCampaign(): Campaign
+    {
+        return new Campaign(['approved_daily_budget' => '50.00', 'budget_confirmed_at' => now()]);
+    }
+
+    public function test_matured_cost_can_trigger_a_narrow_exclusion_below_the_impression_floor(): void
+    {
+        $this->evaluate([], $this->approvedCampaign(), true);
+    }
+
+    public function test_fresh_expensive_clicks_are_not_negated_without_maturity_evidence(): void
+    {
+        $this->evaluate(['matured' => false, 'cost' => 100, 'cost_micros' => 100_000_000], $this->approvedCampaign(), false);
+    }
+
+    public function test_one_matured_click_is_still_insufficient_for_a_cost_only_exclusion(): void
+    {
+        $this->evaluate(['clicks' => 1, 'cost' => 100, 'cost_micros' => 100_000_000], $this->approvedCampaign(), false);
+    }
+
+    public function test_recent_conversion_evidence_preserves_a_term_despite_expensive_matured_spend(): void
+    {
+        $this->evaluate(['conversions' => 0.5], $this->approvedCampaign(), false);
+        $this->evaluate(['all_conversions' => 1], $this->approvedCampaign(), false);
+    }
+
+    public function test_unconfirmed_budget_cannot_lower_the_absolute_spend_evidence_threshold(): void
+    {
+        $this->evaluate([], new Campaign(['approved_daily_budget' => '50.00']), false);
+    }
+
+    public function test_below_campaign_relative_cost_threshold_does_not_create_an_exclusion(): void
+    {
+        $this->evaluate(['cost' => 24.99, 'cost_micros' => 24_990_000], $this->approvedCampaign(), false);
+    }
+
+    public function test_google_only_entry_keeps_shared_guards_and_never_mines_microsoft(): void
+    {
+        $campaign = new Campaign(['google_ads_campaign_id' => '111', 'microsoft_ads_campaign_id' => '222']);
+        $campaign->setRelation('customer', new Customer(['google_ads_customer_id' => '1234567890']));
+        $agent = $this->getMockBuilder(SearchTermMiningAgent::class)->onlyMethods(['mineGoogle', 'mineMicrosoft'])->getMock();
+        $agent->expects($this->once())->method('mineGoogle');
+        $agent->expects($this->never())->method('mineMicrosoft');
+
+        $this->assertSame([], $agent->mine($campaign, true)['errors']);
+    }
+
+    public function test_default_entry_preserves_microsoft_mining_for_existing_callers(): void
+    {
+        $campaign = new Campaign(['google_ads_campaign_id' => '111', 'microsoft_ads_campaign_id' => '222']);
+        $campaign->setRelation('customer', new Customer(['google_ads_customer_id' => '1234567890']));
+        $agent = $this->getMockBuilder(SearchTermMiningAgent::class)->onlyMethods(['mineGoogle', 'mineMicrosoft'])->getMock();
+        $agent->expects($this->once())->method('mineGoogle');
+        $agent->expects($this->once())->method('mineMicrosoft');
+
+        $this->assertSame([], $agent->mine($campaign)['errors']);
     }
 }

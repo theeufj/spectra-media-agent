@@ -73,12 +73,22 @@ class InitialSearchBidPlanner
             return $this->unavailable('Between one and 100 active selected keywords are required for complete initial cost estimates.', $evidence);
         }
         $budget = min($actual, $authorized);
-        $cap = $budget;
+        $cap = $this->defaultBidCeiling($budget);
         if (($snapshot['approved_cpc_ceiling_micros'] ?? null) !== null) {
             if (! is_int($snapshot['approved_cpc_ceiling_micros']) || $snapshot['approved_cpc_ceiling_micros'] <= 0) {
                 return $this->unavailable('The existing approved CPC limit could not be verified.', $evidence);
             }
-            $cap = min($cap, $snapshot['approved_cpc_ceiling_micros']);
+            // An explicit accepted CPC ceiling takes precedence over the
+            // default planning policy, while never exceeding the allocation.
+            $cap = min($budget, $snapshot['approved_cpc_ceiling_micros']);
+        }
+        $limits = CampaignSpendGuardrails::automationLimits($campaign);
+        if ($limits !== null && ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $cap)) {
+            $limit = $limits['max_cpc_bid_micros'] ?? null;
+            if (! is_int($limit) || ! CampaignSpendGuardrails::permitsKeywordBid($campaign, $limit)) {
+                return $this->unavailable('The retained automation CPC limits could not be verified.', $evidence);
+            }
+            $cap = min($cap, $limit);
         }
         foreach ($keywords as $keyword) {
             if (! is_string($keyword['text'] ?? null) || trim($keyword['text']) === ''
@@ -143,7 +153,7 @@ class InitialSearchBidPlanner
                 $cpcLimitMicros = min($cpcLimitMicros ?? (int) $limit, (int) $limit);
             }
         }
-        $cap = intdiv(min($dailyBudgetMicros, $cpcLimitMicros ?? $dailyBudgetMicros), 10_000) * 10_000;
+        $cap = intdiv(min($dailyBudgetMicros, $cpcLimitMicros ?? $this->defaultBidCeiling($dailyBudgetMicros)), 10_000) * 10_000;
         if ($cap <= 0) {
             return $this->unavailable('The retained CPC limit does not permit a positive whole-cent proposal.', $evidence);
         }
@@ -154,6 +164,13 @@ class InitialSearchBidPlanner
         $context['research_max_bid_candidates'] = 4;
 
         return $this->estimateFor($campaign, $customer, $keywords, $context, $dailyBudgetMicros, $cap, $evidence, $exactBidMicros);
+    }
+
+    private function defaultBidCeiling(int $dailyBudgetMicros): int
+    {
+        // A single researched click must not consume most of a small daily
+        // allocation. This is a planning bound, not a traffic guarantee.
+        return intdiv($dailyBudgetMicros, max(1, (int) config('optimization.search_cost_protection.min_clicks_per_day', 5)));
     }
 
     private function estimateFor(Campaign $campaign, Customer $customer, array $keywords, array $snapshot, int $budget, int $cap, array $evidence, ?int $exactBidMicros = null): array

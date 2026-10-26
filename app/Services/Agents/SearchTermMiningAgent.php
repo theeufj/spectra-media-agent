@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Keyword;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
+use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -51,7 +52,7 @@ class SearchTermMiningAgent
         return $this->ads ??= app(AdsServiceFactory::class);
     }
 
-    public function mine(Campaign $campaign): array
+    public function mine(Campaign $campaign, bool $googleOnly = false): array
     {
         $results = [
             'campaign_id' => $campaign->id,
@@ -73,7 +74,7 @@ class SearchTermMiningAgent
             $this->mineGoogle($campaign, $results);
         }
 
-        if ($campaign->microsoft_ads_campaign_id) {
+        if (! $googleOnly && $campaign->microsoft_ads_campaign_id) {
             $this->mineMicrosoft($campaign, $results);
         }
 
@@ -91,12 +92,44 @@ class SearchTermMiningAgent
 
         try {
             $getSearchTerms = $this->ads()->searchTerms($customer);
-            $searchTerms = $getSearchTerms($customerId, $campaignResourceName, 'LAST_30_DAYS');
+            $searchTerms = $getSearchTerms($customerId, $campaignResourceName, 'LAST_30_DAYS_INCLUDING_TODAY');
 
             $results['terms_analyzed'] += count($searchTerms);
             $this->googleKeywordProposals = [];
+            $protected = [];
             foreach ($searchTerms as $term) {
-                $this->evaluateSearchTerm($customer, $customerId, $campaignResourceName, $term, $results, 'google');
+                $key = mb_strtolower(trim($term['search_term']));
+                $protected[$key] = ($protected[$key] ?? 0) + max((float) $term['conversions'], (float) ($term['all_conversions'] ?? 0));
+            }
+            $maturedByTerm = [];
+            if ($searchTerms !== []) {
+                $maturedTerms = $customer->is_sandbox ? $searchTerms
+                    : $getSearchTerms($customerId, $campaignResourceName, 'MATURED_LAST_30_DAYS');
+                foreach ($maturedTerms as $term) {
+                    if (! $customer->is_sandbox && ! $this->maturedGoogleTerm($term)) {
+                        continue;
+                    }
+                    if (! array_key_exists(mb_strtolower(trim($term['search_term'])), $protected)) {
+                        // A missing fresh row cannot prove an absence of new
+                        // conversions for an older reported search term.
+                        continue;
+                    }
+                    $maturedByTerm[mb_strtolower(trim($term['search_term'])).'|'.($term['ad_group_resource_name'] ?? '')] = $term;
+                }
+            }
+            foreach ($searchTerms as $term) {
+                // Recent aggregate spend cannot establish that a click has had
+                // time to convert. This pass may only promote proven terms.
+                $term['matured'] = false;
+                $this->evaluateSearchTerm($customer, $customerId, $campaignResourceName, $term, $results, 'google', $campaign);
+                $text = mb_strtolower(trim($term['search_term']));
+                $matured = $maturedByTerm[$text.'|'.($term['ad_group_resource_name'] ?? '')] ?? null;
+                if ($matured !== null) {
+                    $matured['matured'] = true;
+                    $matured['exclusions_only'] = true;
+                    $matured['conversions'] = max((float) $matured['conversions'], $protected[$text]);
+                    $this->evaluateSearchTerm($customer, $customerId, $campaignResourceName, $matured, $results, 'google', $campaign);
+                }
             }
             $proposals = $this->googleKeywordProposals;
             $this->googleKeywordProposals = null;
@@ -143,7 +176,12 @@ class SearchTermMiningAgent
             if ($proposals === []) {
                 return;
             }
-            $assessment = $campaign->customer->is_sandbox ? ['ready' => true] : app(GoogleSearchMutationGuard::class)->assess($campaign, array_values($proposals));
+            $guard = app(GoogleSearchMutationGuard::class);
+            $costOnly = array_filter($proposals, fn ($proposal) => ($proposal['action'] ?? null) !== 'negative'
+                || ($proposal['match_type'] ?? null) !== 'EXACT' || ($proposal['scope'] ?? null) !== 'campaign') === [];
+            $assessment = $campaign->customer->is_sandbox ? ['ready' => true]
+                : ($costOnly ? $guard->assessCostExclusions($campaign, array_values($proposals))
+                    : $guard->assess($campaign, array_values($proposals)));
         } catch (\Throwable $e) {
             report($e);
             $assessment = ['ready' => false, 'message' => 'Keyword demand and affordable traffic could not be verified.'];
@@ -158,6 +196,18 @@ class SearchTermMiningAgent
                 $campaign->customer_id, $campaign->id, ['proposals' => $proposals, 'assessment' => $assessment]);
 
             return;
+        }
+        if (! $campaign->customer->is_sandbox) {
+            // A lookback report still contains searches excluded on an earlier
+            // run. Reuse the guard's fresh, verified live inventory so a repeat
+            // does not send duplicate exclusions and manufacture a failure.
+            $existingNegatives = array_values(array_filter($assessment['observed_snapshot']['negative_keywords'] ?? [],
+                fn ($negative) => ($negative['scope'] ?? null) === 'campaign'));
+            $proposals = array_values(array_filter($proposals, fn ($proposal) => $proposal['action'] !== 'negative'
+                || ! GoogleSearchReachPlanner::negativeConflict($proposal['text'], $existingNegatives, '')));
+            if ($proposals === []) {
+                return;
+            }
         }
         $this->googleKeywordBatchApproved = true;
         // Exclusions depend on the replacement portfolio. Install additions first,
@@ -309,7 +359,8 @@ class SearchTermMiningAgent
         string $campaignResourceName,
         array $term,
         array &$results,
-        string $platform = 'google'
+        string $platform = 'google',
+        ?Campaign $campaign = null
     ): void {
         $minImpressions = $this->config['min_impressions'] ?? 300;
         $minClicks = $this->config['min_clicks'] ?? 5;
@@ -317,7 +368,6 @@ class SearchTermMiningAgent
         $negativeCostThreshold = $this->config['negative_cost_threshold'] ?? 50.00;
         $negativeCtrThreshold = $this->config['negative_ctr_threshold'] ?? 0.002;
         $negativeMinImpressions = $this->config['negative_min_impressions'] ?? 500;
-        $negativeMatchType = $this->config['negative_match_type'] ?? 'PHRASE';
 
         $searchTerm = $term['search_term'];
         $impressions = $term['impressions'];
@@ -326,13 +376,27 @@ class SearchTermMiningAgent
         $conversions = $term['conversions'];
         $ctr = $term['ctr'];
 
+        // A few expensive clicks can consume a small campaign's test budget
+        // long before 300 impressions. Only matured spend with no conversion
+        // evidence may propose an exclusion; the portfolio guard still owns
+        // authorization and affordable remaining reach.
+        if ($platform === 'google' && ($term['matured'] ?? false) === true && $conversions <= 0
+            && (float) ($term['all_conversions'] ?? 0) <= 0
+            && $clicks >= max(2, (int) ($this->config['negative_min_clicks'] ?? 2))
+            && $this->termCostMicros($term) >= $this->negativeCostMicros($campaign)) {
+            $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm,
+                'Matured spend exceeded the campaign-relative threshold without recorded conversions', $results, 'EXACT');
+
+            return;
+        }
+
         // Skip if not enough data
         if ($impressions < $minImpressions) {
             return;
         }
 
         // Check if this is a HIGH PERFORMER → Add as keyword with match type based on conversion volume
-        if ($clicks >= $minClicks && $ctr >= $promoteCtrThreshold && $conversions > 0) {
+        if (! ($term['exclusions_only'] ?? false) && $clicks >= $minClicks && $ctr >= $promoteCtrThreshold && $conversions > 0) {
             $matchType = $this->determineMatchType($conversions, $platform);
             if ($platform === 'google') {
                 $this->addAsKeyword($customer, $customerId, $term['ad_group_resource_name'], $searchTerm, $matchType, $results);
@@ -345,20 +409,19 @@ class SearchTermMiningAgent
 
         // Check if this is WASTING MONEY → Add as negative
         // Safety: never auto-negative a term that has converted, regardless of other signals
-        if ($cost >= $negativeCostThreshold && $conversions == 0) {
-            if ($platform === 'google') {
-                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results, $negativeMatchType);
-            } else {
-                $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results);
-            }
+        if ($platform !== 'google' && $cost >= $negativeCostThreshold && $conversions == 0) {
+            $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results);
 
             return;
         }
 
-        // Check if this has LOW CTR with high impressions → Add as negative
-        if ($impressions >= $negativeMinImpressions && $ctr < $negativeCtrThreshold && $conversions == 0) {
+        // Low CTR alone is not wasted spend. Keep a review candidate rather
+        // than letting a zero-cost Google query block proven cost exclusions.
+        if ($impressions >= $negativeMinImpressions && $ctr < $negativeCtrThreshold && $conversions == 0
+            && ($platform !== 'google' || ($term['matured'] ?? false) === true && (float) ($term['all_conversions'] ?? 0) <= 0)) {
             if ($platform === 'google') {
-                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results, $negativeMatchType);
+                $results['review_candidates'][] = ['search_term' => $searchTerm, 'reason' => 'Low CTR alone does not prove wasted spend.',
+                    'impressions' => $impressions, 'clicks' => $clicks, 'cost_micros' => $this->termCostMicros($term)];
             } else {
                 $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results);
             }
@@ -367,11 +430,70 @@ class SearchTermMiningAgent
         }
     }
 
+    private function termCostMicros(array $term): int
+    {
+        $micros = $term['cost_micros'] ?? null;
+        if (is_int($micros) || is_string($micros) && ctype_digit($micros)) {
+            return max(0, (int) $micros);
+        }
+
+        return CampaignSpendGuardrails::moneyToMicros($term['cost'] ?? 0);
+    }
+
+    private function negativeCostMicros(?Campaign $campaign): int
+    {
+        $fallback = CampaignSpendGuardrails::moneyToMicros($this->config['negative_cost_threshold'] ?? 50);
+        if ($fallback <= 0) {
+            return PHP_INT_MAX;
+        }
+        if (! $campaign?->budget_confirmed_at) {
+            return $fallback;
+        }
+        $approved = CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget);
+        if ($approved <= 0) {
+            return $fallback;
+        }
+        $limits = $campaign->spend_guardrails['automation_limits'] ?? [];
+        if (($limits['enabled'] ?? false) === true && is_int($limits['max_daily_budget_micros'] ?? null)
+            && $limits['max_daily_budget_micros'] > 0) {
+            $approved = min($approved, $limits['max_daily_budget_micros']);
+        }
+        $fraction = $this->config['negative_daily_budget_fraction'] ?? 0.5;
+        if (! is_numeric($fraction) || ! is_finite((float) $fraction) || $fraction <= 0 || $fraction > 1) {
+            return $fallback;
+        }
+        $basisPoints = (int) floor((float) $fraction * 10_000);
+
+        $relative = intdiv($approved, 10_000) * $basisPoints + intdiv(($approved % 10_000) * $basisPoints, 10_000);
+
+        return max(1, min($fallback, $relative));
+    }
+
+    private function maturedGoogleTerm(array $term): bool
+    {
+        $timezone = $term['account_timezone'] ?? null;
+        $through = $term['matured_through'] ?? null;
+        if (($term['matured'] ?? false) !== true || ! is_string($timezone)
+            || ! in_array($timezone, timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true)
+            || ! is_string($through)) {
+            return false;
+        }
+        try {
+            $date = CarbonImmutable::createFromFormat('!Y-m-d', $through, $timezone);
+            $latest = CarbonImmutable::now($timezone)->startOfDay()
+                ->subDays(max(1, (int) ($this->config['conversion_lag_days'] ?? 2)) + 1);
+
+            return $date->toDateString() === $through && $date->lte($latest);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     /**
      * Determine match type based on conversion volume.
      * High-confidence terms (10+ conversions) → EXACT
      * Medium-confidence (5-9 conversions) → PHRASE
-     * Low-confidence (1-4 conversions) → BROAD
+     * Low-confidence (1-4 conversions) → EXACT, preserving the observed query
      */
     protected function determineMatchType(float $conversions, string $platform = 'google'): int|string
     {
@@ -383,7 +505,7 @@ class SearchTermMiningAgent
                 return KeywordMatchType::PHRASE;
             }
 
-            return KeywordMatchType::BROAD;
+            return KeywordMatchType::EXACT;
         } else {
             // Microsoft uses strings instead of enums
             if ($conversions >= 10) {
