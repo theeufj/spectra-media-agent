@@ -2,6 +2,9 @@
 
 use Illuminate\Support\Str;
 
+$defaultMaxProcesses = max(1, (int) env('HORIZON_DEFAULT_MAX_PROCESSES', 2));
+$defaultMinProcesses = min($defaultMaxProcesses, max(1, (int) env('HORIZON_DEFAULT_MIN_PROCESSES', 1)));
+
 return [
 
     /*
@@ -203,8 +206,10 @@ return [
             'queue' => ['spend-safety'],
             'balance' => 'simple',
             'maxProcesses' => 1,
-            'maxTime' => 0,
-            'maxJobs' => 0,
+            // Native advertising SDK handles/RSS can outlive a job without
+            // appearing in PHP's memory guard. Exit cleanly after each job.
+            'maxTime' => 3600,
+            'maxJobs' => 1,
             'memory' => 128,
             'tries' => 3,
             'timeout' => 150,
@@ -216,8 +221,8 @@ return [
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,
-            'maxTime' => 0,
-            'maxJobs' => 0,
+            'maxTime' => 3600,
+            'maxJobs' => 1,
             'memory' => 128,
             'tries' => 1,
             'timeout' => 3600,
@@ -242,8 +247,8 @@ return [
     'environments' => [
         'production' => [
             'supervisor-1' => [
-                'minProcesses' => 3,
-                'maxProcesses' => 5,
+                'minProcesses' => $defaultMinProcesses,
+                'maxProcesses' => $defaultMaxProcesses,
                 'balanceMaxShift' => 3,
                 'balanceCooldown' => 3,
             ],

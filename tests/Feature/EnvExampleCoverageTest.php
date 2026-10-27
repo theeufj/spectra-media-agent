@@ -28,7 +28,7 @@ class EnvExampleCoverageTest extends TestCase
      * thing. Naming the stock files instead makes the default "checked".
      */
     private const STOCK_CONFIGS = [
-        'app', 'auth', 'cache', 'cors', 'database', 'horizon', 'logging',
+        'app', 'auth', 'cache', 'cors', 'database', 'logging',
         'mail', 'pennant', 'queue', 'session',
     ];
 
