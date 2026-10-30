@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import SubscriptionTierSelector from '@/Components/SubscriptionTierSelector';
 import { SetupStages } from '@/Components/SetupJourney';
+import SetupExpectations from '@/Components/SetupExpectations';
 
 export default function Pricing({ auth, plans, setupFee = null, journey = null }) {
     const [processing, setProcessing] = useState(false);
@@ -26,6 +27,7 @@ export default function Pricing({ auth, plans, setupFee = null, journey = null }
                         <div><dt className="text-gray-500">Google Ads account</dt><dd className="mt-1 font-medium text-gray-900">{journey.business.country} · {journey.business.currency_code}</dd><dd className="text-gray-600">Ad spend is paid separately to Google in this currency.</dd></div>
                     </dl>}
                     <p className="mt-4 text-sm text-gray-600">You will need to accept the Google invitation, add Google billing and install and test tracking before launching. We do not start your ads when you pay.</p>
+                    <SetupExpectations />
                     <div className="mt-8 flex flex-wrap items-center gap-5 border-t border-gray-100 pt-6">
                         <div><p className="text-3xl font-semibold text-gray-900">US${setupFee.price_usd}</p><p className="text-sm text-gray-500">One-time setup fee · charged in USD</p></div>
                         {ready ? <button disabled={processing} onClick={checkout} className="rounded-lg bg-brand-dark px-6 py-3 font-medium text-white disabled:opacity-50">{processing ? 'Opening secure checkout…' : 'Pay setup fee'}</button>
