@@ -429,14 +429,21 @@ class OneTimeSetupTest extends TestCase
         $this->assertFalse($ids->contains($setupOnly->id));
     }
 
-    public function test_admin_handover_emails_the_keys_once(): void
+    public function test_admin_handover_emails_verified_access_once(): void
     {
         Mail::fake();
         $this->stubInviter();
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
-        [, $customer] = $this->setupOnlyCustomer(paid: true);
-        $customer->forceFill(['google_ads_customer_id' => '111-222-3333'])->save();
+        [$owner, $customer] = $this->setupOnlyCustomer(paid: true);
+        $customer->forceFill(['google_ads_customer_id' => '111-222-3333',
+            'setup_handover' => ['google_identity' => ['email' => $owner->email, 'subject' => 'verified-owner',
+                'verified_at' => now()->toIso8601String(), 'verified_by_user_id' => $owner->id]],
+        ])->save();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'status' => 'paused']);
+        \App\Models\Strategy::factory()->create(['campaign_id' => $campaign->id, 'deployment_status' => 'verified']);
+        $this->mock(\App\Services\GTM\CustomerTrackingOwnership::class)
+            ->shouldReceive('verify', 'status')->andReturn(['connected' => true]);
 
         $this->actingAs($admin)->post(route('admin.customers.handover', $customer));
 
@@ -478,6 +485,11 @@ class OneTimeSetupTest extends TestCase
             fn () => new class extends \App\Services\GoogleAds\CommonServices\InviteCustomerUser
             {
                 public function __construct() {}
+
+                public function accessStatus(string $customerId, string $email): string
+                {
+                    return 'accepted';
+                }
 
                 public function execute(string $customerId, string $email, int $accessRole = 2): array
                 {

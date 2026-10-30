@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Mail\TrackingSnippetHandoff;
 use App\Models\Customer;
+use App\Models\Strategy;
+use App\Services\GTM\CustomerTrackingOwnership;
 use App\Services\GTM\GTMContainerService;
 use App\Services\GTM\GTMDetectionService;
 use Illuminate\Http\Request;
@@ -36,11 +38,29 @@ class GTMSetupController extends Controller
             ];
         }
 
+        $strategy = Strategy::whereHas('campaign', fn ($query) => $query->where('customer_id', $customer->id))
+            ->where('platform', 'ilike', '%google%')->where('campaign_type', 'search')->latest('id')->first();
+
         return Inertia::render('Customers/GTM/Setup', [
             'customer' => $customer,
             'snippet' => $snippet,
             'existingTags' => $existingTags,
+            'handoverRevision' => $this->handoverRevision($customer),
+            'trackingOwnership' => app(CustomerTrackingOwnership::class)->status($customer),
+            'goalSetupUrl' => $strategy ? route('campaigns.conversion-goal.edit', ['campaign' => $strategy->campaign, 'strategy' => $strategy->uuid]) : null,
         ]);
+    }
+
+    public function connect(Request $request, Customer $customer, CustomerTrackingOwnership $ownership)
+    {
+        $this->authorize('update', $customer);
+        $validated = $request->validate([
+            'account_id' => ['required', 'string', 'regex:/^\d{1,20}$/D'],
+            'container_id' => ['required', 'string', 'regex:/^\d{1,20}$/D'],
+        ]);
+        $ownership->connect($customer, $validated['account_id'], $validated['container_id']);
+
+        return back()->with('success', 'Your customer-controlled tracking container is connected. Keep its existing snippet if it is already installed; a real event test is still required.');
     }
 
     /**
@@ -51,16 +71,6 @@ class GTMSetupController extends Controller
     public function provision(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
         $this->authorize('update', $customer);
-        if ($customer->gtm_container_id) {
-            $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
-
-            return back()->with([
-                'success' => 'GTM container already provisioned.',
-                'snippet' => $snippet,
-                'customer' => $customer->fresh(),
-            ]);
-        }
-
         $result = $gtmService->provisionContainerForCustomer($customer);
 
         if (! $result['success']) {
@@ -70,7 +80,7 @@ class GTMSetupController extends Controller
         $snippet = $gtmService->getSnippetHtml($result['container_id']);
 
         return back()->with([
-            'success' => 'GTM container created! Add the snippet below to your website.',
+            'success' => ($result['reused'] ?? false) ? 'Your existing tracking container is ready. Its snippet has not changed.' : 'Tracking container created. Install its snippet once on your website.',
             'snippet' => $snippet,
             'customer' => $customer->fresh(),
         ]);
@@ -98,7 +108,7 @@ class GTMSetupController extends Controller
 
         if ($result['installed']) {
             return back()->with([
-                'success' => 'Snippet verified! Conversion tracking is active.',
+                'success' => 'Website snippet detected. Test a real successful event and confirm it in Google Ads before launching; snippet detection alone does not verify conversions.',
                 'customer' => $customer->fresh(),
             ]);
         }
@@ -196,6 +206,9 @@ class GTMSetupController extends Controller
 
         return response()->json([
             'success' => true,
+            'handoverRevision' => $this->handoverRevision($customer),
+            'trackingOwnership' => app(CustomerTrackingOwnership::class)->status($customer),
+            'handover_revision' => $this->handoverRevision($customer),
             'status' => [
                 'provisioned' => (bool) $customer->gtm_container_id,
                 'container_id' => $customer->gtm_container_id,
@@ -204,5 +217,14 @@ class GTMSetupController extends Controller
                 'gtm_detected' => $customer->gtm_detected,
             ],
         ]);
+    }
+
+    private function handoverRevision(Customer $customer): string
+    {
+        $strategy = Strategy::whereHas('campaign', fn ($query) => $query->where('customer_id', $customer->id))
+            ->where('platform', 'ilike', '%google%')->where('campaign_type', 'search')->latest('id')->value('uuid');
+
+        return hash('sha256', json_encode([$strategy, $customer->setup_handover, $customer->gtm_config,
+            $customer->gtm_installed, $customer->gtm_last_verified, $customer->handover_at, $customer->google_ads_customer_id]));
     }
 }

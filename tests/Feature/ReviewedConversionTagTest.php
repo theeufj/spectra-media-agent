@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\User;
+use App\Services\GTM\CustomerTrackingOwnership;
 use App\Services\GTM\GTMContainerService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
@@ -35,6 +37,26 @@ class ReviewedConversionTagTest extends TestCase
 
     private ?array $liveTagsOverride = null;
 
+    private bool $revokeOwnerAtVersionCreation = false;
+
+    private bool $ownerRevoked = false;
+
+    private int $permissionChecks = 0;
+
+    private bool $workspaceRetired = false;
+
+    private array $workspaceChanges = [];
+
+    private bool $addForeignDraftAfterTagWrite = false;
+
+    private bool $customerOwnedFlow = false;
+
+    private ?array $publishedVersion = null;
+
+    private bool $addForeignDraftAtVersionCreation = false;
+
+    private bool $publishExternalVersionDuringBuild = false;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -49,6 +71,22 @@ class ReviewedConversionTagTest extends TestCase
             $method = $request->method();
             if ($url === 'https://oauth2.googleapis.com/token') {
                 return Http::response(['access_token' => 'test-token']);
+            }
+            if (str_ends_with($url, '/user_permissions')) {
+                $this->permissionChecks++;
+
+                return Http::response(['userPermission' => [
+                    ['accountId' => '111', 'emailAddress' => 'owner@example.com', 'accountAccess' => ['permission' => $this->ownerRevoked ? 'user' : 'admin']],
+                    ['accountId' => '111', 'emailAddress' => 'platform@example.com', 'accountAccess' => ['permission' => 'admin'],
+                        'containerAccess' => [['containerId' => '222', 'permission' => 'publish']]],
+                ]]);
+            }
+            if (str_ends_with($url, '/containers/222')) {
+                return Http::response(['accountId' => '111', 'containerId' => '222', 'publicId' => 'GTM-TEST123',
+                    'usageContext' => ['web'], 'path' => 'accounts/111/containers/222']);
+            }
+            if (str_ends_with($url, '/status')) {
+                return Http::response(['workspaceChange' => $this->workspaceChanges]);
             }
             if ($method !== 'GET') {
                 $this->writes[] = ['method' => $method, 'url' => $url, 'data' => $request->data()];
@@ -82,18 +120,40 @@ class ReviewedConversionTagTest extends TestCase
                 }
                 $id = $matches[1] ?? (string) (201 + count($this->tags));
                 $this->tags[$id] = $request->data() + ['tagId' => $id];
+                if ($this->addForeignDraftAfterTagWrite) {
+                    $this->workspaceChanges[] = ['changeStatus' => 'added', 'tag' => ['name' => 'Customer unfinished experiment']];
+                }
 
                 return Http::response($this->tags[$id]);
             }
             if (str_ends_with($url, ':create_version')) {
+                $this->workspaceRetired = true;
+                if ($this->revokeOwnerAtVersionCreation) {
+                    $this->ownerRevoked = true;
+                }
+                if ($this->addForeignDraftAtVersionCreation) {
+                    $this->tags['999'] = ['tagId' => '999', 'name' => 'Unreviewed customer experiment', 'type' => 'html'];
+                }
+                if ($this->publishExternalVersionDuringBuild) {
+                    $this->publishedVersion = ['path' => 'accounts/111/containers/222/versions/88', 'containerVersionId' => '88',
+                        'tag' => [['tagId' => '888', 'name' => 'Customer independently published tag', 'type' => 'html']]];
+                }
+
                 return Http::response(['compilerError' => $this->createCompilerError,
                     'containerVersion' => $this->version()]);
             }
             if (str_ends_with($url, ':publish')) {
+                $this->publishedVersion = $this->version();
+
                 return Http::response(['compilerError' => $this->publishCompilerError,
                     'containerVersion' => $this->version()]);
             }
             if ($method === 'GET' && (str_ends_with($url, '/versions:live') || str_ends_with($url, '/versions/7'))) {
+                if ($this->customerOwnedFlow && str_ends_with($url, '/versions:live')) {
+                    return $this->publishedVersion === null
+                        ? Http::response(['error' => ['message' => 'No live version']], 404)
+                        : Http::response($this->publishedVersion);
+                }
                 $version = $this->version();
                 if ($this->liveTagsOverride !== null) {
                     $version['tag'] = $this->liveTagsOverride;
@@ -118,7 +178,11 @@ class ReviewedConversionTagTest extends TestCase
                 return Http::response($version);
             }
             if (str_ends_with($url, '/workspaces')) {
-                return Http::response(['workspace' => [['name' => 'Default Workspace', 'workspaceId' => '1']]]);
+                if ($this->workspaceRetired) {
+                    return Http::response(['workspace' => []]);
+                }
+
+                return Http::response(['workspace' => [['name' => 'Default Workspace', 'workspaceId' => '1', 'path' => 'accounts/111/containers/222/workspaces/1']]]);
             }
             if (str_contains($url, '/built_in_variables')) {
                 return Http::response(['builtInVariable' => []]);
@@ -149,6 +213,104 @@ class ReviewedConversionTagTest extends TestCase
         return app(GTMContainerService::class)->configureReviewedConversionTag(
             $customer, self::STRATEGY, $goal, 'AW-123456789', 'reviewed-label'
         );
+    }
+
+    private function customerOwned(): Customer
+    {
+        $this->customerOwnedFlow = true;
+        config(['services.gtm.platform_account_id' => '999', 'services.gtm.platform_email' => 'platform@example.com']);
+        $owner = User::factory()->create();
+        $customer = $this->customer(['service_type' => 'setup_only', 'setup_handover' => ['google_identity' => [
+            'email' => 'owner@example.com', 'subject' => 'owner-subject', 'verified_by_user_id' => $owner->id,
+            'verified_at' => now()->toIso8601String()]]]);
+        $customer->users()->attach($owner, ['role' => 'owner']);
+        app(CustomerTrackingOwnership::class)->connect($customer, '111', '222');
+
+        return $customer->fresh();
+    }
+
+    public function test_customer_owned_container_is_reverified_before_writes_and_before_publication(): void
+    {
+        $customer = $this->customerOwned();
+        $result = $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+        $this->assertTrue($result['success']);
+        $this->assertSame(3, $this->permissionChecks); // Connect, before edits, before live publication.
+        $this->assertSame('1', (string) $customer->fresh()->gtm_workspace_id);
+        $this->assertCount(1, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':publish')));
+        $this->assertFalse($customer->fresh()->gtm_installed);
+    }
+
+    public function test_revoked_customer_administrator_after_build_prevents_live_publication(): void
+    {
+        $customer = $this->customerOwned();
+        $this->revokeOwnerAtVersionCreation = true;
+        try {
+            $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+            $this->fail('Revoked ownership must prevent live publication.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('administrator', $e->getMessage());
+        }
+        $this->assertSame(3, $this->permissionChecks);
+        $this->assertCount(0, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':publish')));
+        $this->assertFalse(app(CustomerTrackingOwnership::class)->status($customer->fresh())['connected']);
+    }
+
+    public function test_customer_unrelated_draft_blocks_before_any_tag_mutation(): void
+    {
+        $customer = $this->customerOwned();
+        $this->workspaceChanges = [['changeStatus' => 'added', 'tag' => ['name' => 'Customer unfinished experiment']]];
+        try {
+            $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+            $this->fail('Unrelated customer drafts must block configuration.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('outside this campaign', $e->getMessage());
+        }
+        $this->assertSame([], $this->writes);
+    }
+
+    public function test_our_retry_changes_are_allowed_but_new_unrelated_changes_block_version_creation(): void
+    {
+        $customer = $this->customerOwned();
+        $this->workspaceChanges = [['changeStatus' => 'added', 'tag' => ['name' => 'Site to Spend '.self::STRATEGY.' conversion']],
+            ['changeStatus' => 'added', 'builtInVariable' => ['type' => 'pageHostname']]];
+        $this->assertTrue($this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed'])['success']);
+        $this->writes = [];
+        $this->addForeignDraftAfterTagWrite = true;
+        try {
+            $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+            $this->fail('New unrelated drafts must block version creation.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('outside this campaign', $e->getMessage());
+        }
+        $this->assertCount(0, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':create_version') || str_ends_with($write['url'], ':publish')));
+    }
+
+    public function test_unrelated_draft_racing_after_status_check_is_detected_in_created_version(): void
+    {
+        $customer = $this->customerOwned();
+        $this->addForeignDraftAtVersionCreation = true;
+        try {
+            $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+            $this->fail('An unreviewed compiled change must not be published.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('outside this campaign', $e->getMessage());
+        }
+        $this->assertCount(1, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':create_version')));
+        $this->assertCount(0, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':publish')));
+    }
+
+    public function test_concurrent_external_live_publication_is_not_overwritten(): void
+    {
+        $customer = $this->customerOwned();
+        $this->publishExternalVersionDuringBuild = true;
+        try {
+            $this->configure($customer, ['objective' => 'lead', 'trigger' => 'event', 'event_name' => 'lead_completed']);
+            $this->fail('A concurrently published customer version must not be overwritten.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString('changed during setup', $e->getMessage());
+        }
+        $this->assertSame('88', $this->publishedVersion['containerVersionId']);
+        $this->assertCount(0, array_filter($this->writes, fn ($write) => str_ends_with($write['url'], ':publish')));
     }
 
     public function test_named_success_event_is_the_only_trigger_and_configuration_is_not_tracking_proof(): void

@@ -30,6 +30,8 @@ class GoogleApiOAuthController extends Controller
             ->first();
 
         return Inertia::render('Settings/GoogleApiConnect', [
+            'platformTracking' => app(\App\Services\GTM\GTMPlatformCredential::class)->summary(),
+            'canAuthorizeTracking' => $request->user()->isFullAdmin(),
             'connection' => $existing ? [
                 'connected_at' => $existing->updated_at->toISOString(),
                 'scopes' => $existing->scopes ?? [],
@@ -39,6 +41,8 @@ class GoogleApiOAuthController extends Controller
 
     public function redirect()
     {
+        session()->forget(GTMPlatformAuthorizationController::SESSION_KEY);
+
         // Stateful on purpose: ->stateless() drops the `state` round-trip, and
         // this is a session-backed GET callback with no CSRF token of its own.
         // Without state, a victim following an attacker's callback link binds
@@ -55,6 +59,10 @@ class GoogleApiOAuthController extends Controller
 
     public function callback(Request $request)
     {
+        if ($request->session()->has(GTMPlatformAuthorizationController::SESSION_KEY)) {
+            return app(GTMPlatformAuthorizationController::class)->complete($request);
+        }
+
         $googleUser = Socialite::driver('google')
             ->redirectUrl(route('google-api.callback'))
             ->user();

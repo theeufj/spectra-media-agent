@@ -17,13 +17,14 @@ class GTMContainerService
     /**
      * Get an access token using the PLATFORM's refresh token.
      *
-     * GTM containers are owned and managed by the platform's Google account.
-     * No per-user OAuth is required.
+     * Managed-plan containers belong to the platform. Setup-only containers
+     * belong to the customer, who grants this same platform identity access.
+     * No per-user OAuth tokens are stored.
      */
     protected function getPlatformAccessToken(): ?string
     {
         try {
-            $refreshToken = config('services.gtm.platform_refresh_token');
+            $refreshToken = app(GTMPlatformCredential::class)->refreshToken();
             $clientId = config('services.google.client_id');
             $clientSecret = config('services.google.client_secret');
 
@@ -33,7 +34,7 @@ class GTMContainerService
                 return null;
             }
 
-            $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+            $response = Http::asForm()->timeout(15)->post('https://oauth2.googleapis.com/token', [
                 'client_id' => $clientId,
                 'client_secret' => $clientSecret,
                 'refresh_token' => $refreshToken,
@@ -60,15 +61,91 @@ class GTMContainerService
         }
     }
 
+    /** Customer-controlled tracking can only use the reviewed configuration pipeline. */
+    private function unreviewedMutationError(Customer $customer): ?array
+    {
+        $current = $customer->fresh() ?? $customer;
+        if ($current->service_type === 'setup_only' || ($current->gtm_config['ownership']['type'] ?? null) === 'customer') {
+            return ['success' => false, 'error' => 'Customer-controlled tracking requires a reviewed conversion goal. Generic tag changes and publication are disabled; no changes were made.'];
+        }
+
+        return null;
+    }
+
+    /** Read Google ownership evidence; IDs come from an explicit customer selection. */
+    public function inspectContainerAccess(string $accountId, string $containerId, bool $includeWorkspaces = true): array
+    {
+        if (! preg_match('/^\d{1,20}$/D', $accountId) || ! preg_match('/^\d{1,20}$/D', $containerId)) {
+            return ['success' => false, 'error' => 'Numeric Google Tag Manager account and container IDs are required.'];
+        }
+        $token = $this->getPlatformAccessToken();
+        if (! $token) {
+            return ['success' => false, 'error' => 'SiteToSpend could not authenticate its tracking account. Contact support.'];
+        }
+        $path = "accounts/{$accountId}/containers/{$containerId}";
+        $container = $this->makeApiCall('GET', '/'.$path, $token);
+        if (! $container['success']) {
+            return ['success' => false, 'error' => 'SiteToSpend cannot read this container. Check the IDs and grant its Google account access to your Tag Manager account.'];
+        }
+        $permissions = $this->readAllPages("/accounts/{$accountId}/user_permissions", 'userPermission', $token);
+        if ($permissions === null) {
+            return ['success' => false, 'error' => 'Google Tag Manager permissions could not be verified. Grant SiteToSpend Administrator access; its platform authorization also needs the Tag Manager user-management scope.'];
+        }
+        $workspaces = $includeWorkspaces ? $this->readAllPages('/'.$path.'/workspaces', 'workspace', $token) : [];
+        if ($workspaces === null) {
+            return ['success' => false, 'error' => 'Google Tag Manager workspaces could not be read. Check SiteToSpend container access.'];
+        }
+
+        return ['success' => true, 'container' => $container['data'], 'permissions' => $permissions, 'workspaces' => $workspaces];
+    }
+
+    private function readAllPages(string $path, string $field, string $token): ?array
+    {
+        $rows = [];
+        $page = '';
+        $seen = [];
+        for ($count = 0; $count < 20; $count++) {
+            $response = $this->makeApiCall('GET', $path.($page !== '' ? '?pageToken='.rawurlencode($page) : ''), $token);
+            if (! $response['success'] || ! is_array($response['data'][$field] ?? null)) {
+                return null;
+            }
+            if (count(array_filter($response['data'][$field], 'is_array')) !== count($response['data'][$field])) {
+                return null;
+            }
+            $rows = [...$rows, ...$response['data'][$field]];
+            $next = $response['data']['nextPageToken'] ?? '';
+            if ($next === '') {
+                return $rows;
+            }
+            if (! is_string($next) || isset($seen[$next])) {
+                return null;
+            }
+            $seen[$next] = true;
+            $page = $next;
+        }
+
+        return null;
+    }
+
     /**
      * Provision a new GTM container for a customer under the platform's GTM account.
      *
      * Creates a container, stores its ID on the customer record, and returns
      * the GTM container public ID (e.g. GTM-XXXXXXX) ready for snippet generation.
      */
-    public function provisionContainerForCustomer(Customer $customer, bool $customerScoped = false, ?callable $authorize = null): array
+    public function provisionContainerForCustomer(Customer $customer, bool $customerScoped = true, ?callable $authorize = null): array
     {
         try {
+            if ($customer->service_type === 'setup_only' || ($customer->gtm_config['ownership']['type'] ?? null) === 'customer') {
+                if (! app(CustomerTrackingOwnership::class)->status($customer)['connected']) {
+                    return ['success' => false, 'error' => 'Select a web container in your own Google Tag Manager account before configuring tracking. No new platform-owned snippet was created.'];
+                }
+                app(CustomerTrackingOwnership::class)->verify($customer);
+                $customer->refresh();
+
+                return ['success' => true, 'container_id' => $customer->gtm_container_id,
+                    'container_path' => $customer->gtm_config['container_path'], 'workspace_id' => $customer->gtm_workspace_id, 'reused' => true];
+            }
             $accountId = config('services.gtm.platform_account_id');
 
             if (! $accountId) {
@@ -89,8 +166,26 @@ class GTMContainerService
             // error) meant the next attempt minted another container, up to three
             // per customer, each with its own snippet the customer would have to
             // install for tracking to work.
-            if ($customer->gtm_container_id && ! empty($customer->gtm_config['container_path'])
-                && (! $customerScoped || ($customer->gtm_config['customer_uuid'] ?? null) === $customer->uuid)) {
+            if ($customer->gtm_container_id) {
+                $path = $customer->gtm_config['container_path'] ?? '';
+                if ((string) $customer->gtm_account_id !== (string) $accountId
+                    || ! preg_match('#^accounts/'.preg_quote((string) $accountId, '#').'/containers/\d+$#D', $path)
+                    || (! empty($customer->gtm_config['customer_uuid']) && $customer->gtm_config['customer_uuid'] !== $customer->uuid)
+                    || CustomerTrackingOwnership::assignedElsewhere($customer, $customer->gtm_container_id, $path)) {
+                    return ['success' => false, 'error' => 'The existing tag container does not have exclusive verified ownership. Review its access before changing tracking; the installed snippet was preserved.'];
+                }
+                if (($customer->gtm_config['customer_uuid'] ?? null) !== $customer->uuid) {
+                    $existing = $this->makeApiCall('GET', '/'.$path, $accessToken);
+                    if (! $existing['success'] || ($existing['data']['publicId'] ?? null) !== $customer->gtm_container_id
+                        || ($existing['data']['path'] ?? null) !== $path
+                        || ! in_array($existing['data']['name'] ?? '', [$customer->name.' — Site to Spend', 'Site to Spend '.$customer->uuid], true)) {
+                        return ['success' => false, 'error' => 'The existing tag container could not be verified for this customer. No replacement snippet was created.'];
+                    }
+                    if ($authorize) {
+                        $authorize();
+                    }
+                    $customer->update(['gtm_config' => [...($customer->gtm_config ?? []), 'customer_uuid' => $customer->uuid]]);
+                }
                 Log::info('GTMContainerService: Container already provisioned, reusing', [
                     'customer_id' => $customer->id,
                     'container_id' => $customer->gtm_container_id,
@@ -105,7 +200,7 @@ class GTMContainerService
                 ];
             }
 
-            $containerName = $customerScoped ? 'Site to Spend '.$customer->uuid : $customer->name.' — Site to Spend';
+            $containerName = 'Site to Spend '.$customer->uuid;
             if ($authorize) {
                 $authorize();
             }
@@ -115,11 +210,8 @@ class GTMContainerService
             ]);
 
             if (! $response['success']) {
-                // A container with this name already exists — a previous
-                // customer with the same business name (duplicate onboarding,
-                // deleted-and-recreated test accounts). Adopt it rather than
-                // failing the whole conversion setup: the alternative was
-                // three noisy retries and a customer with no tracking.
+                // UUID-scoped names allow retry recovery for this customer;
+                // business names and shared domains are never ownership proof.
                 if (str_contains($response['error'] ?? '', 'duplicate name')) {
                     $existing = $this->findContainerByName($accountId, $containerName, $accessToken);
 
@@ -142,6 +234,10 @@ class GTMContainerService
 
             if (! $containerId) {
                 return ['success' => false, 'error' => 'Container created but no publicId returned'];
+            }
+            if (! is_string($containerPath) || ! preg_match('#^accounts/'.preg_quote((string) $accountId, '#').'/containers/\d+$#D', $containerPath)
+                || CustomerTrackingOwnership::assignedElsewhere($customer, $containerId, $containerPath)) {
+                return ['success' => false, 'error' => 'Google returned a container without exclusive customer ownership. No snippet was assigned.'];
             }
 
             // Get the default workspace ID
@@ -175,7 +271,7 @@ class GTMContainerService
                     'account_id' => $accountId,
                     'workspace_id' => $workspaceId,
                     'provisioned_at' => now()->toIso8601String(),
-                    ...($customerScoped ? ['customer_uuid' => $customer->uuid] : []),
+                    'customer_uuid' => $customer->uuid,
                 ],
             ]);
 
@@ -234,6 +330,10 @@ HTML;
      */
     public function addConversionTag(Customer $customer, string $tagName, string $conversionId, array $config = []): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -312,13 +412,18 @@ HTML;
     /** Upsert one owned campaign tag with exactly the trigger its owner approved. */
     public function configureReviewedConversionTag(Customer $customer, string $strategyUuid, array $goal, string $conversionId, string $label, ?callable $authorize = null): array
     {
-        $accountId = (string) config('services.gtm.platform_account_id');
+        $accountId = (string) $customer->gtm_account_id;
         $containerPath = $customer->gtm_config['container_path'] ?? '';
-        if (! $accountId || (string) $customer->gtm_account_id !== $accountId
+        if (! $accountId
             || ! preg_match('#^accounts/'.preg_quote($accountId, '#').'/containers/\d+$#', $containerPath)
             || ! $customer->gtm_workspace_id || ! preg_match('/^AW-\d+$/', $conversionId) || ! preg_match('/^[A-Za-z0-9_-]+$/', $label)
             || ! \Illuminate\Support\Str::isUuid($strategyUuid)) {
-            return ['success' => false, 'error' => 'A platform-owned customer tag container and valid conversion tag are required.'];
+            return ['success' => false, 'error' => 'An authorized customer tag container and valid conversion tag are required.'];
+        }
+        try {
+            $authorize = $this->reviewedAuthorization($customer, $authorize);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
         }
         $token = $this->getPlatformAccessToken();
         if (! $token) {
@@ -375,9 +480,8 @@ HTML;
             if (! $listed['success']) {
                 return ['success' => false, 'error' => 'Managed conversion triggers could not be read.'];
             }
-            if ($authorize) {
-                $authorize();
-            }
+            $this->assertReviewedWorkspaceChanges($customer, $workspace, $token, $strategyUuid);
+            $authorize();
             $types = $trigger['type'] === 'pageview' ? 'type=pageHostname&type=pageUrl' : 'type=pageHostname&type=event';
             $variables = $this->makeApiCall('POST', "/{$workspace}/built_in_variables?{$types}", $token);
             if (! $variables['success']) {
@@ -395,9 +499,7 @@ HTML;
                 }
                 $triggerId = $existing['triggerId'] ?? null;
             } else {
-                if ($authorize) {
-                    $authorize();
-                }
+                $authorize();
                 $created = $this->makeApiCall('POST', "/{$workspace}/triggers", $token, $trigger);
                 $triggerId = $created['success'] ? ($created['data']['triggerId'] ?? null) : null;
             }
@@ -420,9 +522,7 @@ HTML;
                 }
             }
             $endpoint = "/{$workspace}/tags".($existingTag ? '/'.$existingTag['tagId'] : '');
-            if ($authorize) {
-                $authorize();
-            }
+            $authorize();
             $written = $this->makeApiCall($existingTag ? 'PUT' : 'POST', $endpoint, $token, $tag);
             if (! $written['success'] && $this->workspaceIsUnusable($written) && $this->rotateWorkspace($customer, $token, $authorize)) {
                 continue;
@@ -440,12 +540,17 @@ HTML;
     /** Remove only this strategy's previously managed measurement when an existing action replaces it. */
     public function retireReviewedConversionTag(Customer $customer, string $strategyUuid, ?callable $authorize = null): array
     {
-        $account = (string) config('services.gtm.platform_account_id');
+        $account = (string) $customer->gtm_account_id;
         $container = $customer->gtm_config['container_path'] ?? '';
-        if (! $account || (string) $customer->gtm_account_id !== $account
+        if (! $account
             || ! preg_match('#^accounts/'.preg_quote($account, '#').'/containers/\d+$#', $container)
             || ! \Illuminate\Support\Str::isUuid($strategyUuid)) {
-            return ['success' => false, 'error' => 'A platform-owned tag container is required.'];
+            return ['success' => false, 'error' => 'An authorized customer tag container is required.'];
+        }
+        try {
+            $authorize = $this->reviewedAuthorization($customer, $authorize);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
         }
         $token = $this->getPlatformAccessToken();
         if (! $token) {
@@ -461,6 +566,7 @@ HTML;
             if (! $tags['success']) {
                 return ['success' => false, 'error' => 'Existing managed tags could not be checked.'];
             }
+            $this->assertReviewedWorkspaceChanges($customer, $workspace, $token, $strategyUuid);
             $tag = collect($tags['data']['tag'] ?? [])->firstWhere('name', $name);
             if (! $tag) {
                 $live = $this->makeApiCall('GET', "/{$container}/versions:live", $token);
@@ -473,9 +579,7 @@ HTML;
 
                 return $this->publishReviewedWorkspace($customer, $workspace, $token, ['name' => $name], null, $authorize);
             }
-            if ($authorize) {
-                $authorize();
-            }
+            $authorize();
             $deleted = $this->makeApiCall('DELETE', "/{$workspace}/tags/{$tag['tagId']}", $token);
             if (! $deleted['success']) {
                 return ['success' => false, 'error' => 'The replaced managed tag could not be retired.'];
@@ -493,17 +597,32 @@ HTML;
         if ($authorize) {
             $authorize();
         }
+        $strategyUuid = explode(' ', $tag['name'])[3] ?? '';
+        $this->assertReviewedWorkspaceChanges($customer, $workspace, $token, $strategyUuid);
+        $container = $customer->gtm_config['container_path'];
+        $owned = ($customer->gtm_config['ownership']['type'] ?? null) === 'customer';
+        $baseline = $owned ? $this->readReviewedLiveVersion($container, $token) : null;
         $created = $this->makeApiCall('POST', "/{$workspace}:create_version", $token, ['name' => 'Site to Spend reviewed goal '.now()->format('Y-m-d His')]);
         $version = $created['data']['containerVersion'] ?? [];
         $path = $version['path'] ?? '';
-        $container = $customer->gtm_config['container_path'];
         if (! $created['success'] || ($created['data']['compilerError'] ?? false)
             || ! preg_match('#^'.preg_quote($container, '#').'/versions/\d+$#', $path)
             || ! $this->reviewedVersionMatches($version, $tag, $trigger, $variables)) {
             return ['success' => false, 'error' => 'The reviewed tag version could not be compiled and verified.'];
         }
+        if ($owned && ! $this->reviewedEqual($this->unownedVersionEntities($baseline, $strategyUuid), $this->unownedVersionEntities($version, $strategyUuid))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'Google included changes outside this campaign in the created tag version. Review your workspace changes before retrying. We have not published that version.']);
+        }
+        if (($customer->gtm_config['ownership']['type'] ?? null) === 'customer' || $customer->service_type === 'setup_only') {
+            // A cached binding cannot authorize publishing after the customer
+            // removed our access or changed the Google identity during a build.
+            app(CustomerTrackingOwnership::class)->verify($customer);
+        }
         if ($authorize) {
             $authorize();
+        }
+        if ($owned && ! $this->reviewedEqual($this->unownedVersionEntities($baseline, ''), $this->unownedVersionEntities($this->readReviewedLiveVersion($container, $token), ''))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'The live Google Tag Manager container changed during setup. Review and retry against the latest version; this version was not published.']);
         }
         $published = $this->makeApiCall('POST', "/{$path}:publish", $token);
         if (! $published['success'] || ($published['data']['compilerError'] ?? false)
@@ -516,6 +635,127 @@ HTML;
         }
 
         return ['success' => true, 'version_path' => $path];
+    }
+
+    private function readReviewedLiveVersion(string $container, string $token): array
+    {
+        $live = $this->makeApiCall('GET', "/{$container}/versions:live", $token);
+        if (! $live['success'] && ($live['status_code'] ?? null) === 404) {
+            return [];
+        }
+        if (! $live['success'] || ! is_array($live['data'] ?? null)
+            || ! preg_match('#^'.preg_quote($container, '#').'/versions/\d+$#D', $live['data']['path'] ?? '')) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'The current live tag version could not be verified. Retry once Google Tag Manager is available; no version was published.']);
+        }
+
+        return $live['data'];
+    }
+
+    /** Keep all unreviewed configuration; ignore only Google transport metadata. */
+    private function unownedVersionEntities(array $version, string $strategyUuid): array
+    {
+        $types = ['tag', 'trigger', 'variable', 'folder', 'builtInVariable', 'zone', 'customTemplate', 'client', 'gtagConfig', 'transformation'];
+        $metadata = ['path', 'accountId', 'containerId', 'containerVersionId', 'name', 'deleted', 'description', 'container', 'fingerprint', 'tagManagerUrl'];
+        if (array_diff(array_keys($version), [...$types, ...$metadata]) !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'The tag version contains configuration we could not verify. No version was published.']);
+        }
+        $result = [];
+        foreach ($types as $type) {
+            $entities = $version[$type] ?? [];
+            if (! is_array($entities) || count(array_filter($entities, 'is_array')) !== count($entities)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'The tag version contained invalid configuration. No version was published.']);
+            }
+            $result[$type] = [];
+            foreach ($entities as $entity) {
+                if ($this->isReviewedEntity($type, $entity, $strategyUuid)) {
+                    continue;
+                }
+                $result[$type][] = array_diff_key($entity, array_flip(['path', 'accountId', 'containerId', 'workspaceId', 'fingerprint', 'tagManagerUrl']));
+            }
+        }
+
+        return $result;
+    }
+
+    private function isReviewedEntity(string $type, array $entity, string $strategyUuid): bool
+    {
+        if (! \Illuminate\Support\Str::isUuid($strategyUuid)) {
+            return false;
+        }
+        $prefix = 'Site to Spend '.$strategyUuid.' ';
+        $name = $entity['name'] ?? '';
+
+        return is_string($name) && match ($type) {
+            'tag' => $name === $prefix.'conversion',
+            'trigger' => preg_match('/^'.preg_quote($prefix, '/').'[a-f0-9]{16}$/D', $name) === 1,
+            'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency'], true),
+            'builtInVariable' => in_array($entity['type'] ?? null, ['pageHostname', 'pageUrl', 'event'], true),
+            default => false,
+        };
+    }
+
+    private function reviewedAuthorization(Customer $customer, ?callable $authorize): callable
+    {
+        $owned = ($customer->gtm_config['ownership']['type'] ?? null) === 'customer';
+        if ($owned || $customer->service_type === 'setup_only') {
+            app(CustomerTrackingOwnership::class)->verify($customer);
+            $customer->refresh();
+        } elseif ((string) $customer->gtm_account_id !== (string) config('services.gtm.platform_account_id')) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'This tag container has no verified customer or platform ownership.']);
+        }
+        $path = $customer->gtm_config['container_path'] ?? '';
+        $publicId = $customer->gtm_container_id;
+        if (CustomerTrackingOwnership::assignedElsewhere($customer, (string) $publicId, $path)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'This tag container is assigned to another customer.']);
+        }
+
+        return function () use ($customer, $authorize, $owned, $path, $publicId): void {
+            $current = $customer->fresh();
+            if (! $current || $current->gtm_container_id !== $publicId || ($current->gtm_config['container_path'] ?? null) !== $path
+                || $current->gtm_workspace_id !== $customer->gtm_workspace_id
+                || ($owned && ! app(CustomerTrackingOwnership::class)->status($current)['connected'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'Your tag container or Google ownership changed. Review the current tracking setup before publishing.']);
+            }
+            if ($authorize) {
+                $authorize();
+            }
+        };
+    }
+
+    /** A customer workspace may contain its own unfinished work. Never publish it with our tag. */
+    private function assertReviewedWorkspaceChanges(Customer $customer, string $workspace, string $token, string $strategyUuid): void
+    {
+        if (($customer->gtm_config['ownership']['type'] ?? null) !== 'customer') {
+            return;
+        }
+        $status = $this->makeApiCall('GET', "/{$workspace}/status", $token);
+        if (! $status['success'] || ! is_array($status['data'] ?? null)
+            || ! empty($status['data']['mergeConflict']) || ! is_array($status['data']['workspaceChange'] ?? [])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'Google Tag Manager workspace changes could not be verified. Resolve workspace conflicts or select a clean workspace before retrying. No live tracking was published.']);
+        }
+        foreach ($status['data']['workspaceChange'] ?? [] as $change) {
+            $allowed = false;
+            if (is_array($change) && in_array($change['changeStatus'] ?? null, ['added', 'updated', 'deleted'], true)) {
+                foreach (['tag', 'trigger', 'variable'] as $type) {
+                    $name = $change[$type]['name'] ?? '';
+                    $prefix = 'Site to Spend '.$strategyUuid.' ';
+                    $namedEntity = is_string($name) && match ($type) {
+                        'tag' => $name === $prefix.'conversion',
+                        'trigger' => preg_match('/^'.preg_quote($prefix, '/').'[a-f0-9]{16}$/D', $name) === 1,
+                        'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency'], true),
+                    };
+                    if ($namedEntity && \Illuminate\Support\Str::isUuid($strategyUuid)) {
+                        $allowed = count(array_diff(array_keys($change), ['changeStatus', $type])) === 0;
+                    }
+                }
+                if ($change['changeStatus'] === 'added' && in_array($change['builtInVariable']['type'] ?? null, ['pageHostname', 'pageUrl', 'event'], true)) {
+                    $allowed = count(array_diff(array_keys($change), ['changeStatus', 'builtInVariable'])) === 0;
+                }
+            }
+            if (! $allowed) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['container_id' => 'This Google Tag Manager workspace contains changes outside this campaign. Publish or move those changes in Tag Manager, or select a clean workspace, then retry. We have not published your unrelated drafts.']);
+            }
+        }
     }
 
     private function reviewedVersionMatches(array $version, array $tag, ?array $trigger, array $variables = []): bool
@@ -701,6 +941,10 @@ HTML;
      */
     public function addFacebookPixelTag(Customer $customer, string $pixelId): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -975,6 +1219,10 @@ JS;
      */
     public function addFacebookConversionTag(Customer $customer, string $pixelId, array $config = []): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -1110,6 +1358,10 @@ JAVASCRIPT;
      */
     public function addMicrosoftUetTag(Customer $customer, string $uetTagId): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -1162,6 +1414,10 @@ JS;
      */
     public function addTrigger(Customer $customer, string $triggerName, string $triggerType, array $config = []): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -1198,6 +1454,10 @@ JS;
      */
     public function publishContainer(Customer $customer, string $notes = ''): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -1394,6 +1654,10 @@ JS;
      */
     public function addFacebookLeadEventTag(Customer $customer, string $pixelId): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
@@ -1449,6 +1713,10 @@ JS;
      */
     public function addMicrosoftLeadEventTag(Customer $customer, string $uetTagId): array
     {
+        if ($blocked = $this->unreviewedMutationError($customer)) {
+            return $blocked;
+        }
+
         try {
             if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];

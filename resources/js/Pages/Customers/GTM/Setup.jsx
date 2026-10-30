@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Head, router, usePage } from '@inertiajs/react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import { fetchJson } from '@/utils/http';
+import { usePolling } from '@/hooks/usePolling';
 
 function CopyBlock({ label, code }) {
     const [copied, setCopied] = useState(false);
@@ -165,13 +166,185 @@ function HandOffPanel({ customer }) {
     );
 }
 
-export default function GTMSetupPage({ auth, customer: initialCustomer, snippet: initialSnippet, existingTags }) {
-    const { flash } = usePage().props;
+function CustomerOwnedTracking({ customer, snippet, existingTags, trackingOwnership, goalSetupUrl, identityError, processing, onVerify }) {
+    const identity = customer.setup_handover?.google_identity;
+    const identityVerified = Boolean(identity?.email && identity?.subject && identity?.verified_at && trackingOwnership?.status !== 'identity_required');
+    const adsAccess = customer.setup_handover?.ads_access || {};
+    const adsAccepted = identityVerified && adsAccess.status === 'accepted' && adsAccess.email === identity.email && adsAccess.subject === identity.subject
+        && String(adsAccess.account_id || '').replace(/\D/g, '') === String(customer.google_ads_customer_id || '').replace(/\D/g, '')
+        && Boolean(customer.google_ads_customer_id);
+    const ownership = trackingOwnership || {};
+    const owned = identityVerified && ownership.status === 'connected' && ownership.connected === true && ownership.email === identity.email
+        && Boolean(ownership.public_id) && ownership.public_id === customer.gtm_container_id;
+    const installed = owned && customer.gtm_installed === true && customer.gtm_container_id === ownership.public_id;
+    const previousSelection = ['connected', 'access_unverified', 'identity_changed'].includes(ownership.status);
+    const { data, setData, post, processing: connecting, errors } = useForm({
+        account_id: previousSelection ? ownership.account_id || '' : '', container_id: previousSelection ? ownership.container_id || '' : '',
+    });
+    const [pendingAction, setPendingAction] = useState(null);
+    const [actionError, setActionError] = useState(null);
+    const customerId = customer.uuid || customer.id;
+    const validSelection = /^\d{1,20}$/.test(data.account_id) && /^\d{1,20}$/.test(data.container_id);
+    const request = (action) => {
+        if (pendingAction) return;
+        setPendingAction(action);
+        setActionError(null);
+        router.post(route(action, { customer: customerId }), {}, {
+            preserveScroll: true,
+            onError: errors => setActionError(Object.values(errors).flat().join(' ') || 'This check could not finish. Please try again.'),
+            onFinish: () => setPendingAction(null),
+        });
+    };
+    const connect = event => {
+        event.preventDefault();
+        if (!identityVerified || !ownership.platform_email || !validSelection || connecting) return;
+        post(route('customers.gtm.connect', { customer: customerId }), { preserveScroll: true });
+    };
+    const adsMessage = adsAccepted ? `Google confirms that ${adsAccess.email} has administrator access to account ${adsAccess.account_id}.`
+        : adsAccess.status === 'approval_pending' ? 'Google is waiting for an existing administrator to approve the invitation request. Your access is not ready yet.'
+        : adsAccess.status === 'invitation_pending' ? 'Your Google Ads invitation is pending. Accept it using the Google account shown above, then check access again.'
+        : adsAccess.status === 'error' ? 'We could not verify access with Google. Try the check again; an invitation alone does not confirm access.'
+        : !customer.google_ads_customer_id ? 'Your Google Ads account is not ready yet. Its invitation and access check will appear here once the account is created.'
+        : 'We have not yet confirmed that your Google account can administer this Google Ads account.';
+
+    return <>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-6">
+            <h3 className="text-lg font-semibold text-blue-900">Your accounts, your tracking</h3>
+            <p className="mt-2 text-sm text-blue-900">Confirm that you control your Google Ads account and your own Google Tag Manager account before handover.</p>
+            <p className="mt-2 text-sm text-blue-800">If you remove SiteToSpend’s access later, your Google accounts and published conversion tags remain in place. SiteToSpend’s monitoring and automated changes will stop.</p>
+        </div>
+
+        <section aria-label="Your Google identity" className="rounded-lg bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">1. Which Google account will manage your setup?</h3>
+            <p className="mt-2 text-sm text-gray-600">Use the Google account you want to manage your ads and website tracking. Signing in confirms your identity; it does not connect an existing ads account or grant access to other customers’ accounts.</p>
+            {identityVerified && <p className="mt-3 text-sm text-green-800">Google identity confirmed: <strong>{identity.email}</strong></p>}
+            {!identityVerified && <p className="mt-3 text-sm text-amber-800">Your Google identity has not been confirmed yet.</p>}
+            <PrimaryButton type="button" onClick={() => request('customers.setup.google-identity')} disabled={Boolean(pendingAction)} className="mt-4">
+                {pendingAction === 'customers.setup.google-identity' ? 'Opening Google…' : identityVerified ? 'Use another Google account' : 'Continue with Google'}
+            </PrimaryButton>
+            {identityError && <p role="alert" className="mt-3 text-sm text-red-700">{identityError}</p>}
+        </section>
+
+        <section aria-label="Your Google Ads access" className="rounded-lg bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">2. Confirm that you can manage your Google Ads account</h3>
+            <p className={`mt-2 text-sm ${adsAccepted ? 'text-green-800' : 'text-gray-700'}`}>{adsMessage}</p>
+            <p className="mt-2 text-sm text-gray-600">Administrator access applies to your customer account, not SiteToSpend’s manager account or other customers.</p>
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+                <PrimaryButton type="button" onClick={() => request('customers.setup.verify-access')}
+                    disabled={!identityVerified || !customer.google_ads_customer_id || Boolean(pendingAction)}>
+                    {pendingAction === 'customers.setup.verify-access' ? 'Checking access…' : 'Check Google Ads access'}
+                </PrimaryButton>
+                <a href="https://ads.google.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-dark underline">Open Google Ads</a>
+            </div>
+            {adsAccess.checked_at && <p className="mt-3 text-xs text-gray-500">Last checked: {new Date(adsAccess.checked_at).toLocaleString()}</p>}
+        </section>
+        {actionError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{actionError}</p>}
+
+        <section aria-label="Your tracking account" className="rounded-lg bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">3. Choose your own Tag Manager account</h3>
+            <p className="mt-2 text-sm text-gray-600">Google Tag Manager holds your website’s conversion tags. Use an account where your confirmed Google identity is an administrator, so you retain control after handover.</p>
+            <p className="mt-2 text-sm text-gray-600">Already use Tag Manager? Choose that account and its website container. If you do not have one, create an account and a Web container in Google first.</p>
+            <a href="https://tagmanager.google.com/" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm font-medium text-brand-dark underline">Open Google Tag Manager</a>
+            {owned ? <p className="mt-3 text-sm text-green-800">The last ownership check confirmed administrator access for <strong>{ownership.email}</strong>. Container: <strong>{ownership.public_id}</strong>.</p>
+                : <p className="mt-3 text-sm text-amber-800">{ownership.message || 'Your tracking account ownership has not been verified yet.'}</p>}
+            {owned && ownership.verified_at && <p className="mt-2 text-xs text-gray-500">Last ownership check: {new Date(ownership.verified_at).toLocaleString()}</p>}
+            {owned && ownership.requires_recheck && <p className="mt-2 text-sm text-amber-800">These permissions need a fresh check. Verify the same container again before handover.</p>}
+            {ownership.status === 'legacy_platform_container' && <p className="mt-2 text-sm text-amber-800">The existing container is in SiteToSpend’s shared account. It does not establish your ownership. Select your own account below; you will not receive access to the shared account.</p>}
+            {!identityVerified && <p className="mt-3 text-sm text-gray-600">Confirm your Google identity in step 1 before choosing your tracking account.</p>}
+            {ownership.platform_email ? <p className="mt-3 text-sm text-gray-700">In your own Tag Manager account, invite <strong>{ownership.platform_email}</strong> as an Administrator and give it Publish permission on the chosen container. This lets SiteToSpend verify your ownership and configure tracking in that container.</p>
+                : <p role="alert" className="mt-3 text-sm text-amber-800">SiteToSpend’s tracking access is not configured yet. We need to finish that before you can connect your container.</p>}
+            <form onSubmit={connect} className="mt-4 space-y-4">
+                <p id="tracking-account-number-help" className="text-xs text-gray-600">Find these numbers in your Tag Manager page address: accounts/<strong>123456</strong>/containers/<strong>987654</strong>. The container number is not the public GTM-XXXX code installed on your website.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div><label htmlFor="owned-gtm-account" className="block text-sm font-medium text-gray-900">Tag Manager account number</label>
+                        <input id="owned-gtm-account" inputMode="numeric" pattern="[0-9]+" required value={data.account_id} onChange={event => setData('account_id', event.target.value)}
+                            aria-describedby="tracking-account-number-help" aria-invalid={Boolean(errors.account_id)} className="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+                        {errors.account_id && <p role="alert" className="mt-1 text-sm text-red-700">{errors.account_id}</p>}</div>
+                    <div><label htmlFor="owned-gtm-container" className="block text-sm font-medium text-gray-900">Container number</label>
+                        <input id="owned-gtm-container" inputMode="numeric" pattern="[0-9]+" required value={data.container_id} onChange={event => setData('container_id', event.target.value)}
+                            aria-describedby="tracking-account-number-help" aria-invalid={Boolean(errors.container_id)} className="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+                        {errors.container_id && <p role="alert" className="mt-1 text-sm text-red-700">{errors.container_id}</p>}</div>
+                </div>
+                <PrimaryButton type="submit" disabled={!identityVerified || !ownership.platform_email || !validSelection || connecting}>
+                    {connecting ? 'Checking your container…' : 'Verify and use this container'}
+                </PrimaryButton>
+            </form>
+        </section>
+
+        <section aria-label="Website tag installation" className="rounded-lg bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">4. Check the tag on your website</h3>
+            <p className="mt-2 text-sm text-gray-600">If this same container is already installed, keep it. A new campaign needs its conversion tag and trigger configured inside the container; you do not reinstall the base website snippet for every campaign.</p>
+            {existingTags?.detected_container_id && <p className="mt-2 text-sm text-gray-700">Previously found on your website: <strong>{existingTags.detected_container_id}</strong>. Finding a tag does not prove that a conversion event works.</p>}
+            {!owned ? <p className="mt-3 text-sm text-amber-800">Choose and verify your own container in step 3 before checking its website installation.</p>
+                : <>
+                    <p className={`mt-3 text-sm ${installed ? 'text-green-800' : 'text-amber-800'}`}>{installed ? 'Your selected website tag was found. A real conversion event still needs testing.' : 'Installation of your selected website tag has not been verified.'}</p>
+                    <PrimaryButton type="button" onClick={onVerify} disabled={processing || !customer.website} className="mt-4">{processing ? 'Scanning…' : 'Check website tag'}</PrimaryButton>
+                    {!customer.website && <p className="mt-2 text-sm text-amber-800">Add your website address to your business profile before checking installation.</p>}
+                    {snippet && <details className="mt-5"><summary className="cursor-pointer text-sm font-medium text-brand-dark">Installation code — only if this container is missing</summary>
+                        <div className="mt-4"><HandOffPanel customer={customer} />
+                            <p className="mb-3 text-sm text-gray-600">Install this container once. Do not add a duplicate copy when it is already on your website.</p>
+                            <CopyBlock label="Paste inside <head>" code={snippet.head} /><CopyBlock label="Paste after opening <body>" code={snippet.body} />
+                        </div>
+                    </details>}
+                </>}
+        </section>
+
+        <section aria-label="Conversion event test" className="rounded-lg bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">5. Test the conversion you want to measure</h3>
+            <p className="mt-2 text-sm font-medium text-amber-800">A successful conversion test is not yet verified here.</p>
+            <p className="mt-2 text-sm text-gray-600">Before launching, complete the intended enquiry or purchase flow in Tag Assistant and check that it sends the correct event to the selected Google Ads conversion action. A found snippet or a saved conversion goal does not confirm this test.</p>
+            <div className="mt-4 flex flex-wrap gap-4">
+                {goalSetupUrl && <Link href={goalSetupUrl} className="text-sm font-medium text-brand-dark underline">Review your conversion goal</Link>}
+                <a href="https://tagassistant.google.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-dark underline">Open Tag Assistant</a>
+            </div>
+        </section>
+    </>;
+}
+
+export default function GTMSetupPage({ auth, customer: initialCustomer, snippet: initialSnippet, existingTags, trackingOwnership = null, goalSetupUrl = null, handoverRevision = null }) {
+    const { flash, errors: pageErrors = {} } = usePage().props;
     const [customer, setCustomer] = useState(initialCustomer);
     const [snippet, setSnippet] = useState(initialSnippet);
     const [processing, setProcessing] = useState(false);
-    const [successMessage, setSuccessMessage] = useState(flash?.success || null);
-    const [errorMessage, setErrorMessage] = useState(flash?.error || null);
+    const [successMessage, setSuccessMessage] = useState(flash?.success || (flash?.type === 'success' ? flash.message : null));
+    const [errorMessage, setErrorMessage] = useState(flash?.error || (flash?.type === 'error' ? flash.message : null));
+    const [statusRefreshError, setStatusRefreshError] = useState(false);
+    const [statusRetry, setStatusRetry] = useState(0);
+    const requestedRevision = useRef(null);
+    const observedPageRevision = useRef(handoverRevision);
+    const statusReloading = useRef(false);
+    const setupOnly = initialCustomer.service_type === 'setup_only';
+    const statusPoll = usePolling(setupOnly ? route('customers.gtm.status', { customer: initialCustomer.uuid || initialCustomer.id }) : null, {
+        enabled: setupOnly, interval: 10000, immediate: false, restartKey: `${handoverRevision}:${statusRetry}`,
+        parse: response => {
+            if (typeof response?.handover_revision !== 'string') throw new Error('Account status could not be read.');
+            return response;
+        },
+    });
+    const refreshStatus = useCallback(() => {
+        if (statusReloading.current) return;
+        statusReloading.current = true;
+        setStatusRefreshError(false);
+        router.reload({
+            only: ['customer', 'snippet', 'trackingOwnership', 'handoverRevision', 'goalSetupUrl'], preserveScroll: true,
+            onError: () => setStatusRefreshError(true),
+            onFinish: () => { statusReloading.current = false; setStatusRetry(value => value + 1); },
+        });
+    }, []);
+    useEffect(() => {
+        // A new page response supersedes an older poll still in memory. Wait
+        // for the restarted poll before comparing against the new revision.
+        if (observedPageRevision.current !== handoverRevision) {
+            observedPageRevision.current = handoverRevision;
+            requestedRevision.current = null;
+            return;
+        }
+        const revision = statusPoll.data?.handover_revision;
+        if (!setupOnly || !handoverRevision || !revision || revision === handoverRevision
+            || requestedRevision.current === revision || statusReloading.current) return;
+        requestedRevision.current = revision;
+        refreshStatus();
+    }, [setupOnly, handoverRevision, statusPoll.data, refreshStatus]);
 
     // Sync state from props when Inertia re-renders with fresh data after redirect
     useEffect(() => {
@@ -180,12 +353,19 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
     }, [initialCustomer, initialSnippet]);
 
     useEffect(() => {
-        if (flash?.success) {
-            setSuccessMessage(flash.success);
-            setTimeout(() => setSuccessMessage(null), 6000);
+        const success = flash?.success || (flash?.type === 'success' ? flash.message : null);
+        const error = flash?.error || (flash?.type === 'error' ? flash.message : null);
+        if (error) {
+            setErrorMessage(error);
+            setSuccessMessage(null);
+        } else if (success) {
+            setSuccessMessage(success);
+            setErrorMessage(null);
+            const timer = setTimeout(() => setSuccessMessage(null), 6000);
+            return () => clearTimeout(timer);
         }
-        if (flash?.error) setErrorMessage(flash.error);
-    }, [flash]);
+        return undefined;
+    }, [flash?.success, flash?.error, flash?.type, flash?.message]);
 
     const handleProvision = () => {
         setProcessing(true);
@@ -214,25 +394,32 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
             user={auth.user}
             header={
                 <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                    Tracking Setup — {customer.name}
+                    {customer.service_type === 'setup_only' ? 'Account access & tracking' : 'Tracking Setup'} — {customer.name}
                 </h2>
             }
         >
-            <Head title="Tracking Setup" />
+            <Head title={customer.service_type === 'setup_only' ? 'Account access & tracking' : 'Tracking Setup'} />
 
             <div className="py-12">
                 <div className="max-w-3xl mx-auto space-y-6">
 
                     {successMessage && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
+                        <div role="status" className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
                             {successMessage}
                         </div>
                     )}
                     {errorMessage && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+                        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
                             {errorMessage}
                         </div>
                     )}
+                    {setupOnly && (statusPoll.error || statusRefreshError) && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        <p>We could not refresh account and tracking status. These are the last confirmed details.</p>
+                        <button type="button" onClick={refreshStatus} className="mt-2 font-semibold underline">Refresh account status</button>
+                    </div>}
+
+                    {customer.service_type === 'setup_only' ? <CustomerOwnedTracking customer={customer} snippet={snippet} existingTags={existingTags}
+                        trackingOwnership={trackingOwnership} goalSetupUrl={goalSetupUrl} identityError={pageErrors.google_identity} processing={processing} onVerify={handleVerify} /> : <>
 
                     {/* Existing Google Tags Guidance */}
                     {(customer.gtm_detected || existingTags) && (
@@ -409,6 +596,8 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
                             )}
                         </div>
                     )}
+
+                    </>}
 
                 </div>
             </div>

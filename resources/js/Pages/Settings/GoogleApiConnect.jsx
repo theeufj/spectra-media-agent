@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 const SCOPE_LABELS = {
     'https://www.googleapis.com/auth/adwords':                      { name: 'Google Ads', desc: 'Create and manage ad campaigns, read performance data' },
@@ -27,8 +28,15 @@ function ScopeRow({ uri }) {
     );
 }
 
-export default function GoogleApiConnect({ connection }) {
-    const { errors } = usePage().props;
+export default function GoogleApiConnect({ connection, platformTracking, canAuthorizeTracking = false }) {
+    const { errors, flash } = usePage().props;
+    const [authorizing, setAuthorizing] = useState(false);
+    const authorizeTracking = () => {
+        if (authorizing || !canAuthorizeTracking) return;
+        router.post(route('google-api.tracking-authorize'), {}, {
+            onStart: () => setAuthorizing(true), onFinish: () => setAuthorizing(false),
+        });
+    };
 
     const allScopes = Object.keys(SCOPE_LABELS);
 
@@ -54,10 +62,23 @@ export default function GoogleApiConnect({ connection }) {
                 </div>
 
                 {errors?.oauth && (
-                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                    <div role="alert" className="mb-6 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
                         {errors.oauth}
                     </div>
                 )}
+
+                {flash?.success && <p role="status" className="mb-6 rounded-lg bg-green-50 p-4 text-green-800">{flash.success}</p>}
+                <section aria-label="Platform tracking authorization" className="mb-8 rounded-xl border border-orange-200 bg-orange-50 p-5">
+                    <h2 className="font-semibold text-gray-900">Platform tracking authorization</h2>
+                    <p className="mt-2 text-sm text-gray-700">Use a Google administrator of Tag Manager account {platformTracking?.account_id || 'configured for this platform'}. This authorizes the shared tracking service to check customer ownership and publish approved tags.</p>
+                    <p className="mt-2 text-sm text-gray-700">Google will ask for your identity, container editing, version publishing and user-permission access. Customer-owned accounts still require that customer to grant access in Tag Manager. Google Ads credentials stay unchanged.</p>
+                    <p className="mt-3 text-sm font-medium">{platformTracking?.ownership_checks_authorized ? `Authorized as ${platformTracking.email}` : 'Ownership checks need platform authorization.'}</p>
+                    <button onClick={authorizeTracking} disabled={authorizing || !canAuthorizeTracking} className="mt-4 rounded-lg bg-orange-700 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600">{authorizing ? 'Opening Google…' : 'Authorize platform tracking'}</button>
+                    {!canAuthorizeTracking && <p className="mt-2 text-sm text-gray-600">A full platform administrator must authorize this connection.</p>}
+                </section>
+
+                <h2 className="text-lg font-semibold text-gray-900">API verification connection</h2>
+                <p className="mb-4 mt-2 text-sm text-gray-600">This separate connection is used for Google API verification. Renew platform tracking with the button above.</p>
 
                 {/* Already connected banner */}
                 {connection && (
@@ -79,7 +100,7 @@ export default function GoogleApiConnect({ connection }) {
                 {/* Scope list */}
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
                     <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Permissions requested</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">API verification permissions</p>
                     </div>
                     <div className="px-5">
                         {allScopes.map(scope => <ScopeRow key={scope} uri={scope} />)}

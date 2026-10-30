@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
 
-export const SETUP_STAGES = ['Your business', 'Your campaign', 'Review your ads', 'Your account is ready'];
+export const SETUP_STAGES = ['Your business', 'Your campaign', 'Review your ads', 'Your account & tracking'];
 
 export function SetupStages({ stage = 0 }) {
     return (
@@ -23,13 +23,15 @@ export function HandoverChecklist({ items = [] }) {
     return (
         <section className="rounded-xl border border-gray-200 bg-white p-6">
             <h2 className="text-xl font-semibold text-gray-900">Before you switch on ads</h2>
-            <p className="mt-2 text-sm text-gray-600">Account creation and launch readiness are separate. Complete the remaining checks below before switching on ads.</p>
+            <p className="mt-2 text-sm text-gray-600">Confirm that you control your accounts, have billing ready and can measure the conversion you want before launching. An invitation or an installed website tag alone does not complete these checks.</p>
             <ul className="mt-6 divide-y divide-gray-100">
                 {items.map(item => (
                     <li key={item.title} className="flex items-start gap-3 py-4">
                         <span className={`mt-0.5 text-sm ${item.done ? 'text-green-700' : 'text-amber-700'}`} aria-label={item.done ? 'Confirmed' : 'Action needed'}>{item.done ? '✓' : '○'}</span>
                         <div><h3 className="font-medium text-gray-900">{item.title}</h3><p className="mt-1 text-sm text-gray-600">{item.detail}</p>
-                            {item.url && <Link href={item.url} className="mt-2 inline-block text-sm font-medium text-brand-dark underline">{item.action_text || 'Set up tracking'}</Link>}
+                            {item.url && (/^https?:\/\//.test(item.url)
+                                ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-medium text-brand-dark underline">{item.action_text || 'Review this step'}</a>
+                                : <Link href={item.url} className="mt-2 inline-block text-sm font-medium text-brand-dark underline">{item.action_text || 'Review this step'}</Link>)}
                         </div>
                     </li>
                 ))}

@@ -7,6 +7,8 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Strategy;
+use App\Services\Customers\SetupGoogleAdsAccess;
+use App\Services\GTM\CustomerTrackingOwnership;
 
 /** A read-only description of the purchased setup, shared by every setup screen. */
 class SetupJourney
@@ -33,12 +35,19 @@ class SetupJourney
             ->where('details->google_ads_customer_id', $customer->cleanGoogleCustomerId())
             ->latest('id')->first() : null;
         $invitationSent = $accessActivity?->action === 'google_ads_admin_invitation_sent';
-        $approvalPending = $accessActivity?->action === 'google_ads_admin_approval_pending';
+        $identity = SetupGoogleAdsAccess::identity($customer);
+        $access = SetupGoogleAdsAccess::status($customer);
+        $accessAccepted = ($access['status'] ?? null) === 'accepted';
+        $invitationSent = ($access['status'] ?? null) === 'invitation_pending' || ($invitationSent && ! $identity);
+        $approvalPending = ($access['status'] ?? null) === 'approval_pending';
+        $ownership = app(CustomerTrackingOwnership::class)->status($customer);
+        $trackingOwned = (bool) ($ownership['connected'] ?? false);
+        $accessUrl = route('customers.gtm.setup', $customer);
         $ready = $this->checkoutReady($customer);
         $signed = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->signed_off_at !== null);
         $verified = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->deployment_status === 'verified');
         $created = $strategies->isNotEmpty() && $strategies->every(fn (Strategy $s) => $s->isDeployed());
-        $handedOver = $verified && $customer->handover_at !== null;
+        $handedOver = $verified && $customer->handover_at !== null && $accessAccepted && $trackingOwned;
         $error = (bool) $campaign?->strategy_generation_error;
         $deploymentProblem = $strategies->contains(fn (Strategy $s) => in_array($s->deployment_status, ['failed', 'deploy_unverified'], true));
         $buildStarted = $campaign->strategy_generation_started_at ?? $customer->setup_fee_paid_at;
@@ -49,7 +58,7 @@ class SetupJourney
         $recentActivity = $strategies->contains(fn (Strategy $s) => $s->updated_at->gt(now()->subMinutes(30)));
         $creating = $awaitingCreation && $recentActivity;
         $deploymentProblem = $deploymentProblem || ($awaitingCreation && ! $recentActivity);
-        $awaitingInvitation = $verified && ! $handedOver && $recentActivity;
+        $awaitingInvitation = false; // Acceptance and ownership require customer action, not an endless spinner.
         $campaignUrl = $campaign ? route('campaigns.show', $campaign) : null;
         $reviewUrl = $campaign && $strategy?->signed_off_at
             ? route('campaigns.collateral.show', [$campaign, $strategy]) : $campaignUrl;
@@ -69,7 +78,7 @@ class SetupJourney
         $trackingVerified = $googleStrategies->isNotEmpty() && $googleStrategies->every(fn (Strategy $s) => SetupConversionGoal::conversionVerificationFor($s)['verified']);
         $trackingSetupUrl = $campaign && $trackingTarget
             ? route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $trackingTarget->uuid])
-            : ($customer->gtm_container_id ? route('customers.gtm.setup', $customer) : null);
+            : $accessUrl;
         $goalDetail = match (true) {
             $goalConfigured => 'Your selected goal is configured in Google Ads. Website installation and a real conversion still need their own checks.',
             $goalConfiguring => 'We are configuring your selected goal. Your ads remain paused; you can check progress here.',
@@ -102,12 +111,18 @@ class SetupJourney
                 'status' => $verified ? 'completed' : ($deploymentProblem ? 'failed' : ($creating ? 'in_progress' : 'pending')),
                 'action_url' => $campaign && ($creating || $deploymentProblem) ? route('campaigns.deployment-status', $campaign) : ($signed ? $reviewUrl : null),
                 'action_text' => $creating || $deploymentProblem ? 'View creation status' : ($signed ? 'Review ads' : null)],
-            ['key' => 'handover', 'title' => 'Your account is ready', 'completed' => $handedOver,
-                'description' => $handedOver ? 'Your account is built. Complete the checks below before switching on ads.'
-                    : ($approvalPending ? 'A second Google Ads administrator must approve access before your invitation is sent.'
-                        : ($invitationSent ? 'Your administrator invitation has been sent. We are finishing your paused campaign.' : 'We will create your account and send your administrator invitation.')),
-                'status' => $handedOver ? 'completed' : ($approvalPending || $awaitingInvitation ? 'in_progress' : ($verified ? 'failed' : 'pending')),
-                'action_url' => $created ? route('dashboard') : null, 'action_text' => $created ? 'View handover' : null],
+            ['key' => 'handover', 'title' => 'Take control of your account', 'completed' => $handedOver,
+                'description' => match (true) {
+                    ! $identity => 'Confirm the Google login you will use to manage your account.',
+                    $approvalPending => 'A second Google Ads administrator must approve access before your invitation is sent.',
+                    $invitationSent => 'Your administrator invitation has been sent. Accept it, then check access.',
+                    ! $accessAccepted => 'Confirm your administrator access to the Google Ads account.',
+                    ! $trackingOwned => 'Choose a Tag Manager account you control so tracking stays with you.',
+                    $handedOver => 'Your Ads access and tracking ownership are confirmed. Complete the launch checks below before advertising.',
+                    default => 'Account access is confirmed. Campaign verification is still pending.',
+                },
+                'status' => $handedOver ? 'completed' : 'pending',
+                'action_url' => $paid ? $accessUrl : null, 'action_text' => $paid ? 'Review account access and tracking' : null],
         ];
         $current = collect($steps)->firstWhere('completed', false) ?? $steps[3];
         $completed = collect($steps)->where('completed', true)->count();
@@ -115,7 +130,7 @@ class SetupJourney
         return [
             'steps' => $steps, 'current_step' => $current, 'completed_steps' => $completed,
             'total_steps' => 4, 'progress' => $completed * 25, 'is_new_user' => ! $handedOver,
-            'is_working' => $building || $creating || $awaitingInvitation || $approvalPending, 'setup_only' => true,
+            'is_working' => $building || $creating, 'setup_only' => true,
             'checkout_ready' => $ready, 'paid' => $paid,
             'business' => $customer->only(['name', 'website', 'country', 'currency_code']),
             'campaign' => $campaign ? [
@@ -131,11 +146,23 @@ class SetupJourney
                     'detail' => $verified ? 'Creation verified. Current status: '.$campaign->status->value.'.' : ($created ? 'Created; verification is still pending.' : 'Awaiting creation and verification.')],
                 ['title' => 'Daily budget', 'done' => $campaign?->budget_confirmed_at !== null,
                     'detail' => $campaign?->budget_confirmed_at ? $customer->currency_code.' '.number_format((float) ($campaign->approved_daily_budget ?? $campaign->daily_budget), 2).' per day approved. Ad spend is paid separately to Google.' : 'Choose and approve this when reviewing your campaign.'],
-                ['title' => 'Administrator invitation', 'done' => (bool) ($invitationSent || $customer->handover_at),
-                    'detail' => $customer->handover_at || $invitationSent
-                        ? 'Invitation sent. Accept it in your email; acceptance is not confirmed here.'
-                        : ($approvalPending ? 'Awaiting approval from a second Google Ads administrator. No invitation email has been sent yet.'
-                            : 'Sent as soon as your paid Google Ads account is created.')],
+                ['title' => 'Your Google login', 'done' => $identity !== null,
+                    'detail' => $identity ? 'Confirmed Google login: '.$identity['email'].'.' : 'Choose the Google login you will use for your Ads and Tag Manager accounts.',
+                    'url' => $accessUrl, 'action_text' => 'Confirm Google login'],
+                ['title' => 'Google Ads administrator access', 'done' => $accessAccepted,
+                    'detail' => match (true) {
+                        $accessAccepted => 'Google confirmed administrator access for '.$identity['email'].'.',
+                        ! $identity => 'Confirm your Google login before we send the account invitation.',
+                        $approvalPending => 'Awaiting approval from a second Google Ads administrator. No invitation email has been sent yet.',
+                        $invitationSent => 'Invitation sent. Accept it in Google Ads, then check access; acceptance has not been confirmed.',
+                        default => 'Administrator access is not confirmed. Check access after accepting your invitation.',
+                    }, 'url' => $accessUrl, 'action_text' => 'Check account access'],
+                ['title' => 'You control your tracking', 'done' => $trackingOwned,
+                    'detail' => $trackingOwned ? 'Your Google login controls the selected Tag Manager account. Published tags stay in that account if you remove our access.' : 'Choose your own Tag Manager account. An installed tag or a container in our shared account does not confirm that you control tracking.',
+                    'url' => $accessUrl, 'action_text' => 'Review tracking ownership'],
+                ['title' => 'Website tag installed', 'done' => $trackingOwned && (bool) $customer->gtm_installed,
+                    'detail' => $customer->gtm_installed ? 'The selected website tag was detected. This does not confirm that a conversion event fires.' : 'Check whether the selected container is already installed. A new campaign does not require reinstalling the same container.',
+                    'url' => $accessUrl, 'action_text' => 'Check website tag'],
                 ['title' => 'Google billing', 'done' => false,
                     'detail' => 'Add or confirm your payment method in Google Ads. Billing readiness is not verified here.'],
                 // conversion_tracking_verified_at is also set when configuration is merely published.

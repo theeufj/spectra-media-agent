@@ -230,7 +230,7 @@ describe('Campaign conversion goal setup', () => {
         ]} />);
 
         expect(screen.getByRole('link', { name: 'Set up goal' })).toHaveAttribute('href', '/goal');
-        expect(screen.getByRole('link', { name: 'Set up tracking' })).toHaveAttribute('href', '/tag');
+        expect(screen.getByRole('link', { name: 'Review this step' })).toHaveAttribute('href', '/tag');
         expect(screen.queryByText(/Check each remaining item in your Google Ads account/)).toBeNull();
     });
 });

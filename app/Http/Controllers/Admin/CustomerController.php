@@ -101,13 +101,20 @@ class CustomerController extends Controller
      */
     public function markHandedOver(Customer $customer, HandOverAccount $handover)
     {
-        $result = $handover->handOver($customer);
+        try {
+            $result = $handover->handOver($customer);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('flash', ['type' => 'error',
+                'message' => 'Google account access could not be verified. The handover is still pending; retry the check.']);
+        }
 
         if ($result['handed_over']) {
             return redirect()->back()->with('flash', [
                 'type' => 'success',
                 'message' => $result['invited']
-                    ? 'Handover recorded — invited '.implode(', ', $result['invited']).' to the account.'
+                    ? 'Account access verified for '.implode(', ', $result['invited']).'. Website event testing and billing remain separate.'
                     : "Handover recorded — {$customer->name} has the keys.",
             ]);
         }
@@ -130,6 +137,10 @@ class CustomerController extends Controller
                 'message' => 'Google requires a second account administrator to approve access for '
                     .implode(', ', $result['awaiting_approval']).'. No invitation email has been sent yet.',
             ],
+            'identity_required' => ['type' => 'info', 'message' => 'The customer must confirm their Google login before we can send access.'],
+            'invitation_pending' => ['type' => 'info', 'message' => 'The Google invitation is awaiting customer acceptance. Handover is not complete.'],
+            'tracking_pending' => ['type' => 'info', 'message' => 'The customer must select and verify a Tag Manager account they control.'],
+            'campaign_pending' => ['type' => 'info', 'message' => 'Campaign verification is still pending.'],
             default => [
                 'type' => 'error',
                 'message' => 'Could not invite '.implode(', ', array_keys($result['failed']))

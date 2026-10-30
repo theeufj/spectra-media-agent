@@ -1,39 +1,16 @@
 @extends('layouts.email')
 
-@section('title', 'Your Google Ads account is ready')
+@section('title', 'Your Google account access is confirmed')
 
 @section('content')
-    <h1>The keys are yours</h1>
-
-    <p>
-        Your Google Ads setup for {{ $customer->name }} is complete. The
-        campaigns, keywords, ad copy and conversion tracking are all in place
-        — and everything is <strong>paused</strong>, so nothing spends until
-        you decide.
-    </p>
-
-    @if ($customer->google_ads_customer_id)
-        <div style="background-color: #f7fafc; border-left: 3px solid {{ $tenantPrimary ?? '#ff4d00' }}; padding: 16px 20px; border-radius: 4px; margin: 24px 0;">
-            <p style="margin: 0 0 4px; font-size: 13px; font-weight: bold; color: #718096;">Your Google Ads account ID</p>
-            <p style="margin: 0; font-size: 18px; font-weight: 700; color: #2d3748;">{{ $customer->google_ads_customer_id }}</p>
-        </div>
-    @endif
-
-    <p>@if (! empty($invited))
-        <p><strong>First, accept the invitation.</strong> Google has emailed
-        {{ implode(' and ', $invited) }} an invitation to this account — accept it
-        and you will have full admin access. It sometimes lands in spam.</p>
-    @endif
-
-    Two steps between you and live ads:</p>
-
+    <h1>Your account access is confirmed</h1>
+    <p>Your campaign for {{ $customer->name }} has been created and verified. Google has confirmed administrator access for {{ implode(' and ', $invited) }} to Ads account {{ $customer->google_ads_customer_id }}. We have also verified that you control the selected Tag Manager account.</p>
+    <p>This confirms account access, not that conversion tracking has passed a website test. Handover does not switch on your ads or change your budget.</p>
     <ol style="color: #4a5568; padding-left: 20px;">
-        <li style="margin-bottom: 8px;"><strong>Add your billing</strong> — in Google Ads, go to Billing → Settings and add your payment method. Spend goes straight to Google; we're not in the middle.</li>
-        <li style="margin-bottom: 8px;"><strong>Enable your campaigns</strong> — switch them from Paused to Enabled whenever you're ready.</li>
+        <li><strong>Add your billing</strong> in Google Ads. Advertising spend is paid separately to Google.</li>
+        <li><strong>Check your conversion setup.</strong> Use your existing website tag when it matches the selected container. Configure the correct conversion event and test it with Google Tag Assistant before advertising.</li>
+        <li><strong>Review your campaign and budget</strong> in Google Ads, then enable the campaign when you are ready.</li>
     </ol>
-
-    <p>
-        That's the whole engagement — no subscription, nothing recurring. If
-        you ever want us to take the wheel again, you know where we are.
-    </p>
+    <p>The website tags and conversion actions are in accounts you control. Removing SiteToSpend's access stops our ability to check or update them; it does not remove already published tags from your website.</p>
+    <p><a href="{{ route('customers.gtm.setup', $customer) }}">Review your account and tracking checks</a></p>
 @endsection

@@ -872,6 +872,7 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 | what an admin doing a verification recording does.
 */
 Route::middleware(['auth', 'admin'])->group(function () {
+    Route::post('/settings/google-api/tracking-authorize', [App\Http\Controllers\GTMPlatformAuthorizationController::class, 'start'])->middleware('throttle:5,1')->name('google-api.tracking-authorize');
     Route::get('/settings/google-api', [App\Http\Controllers\GoogleApiOAuthController::class, 'show'])->name('google-api.show');
     Route::get('/settings/google-api/connect', [App\Http\Controllers\GoogleApiOAuthController::class, 'redirect'])->name('google-api.redirect');
     Route::get('/settings/google-api/callback', [App\Http\Controllers\GoogleApiOAuthController::class, 'callback'])->name('google-api.callback');
@@ -1002,3 +1003,11 @@ Route::get('/email/sequences/unsubscribe/{type}/{id}', [App\Http\Controllers\Ema
 Route::get('/email/unsubscribe/{user}', [App\Http\Controllers\EmailPreferenceController::class, 'unsubscribe'])
     ->name('email.unsubscribe')
     ->middleware('signed');
+
+Route::post('/customers/{customer}/setup/verify-access', [App\Http\Controllers\SetupAccountAccessController::class, 'verify'])
+    ->middleware(['auth', App\Http\Middleware\AuthorizeSetupCustomer::class, 'can:update,customer', 'throttle:5,1'])
+    ->name('customers.setup.verify-access');
+
+Route::post('/customers/{customer}/gtm/connect', [App\Http\Controllers\GTMSetupController::class, 'connect'])
+    ->middleware(['auth', App\Http\Middleware\AuthorizeSetupCustomer::class, 'can:update,customer', 'throttle:5,1'])
+    ->name('customers.gtm.connect');

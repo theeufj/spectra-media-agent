@@ -36,6 +36,7 @@ class EarlySetupAccountInvitationTest extends TestCase
             'setup_fee_paid_at' => $paid ? now() : null,
             'google_ads_customer_id' => $accountId,
             'is_sandbox' => false,
+            'setup_handover' => ['google_identity' => ['email' => $user->email, 'subject' => 'verified-user', 'verified_at' => now()->toIso8601String(), 'verified_by_user_id' => $user->id]],
         ]);
         $customer->users()->attach($user->id, ['role' => 'owner']);
 
@@ -47,6 +48,11 @@ class EarlySetupAccountInvitationTest extends TestCase
         $this->app->bind(InviteCustomerUser::class, fn () => new class($result, $email) extends InviteCustomerUser
         {
             public function __construct(private array $result, private ?string $expectedEmail) {}
+
+            public function accessStatus(string $customerId, string $email): string
+            {
+                return 'not_invited';
+            }
 
             public function execute(string $customerId, string $recipient, int $accessRole = AccessRole::ADMIN): array
             {
@@ -70,9 +76,9 @@ class EarlySetupAccountInvitationTest extends TestCase
 
         $this->assertNull($customer->fresh()->handover_at);
         $this->assertDatabaseHas('agent_activities', ['customer_id' => $customer->id, 'action' => 'google_ads_admin_invitation_sent']);
-        $checklist = collect(app(SetupJourney::class)->forCustomer($customer)['checklist']);
-        $this->assertTrue($checklist->firstWhere('title', 'Administrator invitation')['done']);
-        $this->assertStringContainsString('has been sent', app(SetupJourney::class)->forCustomer($customer)['steps'][3]['description']);
+        $checklist = collect(app(SetupJourney::class)->forCustomer($customer->fresh())['checklist']);
+        $this->assertFalse($checklist->firstWhere('title', 'Google Ads administrator access')['done']);
+        $this->assertStringContainsString('has been sent', app(SetupJourney::class)->forCustomer($customer->fresh())['steps'][3]['description']);
     }
 
     public function test_unpaid_and_unprovisioned_customers_are_not_invited(): void
@@ -152,9 +158,9 @@ class EarlySetupAccountInvitationTest extends TestCase
         (new InvitePaidSetupCustomer($customer))->handle();
 
         $this->assertDatabaseHas('agent_activities', ['customer_id' => $customer->id, 'action' => 'google_ads_admin_approval_pending']);
-        $journey = app(SetupJourney::class)->forCustomer($customer);
-        $this->assertFalse(collect($journey['checklist'])->firstWhere('title', 'Administrator invitation')['done']);
-        $this->assertStringContainsString('No invitation email', collect($journey['checklist'])->firstWhere('title', 'Administrator invitation')['detail']);
+        $journey = app(SetupJourney::class)->forCustomer($customer->fresh());
+        $this->assertFalse(collect($journey['checklist'])->firstWhere('title', 'Google Ads administrator access')['done']);
+        $this->assertStringContainsString('No invitation email', collect($journey['checklist'])->firstWhere('title', 'Google Ads administrator access')['detail']);
     }
 
     public function test_payment_immediately_queues_invitation_if_a_child_account_already_exists(): void

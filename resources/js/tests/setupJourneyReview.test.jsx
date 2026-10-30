@@ -22,6 +22,17 @@ describe('setup review', () => {
         expect(getByLabelText('Action needed')).toBeInTheDocument();
         expect(getByText('Sent; acceptance is not confirmed.')).toBeInTheDocument();
     });
+    it('keeps account handover and tracking checks distinct and opens Google links outside Inertia', () => {
+        const { getByText, getByRole, queryByRole } = render(<><SetupStages stage={3} /><HandoverChecklist items={[
+            { title: 'Google account access', detail: 'Administrator access confirmed.', done: true, url: 'https://ads.google.com/', action_text: 'Open Google Ads' },
+            { title: 'Test your conversion', detail: 'A found tag does not confirm a conversion event.', done: false, url: '/tracking', action_text: 'Review tracking' },
+        ]} /></>);
+        expect(getByText('Your account & tracking')).toHaveAttribute('aria-current', 'step');
+        expect(getByRole('link', { name: 'Open Google Ads' })).toHaveAttribute('target', '_blank');
+        expect(getByRole('link', { name: 'Review tracking' })).toHaveAttribute('href', '/tracking');
+        expect(getByText(/An invitation or an installed website tag alone/)).toBeVisible();
+        expect(queryByRole('checkbox')).toBeNull();
+    });
     it('stops when server reports completion but waits for an explicitly requested regeneration', () => {
         poll.data = null;
         const original = { id: 1, updated_at: 'before' };

@@ -89,7 +89,7 @@ class SetupOnlyJourneyTest extends TestCase
         }
     }
 
-    public function test_the_ads_are_theirs_to_approve_and_the_handover_is_not(): void
+    public function test_ads_review_and_google_identity_confirmation_are_reachable(): void
     {
         [$user, $customer] = $this->setupOnlyCustomer(['setup_fee_paid_at' => now()]);
 
@@ -113,9 +113,8 @@ class SetupOnlyJourneyTest extends TestCase
         );
         $this->assertSame('Review campaign', $steps['campaign']['action_text']);
 
-        // The handover is ours and stays ours: a button here is an instruction
-        // to do the thing they paid us to do.
-        $this->assertNull($steps['handover']['action_url']);
+        // The customer confirms their own Google identity and account access.
+        $this->assertSame(route('customers.gtm.setup', $customer), $steps['handover']['action_url']);
     }
 
     public function test_there_is_nothing_to_review_before_the_account_exists(): void

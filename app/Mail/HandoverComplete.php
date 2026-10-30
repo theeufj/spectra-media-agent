@@ -6,20 +6,12 @@ use App\Models\Customer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 
-/**
- * The engagement-closing email for a one-time setup: the account is built,
- * it's theirs, and these are the two steps between them and live ads.
- */
+/** Account access is confirmed; website event testing and billing remain separate. */
 class HandoverComplete extends AppMailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * @param  list<string>  $invited  addresses Google has sent an access
-     *                                 invitation to, so the email can tell them
-     *                                 to accept it rather than implying they
-     *                                 already have a way in
-     */
+    /** @param list<string> $invited Google identities with confirmed administrator access. */
     public function __construct(
         public Customer $customer,
         public array $invited = [],
@@ -27,7 +19,7 @@ class HandoverComplete extends AppMailable
 
     public function build()
     {
-        return $this->subject('Your Google Ads account is ready — here are the keys')
+        return $this->subject('Your Google Ads account access is confirmed')
             ->view('emails.handover-complete');
     }
 }

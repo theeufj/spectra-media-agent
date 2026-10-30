@@ -88,9 +88,9 @@ class SetupJourneyReadinessTest extends TestCase
         $this->assertStringContainsString('50.00 per day', $journey['checklist'][2]['detail']);
         $strategy->update(['deployment_status' => 'verified']);
         $journey = app(SetupJourney::class)->forCustomer($customer);
-        $this->assertTrue($journey['steps'][3]['completed']);
+        $this->assertFalse($journey['steps'][3]['completed']);
         $this->assertFalse($journey['checklist'][4]['done']);
-        $this->assertStringContainsString('acceptance is not confirmed', $journey['checklist'][3]['detail']);
+        $this->assertStringContainsString('Confirm your Google login', collect($journey['checklist'])->firstWhere('title', 'Google Ads administrator access')['detail']);
     }
 
     public function test_an_old_paid_build_is_actionable_instead_of_spinning_forever(): void
@@ -127,11 +127,11 @@ class SetupJourneyReadinessTest extends TestCase
     {
         $customer = $this->customer();
         $customer->update(['conversion_tracking_verified_at' => now(), 'gtm_installed' => false]);
-        $item = app(SetupJourney::class)->forCustomer($customer)['checklist'][5];
+        $item = collect(app(SetupJourney::class)->forCustomer($customer)['checklist'])->firstWhere('title', 'Conversion tracking');
         $this->assertFalse($item['done']);
         $this->assertStringContainsString('Install your website tag', $item['detail']);
         $customer->update(['gtm_installed' => true]);
-        $item = app(SetupJourney::class)->forCustomer($customer)['checklist'][5];
+        $item = collect(app(SetupJourney::class)->forCustomer($customer)['checklist'])->firstWhere('title', 'Conversion tracking');
         $this->assertFalse($item['done']);
         $this->assertStringContainsString('test conversion', $item['detail']);
     }
@@ -154,7 +154,7 @@ class SetupJourneyReadinessTest extends TestCase
 
         $journey = app(SetupJourney::class)->forCustomer($customer);
         $goal = collect($journey['checklist'])->firstWhere('title', 'Campaign conversion goal');
-        $this->assertTrue($journey['steps'][3]['completed']);
+        $this->assertFalse($journey['steps'][3]['completed']);
         $this->assertNotNull($goal);
         $this->assertFalse($goal['done']);
         $this->assertSame(route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $campaign->strategies()->sole()->uuid]), $goal['url']);

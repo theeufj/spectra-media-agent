@@ -151,9 +151,10 @@ class SetupConversionGoal
                     $execution = $strategy->execution_result ?? [];
                     $mayHaveTag = $execution['metadata']['setup_conversion_goal']['managed_tag_may_exist'] ?? false;
                     $managedAction = $execution['metadata']['setup_conversion_goal']['managed_tag_action_resource'] ?? null;
+                    $managedContainer = $execution['metadata']['setup_conversion_goal']['managed_tag_container_path'] ?? null;
                     $execution['metadata']['setup_conversion_goal'] = ['request_id' => $requestId, 'requested_at' => now()->toIso8601String(),
                         'status' => 'configuring', 'goal' => $goal, 'issues' => [], 'managed_tag_may_exist' => $mayHaveTag,
-                        'managed_tag_action_resource' => $managedAction];
+                        'managed_tag_action_resource' => $managedAction, 'managed_tag_container_path' => $managedContainer];
                     $strategy->update(['execution_result' => $execution]);
 
                     return $requestId;
@@ -225,15 +226,16 @@ class SetupConversionGoal
                     }
                     // Remember the possibility before publishing, so a timeout
                     // cannot hide an old tag from a later prepare-only choice.
-                    $this->save($strategy, $requestId, ['managed_tag_may_exist' => true, 'managed_tag_action_resource' => $action['resource']]);
+                    $this->save($strategy, $requestId, ['managed_tag_may_exist' => true, 'managed_tag_action_resource' => $action['resource'],
+                        'managed_tag_container_path' => $customer->gtm_config['container_path'] ?? null]);
                     $tag = $gtm->configureReviewedConversionTag($customer, $strategy->uuid, $goal, $details['conversion_id'], $details['conversion_label'], $authorize);
                     if (! ($tag['success'] ?? false)) {
                         throw new \RuntimeException('The reviewed website conversion tag could not be published. Retry configuration; the campaign remains paused.');
                     }
                 } elseif (($configuration['managed_tag_may_exist'] ?? false)
+                    && (empty($configuration['managed_tag_container_path']) || $configuration['managed_tag_container_path'] === ($customer->gtm_config['container_path'] ?? null))
                     && ($goal['trigger'] === 'prepare_only' || ($configuration['managed_tag_action_resource'] ?? null) !== $action['resource'])
-                    && $customer->gtm_container_id && ($customer->gtm_config['customer_uuid'] ?? null) === $customer->uuid
-                    && (string) $customer->gtm_account_id === (string) config('services.gtm.platform_account_id')) {
+                    && $customer->gtm_container_id && ($customer->gtm_config['customer_uuid'] ?? null) === $customer->uuid) {
                     $retired = app(GTMContainerService::class)->retireReviewedConversionTag($customer, $strategy->uuid, $authorize);
                     if (! ($retired['success'] ?? false)) {
                         throw new \RuntimeException('The previous managed conversion tag could not be retired. Retry before using the replacement action.');

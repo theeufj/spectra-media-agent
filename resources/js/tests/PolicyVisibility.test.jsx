@@ -58,6 +58,15 @@ describe('Ad policy visibility', () => {
         expect(screen.getByText('Your account is ready')).toBeInTheDocument();
     });
 
+    it('provides the account-control action as the primary handover step', () => {
+        const journey = { current_step: { key: 'handover', title: 'Take control of your account', description: 'Confirm your Google login.',
+            action_url: '/customers/customer-one/gtm/setup', action_text: 'Review account access and tracking' },
+        steps: [{ key: 'handover' }], business: { name: 'Business' }, campaign: { review_url: '/review' }, paid: true, checklist: [] };
+        render(<SetupHome journey={journey} />);
+        expect(screen.getByRole('link', { name: 'Review account access and tracking' })).toHaveAttribute('href', '/customers/customer-one/gtm/setup');
+        expect(screen.getByRole('link', { name: 'View your ads' })).toHaveAttribute('href', '/review');
+    });
+
     it('distinguishes a successful clear check from a campaign being able to deliver', () => {
         render(<PolicyStatusCard campaign={campaign} policyStatus={{ status: 'clear', checked_at: snapshot.checked_at, issues: [] }} />);
         expect(screen.getByText('No current policy issues reported')).toBeInTheDocument();

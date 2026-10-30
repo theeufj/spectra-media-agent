@@ -645,6 +645,13 @@ PROMPT;
      */
     protected function setupConversionTracking(string $customerId, ExecutionResult $result, ?Campaign $campaign = null): void
     {
+        if ($this->customer->service_type === 'setup_only') {
+            // The one-time setup configures the customer's reviewed goal and
+            // exact website trigger separately. Never let campaign creation
+            // publish a generic goal or the customer's unfinished GTM work.
+            return;
+        }
+
         try {
             // Fast path: customer already has a saved conversion action — nothing to do
             if ($this->customer->conversion_action_id) {
@@ -654,7 +661,7 @@ PROMPT;
             }
 
             // Slower API check: action may exist in Google Ads but not yet saved locally
-            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
+            $conversionService = app()->makeWith(\App\Services\GoogleAds\ConversionTrackingService::class, ['customer' => $this->customer]);
             if ($conversionService->isConversionTrackingSetUp($customerId)) {
                 Log::info('GoogleAdsExecutionAgent: Conversion tracking already exists in Google Ads, skipping creation');
 

@@ -39,6 +39,9 @@ Route::middleware('guest')->group(function () {
 */
 Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
 Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
+Route::post('/customers/{customer}/setup/google-identity', [GoogleController::class, 'setupIdentity'])
+    ->middleware(['auth', \App\Http\Middleware\AuthorizeSetupCustomer::class, 'can:update,customer', 'throttle:6,1'])
+    ->name('customers.setup.google-identity');
 
 /*
 |--------------------------------------------------------------------------

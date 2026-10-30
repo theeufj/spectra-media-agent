@@ -30,6 +30,35 @@ use Google\ApiCore\ApiException;
  */
 class InviteCustomerUser extends BaseGoogleAdsService
 {
+    /** Only CustomerUserAccess proves that an invitation was accepted. */
+    public function accessStatus(string $customerId, string $email): string
+    {
+        $this->ensureClient();
+
+        foreach ($this->searchQuery($customerId,
+            'SELECT customer_user_access.email_address, customer_user_access.access_role FROM customer_user_access'
+        )->iterateAllElements() as $row) {
+            $access = $row->getCustomerUserAccess();
+            if (strcasecmp($access->getEmailAddress(), $email) === 0
+                && $access->getAccessRole() === AccessRole::ADMIN) {
+                return 'accepted';
+            }
+        }
+
+        foreach ($this->searchQuery($customerId,
+            'SELECT customer_user_access_invitation.email_address, customer_user_access_invitation.access_role, customer_user_access_invitation.invitation_status FROM customer_user_access_invitation'
+        )->iterateAllElements() as $row) {
+            $invitation = $row->getCustomerUserAccessInvitation();
+            if (strcasecmp($invitation->getEmailAddress(), $email) === 0
+                && $invitation->getAccessRole() === AccessRole::ADMIN
+                && $invitation->getInvitationStatus() === AccessInvitationStatus::PENDING) {
+                return 'invitation_pending';
+            }
+        }
+
+        return 'not_invited';
+    }
+
     /** Check whether Google now shows an approved ADMIN invitation or access. */
     public function hasInvitationOrAccess(string $customerId, string $email): bool
     {

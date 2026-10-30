@@ -37,6 +37,7 @@ class Customer extends Model
         'plan_id',
         'starter_platform',
         'setup_fee_paid_at',
+        'setup_handover',
         'handover_at',
         'early_exit_assessed_at',
         'phone',
@@ -82,6 +83,7 @@ class Customer extends Model
 
     protected $casts = [
         'setup_fee_paid_at' => 'datetime',
+        'setup_handover' => 'array',
         'handover_at' => 'datetime',
         'early_exit_assessed_at' => 'datetime',
         'gtm_config' => 'array',

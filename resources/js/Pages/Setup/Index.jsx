@@ -25,7 +25,7 @@ export default function SetupHome({ journey: initialJourney, policyCampaigns = [
                 <p className="mt-3 max-w-2xl text-gray-600" role="status">{current.description}</p>
                 {error && <p role="alert" className="mt-3 text-sm text-amber-800">We could not refresh the status. These are the last confirmed details. Refresh to try again.</p>}
                 <div className="my-6 flex flex-wrap gap-3">
-                    {current.action_url && current.key !== 'handover' && <Link href={current.action_url} className="rounded-lg bg-brand-dark px-5 py-3 font-medium text-white">{current.action_text}</Link>}
+                    {current.action_url && <Link href={current.action_url} className="rounded-lg bg-brand-dark px-5 py-3 font-medium text-white">{current.action_text}</Link>}
                     {review && current.key === 'handover' && <Link href={review} className="rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-800">View your ads</Link>}
                     {journey.paid && <span className="self-center text-sm text-green-800">Setup fee paid · No subscription</span>}
                 </div>

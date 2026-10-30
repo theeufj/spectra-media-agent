@@ -366,3 +366,5 @@ Schedule::command('admin:warm-usage-dashboard')
 // Admin audit logs: keep the recent window queryable, archive the rest.
 // Runs after midnight so a day is complete before it is archived.
 Schedule::job(new \App\Jobs\ArchiveActivityLogs)->dailyAt('02:30')->withoutOverlapping();
+
+Schedule::job(new \App\Jobs\ReconcileSetupHandovers)->everyFifteenMinutes()->withoutOverlapping()->onFailure(notifyAdminOnFailure('ReconcileSetupHandovers'));

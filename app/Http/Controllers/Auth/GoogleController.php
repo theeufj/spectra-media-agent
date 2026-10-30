@@ -7,7 +7,10 @@ use App\Http\Middleware\CaptureClickIds;
 use App\Jobs\RecordSiteFacebookConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Mail\WelcomeEmail;
+use App\Models\Customer;
 use App\Models\User;
+use App\Services\Customers\SetupGoogleIdentity;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -19,6 +22,7 @@ class GoogleController extends Controller
 {
     public function redirect()
     {
+        session()->forget(SetupGoogleIdentity::SESSION_KEY);
         // Preserve demo_url across the OAuth round-trip via session.
         $demoUrl = request()->query('demo_url');
         if ($demoUrl && filter_var($demoUrl, FILTER_VALIDATE_URL)) {
@@ -30,8 +34,21 @@ class GoogleController extends Controller
         return Socialite::driver('google')->redirect();
     }
 
-    public function callback()
+    public function setupIdentity(Request $request, Customer $customer, SetupGoogleIdentity $identity)
     {
+        $this->authorize('update', $customer);
+
+        return $identity->start($request, $customer);
+    }
+
+    public function callback(Request $request)
+    {
+        // Confirming a handover identity must never sign the browser into a
+        // different SiteToSpend account or create a new signup.
+        if ($request->session()->has(SetupGoogleIdentity::SESSION_KEY)) {
+            return app(SetupGoogleIdentity::class)->complete($request);
+        }
+
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (InvalidStateException $e) {

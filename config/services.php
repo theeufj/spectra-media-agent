@@ -106,6 +106,9 @@ return [
         'platform_refresh_token' => env('GTM_PLATFORM_REFRESH_TOKEN'),
         // The GTM Account ID under which per-customer containers are created.
         'platform_account_id' => env('GTM_PLATFORM_ACCOUNT_ID'),
+        // Google identity behind the platform token; customers grant it account
+        // Administrator (permission verification) and container Publish access.
+        'platform_email' => env('GTM_PLATFORM_EMAIL'),
     ],
 
     'facebook' => [
