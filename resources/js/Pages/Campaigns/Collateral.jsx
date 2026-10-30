@@ -117,6 +117,19 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [deployTarget, setDeployTarget] = useState(null);
     const [deploying, setDeploying] = useState(false);
     const [harvestError, setHarvestError] = useState(null);
+    const launchStrategies = allStrategies.filter(strategy => strategy.signed_off_at);
+    const singleLaunchStrategy = launchStrategies.length === 1 ? launchStrategies[0]
+        : allStrategies.length === 1 ? allStrategies[0] : null;
+    const hasPlatformChoices = launchStrategies.length > 1;
+    const adsLabel = strategy => {
+        if (!strategy) return 'all ads';
+        if (/google/i.test(strategy.platform) && (strategy.campaign_type === 'search' || /\bSEM\b/i.test(strategy.platform))) return 'Google Search ads';
+        return strategy.platform.replace(/\bAds\b/g, 'ads');
+    };
+    const alreadyCreated = strategy => ['deployed', 'verified'].includes(strategy.deployment_status);
+    const updatingAds = singleLaunchStrategy ? alreadyCreated(singleLaunchStrategy)
+        : launchStrategies.length > 0 && launchStrategies.every(alreadyCreated);
+    const launchLabel = `${updatingAds ? 'Update' : setupOnly ? 'Create' : 'Launch'} ${adsLabel(singleLaunchStrategy)}`;
 
     // Function to handle tab changes
     const handleTabChange = (platform) => {
@@ -340,15 +353,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
     const requestLaunchConsent = (strategy = null, fundingMessage = '') => {
-        const target = strategy ? strategy.platform : 'all signed-off platforms';
+        const target = strategy ? strategy.platform.replace(/\s*\(SEM\)/gi, '') : 'all selected platforms';
+        const updating = strategy ? alreadyCreated(strategy) : launchStrategies.every(alreadyCreated);
+        const action = `${updating ? 'Update' : setupOnly ? 'Create' : 'Launch'} ${adsLabel(strategy)}`;
         setConfirmModal({
             show: true,
-            title: setupOnly ? `Create paused ads — ${target}` : `Launch ads — ${target}`,
+            title: `${action}?`,
             message: `${fundingMessage ? `${fundingMessage} ` : ''}${setupOnly
-                ? `Create or update selected ads for ${target} in your account, paused. Nothing spends until you switch them on.`
-                : `Create or update selected ads for ${target}. Active campaigns can spend up to their approved platform budgets, within the campaign budget of ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day.`}`,
+                ? `We'll ${updating ? 'update' : 'create'} your selected ads ${strategy ? `in your ${target} account` : 'across your selected platforms'} and leave them paused. Nothing spends until you switch them on.`
+                : `${updating ? 'Update' : 'Launch'} your selected ads on ${target}. Your approved campaign budget is ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day.`}`,
             onConfirm: () => confirmDeploy(strategy),
-            confirmText: setupOnly ? 'Create paused ads' : 'Launch selected ads',
+            confirmText: action,
             isDestructive: false,
         });
     };
@@ -428,20 +443,21 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     <div className="relative" ref={deployDropdownRef}>
                         <div className="flex">
                             <button
-                                onClick={() => handleDeploy()}
+                                onClick={() => handleDeploy(singleLaunchStrategy)}
                                 disabled={savingApproval || deploying}
-                                className="px-4 py-2 bg-brand-dark text-white rounded-l-lg hover:bg-brand-darker transition font-medium"
+                                aria-describedby={setupOnly ? 'paused-ads-explanation' : undefined}
+                                className={`px-4 py-2 bg-brand-dark text-white ${hasPlatformChoices ? 'rounded-l-lg' : 'rounded-lg'} hover:bg-brand-darker transition font-medium`}
                             >
                                 {/* Deploy is our word for it. To someone who paid us
                                     once to build an account they will run themselves,
                                     the button creates the ads — it does not start
                                     them. */}
-                                {setupOnly ? (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update paused ads' : 'Create paused ads') : (['deployed', 'verified'].includes(currentStrategy.deployment_status) ? 'Update deployed ads' : 'Deploy All')}
+                                {launchLabel}
                             </button>
-                            <button
+                            {hasPlatformChoices && <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
                                 className="px-2 py-2 bg-brand-dark text-white rounded-r-lg hover:bg-brand-darker transition border-l border-white/30"
-                                aria-label={setupOnly ? 'Create ads for one platform' : 'Deploy individual platform'}
+                                aria-label="Choose an ad platform"
                                 aria-expanded={deployDropdownOpen}
                                 aria-controls="platform-launch-options"
                                 onKeyDown={event => { if (event.key === 'Escape') setDeployDropdownOpen(false); }}
@@ -449,21 +465,22 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
-                            </button>
+                            </button>}
                         </div>
-                        {deployDropdownOpen && (
+                        {setupOnly && <p id="paused-ads-explanation" className="mt-2 text-xs text-gray-600">Your ads will stay paused until you start them.</p>}
+                        {hasPlatformChoices && deployDropdownOpen && (
                             <div id="platform-launch-options" onKeyDown={event => { if (event.key === 'Escape') { setDeployDropdownOpen(false); deployDropdownRef.current?.querySelector('button[aria-controls]')?.focus(); } }} className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                                 <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                                    {setupOnly ? 'Create for one platform' : 'Deploy single platform'}
+                                    Choose an ad platform
                                 </div>
-                                {allStrategies.map(strategy => (
+                                {launchStrategies.map(strategy => (
                                     <button
                                         key={strategy.id}
                                         onClick={() => handleDeployPlatform(strategy)}
                                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                     >
                                         <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                                        {strategy.platform}
+                                        {adsLabel(strategy)}
                                     </button>
                                 ))}
                             </div>

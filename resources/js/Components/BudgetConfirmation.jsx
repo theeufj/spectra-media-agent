@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 import MarketResearchPanel, { isResearchPending, latestMarketResearch, researchBudgetOptions, researchCanBeApproved } from '@/Components/MarketResearchPanel';
@@ -25,6 +25,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
     const [refreshing, setRefreshing] = useState(false);
     const [refreshError, setRefreshError] = useState(null);
     const [now, setNow] = useState(Date.now());
+    const automaticallyRequested = useRef(new Set());
     const initial = marketResearch || campaign.search_delivery_state?.market_research || null;
     const needsAuthoritativeResearch = initial?.current === undefined;
     const poll = usePolling(marketResearchStatusUrl, {
@@ -39,7 +40,9 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
     // Raw campaign metadata is not a verified status response and may still
     // name the request from before generation. Let the status endpoint supply
     // the current request rather than pinning the new form to that old ID.
-    const research = latestMarketResearch(needsAuthoritativeResearch ? null : initial, poll.data?.marketResearch) || initial;
+    const research = needsAuthoritativeResearch
+        ? poll.data?.marketResearch || initial
+        : latestMarketResearch(initial, poll.data?.marketResearch) || initial;
     const options = researchBudgetOptions(research);
     const matchingRequest = data.research_id === research?.request_id && data.research_fingerprint === research?.input_fingerprint;
     const option = matchingRequest ? options.find(candidate => candidate.id === data.budget_option_id) : null;
@@ -61,14 +64,27 @@ export default function BudgetConfirmation({ campaign, currency = 'USD', selfFun
         return () => clearTimeout(timer);
     }, [research?.request_id, research?.expires_at]);
 
-    const refresh = (requestedBudget = null) => {
+    const refresh = useCallback((requestedBudget = null, automatic = false) => {
         if (requestedBudget !== null && !validResearchBudget(requestedBudget)) return;
+        automaticallyRequested.current.add(campaign.uuid);
         setRefreshError(null);
-        router.post(marketResearchRefreshUrl || route('campaigns.market-research.refresh', { campaign: campaign.uuid }), requestedBudget === null ? {} : { daily_budget: requestedBudget }, {
+        router.post(marketResearchRefreshUrl || route('campaigns.market-research.refresh', { campaign: campaign.uuid }), automatic ? { automatic: true } : requestedBudget === null ? {} : { daily_budget: requestedBudget }, {
             preserveScroll: true, onStart: () => setRefreshing(true), onFinish: () => setRefreshing(false),
             onError: () => setRefreshError('Research could not be requested. Try again; your budget has not changed.'),
         });
-    };
+    }, [campaign.uuid, marketResearchRefreshUrl]);
+
+    useEffect(() => {
+        // The strategy watch can reveal this form without loading the page
+        // controller again. Ask for missing/expired evidence once, after its
+        // authoritative status arrives. The server reuses any work that won
+        // the race; manual retry remains available if the request fails.
+        if (!marketResearchStatusUrl || (confirmed && !editing) || research?.approved
+            || research?.current === undefined || refreshing || poll.error
+            || automaticallyRequested.current.has(campaign.uuid)) return;
+        const expired = research.status === 'ready' && Date.parse(research.expires_at || '') <= now;
+        if (['not_requested', 'stale'].includes(research.status) || expired) refresh(null, true);
+    }, [campaign.uuid, confirmed, editing, marketResearchStatusUrl, research, now, refreshing, poll.error, refresh]);
     const useQuote = () => {
         if (!fresh) return;
         setData('daily_budget', quote);

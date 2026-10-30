@@ -92,6 +92,115 @@ class CampaignMarketResearchWorkflowTest extends TestCase
         $this->assertSame('preserve', $this->campaign->fresh()->search_delivery_state['diagnosis']);
     }
 
+    public function test_opening_the_budget_screen_automatically_requests_research_once_without_approving_spend(): void
+    {
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $first = $this->workflow->status($this->campaign);
+        $this->assertSame('queued', $first['status']);
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame($first['request_id'], $this->workflow->status($this->campaign)['request_id']);
+        Queue::assertPushed(ResearchCampaignMarket::class, 1);
+        $this->assertEquals('5.00', $this->campaign->fresh()->daily_budget);
+        $this->assertNull($this->campaign->fresh()->approved_daily_budget);
+        $this->assertNull($this->campaign->fresh()->budget_confirmed_at);
+        $this->assertSame('old keyword', $this->campaign->fresh()->keywords[0]['text']);
+    }
+
+    public function test_automatic_entry_reuses_current_custom_research_and_preserves_its_amount_when_expired(): void
+    {
+        $custom = $this->workflow->request($this->campaign, dailyCents: 1025);
+        $this->assertSame($custom['request_id'], $this->workflow->ensureRequested($this->campaign)['request_id']);
+        $this->workflow->run($this->campaign, $custom['request_id']);
+        $this->assertSame($custom['request_id'], $this->workflow->ensureRequested($this->campaign)['request_id']);
+        $this->travel(16)->minutes();
+
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $replacement = $this->workflow->status($this->campaign);
+        $this->assertSame('queued', $replacement['status']);
+        $this->assertSame(10_250_000, $replacement['requested_daily_budget_micros']);
+        $this->assertNotSame($custom['request_id'], $replacement['request_id']);
+        $this->assertSame($replacement['request_id'], $this->workflow->ensureRequested($this->campaign)['request_id']);
+        Queue::assertPushed(ResearchCampaignMarket::class, 2);
+        $this->assertEquals('5.00', $this->campaign->fresh()->daily_budget);
+        $this->assertNull($this->campaign->fresh()->budget_confirmed_at);
+    }
+
+    public function test_a_full_page_visit_also_refreshes_expired_custom_research_without_reverting_its_budget(): void
+    {
+        $custom = $this->workflow->request($this->campaign, dailyCents: 1025);
+        $this->workflow->run($this->campaign, $custom['request_id']);
+        $this->travel(16)->minutes();
+
+        $this->get(route('campaigns.show', $this->campaign))->assertOk();
+
+        $replacement = $this->workflow->status($this->campaign);
+        $this->assertSame('queued', $replacement['status']);
+        $this->assertSame(10_250_000, $replacement['requested_daily_budget_micros']);
+        Queue::assertPushed(ResearchCampaignMarket::class, 2);
+    }
+
+    public function test_automatic_entry_does_not_retry_terminal_findings_or_failures_without_user_intent(): void
+    {
+        $this->proposal['status'] = 'needs_review';
+        $review = $this->researched();
+        $this->travel(16)->minutes();
+        $this->assertSame('needs_review', $this->workflow->ensureRequested($this->campaign)['status']);
+        $this->assertSame($review['request_id'], $this->workflow->status($this->campaign)['request_id']);
+
+        $this->workflow->failed($this->campaign, $review['request_id']);
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('unknown', $this->workflow->status($this->campaign)['status']);
+        Queue::assertPushed(ResearchCampaignMarket::class, 1);
+    }
+
+    public function test_automatic_entry_waits_for_strategies_and_does_not_invalidate_later_approval_or_native_ownership(): void
+    {
+        $this->campaign->update(['strategy_generation_started_at' => now(), 'strategy_generation_completed_at' => null]);
+        $this->assertSame('not_requested', $this->workflow->ensureRequested($this->campaign)['status']);
+        Queue::assertNotPushed(ResearchCampaignMarket::class);
+
+        $this->campaign->update(['strategy_generation_completed_at' => now()]);
+        $research = $this->researched();
+        $staleObject = $this->campaign->fresh();
+        $this->post(route('campaigns.confirm-budget', $this->campaign), ['daily_budget' => '10.00',
+            'research_id' => $research['request_id'], 'research_fingerprint' => $research['input_fingerprint'], 'accept_proposal' => true])
+            ->assertSessionHasNoErrors();
+        $this->travel(16)->minutes();
+        $this->assertTrue($this->workflow->ensureRequested($staleObject)['approved']);
+        $this->campaign->update(['spend_guardrails' => ['ai_max_pilot' => ['enabled' => true]]]);
+        $this->assertSame('native_automation', $this->workflow->ensureRequested($staleObject)['status']);
+        Queue::assertPushed(ResearchCampaignMarket::class, 1);
+    }
+
+    public function test_automatic_entry_cannot_provision_unpaid_accounts_or_choose_a_new_budget(): void
+    {
+        Bus::fake();
+        $this->customer->update(['google_ads_customer_id' => null]);
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true, 'daily_budget' => '50.00'])
+            ->assertSessionHasErrors('daily_budget');
+        Bus::assertNotDispatched(ResearchCampaignMarket::class);
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect();
+        Bus::assertDispatched(ResearchCampaignMarket::class);
+        Bus::assertNotDispatched(ProvisionGoogleAdsAccount::class);
+        $this->assertNull($this->workflow->status($this->campaign)['requested_daily_budget_micros']);
+        $this->assertNull($this->campaign->fresh()->budget_confirmed_at);
+    }
+
+    public function test_automatic_entry_without_strategies_keeps_research_unrequested(): void
+    {
+        $this->strategy->delete();
+        $this->post(route('campaigns.market-research.refresh', $this->campaign), ['automatic' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('not_requested', $this->workflow->status($this->campaign)['status']);
+        Queue::assertNotPushed(ResearchCampaignMarket::class);
+    }
+
     public function test_an_enabled_native_pilot_cannot_reuse_or_generate_manual_bidding_quotes(): void
     {
         $queued = $this->workflow->request($this->campaign);

@@ -108,8 +108,7 @@ describe('one platform launch consent', () => {
         globalThis.route = (name, params) => { calls.push([name, params]); return originalRoute(name, params); };
         try {
             const view = render(<Collateral {...props} brandVerified={false} />);
-            fireEvent.click(view.getByRole('button', { name: 'Deploy individual platform' }));
-            fireEvent.click(view.getByRole('button', { name: 'Facebook Ads' }));
+            fireEvent.click(view.getByRole('button', { name: 'Launch Facebook ads' }));
             expect(calls).toContainEqual(['brand-guidelines.index', {
                 review: 1, return_campaign: props.campaign.uuid, return_strategy: strategy.uuid,
             }]);
@@ -122,22 +121,78 @@ describe('one platform launch consent', () => {
 
     it('preserves its selected strategy through funding and explicit launch consent', () => {
         const { getByRole, getByText } = render(<Collateral {...props} managedBillingEnabled />);
-        fireEvent.click(getByRole('button', { name: 'Deploy individual platform' }));
-        fireEvent.click(getByRole('button', { name: 'Facebook Ads' }));
+        fireEvent.click(getByRole('button', { name: 'Launch Facebook ads' }));
         expect(getByText('Fund Facebook Ads')).toBeInTheDocument();
         expect(router.post).not.toHaveBeenCalled();
         fireEvent.click(getByRole('button', { name: 'Funding succeeded' }));
-        expect(getByRole('dialog')).toHaveTextContent('Launch ads — Facebook Ads');
-        fireEvent.click(getByRole('button', { name: 'Launch selected ads' }));
+        expect(getByRole('dialog')).toHaveTextContent('Launch Facebook ads?');
+        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Launch Facebook ads' }));
         expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
     });
 
-    it('states that setup-only ads remain paused for either launch path', () => {
-        const { getByRole } = render(<Collateral {...props} setupOnly managedBillingEnabled />);
-        fireEvent.click(getByRole('button', { name: 'Create ads for one platform' }));
-        fireEvent.click(getByRole('button', { name: 'Facebook Ads' }));
+    it('uses one clear Google setup action without a dropdown and keeps explicit paused-ad consent', () => {
+        const google = { ...strategy, platform: 'Google Ads (SEM)', campaign_type: 'search' };
+        const { getByRole, queryByRole, getByText } = render(<Collateral {...props} currentStrategy={google}
+            allStrategies={[google]} adCopy={{ ...copy, platform: 'Google Ads' }} setupOnly managedBillingEnabled />);
+        expect(queryByRole('button', { name: 'Choose an ad platform' })).toBeNull();
+        expect(getByText('Your ads will stay paused until you start them.')).toBeVisible();
+        expect(getByRole('button', { name: 'Create Google Search ads' })).toHaveAttribute('aria-describedby', 'paused-ads-explanation');
+        fireEvent.click(getByRole('button', { name: 'Create Google Search ads' }));
+        expect(router.post).not.toHaveBeenCalled();
+        expect(getByRole('dialog')).toHaveTextContent('Create Google Search ads?');
+        expect(getByRole('dialog')).toHaveTextContent('in your Google Ads account and leave them paused');
         expect(getByRole('dialog')).toHaveTextContent('Nothing spends until you switch them on');
-        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create paused ads' }));
+        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create Google Search ads' }));
         expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
+    });
+
+    it('keeps platform selection when several approved platforms can be created', () => {
+        const google = { ...strategy, id: 12, uuid: 'google-strategy', platform: 'Google Ads', campaign_type: 'search' };
+        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} setupOnly />);
+        expect(getByRole('button', { name: 'Create all ads' })).toBeVisible();
+        fireEvent.click(getByRole('button', { name: 'Choose an ad platform' }));
+        fireEvent.click(getByRole('button', { name: 'Google Search ads' }));
+        expect(getByRole('dialog')).toHaveTextContent('Create Google Search ads?');
+        expect(getByRole('dialog')).toHaveTextContent('leave them paused');
+        expect(router.post).not.toHaveBeenCalled();
+        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create Google Search ads' }));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 12 }, expect.any(Object));
+    });
+
+    it('retains the all-platform route only for an explicit all-platform confirmation', () => {
+        const google = { ...strategy, id: 12, uuid: 'google-strategy', platform: 'Google Ads', campaign_type: 'search' };
+        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} setupOnly />);
+        fireEvent.click(getByRole('button', { name: 'Create all ads' }));
+        expect(getByRole('dialog')).toHaveTextContent('across your selected platforms and leave them paused');
+        expect(router.post).not.toHaveBeenCalled();
+        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create all ads' }));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy', { campaign_id: 8 }, expect.any(Object));
+    });
+
+    it('offers the sole signed-off strategy without presenting unsigned directions as launch choices', () => {
+        const unsigned = { ...strategy, id: 12, uuid: 'unsigned-google', platform: 'Google Ads', signed_off_at: null };
+        const { getByRole, queryByRole } = render(<Collateral {...props} allStrategies={[strategy, unsigned]} />);
+        expect(queryByRole('button', { name: 'Choose an ad platform' })).toBeNull();
+        fireEvent.click(getByRole('button', { name: 'Launch Facebook ads' }));
+        fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Launch Facebook ads' }));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
+    });
+
+    it('describes an existing single-platform setup as an update and still leaves it paused', () => {
+        const google = { ...strategy, platform: 'Google Ads', deployment_status: 'verified' };
+        const { getByRole } = render(<Collateral {...props} currentStrategy={google} allStrategies={[google]} setupOnly />);
+        fireEvent.click(getByRole('button', { name: 'Update Google ads' }));
+        expect(getByRole('dialog')).toHaveTextContent("We'll update your selected ads in your Google Ads account and leave them paused");
+        expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { hasActiveSubscription: false }, { deploymentEnabled: false },
+        { campaign: { ...props.campaign, auto_generated_at: '2026-10-30', budget_confirmed_at: null } },
+    ])('retains access and approval gates with the simplified single action %j', overrides => {
+        const { getByRole, queryByRole } = render(<Collateral {...props} {...overrides} />);
+        fireEvent.click(getByRole('button', { name: 'Launch Facebook ads' }));
+        expect(queryByRole('dialog')).toBeNull();
+        expect(router.post).not.toHaveBeenCalled();
     });
 });

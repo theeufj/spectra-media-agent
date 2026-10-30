@@ -37,6 +37,91 @@ afterEach(() => {
 });
 
 describe('deployment completion feedback', () => {
+    it.each(['queued', 'pending', 'deploying'])('keeps paused setup creation %s in progress without a premature warning', async status => {
+        fetch.mockReturnValue(new Promise(() => {}));
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'paused' }} setupOnly deployments={[{
+            ...deployment, status, progress: status === 'deploying' ? 2 : 0, images_count: 9, videos_count: 0,
+            deployment_complete: false, delivery_status: { status: 'paused' },
+        }]} />);
+
+        expect(screen.getByRole('heading', { name: 'Setup progress' })).toBeVisible();
+        expect(screen.getByRole('heading', { name: 'Google Search ads' })).toBeVisible();
+        expect(screen.getByText('1 ad · 9 images')).toBeVisible();
+        expect(screen.queryByText(/0 videos|ad copies/)).toBeNull();
+        expect(screen.getByText(/We’ll check the ads and settings in Google once creation finishes/)).toBeVisible();
+        expect(screen.queryByRole('heading', { name: /Needs a closer look/ })).toBeNull();
+        expect(screen.queryByText(/Deployment finished/)).toBeNull();
+        expect(screen.queryByRole('region', { name: 'Google campaign readiness' })).toBeNull();
+        expect(screen.queryByRole('heading', { name: 'Your paused ads have been created' })).toBeNull();
+        if (status === 'deploying') expect(screen.getAllByText('Creating Google Ads')).toHaveLength(2);
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues checking created paused ads until verification and then offers handover without requiring launch checks', async () => {
+        const created = { ...deployment, status: 'deployed', progress: 3, deployment_complete: false,
+            delivery_status: { status: 'paused' }, google_readiness: null, conversion_goal_readiness: null };
+        const verified = { ...created, status: 'verified', progress: 4, deployment_complete: true,
+            configuration_verification: { passed: true, issues: [], scope: 'paused_objects' } };
+        fetch.mockResolvedValueOnce(response({ deployments: [created] })).mockResolvedValue(response({ deployments: [verified] }));
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'paused' }} setupOnly deployments={[created]} />);
+
+        expect(screen.getByText('75%')).toBeVisible();
+        expect(screen.getByText('Checking created ads')).toBeVisible();
+        expect(screen.getByText('Checking your created campaign and ads')).toBeVisible();
+        expect(screen.queryByRole('link', { name: 'View handover checklist →' })).toBeNull();
+        expect(screen.queryByRole('heading', { name: /Needs a closer look/ })).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(fetch).toHaveBeenCalledTimes(1);
+        await act(() => vi.advanceTimersByTimeAsync(15000));
+
+        expect(screen.getByText('100%')).toBeVisible();
+        expect(screen.getByText('Paused ads ready')).toBeVisible();
+        expect(screen.getByRole('link', { name: 'View handover checklist →' })).toHaveAttribute('href', '/dashboard');
+        expect(screen.getByText('Creation is verified. Conversion tracking and other launch checks are separate.')).toBeVisible();
+        expect(screen.queryByText('Pre-launch checks pending')).toBeNull();
+        expect(screen.queryByText(/^Live$/)).toBeNull();
+        expect(screen.queryByRole('heading', { name: /Needs a closer look/ })).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(30000));
+        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not accept old completion evidence while ads are being created again', async () => {
+        fetch.mockReturnValue(new Promise(() => {}));
+        render(<DeploymentStatus campaign={campaign} setupOnly deployments={[{
+            ...deployment, progress: 4, deployment_complete: true, delivery_status: { status: 'paused' },
+        }]} />);
+        expect(screen.getByText('50%')).toBeVisible();
+        expect(screen.queryByText('100%')).toBeNull();
+        expect(screen.queryByText('Paused ads ready')).toBeNull();
+        expect(screen.queryByRole('link', { name: 'View handover checklist →' })).toBeNull();
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps verification in progress when another platform has already reported an issue', () => {
+        fetch.mockReturnValue(new Promise(() => {}));
+        render(<DeploymentStatus campaign={campaign} setupOnly deployments={[
+            { ...deployment, status: 'deployed', progress: 3, deployment_complete: false, delivery_status: { status: 'paused' } },
+            { id: 770, platform: 'Facebook Ads', status: 'deploy_unverified', progress: 2 },
+        ]} />);
+        expect(screen.getByText('Checking created ads')).toBeVisible();
+        expect(screen.queryByRole('heading', { name: /Needs a closer look/ })).toBeNull();
+        expect(screen.queryByText(/Deployment finished/)).toBeNull();
+    });
+
+    it('shows an actual setup failure separately from checks that have not started', () => {
+        render(<DeploymentStatus campaign={campaign} setupOnly deployments={[{
+            ...deployment, status: 'failed', error_message: 'Google could not create the ad.',
+            deployment_complete: false, delivery_status: { status: 'needs_review' },
+        }]} />);
+        expect(screen.getByRole('heading', { name: 'Ad setup needs attention' })).toBeVisible();
+        expect(screen.getByText('Google could not create the ad.')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Retry ad creation' })).toBeVisible();
+        expect(screen.queryByText('Checking your created campaign and ads')).toBeNull();
+        expect(screen.queryByRole('heading', { name: 'Your paused ads have been created' })).toBeNull();
+    });
+
     it.each([['queued', 0], ['deploying', 2], ['pending', 0]])('clears an earlier live presentation when Echo starts new %s work and resumes polling', async (status, progress) => {
         const listeners = {};
         const channel = { listen: (name, listener) => { listeners[name] = listener; return channel; }, stopListening: vi.fn() };

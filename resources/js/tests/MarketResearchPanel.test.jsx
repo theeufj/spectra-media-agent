@@ -67,6 +67,83 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('campaign market research', () => {
+    it('automatically requests missing research once when the authoritative status arrives, including StrictMode', () => {
+        const props = { marketResearchStatusUrl: '/research/status', marketResearchRefreshUrl: '/research/refresh' };
+        const view = render(<React.StrictMode>{budget(null, props)}</React.StrictMode>);
+        expect(refreshPost).not.toHaveBeenCalled();
+
+        pollResponse.data = { marketResearch: { status: 'not_requested', current: false, approved: false } };
+        view.rerender(<React.StrictMode>{budget(null, props)}</React.StrictMode>);
+        view.rerender(<React.StrictMode>{budget(null, props)}</React.StrictMode>);
+        expect(refreshPost).toHaveBeenCalledExactlyOnceWith('/research/refresh', { automatic: true }, expect.any(Object));
+        expect(post).not.toHaveBeenCalled();
+        expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(5);
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+    });
+
+    it.each([
+        { status: 'stale', current: false },
+        { expires_at: '2000-01-01T00:00:00Z' },
+    ])('automatically refreshes stale evidence on entry without selecting a budget %j', changes => {
+        render(<React.StrictMode>{budget(ready(changes), { marketResearchStatusUrl: '/research/status' })}</React.StrictMode>);
+        expect(refreshPost).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('campaigns.market-research.refresh'), { automatic: true }, expect.any(Object));
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it.each(['ready', 'queued', 'researching', 'needs_review', 'unknown', 'native_automation'])('does not replace %s research on entry', status => {
+        render(budget(ready({ status }), { marketResearchStatusUrl: '/research/status' }));
+        expect(refreshPost).not.toHaveBeenCalled();
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('preserves approved research and confirmed budgets when returning to the screen', () => {
+        const research = ready({ approved: true, expires_at: '2000-01-01T00:00:00Z' });
+        const view = render(budget(research, { marketResearchStatusUrl: '/research/status', editing: true }));
+        expect(refreshPost).not.toHaveBeenCalled();
+        view.rerender(budget(ready({ status: 'stale' }), {
+            marketResearchStatusUrl: '/research/status', campaign: { ...campaign, budget_confirmed_at: '2026-10-23' },
+        }));
+        expect(view.getByText('Budget confirmed')).toBeInTheDocument();
+        expect(refreshPost).not.toHaveBeenCalled();
+    });
+
+    it('shows an automatic refresh failure without retrying in a loop and leaves manual retry available', () => {
+        const initial = ready({ status: 'stale', current: false });
+        const props = { marketResearchStatusUrl: '/research/status' };
+        const view = render(budget(initial, props));
+        act(() => {
+            refreshPost.mock.calls[0][2].onStart();
+            refreshPost.mock.calls[0][2].onError();
+            refreshPost.mock.calls[0][2].onFinish();
+        });
+        view.rerender(budget({ ...initial }, props));
+        expect(refreshPost).toHaveBeenCalledTimes(1);
+        expect(view.getByRole('alert')).toHaveTextContent('your budget has not changed');
+        fireEvent.click(view.getByRole('button', { name: 'Refresh research' }));
+        expect(refreshPost).toHaveBeenLastCalledWith(expect.stringContaining('campaigns.market-research.refresh'), {}, expect.any(Object));
+        expect(refreshPost).toHaveBeenCalledTimes(2);
+        expect(post).not.toHaveBeenCalled();
+    });
+
+    it('automatically recovers a pending request that becomes stale and then shows its replacement result', () => {
+        const initial = ready({ status: 'queued', approvable: false, result: null });
+        const props = { marketResearchStatusUrl: '/research/status' };
+        const view = render(budget(initial, props));
+        expect(refreshPost).not.toHaveBeenCalled();
+        pollResponse.data = { marketResearch: { ...initial, status: 'stale' } };
+        view.rerender(budget(initial, props));
+        expect(refreshPost).toHaveBeenCalledTimes(1);
+
+        const replacement = ready({ request_id: 'replacement', status: 'queued', approvable: false, result: null });
+        view.rerender(budget(replacement, props));
+        expect(view.getByText('Researching your market')).toBeInTheDocument();
+        pollResponse.data = { marketResearch: ready({ request_id: 'replacement' }) };
+        view.rerender(budget(replacement, props));
+        expect(view.getByText('Your researched campaign plan')).toBeInTheDocument();
+        expect(view.getByRole('button', { name: 'Approve researched plan' })).toBeDisabled();
+        expect(refreshPost).toHaveBeenCalledTimes(1);
+    });
+
     it('shows automatic research in progress and cannot approve the unchanged saved amount', () => {
         const research = ready({ status: 'researching', approvable: false, result: null });
         const view = render(budget(research, { marketResearchStatusUrl: '/market-research-status' }));

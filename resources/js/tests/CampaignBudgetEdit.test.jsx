@@ -5,6 +5,7 @@ import { fireEvent, render } from '@testing-library/react';
 const { page, postMock, visitMock, researchPostMock } = vi.hoisted(() => ({ page: { url: '/' }, postMock: vi.fn(), visitMock: vi.fn(), researchPostMock: vi.fn() }));
 const watch = vi.hoisted(() => ({ phase: 'idle', data: null }));
 const pollingRequests = vi.hoisted(() => vi.fn());
+const researchStatus = vi.hoisted(() => ({ data: null }));
 
 vi.mock('@inertiajs/react', () => ({
     Link: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
@@ -20,7 +21,7 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({ default: ({ children }) => <ma
 vi.mock('@/Components/CampaignCopilot', () => ({ default: () => null }));
 vi.mock('@/Components/ForecastPanel', () => ({ default: () => null }));
 vi.mock('@/hooks/useJobWatch', () => ({ useJobWatch: () => watch }));
-vi.mock('@/hooks/usePolling', () => ({ usePolling: (...args) => { pollingRequests(...args); return { data: null }; } }));
+vi.mock('@/hooks/usePolling', () => ({ usePolling: (...args) => { pollingRequests(...args); return args[0] === '/research/status' ? researchStatus : { data: null }; } }));
 
 import CampaignShow from '@/Pages/Campaigns/Show';
 
@@ -32,9 +33,28 @@ beforeEach(() => {
     watch.phase = 'idle';
     watch.data = null;
     pollingRequests.mockClear();
+    researchStatus.data = null;
 });
 
 const readyStrategies = [{ id: 11, uuid: 'draft-strategy', platform: 'Google Ads', campaign_type: 'search', ad_copy_strategy: 'Review this direction', imagery_strategy: 'None' }];
+
+it('starts research automatically when strategy generation reveals the budget screen without a full page load', () => {
+    const campaign = { uuid: 'strategy-arrives', name: 'New campaign', strategies: [], daily_budget: '40.00',
+        currency_code: 'AUD', is_generating_strategies: true };
+    const props = { auth: { user: {} }, campaign, marketResearchStatusUrl: '/research/status' };
+    const view = render(<CampaignShow {...props} />);
+    expect(researchPostMock).not.toHaveBeenCalled();
+    expect(view.queryByLabelText('Daily budget (AUD)')).toBeNull();
+
+    watch.phase = 'done';
+    watch.data = { ...campaign, strategies: readyStrategies, is_generating_strategies: false };
+    researchStatus.data = { marketResearch: { status: 'not_requested', current: false, approved: false } };
+    view.rerender(<CampaignShow {...props} />);
+    expect(view.getByLabelText('Daily budget (AUD)')).toHaveValue(40);
+    expect(researchPostMock).toHaveBeenCalledExactlyOnceWith(route('campaigns.market-research.refresh', { campaign: campaign.uuid }),
+        { automatic: true }, expect.objectContaining({ preserveScroll: true }));
+    expect(postMock).not.toHaveBeenCalled();
+});
 
 it.each(['needs_review', 'stale'])('prepares the strategy before showing an old %s budget decision', status => {
     const campaign = { uuid: 'preparing-campaign', name: 'New campaign', strategies: [], daily_budget: '50.00',

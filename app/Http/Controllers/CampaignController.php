@@ -331,13 +331,22 @@ class CampaignController extends Controller
     public function refreshMarketResearch(Request $request, Campaign $campaign): \Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $campaign);
-        $validated = $request->validate(['daily_budget' => ['nullable', 'numeric', 'min:5', 'max:10000', 'regex:/^\d{1,5}(?:\.\d{1,2})?$/']]);
+        $validated = $request->validate([
+            'automatic' => ['sometimes', 'boolean'],
+            'daily_budget' => ['prohibited_if:automatic,true', 'nullable', 'numeric', 'min:5', 'max:10000', 'regex:/^\d{1,5}(?:\.\d{1,2})?$/'],
+        ]);
+        $workflow = app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class);
+        if ($request->boolean('automatic')) {
+            $workflow->ensureRequested($campaign);
+
+            return back();
+        }
         $cents = null;
         if (isset($validated['daily_budget'])) {
             [$whole, $fraction] = array_pad(explode('.', (string) $validated['daily_budget'], 2), 2, '');
             $cents = (int) $whole * 100 + (int) str_pad($fraction, 2, '0');
         }
-        app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->request($campaign, force: true, prepareAccount: true, dailyCents: $cents);
+        $workflow->request($campaign, force: true, prepareAccount: true, dailyCents: $cents);
 
         return back()->with('flash', ['type' => 'info', 'message' => 'Our agents are checking your selected markets, campaign and budget. Your spending limits have not changed.']);
     }
@@ -515,10 +524,7 @@ class CampaignController extends Controller
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }]);
         $marketWorkflow = app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class);
-        $marketResearch = $marketWorkflow->status($campaign);
-        if ($campaign->strategies->isNotEmpty() && in_array($marketResearch['status'], ['not_requested', 'stale'], true)) {
-            $marketResearch = $marketWorkflow->request($campaign);
-        }
+        $marketResearch = $marketWorkflow->ensureRequested($campaign);
 
         // Calculate total collateral counts
         $totalAdCopies = $campaign->strategies->sum('ad_copies_count');

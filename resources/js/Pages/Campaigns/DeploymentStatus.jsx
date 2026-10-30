@@ -7,11 +7,16 @@ import { useToast } from '@/Components/Toast';
 import GoogleReadinessCard, { googleReadinessStatus } from '@/Components/GoogleReadinessCard';
 
 const isDeployed = d => ['deployed', 'verified', 'active'].includes(d.status);
+const isCreating = d => ['pending', 'queued', 'deploying'].includes(d.status) || !d.status;
+const isVerified = d => isDeployed(d) && (typeof d.deployment_complete === 'boolean' ? d.deployment_complete : d.status === 'verified');
 const isTerminal = d => {
+    // A setup-only campaign is paused throughout creation. That delivery state
+    // must not stop its creation/verification watch or imply work has finished.
+    if (isCreating(d)) return false;
     if (['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status)) return true;
     if (d.delivery_status && typeof d.deployment_complete === 'boolean') {
         if (['unknown', 'under_review'].includes(d.delivery_status?.status)) return false;
-        return d.deployment_complete || ['paused', 'needs_review'].includes(d.delivery_status?.status);
+        return isVerified(d) || d.delivery_status?.status === 'needs_review';
     }
     return ['verified', 'active'].includes(d.status);
 };
@@ -31,6 +36,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     // Stop once every strategy has reached a terminal state.
     const allComplete = deployments.length > 0 && deployments.every(isTerminal);
     const allDeployed = deployments.length > 0 && deployments.every(isDeployed);
+    const allVerified = deployments.length > 0 && deployments.every(isVerified);
     const allServing = deployments.length > 0 && deployments.every(isConfirmedLive);
     // A page opened after creation can watch approval more slowly. Keep this
     // cadence stable during polling so it does not trigger an extra request.
@@ -112,7 +118,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     */
     const overallProgress = deployments.length === 0 ? 0 : Math.round(
         deployments.reduce((total, d) => {
-                return total + (d.deployment_complete === true ? 4 : d.progress ?? (d.status === 'verified' ? 4 : ['deployed', 'active'].includes(d.status) ? 3 : d.status === 'deploying' ? 2 : 0));
+                return total + (isCreating(d) ? Math.min(d.progress ?? (d.status === 'deploying' ? 2 : 0), 2)
+                    : isVerified(d) ? 4 : Math.min(d.progress ?? (isDeployed(d) ? 3 : 0), 3));
         }, 0) / (deployments.length * 4) * 100
     );
 
@@ -173,8 +180,13 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         // While anything is still running, report progress — one early platform
         // failure shouldn't label the whole deploy "failed" mid-flight.
         if (stillRunning) return 'processing';
+        if (deployments.some(d => !isTerminal(d)) && deployments.some(d => ['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status))) return 'verifying';
         if (hasFailure) return 'failed';
         if (deployments.some(d => ['deploy_unverified', 'skipped_plan'].includes(d.status))) return 'attention';
+        // The one-time package delivers verified paused objects. Billing,
+        // tracking and Google quality checks belong to the handover, not to
+        // whether creation completed successfully.
+        if (setupOnly && allVerified) return 'completed';
         if (allServing) return 'live';
         if (allDeployed && !setupOnly && deployments.some(d => d.delivery_status)) {
             if (deployments.some(d => d.delivery_status?.status === 'needs_review')) return 'attention';
@@ -182,7 +194,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             if (deployments.some(d => d.delivery_status?.status === 'paused')) return 'paused';
             return 'unknown';
         }
-        if (deployments.every(d => d.status === 'verified')) return googleNeedsAttention ? 'attention' : googleReadinessPending ? 'readiness_pending' : 'completed';
+        if (allVerified) return googleNeedsAttention ? 'attention' : googleReadinessPending ? 'readiness_pending' : 'completed';
         if (allDeployed && allComplete && googleReadinessPending) return googleNeedsAttention ? 'attention' : 'readiness_pending';
         if (allDeployed) return 'verifying';
         // Everything terminal, nothing live, nothing failed: unverified or
@@ -195,7 +207,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             pending: 'bg-yellow-100 text-yellow-800',
             deploying: 'bg-blue-100 text-blue-800',
             processing: 'bg-blue-100 text-blue-800',
-            verifying: 'bg-green-100 text-green-800',
+            verifying: 'bg-blue-100 text-blue-800',
             deployed: 'bg-green-100 text-green-800',
             active: 'bg-blue-100 text-blue-800',
             verified: 'bg-green-100 text-green-800',
@@ -248,14 +260,25 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         live: 'Live', under_review: 'Waiting for Google review', unknown: 'Delivery not confirmed',
         paused: deployments.every(d => d.delivery_status?.status === 'paused') ? 'Paused' : 'Some platforms paused',
     };
+    if (setupOnly) Object.assign(statusLabels, {
+        processing: googleDeployments.length === deployments.length ? 'Creating Google Ads' : 'Creating ads',
+        verifying: 'Checking created ads', deployed: 'Created · checking', active: 'Created · checking',
+        verified: 'Created and checked', completed: 'Paused ads ready', failed: 'Ad setup needs attention',
+        readiness_pending: 'Pre-launch checks pending',
+    });
     const displayStatus = deployment => {
         if (isConfirmedLive(deployment)) return 'live';
         if (!setupOnly && isDeployed(deployment) && deployment.delivery_status?.status) {
             const status = deployment.delivery_status.status;
             return status === 'needs_review' ? 'attention' : status === 'live' ? 'unknown' : status;
         }
-        return deployment.status;
+        return deployment.status === 'verified' && !isVerified(deployment) ? 'verifying' : deployment.status;
     };
+    const assetSummary = deployment => [
+        `${deployment.ad_copies_count || 0} ${deployment.ad_copies_count === 1 ? 'ad' : 'ads'}`,
+        ...(deployment.images_count > 0 ? [`${deployment.images_count} ${deployment.images_count === 1 ? 'image' : 'images'}`] : []),
+        ...(deployment.videos_count > 0 ? [`${deployment.videos_count} ${deployment.videos_count === 1 ? 'video' : 'videos'}`] : []),
+    ].join(' · ');
     
     return (
         <AuthenticatedLayout
@@ -270,7 +293,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             ← Back to Campaign
                         </Link>
                         <h2 className="font-semibold text-lg sm:text-xl text-gray-800 leading-tight">
-                            Deployment Status: {campaign.name}
+                            {setupOnly ? 'Ad setup' : 'Deployment Status'}: {campaign.name}
                         </h2>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start flex-shrink-0 ${getStatusColor(overallStatus)}`}>
@@ -280,7 +303,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             }
         >
             {setupOnly && <div className="mx-auto max-w-7xl px-4 pt-6"><SetupStages stage={2} /></div>}
-            <Head title={`Deployment - ${campaign.name}`} />
+            <Head title={`${setupOnly ? 'Ad setup' : 'Deployment'} - ${campaign.name}`} />
             
             <div className="py-12">
                 {campaign.status === 'pending_admin_deployment' && <div role="status" className="mx-auto mb-6 max-w-4xl rounded-lg border border-blue-200 bg-blue-50 p-5 text-blue-900"><h3 className="font-semibold">Our team is completing account setup</h3><p className="mt-2 text-sm">Your campaign is saved for launch. We will notify you when account access is ready and your ads have been created.</p><Link href={route('support-tickets.index')} className="mt-3 inline-block text-sm font-semibold underline">Contact support</Link></div>}
@@ -301,7 +324,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                             </h3>
                             <p className="mt-2 text-green-700">{allServing
                                 ? 'Deployment is complete. The platform has confirmed your campaign is enabled and its ads are approved.'
-                                : deployments.every(d => d.deployment_complete === true || d.status === 'verified')
+                                : allVerified
                                 ? 'The campaign and ads have also been verified on the platform.'
                                 : (updatesUnavailable
                                     ? 'Your ads were created, but we cannot confirm the latest verification result. Check the status again for an update.'
@@ -310,7 +333,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                 ? 'Your ads remain paused. Complete your handover checks before switching them on.'
                                 : allServing ? 'Ad strength is monitored separately below. Delivery remains subject to billing, targeting and your campaign schedule.'
                                     : 'Ad delivery depends on platform approval, billing and your campaign start date.'}</p>
-                            {setupOnly && deployments.every(d => d.status === 'verified') && overallStatus !== 'completed' && (
+                            {setupOnly && allVerified && overallStatus !== 'completed' && (
                                 <Link href="/dashboard" className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-4 text-sm font-semibold text-white">
                                     View handover checklist →
                                 </Link>
@@ -321,7 +344,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     {/* Overall Progress */}
                     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Deployment progress</h3>
+                            <h3 className="text-lg font-semibold text-gray-900">{setupOnly ? 'Setup progress' : 'Deployment progress'}</h3>
                             <span className="text-2xl font-bold text-brand-dark">{overallProgress}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
@@ -353,16 +376,14 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                              deployment.platform?.toLowerCase().includes('linkedin') ? '💼' : '📢'}
                                         </span>
                                         <div>
-                                            <h4 className="font-semibold text-sm sm:text-base text-gray-900">{deployment.platform}</h4>
+                                            <h4 className="font-semibold text-sm sm:text-base text-gray-900">{deployment.platform === 'Google Ads (SEM)' ? 'Google Search ads' : deployment.platform}</h4>
                                             <p className="text-xs sm:text-sm text-gray-500">
-                                                {deployment.ad_copies_count || 0} ad copies • 
-                                                {deployment.images_count || 0} images • 
-                                                {deployment.videos_count || 0} videos
+                                                {assetSummary(deployment)}
                                             </p>
                                         </div>
                                     </div>
                                     <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap self-start flex-shrink-0 ${getStatusColor(displayStatus(deployment))}`}>
-                                        <span aria-hidden="true">{getStatusIcon(displayStatus(deployment))}</span>{' '}<span>{displayStatus(deployment) === 'paused' ? 'Paused' : statusLabels[displayStatus(deployment)] || deployment.status}</span>
+                                        <span aria-hidden="true">{getStatusIcon(displayStatus(deployment))}</span>{' '}<span>{displayStatus(deployment) === 'paused' ? 'Paused' : setupOnly && deployment.status === 'deploying' && deployment.platform?.toLowerCase().includes('google') ? 'Creating Google Ads' : statusLabels[displayStatus(deployment)] || deployment.status}</span>
                                     </span>
                                 </div>
                                 
@@ -374,19 +395,29 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                 
                                 {deployment.deployed_at && (
                                     <p className="mt-3 text-xs text-gray-500">
-                                        Deployed at: {new Date(deployment.deployed_at).toLocaleString()}
+                                        {setupOnly ? 'Created at' : 'Deployed at'}: {new Date(deployment.deployed_at).toLocaleString()}
                                     </p>
                                 )}
-                                {deployment.platform?.toLowerCase().includes('google') && <GoogleReadinessCard readiness={deployment.google_readiness} conversionGoals={deployment.conversion_goal_readiness} live={isConfirmedLive(deployment)} />}
+                                {deployment.platform?.toLowerCase().includes('google') && (isCreating(deployment)
+                                    ? <div role="status" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                                        <p className="font-semibold">{deployment.status === 'deploying' ? 'Creating your campaign and ads' : 'Waiting to create your campaign and ads'}</p>
+                                        <p className="mt-1">We’ll check the ads and settings in Google once creation finishes. {setupOnly ? 'Your ads will remain paused for handover.' : 'This screen will update as the work progresses.'}</p>
+                                    </div>
+                                    : isDeployed(deployment) && !deployment.google_readiness && !deployment.conversion_goal_readiness
+                                        ? <div role="status" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                                            <p className="font-semibold">{isVerified(deployment) ? 'Pre-launch checks have not completed yet' : 'Checking your created campaign and ads'}</p>
+                                            <p className="mt-1">{isVerified(deployment) ? 'Creation is verified. Conversion tracking and other launch checks are separate.' : 'We are waiting for confirmation from Google. This screen will update when the checks finish.'}</p>
+                                        </div>
+                                        : (deployment.google_readiness || deployment.conversion_goal_readiness) && <GoogleReadinessCard readiness={deployment.google_readiness} conversionGoals={deployment.conversion_goal_readiness} live={isConfirmedLive(deployment)} />)}
                             </div>
                         ))}
                     </div>
-                    {allComplete && googleReadinessPending && <button type="button" onClick={checkAgain} className="mb-6 inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-brand-dark">Refresh readiness status</button>}
+                    {allComplete && googleReadinessPending && <button type="button" onClick={checkAgain} className="mb-6 inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-brand-dark">{setupOnly ? 'Refresh pre-launch checks' : 'Refresh readiness status'}</button>}
                     
                     {/* Error Details */}
                     {overallStatus === 'failed' && (
                         <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
-                            <h3 className="text-lg font-semibold text-red-800 mb-2">Deployment Issues</h3>
+                            <h3 className="text-lg font-semibold text-red-800 mb-2">{setupOnly ? 'Ad setup needs attention' : 'Deployment Issues'}</h3>
                             <p className="text-red-700 mb-4">
                                 Some platforms encountered errors during deployment. You can retry now —
                                 already-deployed platforms are skipped automatically — or review the campaign first.
@@ -397,7 +428,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                     onClick={() => router.post(route('deployment.deploy'), { campaign_id: campaign.id })}
                                     className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                                 >
-                                    Retry Deployment
+                                    {setupOnly ? 'Retry ad creation' : 'Retry Deployment'}
                                 </button>
                                 <Link
                                     href={`/campaigns/${campaign.id}/strategies`}
@@ -410,11 +441,11 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     )}
 
                     {/* Needs attention: nothing failed outright, but nothing is confirmed live either */}
-                    {overallStatus === 'attention' && (
+                    {(overallStatus === 'attention' || setupOnly && allVerified && googleNeedsAttention) && (
                         <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-yellow-800 mb-2">⚠️ Needs a closer look</h3>
                             <p className="text-yellow-700">
-                                {googleNeedsAttention ? 'Google conversion goals or ad strength need attention. Review the current check results above. Created ads and a verified deployment do not confirm readiness to deliver.' : 'Deployment finished, but we could not confirm every platform yet, or a platform was not included in your plan. Each platform card above explains its current state.'}
+                                {googleNeedsAttention ? 'Google conversion goals or ad strength need attention. Review the current check results above. Created ads and a verified deployment do not confirm readiness to deliver.' : 'We could not verify every platform, or a platform was not included in your plan. Each platform card above explains what needs review.'}
                             </p>
                         </div>
                     )}

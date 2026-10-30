@@ -20,6 +20,30 @@ class CampaignMarketResearchWorkflow
 {
     public function __construct(private CampaignMarketResearch $research) {}
 
+    /** Start missing or expired evidence when the budget screen becomes ready. */
+    public function ensureRequested(Campaign $campaign): array
+    {
+        return DB::transaction(function () use ($campaign): array {
+            // The status decision and replacement share the request lock, so a
+            // second tab cannot supersede a job or approval that just arrived.
+            $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $status = $this->status($current);
+            if ($current->isGeneratingStrategies() || ! $current->strategies()->exists()
+                || ($status['approved'] ?? false)
+                || ! in_array($status['status'], ['not_requested', 'stale'], true)) {
+                return $status;
+            }
+
+            // A fresh quote must retain the customer's last research amount;
+            // opening the screen must not silently revert a custom comparison.
+            $micros = $status['requested_daily_budget_micros'] ?? null;
+            $dailyCents = is_int($micros) && $micros >= 5_000_000 && $micros <= 10_000_000_000 && $micros % 10_000 === 0
+                ? intdiv($micros, 10_000) : null;
+
+            return $this->request($current, dailyCents: $dailyCents);
+        });
+    }
+
     public function request(Campaign $campaign, bool $force = false, bool $prepareAccount = false, ?int $dailyCents = null): array
     {
         $current = $campaign->fresh() ?? $campaign;
