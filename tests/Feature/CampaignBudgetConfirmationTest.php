@@ -159,6 +159,29 @@ class CampaignBudgetConfirmationTest extends TestCase
         $this->assertEquals('5.00', $this->campaign->approved_daily_budget);
     }
 
+    public function test_strategy_without_vertex_uses_the_configured_text_provider_with_website_evidence(): void
+    {
+        config(['services.google.project_id' => null, 'ai.text_provider' => 'xai']);
+        Notification::fake();
+        EnabledPlatform::firstOrCreate(['name' => 'Facebook'], ['slug' => 'facebook'])->update(['is_enabled' => true]);
+        $this->campaign->update(['platforms' => ['facebook']]);
+        KnowledgeBase::factory()->create(['customer_id' => $this->campaign->customer_id, 'user_id' => $this->owner->id, 'source_type' => 'url']);
+        $search = $this->createMock(\App\Services\KnowledgeBaseSearchService::class);
+        $search->expects($this->once())->method('forCampaign')->with($this->campaign->id)->willReturnSelf();
+        $search->expects($this->once())->method('search')->with($this->campaign->customer_id)->willReturn('Reviewed website evidence for this workspace');
+        $gemini = $this->createMock(GeminiService::class);
+        $gemini->expects($this->never())->method('generateWithFunctionCalling');
+        $gemini->expects($this->once())->method('generateContent')->with(
+            config('ai.models.pro'), $this->stringContains('Reviewed website evidence for this workspace')
+        )->willReturn(null);
+        $this->app->instance(\App\Services\KnowledgeBaseSearchService::class, $search);
+        $this->app->instance(GeminiService::class, $gemini);
+
+        (new GenerateStrategy($this->campaign->fresh()))->handle();
+
+        $this->assertSame('AI service did not return a response. Please try again.', $this->campaign->fresh()->strategy_generation_error);
+    }
+
     public function test_fitting_custom_allocations_survive_budget_confirmation_and_retries(): void
     {
         $google = $this->strategy(['daily_budget' => '2.00']);

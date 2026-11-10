@@ -104,7 +104,8 @@ class CampaignMarketResearch
                 $business = $this->businessResearch($campaign, $strategy, $context, $selected);
                 $row['evidence']['business_research'] = $business;
                 $row['evidence']['input_context'] = $context;
-                $platformProposal = $hasDrafts && $this->hasFootprint($campaign, $strategy) ? null : $this->platformProposal($campaign, $strategy, $business, $context);
+                $platformProposal = $requestedIssue || ($hasDrafts && $this->hasFootprint($campaign, $strategy))
+                    ? null : $this->platformProposal($campaign, $strategy, $business, $context);
                 if ($hasDrafts && $this->hasFootprint($campaign, $strategy) && $row['current_budget_micros'] !== null && ! $requestedIssue) {
                     $row['status'] = 'preserved';
                     $row['budget_micros'] = $row['current_budget_micros'];

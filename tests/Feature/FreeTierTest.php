@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Plan;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -58,6 +59,20 @@ class FreeTierTest extends TestCase
             ->withSession(['active_customer_id' => $customer->id])
             ->post('/deployment/deploy', ['campaign_id' => $campaign->id])
             ->assertRedirect(route('subscription.pricing', absolute: false));
+    }
+
+    public function test_admin_subscription_access_is_limited_to_workspaces_the_admin_owns(): void
+    {
+        $user = User::factory()->create();
+        $user->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+        $owned = Customer::factory()->create();
+        $managed = Customer::factory()->create();
+        $user->customers()->attach($owned->id, ['role' => 'owner']);
+        $user->customers()->attach($managed->id, ['role' => 'member']);
+
+        $this->assertTrue($user->hasSubscriptionAccess($owned));
+        $this->assertFalse($user->hasSubscriptionAccess($managed));
+        $this->assertFalse($user->hasSubscriptionAccess());
     }
 
     public function test_plan_less_users_still_resolve_the_default_limits(): void

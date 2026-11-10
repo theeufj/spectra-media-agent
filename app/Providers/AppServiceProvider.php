@@ -26,6 +26,7 @@ use App\Policies\ProposalPolicy;
 use App\Policies\RecommendationPolicy;
 use App\Policies\StrategyPolicy;
 use App\Policies\SupportTicketPolicy;
+use App\Services\FacebookAds\FacebookMarketResearchProvider;
 use App\Services\ResendSendingClient;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -88,6 +89,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->tag(FacebookMarketResearchProvider::class, 'campaign.market_research.providers');
+
         // One per request. getPlatformComparison() and getFunnelAnalysis() are
         // both derived from getSummary(), and the dashboard renders both — so
         // the four platform aggregates ran twice for one page. The service

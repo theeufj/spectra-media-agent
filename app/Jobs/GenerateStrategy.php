@@ -183,9 +183,9 @@ class GenerateStrategy implements ShouldQueue
 
             // Step 2: Build a slim prompt — no KB dump; the model will search what it needs.
             Log::info("Building agentic strategy prompt for campaign {$this->campaign->id}");
-            $prompt = StrategyPrompt::build(
+            $buildPrompt = fn (?string $knowledge) => StrategyPrompt::build(
                 $this->campaign,
-                null, // KB content is null — model uses search_knowledge_base tool instead
+                $knowledge,
                 $recommendations->toArray(),
                 $brandGuidelines,
                 $enabledPlatforms,
@@ -194,15 +194,13 @@ class GenerateStrategy implements ShouldQueue
                 $abTestWinners,
                 $performanceGap
             );
-            Log::info('Prompt length (no KB dump): '.strlen($prompt).' characters');
 
-            // Step 3: Agentic KB traversal — model calls search_knowledge_base iteratively.
-            Log::info("Starting agentic function-calling strategy generation for campaign {$this->campaign->id}");
+            // Step 3: Use Vertex tools where available. The configured text
+            // provider can work from retrieved website evidence without Vertex.
 
             $gemini = app(GeminiService::class);
             $searchService = app(KnowledgeBaseSearchService::class)->forCampaign($this->campaign->id);
             $campaignCustomerId = $this->campaign->customer_id;
-            $userIds = $customerUserIds;
 
             $toolDeclarations = [
                 [
@@ -221,38 +219,53 @@ class GenerateStrategy implements ShouldQueue
                 ],
             ];
 
-            $result = $gemini->generateWithFunctionCalling(
-                config('ai.models.pro'),
-                StrategyPrompt::getSystemInstruction(),
-                $prompt,
-                $toolDeclarations,
-                function (string $name, array $args) use ($searchService, $campaignCustomerId) {
-                    if ($name === 'search_knowledge_base') {
-                        $query = trim($args['query'] ?? '');
-                        Log::info("GenerateStrategy: KB search: \"{$query}\" for customer {$campaignCustomerId}");
+            $generationContext = ['campaign_id' => $this->campaign->id, 'customer_id' => $campaignCustomerId, 'task_type' => 'strategy'];
+            $result = null;
+            if (filled(config('services.google.project_id')) && config('ai.text_provider') !== 'xai') {
+                try {
+                    $result = $gemini->generateWithFunctionCalling(
+                        config('ai.models.pro'),
+                        StrategyPrompt::getSystemInstruction(),
+                        $buildPrompt(null),
+                        $toolDeclarations,
+                        function (string $name, array $args) use ($searchService, $campaignCustomerId) {
+                            if ($name === 'search_knowledge_base') {
+                                $query = trim($args['query'] ?? '');
+                                Log::info("GenerateStrategy: KB search: \"{$query}\" for customer {$campaignCustomerId}");
 
-                        return $searchService->search($campaignCustomerId, $query);
-                    }
+                                return $searchService->search($campaignCustomerId, $query);
+                            }
 
-                    return "Unknown tool: {$name}";
-                },
-                [
-                    'temperature' => 1,
-                    'topP' => 0.95,
-                    'topK' => 40,
-                    'maxOutputTokens' => 65535,
-                ],
-                [
-                    'campaign_id' => $this->campaign->id,
-                    'customer_id' => $this->campaign->customer_id,
-                    'task_type' => 'strategy',
-                ]
-            );
-
-            Log::info("Agentic generation completed for campaign {$this->campaign->id}");
+                            return "Unknown tool: {$name}";
+                        },
+                        [
+                            'temperature' => 1,
+                            'topP' => 0.95,
+                            'topK' => 40,
+                            'maxOutputTokens' => 65535,
+                        ],
+                        $generationContext
+                    );
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
 
             if (! $result) {
-                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from Vertex AI");
+                $offer = mb_substr((string) $this->campaign->product_focus, 0, 200);
+                $evidence = $searchService->search($campaignCustomerId, $offer.' services offers pricing audience locations', 6);
+                $result = $gemini->generateContent(
+                    config('ai.models.pro'),
+                    $buildPrompt($evidence),
+                    ['responseMimeType' => 'application/json', 'maxOutputTokens' => 16384],
+                    systemInstruction: StrategyPrompt::getSystemInstruction(),
+                    maxRetries: 1,
+                    context: $generationContext,
+                );
+            }
+
+            if (! $result) {
+                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from the configured text providers");
                 $this->failWithError('AI service did not return a response. Please try again.');
 
                 return;

@@ -179,6 +179,12 @@ class User extends Authenticatable implements MustVerifyEmail
             return false;
         }
 
+        // Staff can exercise paid features on workspaces they own. The
+        // workspace plan and ad-spend checks still govern campaign deployment.
+        if ($this->isFullAdmin() && $this->customers()->wherePivot('role', 'owner')->whereKey($customer->id)->exists()) {
+            return true;
+        }
+
         // One-and-done customers bought access with a single setup fee — no
         // subscription exists or ever will.
         if ($customer->isPaidSetupOnly()) {

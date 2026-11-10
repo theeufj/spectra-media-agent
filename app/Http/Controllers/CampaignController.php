@@ -313,7 +313,9 @@ class CampaignController extends Controller
         // Deploy-intent: this is the moment a real Google Ads sub-account is
         // worth creating (provisioning at signup minted accounts for
         // tire-kickers that had to be cancelled by hand).
-        \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($campaign->customer);
+        if ($campaign->strategies()->where('platform', 'ilike', '%google%')->exists()) {
+            \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($campaign->customer);
+        }
 
         return redirect()->back()->with('flash', [
             'type' => 'success',

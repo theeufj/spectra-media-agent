@@ -191,6 +191,7 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {!pending && !stale && asList(result?.strategies).map((strategy, index) => {
             const code = strategy.currency_code || currency;
             const caveats = [...asList(strategy.caveats), ...asList(strategy.forecast?.caveats)].map(message).filter(Boolean);
+            const meta = strategy.evidence?.meta;
             if (strategy.status === 'preserved') return <article key={strategy.strategy_id || index} className="mt-5 rounded-lg border border-gray-200 p-4">
                 <h4 className="font-semibold text-gray-900">{strategy.platform || 'Ad platform'}{strategy.channel ? ` · ${strategy.channel}` : ''}</h4>
                 <h5 className="mt-3 text-sm font-semibold text-gray-700">Existing campaign — allocation retained</h5>
@@ -200,10 +201,14 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
             </article>;
             return <article key={strategy.strategy_id || index} className="mt-5 rounded-lg border border-gray-200 p-4">
                 <h4 className="font-semibold text-gray-900">{strategy.platform || 'Ad platform'}{strategy.channel ? ` · ${strategy.channel}` : ''}</h4>
-                <div className="mt-3 grid gap-5 sm:grid-cols-2">
+                {meta ? <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <div><dt className="text-gray-600">Proposed daily budget</dt><dd className="font-semibold">{money(strategy.budget_micros, code)}</dd></div>
+                    <div><dt className="text-gray-600">Minimum daily budget</dt><dd className="font-semibold">{money(meta.minimum_daily_budget_micros, code)}</dd></div>
+                    <div><dt className="text-gray-600">Estimated monthly Meta audience ({asList(meta.countries).join(', ')})</dt><dd className="font-semibold">{clicks(meta.monthly_audience_lower_bound)}–{clicks(meta.monthly_audience_upper_bound)}</dd></div>
+                </dl> : <div className="mt-3 grid gap-5 sm:grid-cols-2">
                     <div><h5 className="text-sm font-semibold text-gray-700">Current plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.current_budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.current_bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.current_cpc_bid_micros, code)}</p><Keywords values={strategy.current_keywords} /></div>
                     <div><h5 className="text-sm font-semibold text-gray-700">Proposed plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.cpc_bid_micros, code)}</p><Keywords values={strategy.proposed_keywords} /><Forecast forecast={strategy.forecast} period={strategy.forecast_period} timezone={strategy.time_zone} currency={code} /></div>
-                </div>
+                </div>}
                 {limitedTraffic(strategy) && <div role="note" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     <p className="font-semibold">Limited forecast traffic</p>
                     <p className="mt-1">Google forecasts {clicks(strategy.forecast.clicks)} clicks{strategy.forecast.forecast_period?.from && strategy.forecast.forecast_period?.through
