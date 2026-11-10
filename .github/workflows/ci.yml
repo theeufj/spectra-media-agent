@@ -1,7 +1,6 @@
 name: CI
 
-# Forge is triggered by deploy.yml only after this entire workflow succeeds.
-# Build once here, test that output, and publish the exact bytes for deployment.
+# Build and test the application on pull requests and pushes to master.
 on:
   push:
     branches: [master]
@@ -131,45 +130,3 @@ jobs:
           cp .env.example .env || true
           php artisan key:generate --force
           php artisan test
-
-      - name: Package tested frontend
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        env:
-          VITE_APP_NAME: ${{ vars.VITE_APP_NAME }}
-          VITE_STRIPE_KEY: ${{ vars.VITE_STRIPE_KEY }}
-        run: |
-          python3 bin/frontend-artifact pack --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --output-dir "$RUNNER_TEMP/frontend-artifact"
-
-      - name: Pass tested assets to publisher
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/frontend-artifact/
-          if-no-files-found: error
-          retention-days: 7
-
-  publish-frontend:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: test
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-${{ github.sha }}-${{ github.run_attempt }}
-          path: frontend-artifact
-
-      - name: Publish immutable build for this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          test "$(gh api "repos/$GH_REPO/git/ref/heads/master" --jq '.object.sha')" = "$GITHUB_SHA"
-          tag="frontend-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          gh release create "$tag" frontend-artifact/frontend-build.tar.gz frontend-artifact/receipt.json \
-            --target "$GITHUB_SHA" --prerelease --latest=false \
-            --title "Frontend $GITHUB_SHA (run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT)" \
-            --notes "Tested production assets. Installed by Forge only after the complete CI run succeeds."
