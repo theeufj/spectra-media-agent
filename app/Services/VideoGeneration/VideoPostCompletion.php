@@ -40,14 +40,13 @@ class VideoPostCompletion
             }
         }
 
-        // PMax video flow: an 8s Veo clip is too short for PMax (min 10s), so extend
-        // the original once (~15s) before linking. An already-extended clip links
-        // straight to the asset group to lift ad strength.
+        // Direct xAI generation requests at least 10 seconds for PMax and can
+        // link straight to the asset group, like a clip that has already been extended.
         $isPmax = str_contains(strtolower($video->platform ?? ''), 'performance max')
             && $campaign->google_ads_campaign_id;
 
         if ($isPmax) {
-            if (($video->extension_count ?? 0) < 1) {
+            if ($video->provider !== 'xai' && ($video->extension_count ?? 0) < 1) {
                 \App\Jobs\ExtendPMaxVideo::dispatch($video)->delay(now()->addSeconds(20));
             } else {
                 $strategyId = $video->strategy_id ?? $campaign->strategies()->latest()->value('id');

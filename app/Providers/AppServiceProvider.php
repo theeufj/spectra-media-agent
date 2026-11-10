@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Mail\ResendScopedTransport;
 use App\Models\AdSpendCredit;
 use App\Models\BrandGuideline;
 use App\Models\Campaign;
@@ -25,6 +26,7 @@ use App\Policies\ProposalPolicy;
 use App\Policies\RecommendationPolicy;
 use App\Policies\StrategyPolicy;
 use App\Policies\SupportTicketPolicy;
+use App\Services\ResendSendingClient;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -32,10 +34,12 @@ use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Resend\Laravel\Transport\ResendTransportFactory;
 use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
@@ -127,6 +131,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        Mail::extend('resend_scoped', function (array $config) {
+            $options = $config['options'] ?? [];
+            $defaultTransport = new ResendTransportFactory($this->app['resend'], $options);
+
+            if (blank(config('services.resend.real_property_ads_key'))) {
+                return $defaultTransport;
+            }
+
+            return new ResendScopedTransport(
+                $defaultTransport,
+                $this->app->make(ResendSendingClient::class),
+                $options,
+            );
+        });
 
         // CustomerScope memoises the acting user's customer list for the life of
         // the request. Authentication changes who is acting, so the memo has to

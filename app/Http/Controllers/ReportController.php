@@ -99,26 +99,27 @@ class ReportController extends Controller
         );
 
         $filename = "reports/{$customer->id}/{$period}_{$date}.pdf";
+        $disk = ReportPdfService::storedDisk($filename);
 
-        if (! Storage::disk('local')->exists($filename)) {
+        if ($disk === null) {
             // Try to regenerate from cached data
             $cacheKey = "executive_report:{$customer->id}:{$period}";
             $report = Cache::get($cacheKey);
 
-            if ($report) {
-                $pdfService = app(ReportPdfService::class);
-                $pdfService->generate($customer, $report);
+            if (($report['period']['end'] ?? null) === $date
+                && app(ReportPdfService::class)->generate($customer, $report) === $filename) {
+                $disk = config('filesystems.private_disk');
             }
 
-            if (! Storage::disk('local')->exists($filename)) {
+            if ($disk === null) {
                 return back()->with('flash', ['type' => 'error', 'message' => 'Report not found. Please generate a new one.']);
             }
         }
 
         $customerName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $customer->name);
 
-        return response()->download(
-            Storage::disk('local')->path($filename),
+        return Storage::disk($disk)->download(
+            $filename,
             "{$period}_report_{$customerName}_{$date}.pdf",
             ['Content-Type' => 'application/pdf']
         );

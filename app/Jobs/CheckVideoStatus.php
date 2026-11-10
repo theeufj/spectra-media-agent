@@ -4,7 +4,9 @@ namespace App\Jobs;
 
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
+use App\Services\OpenRouterService;
 use App\Services\StorageHelper;
+use App\Services\XaiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -32,8 +34,8 @@ class CheckVideoStatus implements ShouldQueue
         try {
             $provider = $this->videoCollateral->provider ?? 'veo';
 
-            if ($provider === 'openrouter') {
-                $this->handleOpenRouter();
+            if (in_array($provider, ['xai', 'openrouter'], true)) {
+                $this->handleGrok($provider);
             } else {
                 $this->handleVeo($geminiService);
             }
@@ -105,17 +107,17 @@ class CheckVideoStatus implements ShouldQueue
         $this->storeAndComplete($videoData, ['gemini_video_uri' => $videoUri]);
     }
 
-    // ─── OpenRouter (Grok) ───────────────────────────────────────────────────
+    // ─── Grok ───────────────────────────────────────────────────────────────
 
-    private function handleOpenRouter(): void
+    private function handleGrok(string $provider): void
     {
-        Log::info("CheckVideoStatus: Polling OpenRouter job: {$this->videoCollateral->operation_name}");
+        Log::info("CheckVideoStatus: Polling {$provider} job: {$this->videoCollateral->operation_name}");
 
-        $result = app(\App\Services\OpenRouterService::class)
-            ->checkVideoStatus($this->videoCollateral->operation_name);
+        $service = $provider === 'xai' ? app(XaiService::class) : app(OpenRouterService::class);
+        $result = $service->checkVideoStatus($this->videoCollateral->operation_name);
 
         if ($result === null) {
-            Log::info('CheckVideoStatus: OpenRouter not ready yet — releasing with 60s delay.');
+            Log::info("CheckVideoStatus: {$provider} not ready yet. Retrying in 60 seconds.");
             $this->release(60);
 
             return;
@@ -123,10 +125,10 @@ class CheckVideoStatus implements ShouldQueue
 
         if (isset($result['error'])) {
             $this->videoCollateral->update(['status' => 'failed']);
-            throw new \Exception('OpenRouter video generation failed: '.$result['error']);
+            throw new \Exception("{$provider} video generation failed: ".$result['error']);
         }
 
-        Log::info('CheckVideoStatus: OpenRouter video ready.');
+        Log::info("CheckVideoStatus: {$provider} video ready.");
         $this->storeAndComplete($result['bytes'], []);
     }
 

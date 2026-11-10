@@ -56,6 +56,8 @@
             bucket. It passed in CI only because CI has no AWS vars, which
             means the suite's result depended on whose machine ran it.
         -->
+        <env name="GOOGLE_CLOUD_PROJECT" value="test-project" force="true"/>
+
         <env name="AI_IMAGE_RETRY_BASE_DELAY" value="0" force="true"/>
         <env name="AI_GEMINI_IMAGE_INTERVAL_SECONDS" value="0" force="true"/>
         <env name="AI_GEMINI_IMAGE_MAX_WAIT_SECONDS" value="0" force="true"/>

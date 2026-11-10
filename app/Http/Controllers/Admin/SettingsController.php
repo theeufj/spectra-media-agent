@@ -57,9 +57,11 @@ class SettingsController extends Controller
             'adCopyModel' => config('ai.models.default'),
             'videoPromptDefault' => \App\Prompts\VideoFromScriptPrompt::defaultTemplate(),
             'videoPromptCustom' => (string) Setting::get(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, ''),
-            'videoModel' => config('ai.video_provider') === 'grok'
-                ? config('ai.models.video_grok').' via OpenRouter (fallback: '.config('ai.models.video').')'
-                : config('ai.models.video'),
+            'videoModel' => match (config('ai.video_provider')) {
+                'xai' => config('ai.models.video_xai').' via xAI (fallback: OpenRouter if configured, then '.config('ai.models.video').')',
+                'grok' => config('ai.models.video_grok').' via OpenRouter (fallback: '.config('ai.models.video').')',
+                default => config('ai.models.video'),
+            },
             'lastVideoGeneration' => \App\Models\AiCost::where('operation', 'startVideoGeneration')
                 ->latest()
                 ->first(['model', 'created_at', 'cost']),

@@ -330,6 +330,7 @@ class GenerateVideo implements ShouldQueue
                     'customer_id' => $this->campaign->customer_id,
                     'task_type' => 'video_generation',
                 ],
+                forPerformanceMax: str_contains(strtolower($this->platform), 'performance max'),
             );
 
             if (! $result) {
@@ -352,7 +353,11 @@ class GenerateVideo implements ShouldQueue
                 'provider' => $result['provider'],
                 'generation_metadata' => array_merge($videoCollateral->generation_metadata ?? [], [
                     'provider' => $result['provider'],
-                    'model' => config('ai.models.'.($result['provider'] === 'veo' ? 'video' : 'video_grok')),
+                    'model' => config(match ($result['provider']) {
+                        'xai' => 'ai.models.video_xai',
+                        'openrouter' => 'ai.models.video_grok',
+                        default => 'ai.models.video',
+                    }),
                     'prompt' => $promptForProvider($result['provider']),
                     'prompt_hash' => hash('sha256', $promptForProvider($result['provider'])),
                 ]),

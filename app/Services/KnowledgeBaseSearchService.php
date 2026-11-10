@@ -75,6 +75,7 @@ class KnowledgeBaseSearchService
             if (! is_array($cached)) {
                 $vector = $this->gemini->embedContent(config('ai.models.embedding'), $query, [
                     'customer_id' => $customerId, 'embedding_wait_ms' => 0, 'embedding_timeout_seconds' => 3,
+                    'embedding_query' => true,
                 ], $queryModel);
                 $cached = $vector && $queryModel ? ['vector' => $vector, 'model' => $queryModel] : null;
                 if ($cached) {

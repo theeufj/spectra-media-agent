@@ -21,15 +21,22 @@ class RefineImage implements ShouldQueue
 
     public $timeout = 900;
 
+    protected ?string $contextImageDisk = null;
+
     public function __construct(
         protected ImageCollateral $originalImage,
         protected string $prompt,
-        protected ?string $contextImagePath = null
-    ) {}
+        protected ?string $contextImagePath = null,
+        ?string $contextImageDisk = null,
+    ) {
+        $this->contextImageDisk = $contextImageDisk;
+    }
 
     public function handle(GeminiService $geminiService): void
     {
         Log::info("Starting image refinement job for ImageCollateral ID: {$this->originalImage->id}");
+
+        $contextDisk = null;
 
         try {
             // Check free-tier image limit (refinement creates a new record)
@@ -53,13 +60,14 @@ class RefineImage implements ShouldQueue
 
             // Add the user-uploaded context image, if provided
             if ($this->contextImagePath) {
-                $fullPath = storage_path('app/'.$this->contextImagePath);
-                if (! file_exists($fullPath)) {
-                    throw new \Exception("Temporary context image not found at path: {$fullPath}");
+                // Jobs queued before the private disk was introduced used the default disk.
+                $contextDisk = Storage::disk($this->contextImageDisk ?? config('filesystems.default'));
+                $uploadedImageData = $contextDisk->get($this->contextImagePath);
+                if ($uploadedImageData === null) {
+                    throw new \RuntimeException('Temporary context image could not be read.');
                 }
-                $uploadedImageData = file_get_contents($fullPath);
                 $contextImages[] = [
-                    'mime_type' => mime_content_type($fullPath),
+                    'mime_type' => (new \finfo(FILEINFO_MIME_TYPE))->buffer($uploadedImageData),
                     'data' => base64_encode($uploadedImageData),
                 ];
             }
@@ -133,14 +141,17 @@ class RefineImage implements ShouldQueue
 
             Log::info("Successfully refined image. New ImageCollateral ID: {$newImage->id}, Parent ID: {$this->originalImage->id}");
 
-            // Clean up the temporary context image if it was uploaded
-            if ($this->contextImagePath) {
-                Storage::disk('local')->delete($this->contextImagePath);
-            }
-
         } catch (\Throwable $e) {
             Log::error("Error in RefineImage job for ImageCollateral ID {$this->originalImage->id}: ".$e->getMessage());
             $this->fail($e);
+        } finally {
+            if ($contextDisk !== null && $this->contextImagePath !== null) {
+                try {
+                    $contextDisk->delete($this->contextImagePath);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
         }
     }
 

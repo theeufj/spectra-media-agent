@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+psql "$DB_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --command='CREATE EXTENSION IF NOT EXISTS vector;'
+exec php artisan migrate --force --no-interaction

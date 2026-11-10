@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Connection;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -22,6 +24,11 @@ class FacebookApiOAuthController extends Controller
     ];
 
     private const GRAPH = 'https://graph.facebook.com/v22.0';
+
+    private const INSIGHT_PERIODS = [
+        'last_30d' => 'Last 30 days',
+        'maximum' => 'All available data',
+    ];
 
     public function show()
     {
@@ -98,7 +105,7 @@ class FacebookApiOAuthController extends Controller
         ]);
     }
 
-    public function verify()
+    public function verify(Request $request)
     {
         $connection = Connection::where('user_id', Auth::id())
             ->where('platform', 'facebook_api')
@@ -107,6 +114,12 @@ class FacebookApiOAuthController extends Controller
         if (! $connection) {
             return redirect()->route('facebook-api.show');
         }
+
+        $selection = $request->validate([
+            'ad_account_id' => ['nullable', 'string', 'regex:/\Aact_[0-9]+\z/'],
+            'date_preset' => ['nullable', Rule::in(array_keys(self::INSIGHT_PERIODS))],
+        ]);
+        $datePreset = $selection['date_preset'] ?? 'last_30d';
 
         $tokenExpired = $connection->expires_at && $connection->expires_at->isPast();
         $token = $connection->access_token;
@@ -127,15 +140,21 @@ class FacebookApiOAuthController extends Controller
         $businesses = $this->fetchBusinesses($token);
         $managedPages = $this->fetchManagedPages($token);
 
-        // Fetch account-level ad insights for the first accessible ad account
-        $firstAccountId = $adAccounts['accounts'][0]['id'] ?? null;
-        $adInsights = $firstAccountId ? $this->fetchAdInsights($token, $firstAccountId) : ['error' => 'No ad accounts found.'];
+        $accountId = $selection['ad_account_id'] ?? null;
+        $selectedAccount = collect($adAccounts['accounts'] ?? [])->firstWhere('id', $accountId);
+        if ($accountId && ! $selectedAccount && ! $adAccounts['error']) {
+            abort(404);
+        }
+        $adInsights = $selectedAccount
+            ? $this->fetchAdInsights($token, $selectedAccount['id'], $datePreset)
+            : null;
 
         // Fetch posts for the first managed page — use the page's own access token from /me/accounts
         $firstPage = $managedPages['pages'][0] ?? null;
         $firstPageId = $firstPage['id'] ?? null;
         $firstPageToken = $firstPage['page_token'] ?? $token;
         $pagePosts = $firstPageId ? $this->fetchPagePosts($firstPageToken, $firstPageId, $firstPage['name'] ?? '') : ['error' => 'No managed pages found.', 'posts' => []];
+        $managedPages['pages'] = array_map(fn ($page) => Arr::except($page, 'page_token'), $managedPages['pages']);
 
         // Fetch pages linked to first business (business_management asset demonstration)
         $firstBusinessId = $businesses['accounts'][0]['id'] ?? null;
@@ -148,6 +167,9 @@ class FacebookApiOAuthController extends Controller
             'grantedPermissions' => $this->fetchGrantedPermissions($token),
             'adAccounts' => $adAccounts,
             'adInsights' => $adInsights,
+            'selectedAccount' => $selectedAccount,
+            'datePreset' => $datePreset,
+            'insightPeriods' => self::INSIGHT_PERIODS,
             'businesses' => $businesses,
             'businessAssets' => $businessAssets,
             'managedPages' => $managedPages,
@@ -161,26 +183,33 @@ class FacebookApiOAuthController extends Controller
             ->where('platform', 'facebook_api')
             ->first();
 
-        if (! $connection) {
+        if (! $connection || $connection->expires_at?->isPast()) {
             return response()->json(['error' => 'Not connected'], 401);
         }
 
-        $adAccountId = $request->input('ad_account_id');
-        if (! $adAccountId) {
-            return response()->json(['error' => 'No ad account specified'], 422);
-        }
+        $adAccountId = $request->validate([
+            'ad_account_id' => ['required', 'string', 'regex:/\Aact_[0-9]+\z/'],
+        ])['ad_account_id'];
+
+        $token = $connection->access_token;
 
         try {
+            $accounts = $this->fetchAdAccounts($token);
+            if (! collect($accounts['accounts'] ?? [])->contains('id', $adAccountId)) {
+                return response()->json(['error' => 'The connected Meta user cannot access this ad account.'], 403);
+            }
+
             // Graph API requires form-encoded body (not JSON). Empty PHP arrays
             // are dropped by form encoding, so special_ad_categories must be the
             // string '[]' which Facebook deserialises as an empty JSON array.
-            $response = Http::post(self::GRAPH.'/'.$adAccountId.'/campaigns', [
-                'name' => 'SiteToSpend Demo Campaign - '.now()->format('d M Y H:i'),
+            $name = 'SiteToSpend Demo Campaign - '.now()->format('d M Y H:i');
+            $response = Http::asForm()->post(self::GRAPH.'/'.$adAccountId.'/campaigns', [
+                'name' => $name,
                 'objective' => 'OUTCOME_AWARENESS',
                 'status' => 'PAUSED',
                 'special_ad_categories' => '[]',
                 'is_adset_budget_sharing_enabled' => 0,
-                'access_token' => $connection->access_token,
+                'access_token' => $token,
             ]);
 
             if (! $response->successful()) {
@@ -202,7 +231,7 @@ class FacebookApiOAuthController extends Controller
             return response()->json([
                 'success' => true,
                 'campaign_id' => $data['id'] ?? null,
-                'name' => 'SiteToSpend Demo Campaign - '.now()->format('d M Y H:i'),
+                'name' => $name,
                 'status' => 'PAUSED',
                 'objective' => 'OUTCOME_AWARENESS',
             ]);
@@ -254,12 +283,12 @@ class FacebookApiOAuthController extends Controller
         }
     }
 
-    private function fetchAdInsights(string $token, string $adAccountId): array
+    private function fetchAdInsights(string $token, string $adAccountId, string $datePreset): array
     {
         try {
             $response = Http::get(self::GRAPH.'/'.$adAccountId.'/insights', [
                 'fields' => 'impressions,clicks,spend,reach,cpc,cpm,actions',
-                'date_preset' => 'last_30d',
+                'date_preset' => $datePreset,
                 'level' => 'account',
                 'access_token' => $token,
             ]);
@@ -274,7 +303,8 @@ class FacebookApiOAuthController extends Controller
             return [
                 'error' => null,
                 'account_id' => $adAccountId,
-                'period' => 'Last 30 days',
+                'period' => self::INSIGHT_PERIODS[$datePreset],
+                'has_activity' => $data !== [],
                 'impressions' => $row['impressions'] ?? '0',
                 'clicks' => $row['clicks'] ?? '0',
                 'spend' => $row['spend'] ?? '0.00',
@@ -431,7 +461,7 @@ class FacebookApiOAuthController extends Controller
     {
         try {
             $response = Http::get(self::GRAPH.'/me/adaccounts', [
-                'fields' => 'id,name,account_status',
+                'fields' => 'id,name,account_status,currency',
                 'access_token' => $token,
             ]);
 
@@ -447,6 +477,7 @@ class FacebookApiOAuthController extends Controller
                     'id' => $a['id'] ?? '',
                     'name' => $a['name'] ?? '',
                     'status' => $a['account_status'] ?? null,
+                    'currency' => $a['currency'] ?? null,
                 ], $accounts),
                 'count' => count($accounts),
             ];

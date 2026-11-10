@@ -11,10 +11,14 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Resend\Laravel\Facades\Resend;
+use Resend\Service\Emails\Receiving;
 
 class EmailInboxService
 {
-    public function __construct(private readonly EmailHtmlSanitizer $sanitizer) {}
+    public function __construct(
+        private readonly EmailHtmlSanitizer $sanitizer,
+        private readonly ResendSendingClient $scopedClient,
+    ) {}
 
     public function processInboundWebhook(array $payload): void
     {
@@ -37,7 +41,9 @@ class EmailInboxService
         }
 
         try {
-            $email = Resend::emails()->receiving->get($resendEmailId);
+            $key = config('services.resend.inbound_api_key');
+            $receiving = ($key ? \Resend::client($key)->emails : Resend::emails())->receiving;
+            $email = $receiving->get($resendEmailId);
         } catch (\Throwable $e) {
             Log::error('Failed to fetch received email from Resend', [
                 'email_id' => $resendEmailId,
@@ -68,7 +74,7 @@ class EmailInboxService
         ]);
 
         foreach ($email->attachments ?? [] as $att) {
-            $this->storeAttachment($message, $resendEmailId, $att);
+            $this->storeAttachment($receiving, $message, $resendEmailId, $att);
         }
 
         if ($inbox->forward_to) {
@@ -113,7 +119,7 @@ class EmailInboxService
                 ."Subject: {$message->subject}"
                 .'</div>';
 
-            Resend::emails()->send([
+            $this->sendOutbound($inbox, [
                 'from' => "{$inbox->display_name} <{$inbox->email_address}>",
                 'to' => [$inbox->forward_to],
                 'subject' => $subject,
@@ -154,7 +160,7 @@ class EmailInboxService
             'attachments' => ! empty($attachments) ? $attachments : null,
         ]);
 
-        $sent = Resend::emails()->send($payload);
+        $sent = $this->sendOutbound($inbox, $payload);
 
         $threadId = ! empty($params['thread_id'])
             ? $params['thread_id']
@@ -192,6 +198,13 @@ class EmailInboxService
         }
 
         return $message;
+    }
+
+    private function sendOutbound(EmailInbox $inbox, array $payload): object
+    {
+        $client = $this->scopedClient->forSender($inbox->email_address);
+
+        return ($client ? $client->emails : Resend::emails())->send($payload);
     }
 
     private function resolveInbox(array $toAddresses): ?EmailInbox
@@ -234,7 +247,7 @@ class EmailInboxService
         return null;
     }
 
-    private function storeAttachment(EmailMessage $message, string $resendEmailId, array $att): void
+    private function storeAttachment(Receiving $receiving, EmailMessage $message, string $resendEmailId, array $att): void
     {
         $attachmentId = $att['id'] ?? null;
         $filename = $att['filename'] ?? 'attachment';
@@ -245,7 +258,7 @@ class EmailInboxService
 
         if ($attachmentId) {
             try {
-                $meta = Resend::emails()->receiving->attachments->get($resendEmailId, $attachmentId);
+                $meta = $receiving->attachments->get($resendEmailId, $attachmentId);
                 $downloadUrl = $meta->download_url ?? null;
 
                 if ($downloadUrl) {

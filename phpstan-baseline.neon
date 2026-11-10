@@ -428,12 +428,6 @@ parameters:
 			path: app/Http/Controllers/ReportController.php
 
 		-
-			message: '#^Negated boolean expression is always true\.$#'
-			identifier: booleanNot.alwaysTrue
-			count: 1
-			path: app/Http/Controllers/ReportController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\|App\\Models\\LinkedInAdsPerformanceData\|App\\Models\\MicrosoftAdsPerformanceData\:\:\$revenue\.$#'
 			identifier: property.notFound
 			count: 2

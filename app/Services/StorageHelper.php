@@ -2,11 +2,31 @@
 
 namespace App\Services;
 
+use Illuminate\Filesystem\AwsS3V3Adapter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class StorageHelper
 {
+    public static function putPrivate(string $path, string $contents, string $contentType): bool
+    {
+        $diskName = config('filesystems.private_disk');
+        $disk = Storage::disk($diskName);
+        if (! $disk instanceof AwsS3V3Adapter) {
+            return $disk->put($path, $contents);
+        }
+
+        // Flysystem's upload adds a private ACL, which ACL-free buckets reject.
+        $disk->getClient()->putObject([
+            'Bucket' => config("filesystems.disks.{$diskName}.bucket"),
+            'Key' => $path,
+            'Body' => $contents,
+            'ContentType' => $contentType,
+        ]);
+
+        return true;
+    }
+
     /**
      * Store a file and return [path, url].
      * Uses S3 + CloudFront when configured, otherwise falls back to local public disk.

@@ -122,7 +122,7 @@ class GeminiService
 
     public function __construct()
     {
-        $this->project = config('services.google.project_id');
+        $this->project = (string) config('services.google.project_id');
         $this->location = config('services.google.location', 'us-central1');
 
         $this->vertexBaseUrl = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/global/publishers/google/models/";
@@ -134,6 +134,10 @@ class GeminiService
 
     private function getAccessToken(?int $timeout = null): string
     {
+        if ($this->project === '') {
+            throw new \RuntimeException('Google Vertex project ID is not configured.');
+        }
+
         // Tokens expire after 60 min; cache for 50 to ensure we never send a stale one.
         return Cache::remember('gcp_vertex_access_token', 3000, function () use ($timeout) {
             // Laravel 12 does not call putenv() for .env values, so google/auth's
@@ -808,7 +812,7 @@ class GeminiService
     // ─── Embeddings ──────────────────────────────────────────────────────────
 
     /**
-     * Generates embeddings for a given text using a specified Gemini embedding model.
+     * Generates embeddings for a given text using the configured model's provider.
      *
      * `$usedModel` reports which model actually produced the vector, which is
      * not always `$model`: a 429 on the primary falls back to a different model
@@ -820,18 +824,19 @@ class GeminiService
     public function embedContent(string $model, string $text, array $context = [], ?string &$usedModel = null): ?array
     {
         $usedModel = null;
+        $cloudflare = str_starts_with($model, '@cf/');
         // Throttle every embedding call across all workers, at the rate the
         // account is entitled to (config('ai.embedding_rpm'), default 4 — a
         // margin under the preview model's 5 RPM regional quota). Spin-wait in
         // 500 ms increments until a slot is free. Shared via cache (Redis in
         // production).
-        $throttleKey = 'gemini_embedding_rpm';
+        $throttleKey = $cloudflare ? 'cloudflare_embedding_rpm' : 'gemini_embedding_rpm';
         $perMinute = max(1, (int) config('ai.embedding_rpm', 4));
         $waited = 0;
         $maxWait = max(0, min(120_000, (int) ($context['embedding_wait_ms'] ?? 120_000)));
         while (! RateLimiter::attempt($throttleKey, $perMinute, fn () => null, 60)) {
             if ($waited >= $maxWait) {
-                Log::info('GeminiService: Embedding capacity busy; caller can retry or use text search');
+                Log::info('Embedding capacity busy; caller can retry or use text search', ['model' => $model]);
 
                 return null;
             }
@@ -841,6 +846,13 @@ class GeminiService
 
         $startTime = hrtime(true);
         $timeout = max(1, min(300, (int) ($context['embedding_timeout_seconds'] ?? 300)));
+
+        if ($cloudflare) {
+            $vector = $this->embedViaCloudflare($model, $text, $context, $timeout, $startTime);
+            $usedModel = $vector !== null ? $model : null;
+
+            return $vector;
+        }
 
         // Which endpoint a model needs is a property of the model, so it lives
         // in config alongside the model names rather than as a literal here.
@@ -918,6 +930,47 @@ class GeminiService
 
             return null;
         }
+    }
+
+    private function embedViaCloudflare(string $model, string $text, array $context, int $timeout, int $startTime): ?array
+    {
+        $account = config('services.cloudflare.account_id');
+        $token = config('services.cloudflare.workers_ai_token');
+        $dimensions = config('ai.cloudflare_embedding_dimensions')[$model] ?? null;
+
+        if (! $account || ! $token || ! $dimensions) {
+            Log::warning('Cloudflare embedding credentials or model dimensions are missing', ['model' => $model]);
+
+            return null;
+        }
+
+        $input = ($context['embedding_query'] ?? false) ? 'queries' : 'text';
+
+        try {
+            $response = Http::withToken($token)->acceptJson()
+                ->connectTimeout(min(2, $timeout))->timeout($timeout)
+                ->post("https://api.cloudflare.com/client/v4/accounts/{$account}/ai/run/{$model}", [$input => [$text]]);
+        } catch (\Illuminate\Http\Client\ConnectionException) {
+            Log::warning('Cloudflare embedding request could not connect or timed out', ['model' => $model]);
+
+            return null;
+        }
+
+        $vector = $response->json('result.data.0');
+        if (! $response->successful() || $response->json('success') !== true
+            || ! is_array($vector) || ! array_is_list($vector) || count($vector) !== $dimensions
+            || ! array_all($vector, fn ($value) => (is_int($value) || is_float($value)) && is_finite($value))) {
+            Log::warning('Cloudflare embedding request failed or returned an invalid vector', [
+                'model' => $model, 'status' => $response->status(),
+            ]);
+
+            return null;
+        }
+
+        $this->recordCost($model, 'embedContent', ['promptTokenCount' => (int) ceil(strlen($text) / 4)],
+            (int) ((hrtime(true) - $startTime) / 1e6), $context + ['service' => 'Cloudflare']);
+
+        return $vector;
     }
 
     /**
@@ -1553,7 +1606,7 @@ class GeminiService
             AiCost::create([
                 'campaign_id' => $context['campaign_id'] ?? null,
                 'customer_id' => $context['customer_id'] ?? null,
-                'service' => 'Gemini',
+                'service' => $context['service'] ?? 'Gemini',
                 'operation' => $context['operation'] ?? $operation,
                 'model' => $model,
                 'input_tokens' => $inputTokens,

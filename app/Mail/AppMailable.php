@@ -27,6 +27,16 @@ abstract class AppMailable extends Mailable
         );
     }
 
+    protected function buildFrom($message)
+    {
+        // Laravel has already applied any explicit envelope or caller From.
+        if (empty($this->from) && ($sender = Tenant::mailFrom($this->tenantKey ?? $this->resolveTenantKey()))) {
+            $message->from($sender->address, $sender->name);
+        }
+
+        return parent::buildFrom($message);
+    }
+
     /**
      * For senders whose customer isn't discoverable from the mailable's own
      * models (the mailable holds only strings, or the recipient is a lead) —

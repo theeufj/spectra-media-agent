@@ -22,6 +22,8 @@ return [
         // Verifies inbound reply webhooks — see ResendInboundController.
         'webhook_secret' => env('RESEND_WEBHOOK_SECRET'),
         'key' => env('RESEND_API_KEY'),
+        'inbound_api_key' => env('RESEND_INBOUND_API_KEY'),
+        'real_property_ads_key' => env('RESEND_REAL_PROPERTY_ADS_API_KEY'),
     ],
 
     'ses' => [
@@ -149,6 +151,8 @@ return [
     'cloudflare' => [
         'turnstile_site_key' => env('CLOUDFLARE_TURNSTILE_SITE_KEY'),
         'turnstile_secret_key' => env('CLOUDFLARE_TURNSTILE_SECRET_KEY'),
+        'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+        'workers_ai_token' => env('CLOUDFLARE_WORKERS_AI_TOKEN'),
     ],
 
     'firecrawl' => [

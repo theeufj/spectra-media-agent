@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\User;
+use App\Services\Reporting\ReportPdfService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
@@ -71,7 +72,7 @@ class MonthlyExecutiveReport extends AppMailable
             $date = $this->report['period']['end'] ?? now()->format('Y-m-d');
 
             return [
-                Attachment::fromStorageDisk('local', $this->pdfPath)
+                Attachment::fromStorageDisk(ReportPdfService::storedDisk($this->pdfPath) ?? config('filesystems.private_disk'), $this->pdfPath)
                     ->as("Monthly_Report_{$customerName}_{$date}.pdf")
                     ->withMime('application/pdf'),
             ];

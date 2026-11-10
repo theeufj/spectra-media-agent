@@ -62,7 +62,8 @@ return [
         ],
 
         'resend' => [
-            'transport' => 'resend',
+            // Keep the mailer name already stored on queued messages.
+            'transport' => 'resend_scoped',
         ],
 
         'sendmail' => [

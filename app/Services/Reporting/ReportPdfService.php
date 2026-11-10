@@ -3,6 +3,7 @@
 namespace App\Services\Reporting;
 
 use App\Models\Customer;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Browsershot\Browsershot;
@@ -32,17 +33,25 @@ class ReportPdfService
                 ->pdf();
 
             $period = $report['period']['type'] ?? 'weekly';
-            $date = now()->format('Y-m-d');
+            $date = $report['period']['end'] ?? now()->format('Y-m-d');
             $filename = "reports/{$customer->id}/{$period}_{$date}.pdf";
 
-            Storage::disk('local')->put($filename, $pdf);
-
-            return $filename;
+            return StorageHelper::putPrivate($filename, $pdf, 'application/pdf') ? $filename : null;
         } catch (\Throwable $e) {
             Log::error("ReportPdfService: Failed to generate PDF for customer #{$customer->id}: {$e->getMessage()}");
 
             return null;
         }
+    }
+
+    public static function storedDisk(string $filename): ?string
+    {
+        $disk = config('filesystems.private_disk');
+        if (Storage::disk($disk)->exists($filename)) {
+            return $disk;
+        }
+
+        return $disk !== 'local' && Storage::disk('local')->exists($filename) ? 'local' : null;
     }
 
     /**
@@ -54,14 +63,14 @@ class ReportPdfService
         $date = $report['period']['end'] ?? now()->format('Y-m-d');
         $filename = "reports/{$customer->id}/{$period}_{$date}.pdf";
 
-        if (Storage::disk('local')->exists($filename)) {
-            return Storage::disk('local')->get($filename);
+        if (($disk = self::storedDisk($filename)) !== null) {
+            return Storage::disk($disk)->get($filename);
         }
 
         // Regenerate
         $path = $this->generate($customer, $report);
         if ($path) {
-            return Storage::disk('local')->get($path);
+            return Storage::disk(config('filesystems.private_disk'))->get($path);
         }
 
         return null;

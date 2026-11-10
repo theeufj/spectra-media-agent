@@ -128,7 +128,7 @@ return [
          */
         'text_xai' => env('AI_MODEL_TEXT_XAI', 'grok-4-fast'),
         'image_xai' => env('AI_MODEL_IMAGE_XAI', 'grok-imagine-image-2.0'),
-        'video_xai' => env('AI_MODEL_VIDEO_XAI', 'grok-imagine-video'),
+        'video_xai' => env('AI_MODEL_VIDEO_XAI', 'grok-imagine-video-1.5'),
 
         'text_grok' => env('AI_MODEL_TEXT_GROK', 'x-ai/grok-4-fast'),
         'image_grok' => env('AI_MODEL_IMAGE_GROK', 'x-ai/grok-imagine-image-2.0'),
@@ -152,6 +152,10 @@ return [
      * embeds into a different space, which is a worse failure than waiting.
      */
     'embedding_rpm' => (int) env('AI_EMBEDDING_RPM', 4),
+
+    'cloudflare_embedding_dimensions' => [
+        '@cf/qwen/qwen3-embedding-0.6b' => 1024,
+    ],
 
     /*
      * Embedding models served only from the regional Vertex host, via
@@ -269,6 +273,8 @@ return [
         'gemini-2.5-flash-preview-tts' => ['input' => 0.50, 'output' => 10.00, 'cached' => 0.00],
         'gemini-embedding-2-preview' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
+        // Workers AI's list rate. Free-plan requests stop at the daily allowance.
+        '@cf/qwen/qwen3-embedding-0.6b' => ['input' => 0.0118, 'output' => 0.00, 'cached' => 0.00],
         'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-001' => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
         // OpenRouter Grok models bill flat per artefact, not per token:
@@ -288,9 +294,11 @@ return [
          * disappears from every per-customer view without anything failing.
          */
         'grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
+        'grok-4.3' => ['input' => 1.25, 'output' => 2.50, 'cached' => 0.20],
         'grok-2-image-1212' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'grok-imagine-video' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
+        'grok-imagine-video-1.5' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
 
         'x-ai/grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
         'x-ai/grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
@@ -307,17 +315,19 @@ return [
         // Grok 1.5 via OpenRouter: $0.08/s at 480p, $0.25/s at 1080p; 720p
         // rate unpublished — estimated between the two.
         'x-ai/grok-imagine-video-1.5' => 0.15,
-        // The same model on xAI's own account, so the same rate.
-        'grok-imagine-video' => 0.15,
+        // Direct xAI text-to-video at 720p.
+        'grok-imagine-video' => 0.07,
+        'grok-imagine-video-1.5' => 0.14,
         'default' => 0.40,
     ],
 
     /*
      * Providers for fresh creative generation. 'grok' routes through
      * OpenRouter (requires OPENROUTER_API_KEY) with automatic fallback to
-     * Gemini/Veo; 'gemini' uses the Google stack directly. Seeded image
-     * generation and image edits always use Gemini (reference-image
-     * support), regardless of this setting.
+     * Gemini/Veo. 'xai' prefers the direct API (requires XAI_API_KEY).
+     * Direct video falls back to configured OpenRouter, then Veo. 'gemini'
+     * for images and 'veo' for video use the Google stack directly. Seeded
+     * image generation and edits always use Gemini.
      */
     /*
      * Who writes the words.
@@ -341,6 +351,11 @@ return [
      * Flat per-image cost for Grok Imagine 2.0 at 1K via OpenRouter.
      */
     'openrouter_image_cost' => 0.04,
+    'xai_image_cost' => [
+        'grok-imagine-image' => 0.02,
+        'grok-imagine-image-2.0' => 0.06,
+        'default' => 0.06,
+    ],
 
     /*
      * TTS voice for video narration. Any Gemini prebuilt voice name; the

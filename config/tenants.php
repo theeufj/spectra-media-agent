@@ -58,6 +58,7 @@ return [
             'accent' => '#C9A660',
         ],
         'email_from' => 'hello@realpropertyads.com',
+        'mail_from_enabled' => (bool) env('REAL_PROPERTY_ADS_MAIL_FROM_ENABLED', false),
         'logo_text' => 'Real Property Ads',
         'logo_url' => null,
     ],

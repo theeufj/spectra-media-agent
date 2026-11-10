@@ -34,6 +34,11 @@ class User extends Authenticatable implements MustVerifyEmail
         $this->notify(new \App\Notifications\VerifyEmailAddress);
     }
 
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new \App\Notifications\ResetPassword($token));
+    }
+
     /**
      * The attributes that are mass assignable.
      *

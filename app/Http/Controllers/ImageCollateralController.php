@@ -133,14 +133,19 @@ class ImageCollateralController extends Controller
         }
 
         $contextImagePath = null;
+        $contextImageDisk = null;
         if ($request->hasFile('context_image')) {
-            // Store the uploaded context image locally temporarily.
-            // The job will clean it up after processing.
-            $contextImagePath = $request->file('context_image')->store('temp_context_images');
+            $contextImageDisk = config('filesystems.private_disk');
+            $contextImage = $request->file('context_image');
+            $contextImagePath = 'temp_context_images/'.$contextImage->hashName();
+            $contents = $contextImage->get();
+            if ($contents === false || ! StorageHelper::putPrivate($contextImagePath, $contents, $contextImage->getMimeType() ?? 'application/octet-stream')) {
+                throw new \RuntimeException('Could not store the refinement context image.');
+            }
         }
 
         // Dispatch the job to handle the refinement.
-        RefineImage::dispatch($imageCollateral, $request->prompt, $contextImagePath);
+        RefineImage::dispatch($imageCollateral, $request->prompt, $contextImagePath, $contextImageDisk);
 
         $quotaService->recordUsage($user, 'refinement');
 

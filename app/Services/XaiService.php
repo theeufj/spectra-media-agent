@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AiCost;
 use App\Support\BillingAlert;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -183,13 +184,121 @@ class XaiService
 
             // Images are billed flat rather than by token, so the token table
             // would record every one at zero.
-            $this->recordFlatCost($model, 'generateImage', (float) config('ai.openrouter_image_cost', 0.04), $context);
+            $rates = config('ai.xai_image_cost');
+            $this->recordFlatCost($model, 'generateImage', $rates[$model] ?? $rates['default'], $context);
 
             return ['data' => $b64, 'mimeType' => 'image/jpeg'];
         } catch (\Throwable $e) {
             report($e);
             Log::error('XaiService: image generation exception: '.$e->getMessage());
 
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function startVideoGeneration(string $prompt, int $durationSeconds, string $aspectRatio, array $context = []): ?string
+    {
+        if (! $this->isConfigured() || self::isUnavailable()) {
+            return null;
+        }
+
+        $model = (string) config('ai.models.video_xai');
+        $duration = max(1, min(15, $durationSeconds));
+
+        try {
+            $response = Http::withToken(config('services.xai.api_key'))
+                ->timeout(120)
+                ->post(self::BASE.'/videos/generations', [
+                    'model' => $model,
+                    'prompt' => $prompt,
+                    'duration' => $duration,
+                    'aspect_ratio' => $aspectRatio,
+                    'resolution' => '720p',
+                ]);
+
+            if (! $response->successful()) {
+                $this->noteFailure('video generation', $model, $response->status(), $response->body());
+
+                return null;
+            }
+
+            $requestId = $response->json('request_id');
+            if (! is_string($requestId) || $requestId === '') {
+                Log::error('XaiService: video response missing request_id', ['model' => $model]);
+
+                return null;
+            }
+
+            // Model IDs can contain dots, so look up the literal key in the pricing map.
+            $rates = config('ai.video_cost_per_second');
+            if (! isset($rates[$model])) {
+                Log::warning('XaiService: no video pricing for model, using the default rate', ['model' => $model]);
+            }
+            $rate = $rates[$model] ?? $rates['default'];
+            $this->recordFlatCost($model, 'startVideoGeneration', round($duration * $rate, 6), $context, [
+                'duration_seconds' => $duration,
+            ]);
+
+            return $requestId;
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('XaiService: video start exception: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** @return array{bytes: string}|array{error: string}|null */
+    public function checkVideoStatus(string $requestId): ?array
+    {
+        if (! $this->isConfigured()) {
+            return ['error' => 'xAI credentials are unavailable'];
+        }
+
+        try {
+            $response = Http::withToken(config('services.xai.api_key'))
+                ->timeout(120)
+                ->get(self::BASE.'/videos/'.rawurlencode($requestId));
+
+            if ($response->serverError() || $response->status() === 429) {
+                return null;
+            }
+
+            if (! $response->successful()) {
+                return ['error' => 'status check failed: '.$response->status()];
+            }
+
+            $status = $response->json('status');
+            if ($status === 'pending') {
+                return null;
+            }
+            if ($status !== 'done') {
+                return ['error' => 'job status: '.(is_string($status) ? $status : 'unknown')];
+            }
+            if ($response->json('video.respect_moderation') === false) {
+                return ['error' => 'video did not pass moderation'];
+            }
+
+            $url = $response->json('video.url');
+            $host = is_string($url) ? parse_url($url, PHP_URL_HOST) : null;
+            if (! is_string($host) || ! str_ends_with(strtolower($host), '.x.ai') || parse_url($url, PHP_URL_SCHEME) !== 'https') {
+                return ['error' => 'video response did not contain a trusted download URL'];
+            }
+
+            // The temporary URL is already authorized and must not receive the API key.
+            $content = Http::withoutRedirecting()->timeout(300)->get($url);
+            if ($content->serverError() || $content->status() === 429) {
+                return null;
+            }
+            if (! $content->successful() || $content->body() === '') {
+                return ['error' => 'content download failed: '.$content->status()];
+            }
+
+            return ['bytes' => $content->body()];
+        } catch (ConnectionException) {
             return null;
         }
     }
@@ -231,8 +340,9 @@ class XaiService
      * before deciding what to use.
      *
      * @param  array<string, mixed>  $context
+     * @param  array<string, mixed>  $metadata
      */
-    private function recordFlatCost(string $model, string $operation, float $cost, array $context): void
+    private function recordFlatCost(string $model, string $operation, float $cost, array $context, array $metadata = []): void
     {
         try {
             AiCost::create([
@@ -246,10 +356,11 @@ class XaiService
                 'cost' => $cost,
                 'duration_ms' => 0,
                 'task_type' => $context['task_type'] ?? null,
+                'metadata' => $metadata ?: null,
             ]);
         } catch (\Throwable $e) {
             report($e);
-            Log::error('XaiService: failed to record image cost: '.$e->getMessage());
+            Log::error('XaiService: failed to record cost: '.$e->getMessage());
         }
     }
 

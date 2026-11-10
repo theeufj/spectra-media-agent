@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Mail\Mailables\Address;
+
 class Tenant
 {
     /**
@@ -30,6 +32,15 @@ class Tenant
     public static function name(?string $key): string
     {
         return self::config($key)['name'] ?? 'Site to Spend';
+    }
+
+    public static function mailFrom(?string $key): ?Address
+    {
+        $tenant = self::config($key);
+
+        return ($tenant['mail_from_enabled'] ?? false)
+            ? new Address($tenant['email_from'], $tenant['name'])
+            : null;
     }
 
     /**

@@ -66,44 +66,60 @@ function IdentitySection({ identity }) {
     );
 }
 
-function AdAccountsSection({ adAccounts, adInsights }) {
+function AdAccountsSection({ adAccounts, adInsights, selectedAccount, datePreset, insightPeriods }) {
     const currency = useCurrency();
-    const hasInsights = adInsights && !adInsights.error;
+    const select = (accountId, period) => {
+        router.get(route('facebook-api.verify'), { ad_account_id: accountId, date_preset: period }, {
+            preserveScroll: true,
+        });
+    };
     return (
         <SectionCard title="Ad Accounts — Performance Data" icon={AdsIcon}
             error={adAccounts.error} status={adAccounts.status}
             badge={!adAccounts.error && <GreenBadge label={`${adAccounts.count ?? 0} accounts`} />}>
-            {/* Accounts list */}
             {adAccounts.accounts?.length > 0 && (
-                <div className="px-5 pt-4 pb-2 border-b border-gray-100">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Accessible Ad Accounts (ads_read · ads_management)</p>
-                    <div className="space-y-1">
-                        {adAccounts.accounts.map((a, i) => (
-                            <div key={i} className="flex items-center justify-between py-1.5">
-                                <div>
-                                    <span className="text-sm font-medium text-gray-900">{a.name}</span>
-                                    <span className="text-xs text-gray-500 ml-2 font-mono">{a.id}</span>
-                                </div>
-                                <div className="w-2 h-2 rounded-full bg-green-400" />
-                            </div>
-                        ))}
-                    </div>
+                <div className="grid gap-3 px-5 py-4 border-b border-gray-100 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-gray-700">
+                        Ad account
+                        <select className="mt-1 block w-full rounded-md border-gray-300"
+                            value={selectedAccount?.id ?? ''}
+                            onChange={(event) => select(event.target.value, datePreset)}>
+                            <option value="">Select an ad account</option>
+                            {adAccounts.accounts.map((account) => (
+                                <option key={account.id} value={account.id}>{account.name}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="text-sm font-medium text-gray-700">
+                        Reporting period
+                        <select className="mt-1 block w-full rounded-md border-gray-300"
+                            value={datePreset}
+                            disabled={!selectedAccount}
+                            onChange={(event) => select(selectedAccount.id, event.target.value)}>
+                            {Object.entries(insightPeriods).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                    </label>
                 </div>
             )}
-            {/* Live performance metrics */}
             <div className="px-5 py-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                     Live Performance Metrics — {adInsights?.period ?? 'Last 30 days'}
                     {adInsights?.account_id && <span className="font-normal normal-case ml-1 text-gray-500">for {adInsights.account_id}</span>}
                 </p>
-                {adInsights?.error ? (
+                {!adInsights ? (
+                    <p className="text-sm text-gray-500">Select an ad account to load live reporting.</p>
+                ) : adInsights.error ? (
                     <p className="text-sm text-red-500">{adInsights.error}</p>
+                ) : !adInsights.has_activity ? (
+                    <p className="text-sm text-gray-500">Meta returned no delivery activity for this period.</p>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <MetricBox label="Impressions" value={hasInsights ? count(adInsights.impressions) : '—'} />
-                        <MetricBox label="Clicks" value={hasInsights ? count(adInsights.clicks) : '—'} />
-                        <MetricBox label="Spend" value={hasInsights ? money(adInsights.spend, currency) : '—'} />
-                        <MetricBox label="Reach" value={hasInsights ? count(adInsights.reach) : '—'} />
+                        <MetricBox label="Impressions" value={count(adInsights.impressions)} />
+                        <MetricBox label="Clicks" value={count(adInsights.clicks)} />
+                        <MetricBox label="Spend" value={money(adInsights.spend, selectedAccount?.currency ?? currency)} />
+                        <MetricBox label="Reach" value={count(adInsights.reach)} />
                     </div>
                 )}
             </div>
@@ -111,32 +127,17 @@ function AdAccountsSection({ adAccounts, adInsights }) {
     );
 }
 
-function CampaignCreateSection({ adAccounts }) {
+function CampaignCreateSection({ selectedAccount }) {
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    const firstAccount = adAccounts.accounts?.[0];
-
-    const handleCreate = () => {
-        if (!firstAccount) return;
-        setLoading(true);
-        router.post(route('facebook-api.test-campaign'), { ad_account_id: firstAccount.id }, {
-            preserveScroll: true,
-            onSuccess: (page) => {
-                // Inertia router.post with onSuccess gets the page props
-                setLoading(false);
-            },
-            onFinish: () => setLoading(false),
-        });
-    };
-
-    const handleCreateDirect = async () => {
-        if (!firstAccount) return;
+    const handleCreate = async () => {
+        if (!selectedAccount) return;
         setLoading(true);
         try {
             const data = await fetchJson(route('facebook-api.test-campaign'), {
                 method: 'POST',
-                json: { ad_account_id: firstAccount.id },
+                json: { ad_account_id: selectedAccount.id },
             });
             setResult(data);
         } catch (e) {
@@ -151,14 +152,15 @@ function CampaignCreateSection({ adAccounts }) {
             badge={result?.success ? <GreenBadge label="Campaign created" /> : null}>
             <div className="px-5 py-4">
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                    Demonstrates <strong>ads_management</strong> write access. Creates a PAUSED test campaign on ad account <strong className="font-mono">{firstAccount?.id ?? '—'}</strong>.
-                    The campaign does not spend — it is created with status PAUSED.
+                    {selectedAccount ? (
+                        <>Creates a paused test campaign in <strong>{selectedAccount.name}</strong> ({selectedAccount.id}).</>
+                    ) : 'Select an ad account to create a paused test campaign.'}
                 </p>
 
                 {!result && (
                     <button
-                        onClick={handleCreateDirect}
-                        disabled={loading || !firstAccount}
+                        onClick={handleCreate}
+                        disabled={loading || !selectedAccount}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
                     >
                         {loading ? (
@@ -373,7 +375,7 @@ function PermissionsSection({ grantedPermissions }) {
 export default function FacebookApiVerify({
     account_name, token_expired,
     identity, grantedPermissions,
-    adAccounts, adInsights,
+    adAccounts, adInsights, selectedAccount, datePreset = 'last_30d', insightPeriods = {},
     businesses, businessAssets,
     managedPages, pagePosts,
 }) {
@@ -416,14 +418,15 @@ export default function FacebookApiVerify({
                 <div className="space-y-4 mb-8">
                     <PermissionsSection grantedPermissions={grantedPermissions} />
                     <IdentitySection identity={identity ?? { error: null }} />
-                    <AdAccountsSection adAccounts={adAccounts ?? { accounts: [] }} adInsights={adInsights} />
-                    <CampaignCreateSection adAccounts={adAccounts ?? { accounts: [] }} />
+                    <AdAccountsSection adAccounts={adAccounts ?? { accounts: [] }} adInsights={adInsights}
+                        selectedAccount={selectedAccount} datePreset={datePreset} insightPeriods={insightPeriods} />
+                    <CampaignCreateSection key={selectedAccount?.id} selectedAccount={selectedAccount} />
                     <BusinessSection businesses={businesses ?? { accounts: [] }} businessAssets={businessAssets} />
                     <PagesSection managedPages={managedPages ?? { pages: [] }} pagePosts={pagePosts} />
                 </div>
 
                 <div className="flex gap-3">
-                    <Link href={route('facebook-api.verify')}
+                    <Link href={route('facebook-api.verify', { ad_account_id: selectedAccount?.id, date_preset: datePreset })}
                         className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

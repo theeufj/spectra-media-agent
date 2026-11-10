@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+cd /app
+
+if [ -n "${GOOGLE_ADS_INI_BASE64:-}" ]; then
+    (
+        umask 077
+        printf '%s' "$GOOGLE_ADS_INI_BASE64" | base64 -d > storage/app/google_ads_php.ini
+        chown www-data:www-data storage/app/google_ads_php.ini
+        chmod 0600 storage/app/google_ads_php.ini
+    )
+    unset GOOGLE_ADS_INI_BASE64
+fi
+
+if [ -n "${GOOGLE_VERTEX_CREDENTIALS_BASE64:-}" ]; then
+    export GOOGLE_APPLICATION_CREDENTIALS=/run/spectra/vertex.json
+    (
+        umask 077
+        install -d -o www-data -g www-data -m 0700 /run/spectra
+        printf '%s' "$GOOGLE_VERTEX_CREDENTIALS_BASE64" | base64 -d > "$GOOGLE_APPLICATION_CREDENTIALS"
+        chown www-data:www-data "$GOOGLE_APPLICATION_CREDENTIALS"
+        chmod 0600 "$GOOGLE_APPLICATION_CREDENTIALS"
+    )
+    unset GOOGLE_VERTEX_CREDENTIALS_BASE64
+fi
+
+case "${1:-web}" in
+    web) exec tini -- apache2-foreground ;;
+    worker) exec tini -- gosu www-data php artisan horizon ;;
+    scheduler) exec tini -- gosu www-data php artisan schedule:work ;;
+    *) exec "$@" ;;
+esac

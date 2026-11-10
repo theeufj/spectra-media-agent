@@ -15,6 +15,9 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    // Private files shared by web and queue workers in separate containers.
+    'private_disk' => env('PRIVATE_S3_BUCKET') ? 'private-s3' : 'local',
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -71,6 +74,17 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+        ],
+
+        'private-s3' => [
+            'driver' => 's3',
+            'key' => env('PRIVATE_S3_ACCESS_KEY_ID'),
+            'secret' => env('PRIVATE_S3_SECRET_ACCESS_KEY'),
+            'region' => env('PRIVATE_S3_REGION', 'auto'),
+            'bucket' => env('PRIVATE_S3_BUCKET'),
+            'endpoint' => env('PRIVATE_S3_ENDPOINT'),
+            'use_path_style_endpoint' => env('PRIVATE_S3_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => true,
         ],
 
     ],

@@ -40,7 +40,7 @@ class VerifyEmailAddress extends VerifyEmail
     {
         $tenantKey = $notifiable->tenant_key ?? null;
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->view(
                 ['html' => 'emails.notification', 'text' => 'emails.notification-text'],
                 Tenant::viewData($tenantKey),
@@ -56,5 +56,11 @@ class VerifyEmailAddress extends VerifyEmail
             ->action('Verify Email Address', $this->verificationUrl($notifiable))
             ->line('If you didn\'t create an account, no further action is required.')
             ->salutation('— The '.Tenant::name($tenantKey).' Team');
+
+        if ($sender = Tenant::mailFrom($tenantKey)) {
+            $mail->from($sender->address, $sender->name);
+        }
+
+        return $mail;
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\FirstCampaignReady;
+use App\Mail\WelcomeEmail;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\User;
@@ -11,8 +12,10 @@ use App\Notifications\DeploymentCompleted;
 use App\Services\VideoGeneration\VideoPostCompletion;
 use App\Support\Tenant;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Symfony\Component\Mailer\SentMessage;
 use Tests\TestCase;
 
 /**
@@ -26,6 +29,41 @@ use Tests\TestCase;
 class TenantEmailBrandingTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_enabled_tenant_sender_reaches_the_transport_for_account_and_lifecycle_mail(): void
+    {
+        $this->configureSenders(true);
+        $user = User::factory()->create(['tenant_key' => 'realpropertyads']);
+        $customer = Customer::factory()->create(['tenant_key' => 'realpropertyads']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $user->sendEmailVerificationNotification();
+        $user->sendPasswordResetNotification('test-reset-token');
+        Mail::to($user->email)->sendNow((new WelcomeEmail($user->name))->withTenant($user->tenant_key));
+        Mail::to($user->email)->sendNow(new FirstCampaignReady($campaign, $user->name));
+        $user->notifyNow(new DeploymentCompleted($campaign, successCount: 1, failureCount: 0), ['mail']);
+
+        $this->assertSame(array_fill(0, 5, ['hello@realpropertyads.com', 'Real Property Ads']), $this->deliveredSenders());
+    }
+
+    public function test_disabled_and_default_tenants_keep_the_global_sender_and_explicit_senders_win(): void
+    {
+        $this->configureSenders(false);
+        $user = User::factory()->create(['tenant_key' => 'realpropertyads']);
+        $user->sendEmailVerificationNotification();
+
+        $this->configureSenders(true);
+        User::factory()->create(['tenant_key' => 'sitetospend'])->sendPasswordResetNotification('test-reset-token');
+        Mail::to($user->email)->sendNow((new WelcomeEmail($user->name))
+            ->withTenant($user->tenant_key)
+            ->from('founder@example.com', 'Founder'));
+
+        $this->assertSame([
+            ['hello@sitetospend.com', 'Site to Spend'],
+            ['hello@sitetospend.com', 'Site to Spend'],
+            ['founder@example.com', 'Founder'],
+        ], $this->deliveredSenders());
+    }
 
     public function test_mailable_for_a_tenant_customer_renders_tenant_brand_and_links(): void
     {
@@ -152,5 +190,29 @@ class TenantEmailBrandingTest extends TestCase
         $pending->update(['status' => 'completed']);
         (new VideoPostCompletion)($pending->fresh());
         Mail::assertSent(\App\Mail\VideosGenerated::class, 1);
+    }
+
+    private function configureSenders(bool $enableTenantSender): void
+    {
+        $tenants = config('tenants');
+        $tenants['realpropertyads.com']['mail_from_enabled'] = $enableTenantSender;
+
+        config([
+            'mail.default' => 'array',
+            'mail.from' => ['address' => 'hello@sitetospend.com', 'name' => 'Site to Spend'],
+            'tenants' => $tenants,
+        ]);
+    }
+
+    private function deliveredSenders(): array
+    {
+        $transport = Mail::getSymfonyTransport();
+        $this->assertInstanceOf(ArrayTransport::class, $transport);
+
+        return $transport->messages()->map(function (SentMessage $message) {
+            $sender = $message->getEnvelope()->getSender();
+
+            return [$sender->getAddress(), $sender->getName()];
+        })->all();
     }
 }

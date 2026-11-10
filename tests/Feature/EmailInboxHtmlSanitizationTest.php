@@ -6,8 +6,11 @@ use App\Models\EmailInbox;
 use App\Models\EmailMessage;
 use App\Models\User;
 use App\Services\EmailInboxService;
+use App\Services\ResendSendingClient;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia;
+use Resend\Client;
+use Resend\Contracts\Transporter;
 use Resend\Laravel\Facades\Resend;
 use Tests\TestCase;
 
@@ -87,6 +90,26 @@ class EmailInboxHtmlSanitizationTest extends TestCase
         $this->assertNoExecutableMarkup($emails->sent[0]['html']);
         $this->assertStringContainsString('Forwarded message', $emails->sent[0]['html']);
         $this->assertStringContainsString('Invoice attached', $emails->sent[0]['html']);
+    }
+
+    public function test_real_property_inbox_routes_only_outbound_requests_to_the_scoped_client(): void
+    {
+        $inbox = $this->inbox(['email_address' => 'support@RealPropertyAds.COM', 'forward_to' => 'ops@example.test']);
+        $globalEmails = $this->fakeResend($inbox);
+        $scopedTransport = $this->createMock(Transporter::class);
+        $scopedTransport->expects($this->exactly(2))->method('request')->willReturn(['id' => 'scoped-id']);
+        $this->mock(ResendSendingClient::class, function ($selector) use ($scopedTransport, $inbox) {
+            $selector->shouldReceive('forSender')->twice()->with($inbox->email_address)
+                ->andReturn(new Client($scopedTransport));
+        });
+
+        $service = app(EmailInboxService::class);
+        $service->processInboundWebhook($this->webhookPayload($inbox));
+        $sent = $service->sendEmail($inbox, ['to' => 'customer@example.test', 'subject' => 'Reply', 'text' => 'Thank you']);
+
+        $this->assertDatabaseHas('email_messages', ['inbox_id' => $inbox->id, 'direction' => 'inbound']);
+        $this->assertSame([], $globalEmails->sent);
+        $this->assertSame('scoped-id', $sent->resend_email_id);
     }
 
     public function test_a_row_stored_before_sanitisation_is_cleaned_on_render(): void

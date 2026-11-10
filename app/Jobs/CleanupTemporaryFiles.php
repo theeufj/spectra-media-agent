@@ -40,6 +40,14 @@ class CleanupTemporaryFiles implements ShouldQueue
             }
         }
 
+        $contextDisk = Storage::disk(config('filesystems.private_disk'));
+        foreach ($contextDisk->files('temp_context_images') as $file) {
+            if ($contextDisk->lastModified($file) < now()->subDays(7)->timestamp) {
+                $contextDisk->delete($file);
+                $deleted++;
+            }
+        }
+
         Log::info("CleanupTemporaryFiles: Deleted {$deleted} expired files");
     }
 

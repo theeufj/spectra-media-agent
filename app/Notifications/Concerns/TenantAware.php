@@ -23,14 +23,15 @@ trait TenantAware
     {
         $models = array_values(array_filter(get_object_vars($this), 'is_object'));
         $stamps = \App\Models\EmailLog::stampHeaders($this, Tenant::customerFromModels(...$models));
+        $tenantKey = $this->tenantKey();
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             // Both parts: a bare html view would drop the text/plain
             // alternative the stock markdown template always shipped, which
             // text-mode clients and spam filters both care about.
             ->view(
                 ['html' => 'emails.notification', 'text' => 'emails.notification-text'],
-                Tenant::viewData($this->tenantKey()),
+                Tenant::viewData($tenantKey),
             )
             // Stamp the customer for the per-customer email log; stripped
             // again before transport (LogSentEmail::handleSending).
@@ -39,6 +40,12 @@ trait TenantAware
                     $message->getHeaders()->addTextHeader($name, $value);
                 }
             });
+
+        if ($sender = Tenant::mailFrom($tenantKey)) {
+            $mail->from($sender->address, $sender->name);
+        }
+
+        return $mail;
     }
 
     protected function tenantKey(): ?string
