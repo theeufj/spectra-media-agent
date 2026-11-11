@@ -136,12 +136,25 @@ class FacebookAdsExecutionAgentTest extends TestCase
             ], JSON_THROW_ON_ERROR)]]]]);
         }]);
 
-        $agent = Mockery::mock(FacebookAdsExecutionAgent::class, [$customer])->makePartial()->shouldAllowMockingProtectedMethods();
-        $agent->shouldReceive('validatePrerequisites')->once()->andReturn(new ValidationResult(true));
-        $agent->shouldReceive('executePlan')->once()->withArgs(fn (ExecutionPlan $plan) => $plan->getCampaignStructure()['objective'] === 'OUTCOME_TRAFFIC')
-            ->andReturn(ExecutionResult::success());
+        $agent = new class($customer) extends FacebookAdsExecutionAgent
+        {
+            public ?ExecutionPlan $executedPlan = null;
+
+            protected function validatePrerequisites(ExecutionContext $context): ValidationResult
+            {
+                return new ValidationResult(true);
+            }
+
+            protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
+            {
+                $this->executedPlan = $plan;
+
+                return ExecutionResult::success();
+            }
+        };
 
         $this->assertTrue($agent->execute($context)->success);
+        $this->assertSame('OUTCOME_TRAFFIC', $agent->executedPlan?->getCampaignStructure()['objective'] ?? null);
         Http::assertSentCount(2);
     }
 

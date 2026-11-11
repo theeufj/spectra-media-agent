@@ -101,6 +101,8 @@ class AdSetServiceTest extends TestCase
             targeting: [
                 'targeting_automation' => ['advantage_audience' => 0],
                 'geo_locations' => ['countries' => ['GB']],
+                'age_min' => 30,
+                'age_max' => 55,
             ],
         );
 
@@ -108,7 +110,8 @@ class AdSetServiceTest extends TestCase
             $targeting = json_decode($request->data()['targeting'] ?? '{}', true);
 
             // Existing value should be preserved, not overwritten
-            return $targeting['targeting_automation']['advantage_audience'] === 0;
+            return $targeting['targeting_automation']['advantage_audience'] === 0
+                && $targeting['age_min'] === 30 && $targeting['age_max'] === 55;
         });
     }
 

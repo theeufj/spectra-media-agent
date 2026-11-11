@@ -9,6 +9,7 @@ use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Prompts\FacebookAdsExecutionPrompt;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\CampaignStatusHelper;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\AdSetService;
@@ -307,7 +308,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $fbCampaign = $this->createCampaign($accountId, $campaign, $strategy, $plan, $result);
 
             // 2. Create Ad Set with targeting
-            $fbAdSet = $this->createAdSet($accountId, $fbCampaign['id'], $campaign, $strategy, $plan, $result);
+            $fbAdSet = $this->createAdSet($accountId, $fbCampaign, $campaign, $strategy, $plan, $result);
 
             // 3. Deploy every available creative — one ad per image, one per video.
             //    Facebook optimises delivery across all ads in the ad set, so more
@@ -457,7 +458,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             ]);
             $result->addPlatformId('campaign', $campaign->facebook_ads_campaign_id);
 
-            return ['id' => $campaign->facebook_ads_campaign_id];
+            if ($strategy->facebook_adset_id) {
+                return ['id' => $campaign->facebook_ads_campaign_id];
+            }
+
+            $existing = $this->campaignService->getCampaign($campaign->facebook_ads_campaign_id);
+            if (! isset($existing['objective'])) {
+                throw new \RuntimeException('Could not verify the existing Facebook campaign objective before retrying ad-set creation.');
+            }
+
+            return $existing;
         }
 
         $campaignStructure = $plan->getCampaignStructure();
@@ -490,7 +500,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function createAdSet(
         string $accountId,
-        string $campaignId,
+        array $fbCampaign,
         Campaign $campaign,
         Strategy $strategy,
         ExecutionPlan $plan,
@@ -507,16 +517,39 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             return ['id' => $strategy->facebook_adset_id];
         }
 
+        $campaignId = $fbCampaign['id'];
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int) (($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
+        $objective = $fbCampaign['objective'] ?? $campaignStructure['objective'] ?? '';
+        $optimizationGoal = $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS';
+        if ($objective !== ($campaignStructure['objective'] ?? '')) {
+            $optimizationGoal = match ($objective) {
+                'OUTCOME_LEADS' => 'LEAD_GENERATION',
+                'OUTCOME_SALES' => 'OFFSITE_CONVERSIONS',
+                'OUTCOME_TRAFFIC' => 'LANDING_PAGE_VIEWS',
+                'OUTCOME_AWARENESS' => 'REACH',
+                default => throw new \RuntimeException('Retry the Facebook ad set with a plan for its existing campaign objective.'),
+            };
+        }
 
-        // Build targeting from plan
         $targeting = $this->buildTargeting($plan);
+        $research = app(CampaignMarketResearchWorkflow::class)->status($campaign);
+        $row = collect($research['result']['strategies'] ?? [])->firstWhere('strategy_id', $strategy->id);
+        $countries = $row['evidence']['meta']['countries'] ?? [];
+        if (($research['approved'] ?? false) && $countries !== []) {
+            // Use the reviewed country and demographics. The model's interest,
+            // behaviour and audience IDs were not verified against Meta.
+            $demographics = $strategy->targetingConfig;
+            $targeting['geo_locations'] = ['countries' => $countries];
+            $targeting['age_min'] = $demographics->age_min ?? 18;
+            $targeting['age_max'] = $demographics->age_max ?? 65;
+            $targeting['genders'] = $demographics?->getFacebookGenderTargeting() ?? [1, 2];
+            $targeting['targeting_automation'] = ['advantage_audience' => 0];
+            unset($targeting['interests'], $targeting['behaviors'], $targeting['custom_audiences']);
+        }
 
         // Wire pixel promoted_object when available — required for conversion objectives
         $promotedObject = null;
         if ($this->customer->facebook_pixel_id) {
-            $objective = $campaignStructure['objective'] ?? '';
             $eventType = match (true) {
                 str_contains($objective, 'LEADS') => 'LEAD',
                 str_contains($objective, 'SALES') => 'PURCHASE',
@@ -536,7 +569,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaignId,
             $campaign->name.' - Ad Set',
             $targeting,
-            $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS',
+            $optimizationGoal,
             CampaignStatusHelper::getFacebookAdsStatus(),
             $promotedObject
         );
