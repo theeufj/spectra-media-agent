@@ -78,6 +78,23 @@ class GeoTargets
         return self::MAP[strtolower(trim($name))] ?? null;
     }
 
+    /** Resolve a supported country name or alias to its canonical ISO code. */
+    public static function countryCodeFor(string $name): ?string
+    {
+        $id = self::idFor($name);
+        if ($id === null) {
+            return null;
+        }
+
+        foreach (self::MAP as $code => $countryId) {
+            if ($countryId === $id && strlen($code) === 2 && $code !== 'uk') {
+                return strtoupper($code);
+            }
+        }
+
+        return null;
+    }
+
     /**
      * The resource name Keyword Planner takes, for a customer's country.
      *

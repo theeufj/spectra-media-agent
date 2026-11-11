@@ -5,6 +5,7 @@ namespace App\Services\FacebookAds;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\Campaigns\CampaignMarketResearchProvider;
+use App\Services\GoogleAds\GeoTargets;
 use Illuminate\Support\Facades\Http;
 
 class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
@@ -85,7 +86,11 @@ class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
         $countries = [];
         foreach ($locations['countries'] ?? $locations as $location) {
             $country = is_array($location) ? ($location['country_code'] ?? $location['country'] ?? null) : $location;
-            if (! is_string($country) || ! preg_match('/^[a-z]{2}$/iD', $country)) {
+            if (! is_string($country)) {
+                return [];
+            }
+            $country = GeoTargets::countryCodeFor($country) ?? trim($country);
+            if (! preg_match('/^[a-z]{2}$/iD', $country)) {
                 return [];
             }
             $countries[strtoupper($country)] = true;

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Models\TargetingConfig;
 use App\Services\Campaigns\CampaignMarketResearchProvider;
 use App\Services\FacebookAds\FacebookMarketResearchProvider;
 use Illuminate\Http\Client\Request;
@@ -41,5 +42,13 @@ class FacebookMarketResearchTest extends TestCase
         Http::assertSent(fn (Request $request) => str_contains($request->url(), '/delivery_estimate?')
             && $request->hasHeader('Authorization', 'Bearer test-system-user')
             && json_decode($request['targeting_spec'], true) === ['geo_locations' => ['countries' => ['AU']]]);
+
+        // Strategy generation stores country names, while older drafts use codes.
+        $campaign->geographic_targeting = null;
+        $strategy->setRelation('targetingConfig', new TargetingConfig(['geo_locations' => ['Australia']]));
+        $this->assertSame('ready', $provider->propose($campaign, $strategy, [], ['daily_budget_micros' => 10_000_000])['status']);
+
+        $strategy->targetingConfig->geo_locations = ['Sydney'];
+        $this->assertSame('needs_review', $provider->propose($campaign, $strategy, [], ['daily_budget_micros' => 10_000_000])['status']);
     }
 }
