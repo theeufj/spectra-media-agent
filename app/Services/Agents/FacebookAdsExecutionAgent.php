@@ -264,7 +264,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ],
                 systemInstruction: $systemInstruction,
                 enableThinking: true,
-                enableGoogleSearch: true // Enable real-time grounding for current API best practices
+                enableGoogleSearch: config('ai.text_provider') !== 'xai'
             );
 
             if (! $response || ! isset($response['text'])) {

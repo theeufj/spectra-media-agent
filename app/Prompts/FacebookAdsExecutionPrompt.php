@@ -141,8 +141,6 @@ Generate a comprehensive Facebook/Meta Ads execution plan for the following camp
 
 **Customer/Business:**
 - Name: {$customer->name}
-- Facebook Ad Account ID: {$customer->facebook_ads_account_id}
-- Facebook Page ID: {$customer->facebook_page_id}
 - Facebook Pixel Installed: {$hasPixel}
 
 # BUDGET ALLOCATION

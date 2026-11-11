@@ -13,6 +13,8 @@ use App\Services\Agents\ValidationResult;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
@@ -113,6 +115,34 @@ class FacebookAdsExecutionAgentTest extends TestCase
         $this->assertArrayHasKey('campaign_id', $result->platformIds);
 
         Log::shouldHaveReceived('info')->atLeast()->once();
+    }
+
+    public function test_execution_plans_can_use_xai_without_sending_meta_account_ids(): void
+    {
+        [$customer, $campaign, $strategy, $context] = $this->createContext();
+        config(['ai.text_provider' => 'xai', 'services.xai.api_key' => 'test-xai-key']);
+        $this->app->instance(GeminiService::class, new GeminiService);
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->with($campaign)->andReturnNull());
+
+        Http::fake(['https://api.x.ai/v1/chat/completions' => function (Request $request) use ($customer) {
+            $prompt = $request['messages'][1]['content'];
+            $this->assertStringNotContainsString($customer->facebook_ads_account_id, $prompt);
+            $this->assertStringNotContainsString($customer->facebook_page_id, $prompt);
+
+            return Http::response(['choices' => [['message' => ['content' => json_encode([
+                'campaign_structure' => ['objective' => 'OUTCOME_TRAFFIC', 'optimization_goal' => 'LANDING_PAGE_VIEWS'],
+                'targeting_strategy' => ['geo_locations' => ['countries' => ['AU']]],
+                'execution_sequence' => [['step' => 1, 'action' => 'create_campaign']],
+            ], JSON_THROW_ON_ERROR)]]]]);
+        }]);
+
+        $agent = Mockery::mock(FacebookAdsExecutionAgent::class, [$customer])->makePartial()->shouldAllowMockingProtectedMethods();
+        $agent->shouldReceive('validatePrerequisites')->once()->andReturn(new ValidationResult(true));
+        $agent->shouldReceive('executePlan')->once()->withArgs(fn (ExecutionPlan $plan) => $plan->getCampaignStructure()['objective'] === 'OUTCOME_TRAFFIC')
+            ->andReturn(ExecutionResult::success());
+
+        $this->assertTrue($agent->execute($context)->success);
+        Http::assertSentCount(2);
     }
 
     public function test_execute_fails_when_facebook_account_not_configured(): void
