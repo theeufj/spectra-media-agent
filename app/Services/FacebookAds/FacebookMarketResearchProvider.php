@@ -45,8 +45,9 @@ class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
         // The execution service bills impressions. Use Meta’s matching minimum and
         // the app’s existing minimum without increasing the proposed allocation.
         $minimum = $client->get($accountUrl.'/minimum_budgets');
-        $minimumCents = $minimum->json('data.0.min_daily_budget_imp');
-        if (! $minimum->successful() || $minimum->json('data.0.currency') !== $currency || ! is_int($minimumCents) || $minimumCents <= 0) {
+        $currencyMinimum = collect($minimum->json('data', []))->firstWhere('currency', $currency);
+        $minimumCents = $currencyMinimum['min_daily_budget_imp'] ?? null;
+        if (! $minimum->successful() || ! is_int($minimumCents) || $minimumCents <= 0) {
             return $unverified('Meta did not return a valid minimum daily budget for this account.');
         }
 

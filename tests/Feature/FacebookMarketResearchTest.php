@@ -19,7 +19,10 @@ class FacebookMarketResearchTest extends TestCase
         config(['services.facebook.system_user_token' => 'test-system-user', 'services.facebook.graph_version' => 'v24.0']);
         $base = 'https://graph.facebook.com/v24.0/act_123456';
         Http::fake([
-            $base.'/minimum_budgets' => Http::response(['data' => [['currency' => 'AUD', 'min_daily_budget_imp' => 635]]]),
+            $base.'/minimum_budgets' => Http::response(['data' => [
+                ['currency' => 'AED', 'min_daily_budget_imp' => 369],
+                ['currency' => 'AUD', 'min_daily_budget_imp' => 635],
+            ]]),
             $base.'/delivery_estimate*' => Http::response(['data' => [[
                 'estimate_ready' => true, 'estimate_mau_lower_bound' => 12000, 'estimate_mau_upper_bound' => 14000,
             ]]]),
