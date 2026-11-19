@@ -24,7 +24,8 @@ class InsightService extends BaseFacebookAdsService
         string $campaignId,
         string $dateStart,
         string $dateEnd,
-        ?array $fields = null
+        ?array $fields = null,
+        bool $daily = true,
     ): ?array {
         try {
             if ($fields === null) {
@@ -52,7 +53,8 @@ class InsightService extends BaseFacebookAdsService
                     'since' => $dateStart,
                     'until' => $dateEnd,
                 ]),
-                'time_increment' => '1',
+                'time_increment' => $daily ? '1' : 'all_days',
+                'limit' => 100,
             ]);
 
             if ($response && isset($response['data'])) {
@@ -100,6 +102,7 @@ class InsightService extends BaseFacebookAdsService
             if ($fields === null) {
                 $fields = [
                     'impressions',
+                    'inline_link_clicks',
                     'clicks',
                     'spend',
                     'actions',
@@ -318,7 +321,8 @@ class InsightService extends BaseFacebookAdsService
         string $dateEnd,
         string $level = 'account',
         ?array $fields = null,
-        int $limit = 100
+        int $limit = 100,
+        ?string $campaignId = null,
     ): array {
         try {
             $params = [
@@ -331,6 +335,9 @@ class InsightService extends BaseFacebookAdsService
                 $params['level'] = $level;
             }
 
+            if ($campaignId !== null) {
+                $params['filtering'] = json_encode([['field' => 'campaign.id', 'operator' => 'IN', 'value' => [$campaignId]]], JSON_THROW_ON_ERROR);
+            }
             $response = $this->get("/{$accountId}/insights", $params);
 
             return $response['data'] ?? [];

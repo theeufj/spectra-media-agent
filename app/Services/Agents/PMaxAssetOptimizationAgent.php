@@ -5,45 +5,41 @@ namespace App\Services\Agents;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
-use App\Services\GeminiService;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\GetAssetGroupPerformance;
 use Illuminate\Support\Facades\Log;
 
 /**
  * PMaxAssetOptimizationAgent
  *
- * Detects low-performing PMax assets and takes automated action:
- *  - Text assets (HEADLINE/DESCRIPTION): generates AI replacements via Gemini
- *  - Image assets: flags for human review (cannot auto-generate in this flow)
+ * Identifies low-performing assets for the next approved creative release.
  */
 class PMaxAssetOptimizationAgent
 {
     protected Customer $customer;
 
-    protected GeminiService $gemini;
-
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
-        $this->gemini = app(GeminiService::class);
     }
 
     /**
-     * Analyse a PMax campaign's asset groups and replace / flag low performers.
+     * Analyse a PMax campaign's asset groups and flag low performers.
      *
-     * @return array{low_detected: int, text_replaced: int, image_flagged: int, errors: array}
+     * @return array{low_detected: int, text_replaced: int, text_flagged: int, image_flagged: int, observed_assets: int, insufficient_data_assets: int, errors: array}
      */
     public function run(Campaign $campaign): array
     {
         $result = [
             'low_detected' => 0,
             'text_replaced' => 0,
+            'text_flagged' => 0,
             'image_flagged' => 0,
+            'observed_assets' => 0,
+            'insufficient_data_assets' => 0,
             'errors' => [],
         ];
 
-        $campaignResourceName = $campaign->google_ads_campaign_id;
+        $campaignResourceName = $campaign->googleAdsResourceName();
         if (! $campaignResourceName) {
             Log::warning('PMaxAssetOptimizationAgent: No google_ads_campaign_id on campaign', [
                 'campaign_id' => $campaign->id,
@@ -53,93 +49,50 @@ class PMaxAssetOptimizationAgent
             return $result;
         }
 
-        $customerId = $this->customer->google_ads_customer_id;
+        $customerId = $this->customer->cleanGoogleCustomerId();
         if (! $customerId) {
             $result['errors'][] = 'No google_ads_customer_id set on customer';
 
             return $result;
         }
 
-        // Fetch low-performing assets
-        $getPerformance = new GetAssetGroupPerformance($this->customer);
-        $lowAssets = $getPerformance->getLowPerformingAssets($customerId, $campaignResourceName);
+        if ($campaign->customer_id !== $this->customer->id) {
+            $result['errors'][] = 'Campaign customer does not match the optimisation account.';
 
+            return $result;
+        }
+        $reader = app(GetAssetGroupPerformance::class, ['customer' => $this->customer]);
+        $report = $reader($customerId, $campaignResourceName);
+        $lowAssets = $report['low'];
         $result['low_detected'] = count($lowAssets);
-
-        // Record that we detected low assets
+        $result['observed_assets'] = count($report['observed']) + $result['low_detected'];
+        $result['insufficient_data_assets'] = count($report['pending']) + count($report['learning']);
+        $total = $result['observed_assets'] + $result['insufficient_data_assets'];
+        if ($total === 0) {
+            return $result;
+        }
+        $assets = array_merge($report['pending'], $report['learning'], $report['observed'], $lowAssets);
         AgentActivity::record(
-            'pmax_asset_optimization',
-            'low_assets_detected',
-            "Detected {$result['low_detected']} low-performing asset(s) in PMax campaign \"{$campaign->name}\"",
-            $this->customer->id,
-            $campaign->id,
-            ['low_count' => $result['low_detected'], 'campaign_resource' => $campaignResourceName]
+            'pmax_asset_optimization', 'asset_performance_observed',
+            "Checked {$total} Performance Max assets. {$result['insufficient_data_assets']} have insufficient delivery; {$result['low_detected']} met the account's spend and impression thresholds for review.",
+            $this->customer->id, $campaign->id,
+            ['campaign_resource' => $campaignResourceName, 'reporting_range' => $report['date_range'],
+                'minimum_impressions' => $report['minimum_impressions'], 'observed_assets' => $result['observed_assets'],
+                'insufficient_data_assets' => $result['insufficient_data_assets'], 'no_delivery_assets' => count($report['pending']),
+                'highest_asset_impressions' => max(array_column($assets, 'impressions')),
+                'assets_with_clicks' => count(array_filter(array_column($assets, 'clicks'))),
+                'review_candidates' => $lowAssets],
         );
 
         if (empty($lowAssets)) {
             return $result;
         }
 
-        $businessName = $this->customer->name ?? 'the business';
-        $industry = $this->customer->industry ?? 'general';
-        $createText = new CreateTextAsset($this->customer);
-
         foreach ($lowAssets as $asset) {
             $fieldType = $asset['field_type'];
 
-            // Text assets: auto-replace with Gemini-generated copy
-            if (in_array($fieldType, ['HEADLINE', 'DESCRIPTION'], true)) {
-                try {
-                    $maxChars = $fieldType === 'HEADLINE' ? 30 : 90;
-                    $charHint = $fieldType === 'HEADLINE'
-                        ? 'Keep each under 30 chars for headlines'
-                        : 'Keep each under 90 chars for descriptions';
-
-                    $prompt = 'The following Google Ads PMax asset has been rated LOW performance. '
-                        ."Generate 3 alternative {$fieldType} variants for a {$industry} business named {$businessName}. "
-                        ."{$charHint}. Return JSON array of strings.";
-
-                    $response = $this->gemini->generateContent(
-                        model: config('ai.models.default'),
-                        prompt: $prompt,
-                        config: ['temperature' => 0.85, 'maxOutputTokens' => 512],
-                    );
-
-                    if ($response && isset($response['text'])) {
-                        $text = $response['text'];
-                        if (preg_match('/\[.*\]/s', $text, $matches)) {
-                            $variants = json_decode($matches[0], true);
-                            if (is_array($variants)) {
-                                foreach ($variants as $variant) {
-                                    $variant = trim($variant);
-                                    if (empty($variant)) {
-                                        continue;
-                                    }
-                                    // Enforce character limits
-                                    $variant = mb_substr($variant, 0, $maxChars);
-                                    $resourceName = ($createText)($customerId, $variant);
-                                    if ($resourceName) {
-                                        $result['text_replaced']++;
-                                        Log::info('PMaxAssetOptimizationAgent: Created replacement text asset', [
-                                            'field_type' => $fieldType,
-                                            'text' => $variant,
-                                            'resource' => $resourceName,
-                                            'campaign_id' => $campaign->id,
-                                        ]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    report($e);
-                    $errorMsg = "Failed to replace {$fieldType} asset: ".$e->getMessage();
-                    $result['errors'][] = $errorMsg;
-                    Log::warning('PMaxAssetOptimizationAgent: '.$errorMsg, [
-                        'campaign_id' => $campaign->id,
-                        'asset' => $asset,
-                    ]);
-                }
+            if (in_array($fieldType, ['HEADLINE', 'LONG_HEADLINE', 'DESCRIPTION'], true)) {
+                $result['text_flagged']++;
 
                 continue;
             }
@@ -148,7 +101,7 @@ class PMaxAssetOptimizationAgent
             if (in_array($fieldType, ['MARKETING_IMAGE', 'SQUARE_MARKETING_IMAGE', 'PORTRAIT_MARKETING_IMAGE', 'LOGO', 'LANDSCAPE_LOGO'], true)) {
                 $imageUrl = $asset['image_url'] ?? '(unknown)';
 
-                Log::warning('PMaxAssetOptimizationAgent: Low-performing image asset needs human replacement', [
+                Log::warning('PMaxAssetOptimizationAgent: Image asset met the account thresholds for review', [
                     'field_type' => $fieldType,
                     'image_url' => $imageUrl,
                     'asset_group' => $asset['asset_group'] ?? null,
@@ -158,7 +111,7 @@ class PMaxAssetOptimizationAgent
                 AgentActivity::record(
                     'pmax_asset_optimization',
                     'image_asset_flagged',
-                    "Low-performing image asset ({$fieldType}) requires human replacement for campaign \"{$campaign->name}\"",
+                    "Image asset ({$fieldType}) met the account thresholds for creative review in campaign \"{$campaign->name}\"",
                     $this->customer->id,
                     $campaign->id,
                     [

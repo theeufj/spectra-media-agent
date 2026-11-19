@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ResumeCampaignLaunches;
 use App\Jobs\SendGoogleAdsLinkInvitation;
+use App\Models\AgentActivity;
 use App\Models\Customer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\MccAccount;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -23,14 +27,14 @@ use Tests\TestCase;
  */
 class GoogleAdsAccountLinkingTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_supplying_an_account_id_requests_a_link(): void
     {
         Queue::fake();
 
         Customer::factory()->create([
-            'google_ads_customer_id' => '9636173260',
+            'google_ads_customer_id' => '1234567890',
             'is_sandbox' => false,
         ]);
 
@@ -49,7 +53,7 @@ class GoogleAdsAccountLinkingTest extends TestCase
 
         Queue::assertNotPushed(SendGoogleAdsLinkInvitation::class);
 
-        $customer->update(['google_ads_customer_id' => '9636173260']);
+        $customer->update(['google_ads_customer_id' => '1234567890']);
 
         Queue::assertPushed(SendGoogleAdsLinkInvitation::class);
     }
@@ -59,7 +63,7 @@ class GoogleAdsAccountLinkingTest extends TestCase
         Queue::fake();
 
         Customer::factory()->create([
-            'google_ads_customer_id' => '9636173260',
+            'google_ads_customer_id' => '1234567890',
             'google_ads_link_status' => 'active',
             'is_sandbox' => false,
         ]);
@@ -74,7 +78,7 @@ class GoogleAdsAccountLinkingTest extends TestCase
         Queue::fake();
 
         $customer = Customer::factory()->create([
-            'google_ads_customer_id' => '9636173260',
+            'google_ads_customer_id' => '1234567890',
             'google_ads_link_status' => 'pending',
             'is_sandbox' => false,
         ]);
@@ -82,6 +86,69 @@ class GoogleAdsAccountLinkingTest extends TestCase
         $customer->update(['name' => 'Renamed']);
 
         Queue::assertNotPushed(SendGoogleAdsLinkInvitation::class);
+    }
+
+    public function test_recording_a_failed_invitation_does_not_schedule_another(): void
+    {
+        $customer = Customer::factory()->createQuietly([
+            'google_ads_customer_id' => '1234567890',
+            'is_sandbox' => false,
+        ]);
+
+        $customer->update(['google_ads_link_status' => 'failed', 'google_ads_link_requested_at' => now()]);
+        $customer->update(['name' => 'New name']);
+
+        Queue::assertNotPushed(SendGoogleAdsLinkInvitation::class);
+    }
+
+    public function test_an_old_queued_invitation_preserves_a_managed_account(): void
+    {
+        Mail::fake();
+        $customer = Customer::factory()->create([
+            'google_ads_customer_id' => '1234567890',
+            'google_ads_link_status' => 'managed',
+            'is_sandbox' => false,
+        ]);
+
+        (new SendGoogleAdsLinkInvitation($customer))->handle();
+
+        $this->assertSame('managed', $customer->fresh()->google_ads_link_status);
+        $this->assertFalse($customer->fresh()->isSelfFundedAds());
+        Mail::assertNothingSent();
+        Queue::assertNotPushed(SendGoogleAdsLinkInvitation::class);
+    }
+
+    public function test_old_provisioning_evidence_recovers_only_the_exact_managed_account(): void
+    {
+        Mail::fake();
+        MccAccount::query()->update(['is_active' => false]);
+        MccAccount::create([
+            'name' => 'Test Manager',
+            'google_customer_id' => '111-222-3333',
+            'refresh_token' => 'test-token',
+            'is_active' => true,
+        ]);
+        $customer = Customer::factory()->createQuietly([
+            'google_ads_customer_id' => '1234567890',
+            'google_ads_manager_customer_id' => '1112223333',
+            'google_ads_link_status' => 'failed',
+            'is_sandbox' => false,
+        ]);
+        $otherAccount = $customer->replicate()->fill(['google_ads_customer_id' => '1234567891']);
+        $otherAccount->saveQuietly();
+        foreach ([$customer, $otherAccount] as $target) {
+            AgentActivity::record('onboarding', 'google_ads_account_created', 'Created test account', $target->id, null, [
+                'client_account' => '1234567890',
+                'manager_account' => '1112223333',
+            ]);
+            (new SendGoogleAdsLinkInvitation($target))->handle();
+        }
+
+        $this->assertSame('managed', $customer->fresh()->google_ads_link_status);
+        $this->assertSame('failed', $otherAccount->fresh()->google_ads_link_status);
+        Queue::assertPushed(ResumeCampaignLaunches::class, 1);
+        Queue::assertNotPushed(SendGoogleAdsLinkInvitation::class);
+        Mail::assertNothingSent();
     }
 
     public function test_sandbox_customers_are_never_invited(): void
@@ -92,7 +159,7 @@ class GoogleAdsAccountLinkingTest extends TestCase
         Queue::fake();
 
         Customer::factory()->create([
-            'google_ads_customer_id' => '9636173260',
+            'google_ads_customer_id' => '1234567890',
             'is_sandbox' => true,
         ]);
 
@@ -119,7 +186,7 @@ class GoogleAdsAccountLinkingTest extends TestCase
         Queue::fake();
 
         Customer::factory()->create([
-            'google_ads_customer_id' => '963-617-3260',
+            'google_ads_customer_id' => '123-456-7890',
             'is_sandbox' => false,
         ]);
 

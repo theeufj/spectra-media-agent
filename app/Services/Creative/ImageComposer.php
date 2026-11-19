@@ -135,6 +135,7 @@ class ImageComposer
                     // A single word wider than the frame cannot be wrapped out
                     // of trouble; only a smaller size helps.
                     $lines = [];
+                    $current = '';
                     break;
                 }
 

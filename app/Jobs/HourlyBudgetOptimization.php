@@ -8,8 +8,10 @@ use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CampaignAlertService;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
+use App\Support\ConfirmedBudgetChanges;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -70,6 +72,7 @@ class HourlyBudgetOptimization implements ShouldQueue
             'snapshots_recorded' => 0,
             'alerts_fired' => 0,
             'errors' => 0,
+            'budget_failures' => [],
         ];
 
         foreach ($campaigns as $campaign) {
@@ -80,11 +83,12 @@ class HourlyBudgetOptimization implements ShouldQueue
 
                 // 2. Apply budget multiplier
                 $results = $budgetAgent->optimize($campaign);
-                $summary['errors'] += count($results['errors'] ?? []);
-                $adjustments = array_filter(
-                    $results['adjustments'] ?? [],
-                    fn ($a) => $a['type'] === 'budget_updated'
-                );
+                $budgetErrors = $results['errors'] ?? [];
+                $summary['errors'] += count($budgetErrors);
+                if ($budgetErrors !== []) {
+                    $summary['budget_failures'][$campaign->id] = $budgetErrors;
+                }
+                $adjustments = ConfirmedBudgetChanges::from($results['adjustments'] ?? []);
                 $summary['budget_adjustments'] += count($adjustments);
 
                 // 3. Check for critical alerts (budget exhaustion, conversion drops, spend anomalies)
@@ -268,6 +272,7 @@ class HourlyBudgetOptimization implements ShouldQueue
 
                 if (! empty($insights)) {
                     $day = $insights[0];
+                    $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
                     $conversionValue = 0;
                     foreach ($day['action_values'] ?? [] as $av) {
                         if (($av['action_type'] ?? '') === 'purchase') {
@@ -278,8 +283,8 @@ class HourlyBudgetOptimization implements ShouldQueue
                     return [
                         'platform' => 'facebook_ads',
                         'impressions' => (int) ($day['impressions'] ?? 0),
-                        'clicks' => (int) ($day['clicks'] ?? 0),
-                        'conversions' => $insightService->parseAction($day['actions'] ?? null, 'purchase'),
+                        'clicks' => (int) ($day['inline_link_clicks'] ?? 0),
+                        'conversions' => FacebookCampaignMetrics::conversions($day['actions'] ?? null, $goal),
                         'spend' => (float) ($day['spend'] ?? 0),
                         'conversion_value' => $conversionValue,
                     ];

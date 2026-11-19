@@ -53,12 +53,15 @@ class VideoGenerationService
         $seconds = $voiceoverScript
             ? (int) min(15, max(6, ceil(str_word_count($voiceoverScript) / 2.4)))
             : 8;
+        if ($forPerformanceMax) {
+            $seconds = max(PerformanceMaxVideo::MIN_SECONDS, $seconds);
+        }
         $aspectRatio = ($parameters['aspectRatio'] ?? null) === '9:16' ? '9:16' : '16:9';
 
         if ($provider === 'xai' && $this->xai->isConfigured() && ! XaiService::isUnavailable()) {
             $jobId = $this->xai->startVideoGeneration(
                 $promptFor('xai'),
-                $forPerformanceMax ? max(10, $seconds) : $seconds,
+                $seconds,
                 $aspectRatio,
                 $context,
             );

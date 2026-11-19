@@ -166,6 +166,10 @@ class ExtendVideoForScript implements ShouldQueue
             'status' => 'generating',
             'operation_name' => $operationName,
             'is_active' => true,
+            'provider' => 'veo',
+            'should_deploy' => (bool) $source->should_deploy,
+            'variation_index' => $source->variation_index,
+            'generation_metadata' => \Illuminate\Support\Arr::except($source->generation_metadata ?? [], ['duration_seconds']),
             'parent_video_id' => $source->id,
             'extension_count' => ($source->extension_count ?? 0) + 1,
         ]);

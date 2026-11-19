@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\CampaignStatus;
 use App\Http\Requests\DeployCollateralRequest;
-use App\Jobs\DeployCampaign;
+use App\Jobs\ProvisionGoogleAdsAccount;
 use App\Models\ActivityLog;
 use App\Models\Campaign;
 use App\Models\Setting;
-use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Deployment\CampaignLaunchIntent;
+use App\Services\DeploymentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -109,6 +108,8 @@ class DeploymentController extends Controller
         $validated = $request->validate([
             'campaign_id' => 'required|integer|exists:campaigns,id',
             'strategy_id' => $singlePlatform ? 'required|integer|exists:strategies,id' : 'nullable|integer',
+            'creative_fingerprints' => 'sometimes|array',
+            'creative_fingerprints.*' => 'required|string|regex:/^[a-f0-9]{64}$/',
         ]);
 
         // Get campaign and verify ownership
@@ -152,7 +153,7 @@ class DeploymentController extends Controller
 
         // 1. Subscription Check — the shared teammate-aware rule (also what
         //    the EnsureSubscribed middleware now applies).
-        if (! $user->hasSubscriptionAccess($customer)) {
+        if (! $customer->hasPaidDeploymentAccess() || ! $user->hasSubscriptionAccess($customer)) {
             ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — no active subscription for campaign '{$campaign->name}'", $campaign, [
                 'campaign_id' => $campaign->id,
                 'reason' => 'no_subscription',
@@ -216,128 +217,49 @@ class DeploymentController extends Controller
             ]);
         }
 
-        // Already in the admin queue: re-clicking Deploy used to wipe the
-        // strategies' statuses, send another raw email, and repeat the same
-        // success message with nothing new happening.
-        if ($campaign->status === CampaignStatus::PendingAdminDeployment) {
+        $launch = app(CampaignLaunchIntent::class);
+        $credit = $customer->adSpendCredit()->first();
+        $paymentNeedsAttention = ! $customer->isSelfFundedAds() && Setting::get('managed_billing_enabled', true)
+            && $credit !== null && ! $credit->isInGoodStanding();
+        $billingRedirect = fn () => redirect()->route('billing.ad-spend')->with('flash', [
+            'type' => 'error',
+            'message' => 'Update your ad spend payment method before creating ads. Your billing account needs attention.',
+        ]);
+        try {
+            $launchId = $launch->request($campaign, $user, $strategyId, $validated['creative_fingerprints'] ?? []);
+        } catch (ValidationException $e) {
+            if ($paymentNeedsAttention) {
+                return $billingRedirect();
+            }
+
+            return back()->with('flash', ['type' => 'error', 'message' => $e->validator->errors()->first()]);
+        }
+        if ($launchId === null) {
+            if ($paymentNeedsAttention) {
+                return $billingRedirect();
+            }
+
             return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
                 'type' => 'info',
-                'message' => 'This campaign is already with our team for launch — we\'ll notify you as soon as it\'s live.',
+                'message' => 'This campaign already has a deployment. Check its progress below.',
             ]);
         }
 
-        // A deploy already in flight: don't reset its status rows (that blinds
-        // verification), and don't dispatch again (ShouldBeUnique would drop
-        // it silently while we claimed success).
-        if ($campaign->strategies()->whereIn('deployment_status', ['queued', 'deploying'])->exists()) {
-            return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
-                'type' => 'info',
-                'message' => 'A deployment is already running for this campaign — here\'s its progress.',
-            ]);
-        }
-
-        // Google readiness: no account ID, or an account whose manager link
-        // isn't active. Both used to reach the execution agent and die with
-        // PERMISSION_DENIED after the card had been charged — the link-status
-        // case even triggered the identity-verification email, the wrong
-        // remedy entirely. Queue for the admin team instead.
-        $hasGoogleStrategy = $selected()
-            ->whereNotNull('signed_off_at')
-            ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
-            ->exists();
-
-        $linkProblem = in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true);
-
-        if ($hasGoogleStrategy && (empty($customer->google_ads_customer_id) || $linkProblem)) {
-            $reason = empty($customer->google_ads_customer_id)
-                ? 'The customer has no Google Ads account ID. Create a sub-account under the MCC, attach it in the admin portal, then click Deploy on this campaign.'
-                : "The customer's Google Ads manager link is '{$customer->google_ads_link_status}' — resolve the link (or re-invite), then click Deploy on this campaign.";
-
-            $campaign->update([
-                'status' => CampaignStatus::PendingAdminDeployment,
-                'pending_admin_deployment_at' => now(),
-            ]);
-
-            \Illuminate\Support\Facades\Mail::raw(
-                "Campaign pending deployment — admin action required\n\n"
-                ."Customer: {$customer->name} (ID: {$customer->id})\n"
-                ."Campaign: {$campaign->name} (ID: {$campaign->id})\n"
-                ."Budget: \${$campaign->daily_budget}/day\n"
-                ."Strategies: {$signedOffCount} signed off\n\n"
-                .$reason."\n\n"
-                .url(route('admin.customers.show', $customer)),
-                fn ($m) => $m->to(config('app.admin_email'))
-                    ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->name}")
-            );
-
-            // Also raise the in-product admin alert — a raw email with no
-            // follow-up was the entire SLA machinery behind "within 24 hours".
-            \App\Notifications\CriticalAgentAlert::deliver(
-                'pending_admin_deployment',
-                "Deploy \"{$campaign->name}\" for {$customer->name}",
-                $reason,
-                ['campaign_id' => $campaign->id, 'customer_id' => $customer->id],
-                \App\Models\NotificationTemplate::RECIPIENTS_ADMINS,
-                $customer
-            );
-
-            ActivityLog::log('campaign_pending_admin_deployment', "Campaign '{$campaign->name}' queued for admin deployment", $campaign, [
-                'campaign_id' => $campaign->id,
-                'customer_id' => $customer->id,
-                'reason' => $reason,
-            ]);
+        $queued = $launch->resume($campaign->id, $launchId);
+        if (! $queued) {
+            $strategies = $launch->strategies($campaign, $launchId, CampaignLaunchIntent::WAITING)->get();
+            if ($strategies->contains(fn ($strategy) => DeploymentService::normalizePlatform($strategy->platform) === 'google')
+                && CampaignLaunchIntent::canProvisionGoogle($customer)) {
+                ProvisionGoogleAdsAccount::dispatchIfNeeded($customer->fresh());
+            }
+            if ($paymentNeedsAttention) {
+                return $billingRedirect();
+            }
 
             return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
                 'type' => 'success',
-                'message' => 'Your campaign is with our team for account setup. We will notify you when the ads have been created.',
+                'message' => 'Launch approved. Your ads will be created automatically when the account and funding are ready.',
             ]);
-        }
-
-        // Money problems are actionable before dispatch, rather than a delayed worker failure.
-        $managedBilling = Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds();
-        $credit = $customer->adSpendCredit()->first();
-        if ($managedBilling && $credit && ! $credit->isInGoodStanding()) {
-            return redirect()->route('billing.ad-spend')->with('flash', [
-                'type' => 'error', 'message' => 'Update your ad spend payment method before creating ads. Your billing account needs attention.',
-            ]);
-        }
-
-        $newStrategies = $selected()->whereNotNull('signed_off_at')->get()->filter(function ($strategy) use ($campaign) {
-            $strategy->setRelation('campaign', $campaign);
-
-            return $strategy->requiresInitialMarketResearch();
-        });
-        if ($newStrategies->isNotEmpty()) {
-            try {
-                app(CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
-            } catch (ValidationException $e) {
-                return back()->with('flash', ['type' => 'error', 'message' => $e->validator->errors()->first()]);
-            }
-        }
-
-        $queued = DB::transaction(function () use ($campaign, $selected) {
-            $locked = Campaign::query()->lockForUpdate()->findOrFail($campaign->id);
-            if ($locked->strategies()->whereIn('deployment_status', ['queued', 'deploying'])->exists()) {
-                return false;
-            }
-            $selected()->whereNotNull('signed_off_at')->update(['deployment_status' => 'queued', 'deployment_error' => null]);
-
-            return true;
-        });
-        if ($queued) {
-            try {
-                DeployCampaign::dispatch($campaign, useAgents: true, strategyId: $strategyId);
-            } catch (\Throwable $e) {
-                report($e);
-                $selected()->where('deployment_status', 'queued')->update([
-                    'deployment_status' => 'failed',
-                    'deployment_error' => 'We could not queue your ads for creation. Please try again.',
-                ]);
-
-                return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
-                    'type' => 'error', 'message' => 'We could not queue your ads for creation. Please try again.',
-                ]);
-            }
         }
 
         ActivityLog::log('campaign_deployed', "Campaign '{$campaign->name}' deployment initiated ({$signedOffCount} strategies)", $campaign, [

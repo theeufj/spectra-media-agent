@@ -24,6 +24,10 @@ class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
         $token = config('services.facebook.system_user_token');
         $version = config('services.facebook.graph_version');
         if (! $customer?->facebook_bm_owned || ! ctype_digit($accountId ?? '') || ! $token || ! $version) {
+            if ($customer && ! $customer->facebook_ads_account_id && ($manualSetup = CreateFacebookAdsAccount::manualSetupReason($customer))) {
+                return $unverified($manualSetup);
+            }
+
             return $unverified('Link a Meta Business ad account to this workspace before checking its audience and budget.');
         }
 
@@ -51,8 +55,9 @@ class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
             return $unverified('Meta did not return a valid minimum daily budget for this account.');
         }
 
+        $targeting = FacebookAudienceTargeting::forReview($strategy, $countries);
         $audience = $client->get($accountUrl.'/delivery_estimate', [
-            'targeting_spec' => json_encode(['geo_locations' => ['countries' => $countries]], JSON_THROW_ON_ERROR),
+            'targeting_spec' => json_encode($targeting, JSON_THROW_ON_ERROR),
             'optimization_goal' => 'LINK_CLICKS',
         ]);
         $lower = $audience->json('data.0.estimate_mau_lower_bound');
@@ -73,11 +78,11 @@ class FacebookMarketResearchProvider implements CampaignMarketResearchProvider
             'evidence' => [
                 ...$evidence,
                 'coverage' => 'meta_audience_and_minimum_budget',
-                'meta' => ['countries' => $countries, 'monthly_audience_lower_bound' => $lower, 'monthly_audience_upper_bound' => $upper,
+                'meta' => ['countries' => $countries, 'targeting_spec' => $targeting, 'monthly_audience_lower_bound' => $lower, 'monthly_audience_upper_bound' => $upper,
                     'minimum_daily_budget_micros' => $minimumMicros],
             ],
             'reasons' => $valid ? [] : ['Research a daily allocation at or above the minimum shown for this Meta placement.'],
-            'caveats' => ['Meta estimates the broad monthly audience in these countries. This is not a forecast of clicks, ad spend or conversions.'],
+            'caveats' => ['Meta estimates monthly audience size for these targeting settings. Click costs and signup volume remain unverified.'],
         ];
     }
 

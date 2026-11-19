@@ -86,6 +86,49 @@ class ConversionTrackingService extends BaseGoogleAdsService
         return $activity;
     }
 
+    /** Read valued purchase activity for one campaign and an unambiguous purchase action. */
+    public function getPerformanceMaxPurchaseEvidence(string $customerId, string $resource, ?string $selectedAction = null): ?array
+    {
+        $customerId = $this->validatedCustomerId($customerId);
+        $this->validateResource($customerId, $resource, 'campaigns');
+        if ($selectedAction !== null) {
+            $this->validateResource($customerId, $selectedAction, 'conversionActions');
+        }
+        $actions = [];
+        $actionFilter = $selectedAction ? " AND conversion_action.resource_name = '{$selectedAction}'" : '';
+        $query = 'SELECT conversion_action.resource_name, conversion_action.value_settings.always_use_default_value FROM conversion_action '
+            ."WHERE conversion_action.category = 'PURCHASE' AND conversion_action.status = 'ENABLED'{$actionFilter}";
+        foreach ($this->readRows($customerId, $query) as $row) {
+            $action = $row->getConversionAction();
+            if ($action && $action->getValueSettings() && ! $action->getValueSettings()->getAlwaysUseDefaultValue()) {
+                $actions[] = $action->getResourceName();
+            }
+        }
+        if (count($actions) !== 1) {
+            return null;
+        }
+        $action = $actions[0];
+        $this->validateResource($customerId, $action, 'conversionActions');
+        $end = now($this->customer->timezone)->subDays(3)->startOfDay();
+        $from = $end->copy()->subDays(27)->toDateString();
+        $through = $end->toDateString();
+        $query = 'SELECT segments.date, metrics.all_conversions_by_conversion_date, metrics.all_conversions_value_by_conversion_date '
+            ."FROM campaign WHERE campaign.resource_name = '{$resource}' AND segments.conversion_action = '{$action}' "
+            ."AND segments.date BETWEEN '{$from}' AND '{$through}'";
+        $days = [];
+        foreach ($this->readRows($customerId, $query) as $row) {
+            $date = $row->getSegments()?->getDate();
+            $metrics = $row->getMetrics();
+            if (! $date || ! $metrics || $date < $from || $date > $through || isset($days[$date])) {
+                return null;
+            }
+            $days[$date] = ['conversions' => $metrics->getAllConversionsByConversionDate(),
+                'value' => $metrics->getAllConversionsValueByConversionDate()];
+        }
+
+        return ['action_resource' => $action, 'from' => $from, 'through' => $through, 'days' => $days];
+    }
+
     /** Read status independently of metrics: campaigns with no traffic still have a status. */
     public function getCampaignStatus(string $customerId, string $campaignResource): ?string
     {

@@ -180,6 +180,25 @@ class GeminiService
         ];
     }
 
+    public function isVertexConfigured(): bool
+    {
+        $credentialsPath = config('services.google.credentials_path');
+
+        return $this->project !== '' && $credentialsPath && is_readable($credentialsPath);
+    }
+
+    public function checkVertexConnectivity(): bool
+    {
+        $model = config('ai.models.default');
+
+        return Http::withHeaders($this->authHeaders(5))
+            ->timeout(5)
+            ->post("{$this->vertexBaseUrl}{$model}:countTokens", [
+                'contents' => [['role' => 'user', 'parts' => [['text' => 'Health check']]]],
+            ])
+            ->successful();
+    }
+
     private function flushTokenCache(): void
     {
         Cache::forget('gcp_vertex_access_token');
@@ -235,7 +254,7 @@ class GeminiService
            extraction, creative, the copilot and the demo down together for a
            day.
         */
-        if ($this->shouldUseXai($imageBase64, $enableGoogleSearch)) {
+        if (($context['text_provider'] ?? null) !== 'gemini' && $this->shouldUseXai($imageBase64, $enableGoogleSearch)) {
             $viaXai = app(XaiService::class)->generateText($prompt, $config, $systemInstruction, $context);
 
             if ($viaXai !== null) {
@@ -408,8 +427,9 @@ class GeminiService
                     $payload['tools'] = [['googleSearch' => (object) []]];
                 }
 
-                $response = Http::withHeaders($this->authHeaders())
-                    ->timeout(300)
+                $timeout = max(1, min(300, (int) ($context['text_timeout_seconds'] ?? 300)));
+                $response = Http::withHeaders($this->authHeaders(isset($context['text_timeout_seconds']) ? $timeout : null))
+                    ->timeout($timeout)
                     ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
                 if ($response->successful()) {
@@ -1132,12 +1152,14 @@ class GeminiService
 
             if (is_array($responseData)) {
                 foreach ($responseData as $chunk) {
-                    if (isset($chunk['candidates'][0]['content']['parts'][0]['inlineData'])) {
-                        $inlineData = $chunk['candidates'][0]['content']['parts'][0]['inlineData'];
-                        $images[] = [
-                            'data' => $inlineData['data'] ?? null,
-                            'mimeType' => $inlineData['mimeType'] ?? null,
-                        ];
+                    foreach ($chunk['candidates'][0]['content']['parts'] ?? [] as $part) {
+                        $inlineData = $part['inlineData'] ?? [];
+                        if (! ($part['thought'] ?? false) && isset($inlineData['data'], $inlineData['mimeType'])) {
+                            $images[] = [
+                                'data' => $inlineData['data'],
+                                'mimeType' => $inlineData['mimeType'],
+                            ];
+                        }
                     }
                     if (! empty($chunk['usageMetadata'])) {
                         $usageMetadata = $chunk['usageMetadata'];
@@ -1283,6 +1305,7 @@ class GeminiService
     {
         $model = config('ai.models.tts');
         $voice ??= config('ai.tts_voice', 'Charon');
+        $style = 'Warm, confident, energetic delivery from a professional advertising narrator.';
 
         $payload = [
             'contents' => [[
@@ -1296,6 +1319,12 @@ class GeminiService
                 ],
             ],
         ];
+
+        if (in_array($model, config('ai.tts_models_with_speech_metadata', []), true)) {
+            $payload['contents'][0]['parts'] = [['text' => $text, 'speechMetadata' => ['style' => $style]]];
+            $payload['generationConfig']['speechConfig']['voiceConfig'] = ['voice' => $voice];
+            $payload['generationConfig']['responseFormat'] = [['audio' => ['mimeType' => 'AUDIO_L16']]];
+        }
 
         $startTime = hrtime(true);
 
@@ -1555,7 +1584,7 @@ class GeminiService
     /**
      * Calculate cost in USD from token counts and model pricing config.
      */
-    public function calculateCost(string $model, int $inputTokens, int $outputTokens, int $cachedTokens = 0): float
+    public function calculateCost(string $model, int $inputTokens, int $outputTokens, int $cachedTokens = 0, int $imageOutputTokens = 0): float
     {
         // Array access required — model names contain dots which break Laravel's config dot-notation.
         $pricing = (config('ai.pricing') ?? [])[$model] ?? null;
@@ -1577,9 +1606,12 @@ class GeminiService
             $pricing = $introductory;
         }
 
+        $imageOutputTokens = min($outputTokens, $imageOutputTokens);
+
         return round(
             ($inputTokens * $pricing['input'] / 1_000_000) +
-            ($outputTokens * $pricing['output'] / 1_000_000) +
+            (($outputTokens - $imageOutputTokens) * $pricing['output'] / 1_000_000) +
+            ($imageOutputTokens * ($pricing['image_output'] ?? $pricing['output']) / 1_000_000) +
             ($cachedTokens * $pricing['cached'] / 1_000_000),
             6
         );
@@ -1597,11 +1629,17 @@ class GeminiService
             $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0)
                 + (int) ($usageMetadata['thoughtsTokenCount'] ?? 0);
             $cachedTokens = (int) ($usageMetadata['cachedContentTokenCount'] ?? 0);
+            $imageOutputTokens = 0;
+            foreach ($usageMetadata['candidatesTokensDetails'] ?? [] as $details) {
+                if (($details['modality'] ?? null) === 'IMAGE') {
+                    $imageOutputTokens += (int) ($details['tokenCount'] ?? 0);
+                }
+            }
             // Media billed by duration (video) carries an explicit cost; the
             // token calc only applies where tokens are the billing unit.
             $cost = array_key_exists('cost_override', $context)
                 ? (float) $context['cost_override']
-                : $this->calculateCost($model, max(0, $inputTokens - $cachedTokens), $outputTokens, $cachedTokens);
+                : $this->calculateCost($model, max(0, $inputTokens - $cachedTokens), $outputTokens, $cachedTokens, $imageOutputTokens);
 
             AiCost::create([
                 'campaign_id' => $context['campaign_id'] ?? null,

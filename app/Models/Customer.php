@@ -233,8 +233,8 @@ class Customer extends Model
      * same clicks. They should be gated on their subscription and their media
      * allowance, and on nothing else.
      *
-     * A sub-account we create never sets google_ads_link_status, so its presence
-     * is a reliable marker of an account the customer brought with them.
+     * Our sub-accounts use the managed status. Active identifies an accepted
+     * link to an account the customer brought with them.
      *
      * One-time setup customers are the third case and belong with the second.
      * We do create their sub-account, but the whole proposition is that they
@@ -448,6 +448,18 @@ class Customer extends Model
         return Plan::platformsFor($this->resolvePlan()->slug, $this->starter_platform);
     }
 
+    public function allowsAdPlatform(string $platform): bool
+    {
+        $platform = strtolower($platform);
+        foreach ($this->allowedPlatforms() as $allowed) {
+            if (str_contains($platform, $allowed)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Is this account on something other than free?
      *
@@ -459,6 +471,17 @@ class Customer extends Model
     public function isOnPaidPlan(): bool
     {
         return $this->resolvePlan()->slug !== 'free' || $this->isPaidSetupOnly();
+    }
+
+    /** Paid campaign access belongs to the workspace; a saved card is only a payment method. */
+    public function hasPaidDeploymentAccess(): bool
+    {
+        if ($this->service_type === 'setup_only') {
+            return $this->isPaidSetupOnly();
+        }
+
+        return $this->isOnPaidPlan()
+            || $this->users()->where('subscription_status', 'active')->exists();
     }
 
     /**

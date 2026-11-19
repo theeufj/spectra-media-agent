@@ -117,6 +117,42 @@ class FacebookAdsExecutionAgentTest extends TestCase
         Log::shouldHaveReceived('info')->atLeast()->once();
     }
 
+    public function test_website_signup_builds_for_completed_registration_and_keeps_the_end_date(): void
+    {
+        config(['services.facebook.system_user_token' => 'test-token']);
+        $customer = Customer::factory()->create([
+            'facebook_ads_account_id' => '123456789',
+            'facebook_pixel_id' => '987654321',
+            'timezone' => 'Australia/Sydney',
+        ]);
+        $campaign = Campaign::factory()->for($customer)->create(['name' => 'Signup', 'end_date' => '2026-11-22']);
+        $strategy = Strategy::factory()->for($campaign)->create([
+            'platform' => 'Facebook Ads', 'campaign_type' => 'display', 'daily_budget' => 40,
+            'conversion_goals' => ['primary_goal' => 'Sign-up'],
+        ]);
+        $context = new ExecutionContext(strategy: $strategy, campaign: $campaign, customer: $customer, availableAssets: [], platformStatus: []);
+        $plan = new ExecutionPlan([]);
+        $result = ExecutionResult::success(platformIds: [], executionTime: 0.0, plan: $plan);
+        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('status')->with($campaign)->andReturn([]));
+        Http::fake([
+            'graph.facebook.com/*/campaigns' => Http::response(['id' => '111222333']),
+            'graph.facebook.com/*/adsets' => Http::response(['id' => '444555666']),
+        ]);
+
+        $agent = new FacebookAdsExecutionAgent($customer);
+        (new \ReflectionMethod($agent, 'bootPlatformServices'))->invoke($agent, $context);
+        $remote = (new \ReflectionMethod($agent, 'createCampaign'))->invoke($agent, '123456789', $campaign, $strategy, $plan, $result);
+        (new \ReflectionMethod($agent, 'createAdSet'))->invoke($agent, '123456789', $remote, $campaign, $strategy, $plan, $result);
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/campaigns')
+            && $request['objective'] === 'OUTCOME_LEADS' && $request['daily_budget'] === 4000
+            && $request['status'] === 'PAUSED');
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/adsets')
+            && $request['optimization_goal'] === 'OFFSITE_CONVERSIONS' && $request['destination_type'] === 'WEBSITE'
+            && $request['end_time'] === '2026-11-22T23:59:59+11:00'
+            && json_decode($request['promoted_object'], true) === ['pixel_id' => '987654321', 'custom_event_type' => 'COMPLETE_REGISTRATION']);
+    }
+
     public function test_execution_plans_can_use_xai_without_sending_meta_account_ids(): void
     {
         [$customer, $campaign, $strategy, $context] = $this->createContext();

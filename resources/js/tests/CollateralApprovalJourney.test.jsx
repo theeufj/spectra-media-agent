@@ -23,11 +23,30 @@ vi.mock('@/Components/Modal', () => ({ default: () => null }));
 vi.mock('@/Components/CreativeSizesModal', () => ({ default: () => null }));
 const strategy = { id: 11, uuid: 'strategy-a', platform: 'Facebook Ads', signed_off_at: '2026-10-01', campaign_type: 'display', ad_copies_count: 1, image_collaterals_count: 0, video_collaterals_count: 0 };
 const copy = { id: 14, strategy_id: 11, platform: 'Facebook Ads', headlines: ['Repair your sailboat'], descriptions: ['Book a service'], should_deploy: false, updated_at: '2026-10-01' };
-const props = { campaign: { id: 8, uuid: 'campaign-a', name: 'Repair campaign', daily_budget: 20, total_budget: 600 }, currentStrategy: strategy, allStrategies: [strategy], adCopy: copy, imageCollaterals: [], videoCollaterals: [], supportsVideo: false, hasActiveSubscription: true, deploymentEnabled: true, brandVerified: true, managedBillingEnabled: false };
+const fingerprint = 'a'.repeat(64);
+const secondFingerprint = 'b'.repeat(64);
+const approved = value => ({ status: 'passed', fingerprint: value, issues: [] });
+const props = { campaign: { id: 8, uuid: 'campaign-a', name: 'Repair campaign', daily_budget: 20, total_budget: 600 }, currentStrategy: strategy, allStrategies: [strategy], adCopy: copy, imageCollaterals: [], videoCollaterals: [], supportsVideo: false, hasActiveSubscription: true, deploymentEnabled: true, brandVerified: true, managedBillingEnabled: false, creativeRelease: { 11: approved(fingerprint) } };
 
 beforeEach(() => { polling.data = null; vi.clearAllMocks(); });
 
 describe('saved creative selections', () => {
+    it('sends the business logo file with its explicit Performance Max role', () => {
+        const pmax = { ...strategy, platform: 'Google Ads', campaign_type: 'performance_max' };
+        const view = render(<Collateral {...props} currentStrategy={pmax} allStrategies={[pmax]} />);
+        const input = view.getByLabelText('Upload business logo');
+        expect(input).toHaveAttribute('accept', 'image/jpeg,image/png');
+        expect(input.multiple).toBe(false);
+        const file = new File(['logo'], 'brand.png', { type: 'image/png' });
+        fireEvent.change(input, { target: { files: [file] } });
+        const [url, form] = router.post.mock.calls[0];
+        expect(url).toContain('campaigns.collateral.image.upload');
+        expect(form.get('role')).toBe('logo');
+        expect(form.getAll('images[]')).toEqual([file]);
+        view.unmount();
+        expect(render(<Collateral {...props} />).queryByLabelText('Upload business logo')).toBeNull();
+    });
+
     it('saves every format of deselected concepts and retains the saved exclusion after a reload', async () => {
         const images = Array.from({ length: 9 }, (_, index) => ({ id: 749 + index,
             concept_key: `concept-${Math.floor(index / 3)}`, format: ['square', 'landscape', 'mrec'][index % 3],
@@ -102,6 +121,15 @@ describe('saved creative selections', () => {
 });
 
 describe('one platform launch consent', () => {
+    it('approves the selected reviewed package to update live Performance Max without collecting funds again', () => {
+        const live = { ...strategy, platform: 'Google Ads', campaign_type: 'performance_max', deployment_status: 'active' };
+        const { getByRole, queryByText } = render(<Collateral {...props} currentStrategy={live} allStrategies={[live]} managedBillingEnabled />);
+        fireEvent.click(getByRole('button', { name: 'Update live ads' }));
+        expect(queryByText('Fund Google Ads')).toBeNull();
+        fireEvent.click(getByRole('button', { name: 'Approve and update ads' }));
+        expect(router.post).toHaveBeenCalledWith(expect.stringContaining('/__route__/campaigns.creative-release'), { fingerprint }, expect.any(Object));
+    });
+
     it('preserves the current campaign review page when launch requires brand approval', () => {
         const calls = [];
         const originalRoute = globalThis.route;
@@ -127,7 +155,7 @@ describe('one platform launch consent', () => {
         fireEvent.click(getByRole('button', { name: 'Funding succeeded' }));
         expect(getByRole('dialog')).toHaveTextContent('Launch Facebook ads?');
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Launch Facebook ads' }));
-        expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
+        expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11, creative_fingerprints: { 11: fingerprint } }, expect.any(Object));
     });
 
     it('uses one clear Google setup action without a dropdown and keeps explicit paused-ad consent', () => {
@@ -143,12 +171,12 @@ describe('one platform launch consent', () => {
         expect(getByRole('dialog')).toHaveTextContent('in your Google Ads account and leave them paused');
         expect(getByRole('dialog')).toHaveTextContent('Nothing spends until you switch them on');
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create Google Search ads' }));
-        expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
+        expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11, creative_fingerprints: { 11: fingerprint } }, expect.any(Object));
     });
 
     it('keeps platform selection when several approved platforms can be created', () => {
         const google = { ...strategy, id: 12, uuid: 'google-strategy', platform: 'Google Ads', campaign_type: 'search' };
-        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} setupOnly />);
+        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} creativeRelease={{ 11: approved(fingerprint), 12: approved(secondFingerprint) }} setupOnly />);
         expect(getByRole('button', { name: 'Create all ads' })).toBeVisible();
         fireEvent.click(getByRole('button', { name: 'Choose an ad platform' }));
         fireEvent.click(getByRole('button', { name: 'Google Search ads' }));
@@ -156,17 +184,17 @@ describe('one platform launch consent', () => {
         expect(getByRole('dialog')).toHaveTextContent('leave them paused');
         expect(router.post).not.toHaveBeenCalled();
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create Google Search ads' }));
-        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 12 }, expect.any(Object));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 12, creative_fingerprints: { 11: fingerprint, 12: secondFingerprint } }, expect.any(Object));
     });
 
     it('retains the all-platform route only for an explicit all-platform confirmation', () => {
         const google = { ...strategy, id: 12, uuid: 'google-strategy', platform: 'Google Ads', campaign_type: 'search' };
-        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} setupOnly />);
+        const { getByRole } = render(<Collateral {...props} allStrategies={[strategy, google]} creativeRelease={{ 11: approved(fingerprint), 12: approved(secondFingerprint) }} setupOnly />);
         fireEvent.click(getByRole('button', { name: 'Create all ads' }));
         expect(getByRole('dialog')).toHaveTextContent('across your selected platforms and leave them paused');
         expect(router.post).not.toHaveBeenCalled();
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Create all ads' }));
-        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy', { campaign_id: 8 }, expect.any(Object));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy', { campaign_id: 8, creative_fingerprints: { 11: fingerprint, 12: secondFingerprint } }, expect.any(Object));
     });
 
     it('offers the sole signed-off strategy without presenting unsigned directions as launch choices', () => {
@@ -175,7 +203,7 @@ describe('one platform launch consent', () => {
         expect(queryByRole('button', { name: 'Choose an ad platform' })).toBeNull();
         fireEvent.click(getByRole('button', { name: 'Launch Facebook ads' }));
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Launch Facebook ads' }));
-        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11 }, expect.any(Object));
+        expect(router.post).toHaveBeenCalledExactlyOnceWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11, creative_fingerprints: { 11: fingerprint } }, expect.any(Object));
     });
 
     it('describes an existing single-platform setup as an update and still leaves it paused', () => {

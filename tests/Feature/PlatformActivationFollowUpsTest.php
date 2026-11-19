@@ -3,19 +3,25 @@
 namespace Tests\Feature;
 
 use App\Enums\CampaignStatus;
+use App\Jobs\RecordSiteConversion;
+use App\Models\AdSpendCredit;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Services\Agents\Google\SearchKeywordBuilder;
+use App\Services\Campaigns\SettleDeployedCampaign;
 use App\Services\CampaignStatusHelper;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use Google\Ads\GoogleAds\V26\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -62,6 +68,7 @@ class PlatformActivationFollowUpsTest extends TestCase
     private function deployedStrategy(string $platform, array $customerAttributes = [], array $campaignAttributes = []): Strategy
     {
         $customer = Customer::factory()->create($customerAttributes);
+        AdSpendCredit::factory()->create(['customer_id' => $customer->id]);
         $campaign = Campaign::factory()->create(array_merge([
             'customer_id' => $customer->id,
             'status' => CampaignStatus::Active,
@@ -161,6 +168,150 @@ class PlatformActivationFollowUpsTest extends TestCase
 
         $this->assertStringNotContainsString("Strategy {$strategy->id} ", Artisan::output());
         $this->assertSame('deployed', $strategy->fresh()->deployment_status);
+    }
+
+    public function test_the_sweep_cannot_bypass_a_staged_google_search_reach_check(): void
+    {
+        $strategy = $this->deployedStrategy('Google Ads (SEM)', ['google_ads_customer_id' => '1234567890']);
+        $strategy->update(['execution_result' => ['metadata' => [
+            'google_search_staging' => ['campaign_resource' => 'customers/1234567890/campaigns/55'],
+            'search_reach_activation' => ['enabled_verified' => false],
+        ]]]);
+
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])
+            ->expectsOutputToContain('activation requirements are pending')
+            ->assertSuccessful();
+
+        $this->assertSame('deployed', $strategy->fresh()->deployment_status);
+    }
+
+    public function test_a_verified_meta_stage_enables_only_the_parent_after_budget_and_child_checks(): void
+    {
+        Setting::set('managed_billing_enabled', true, 'boolean');
+        $strategy = $this->metaStage();
+        $credit = $strategy->campaign->customer->adSpendCredit()->firstOrFail();
+        $credit->update(['current_balance' => 0]);
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertSuccessful();
+        Http::assertNothingSent();
+        $credit->addCredit(100, 'Settled ad spend prepayment', 'pi_meta_funded');
+
+        $strategy->campaign->update(['status' => CampaignStatus::Draft]);
+        app(SettleDeployedCampaign::class)->settle($strategy->campaign);
+        Queue::assertNotPushed(RecordSiteConversion::class);
+
+        $active = false;
+        Http::fake(function (Request $request) use (&$active) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+
+            return match (true) {
+                $request->method() === 'POST' && str_ends_with($path, '/900') => Http::response(['success' => $active = true]),
+                str_ends_with($path, '/900/adsets') => Http::response(['data' => [['id' => '901', 'status' => 'ACTIVE']]]),
+                str_ends_with($path, '/901/ads') => Http::response(['data' => [
+                    ['id' => '902', 'status' => 'ACTIVE'], ['id' => '903', 'status' => 'PAUSED'],
+                ]]),
+                str_ends_with($path, '/900') => Http::response([
+                    'id' => '900', 'account_id' => '222', 'daily_budget' => '4000', 'status' => $active ? 'ACTIVE' : 'PAUSED',
+                ]),
+                default => throw new \RuntimeException("Unexpected Meta request: {$path}"),
+            };
+        });
+
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertSuccessful();
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertSuccessful();
+
+        $writes = Http::recorded(fn (Request $request) => $request->method() === 'POST')->values();
+        $this->assertCount(1, $writes);
+        $this->assertStringEndsWith('/900', $writes[0][0]->url());
+        $this->assertSame('ACTIVE', $writes[0][0]['status']);
+        $this->assertSame('active', $strategy->fresh()->deployment_status);
+        $this->assertSame('PAUSED', $strategy->campaign->fresh()->platform_status);
+        Queue::assertPushed(RecordSiteConversion::class, 1);
+    }
+
+    public function test_a_meta_stage_with_paused_ads_stays_paused(): void
+    {
+        $strategy = $this->metaStage();
+        Http::fake([
+            'graph.facebook.com/*/900/adsets*' => Http::response(['data' => [['id' => '901', 'status' => 'ACTIVE']]]),
+            'graph.facebook.com/*/901/ads*' => Http::response(['data' => [['id' => '902', 'status' => 'PAUSED']]]),
+            'graph.facebook.com/*/900*' => Http::response(['id' => '900', 'account_id' => '222', 'daily_budget' => '4000', 'status' => 'PAUSED']),
+        ]);
+
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertFailed();
+
+        Http::assertNotSent(fn (Request $request) => $request->method() === 'POST');
+        $this->assertSame('verified', $strategy->fresh()->deployment_status);
+    }
+
+    public function test_testing_mode_and_an_unapproved_budget_both_block_a_verified_meta_launch(): void
+    {
+        $strategy = $this->metaStage();
+        Setting::set('campaign_testing_mode', true, 'boolean');
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertFailed();
+
+        Setting::set('campaign_testing_mode', false, 'boolean');
+        $strategy->campaign->update(['approved_daily_budget' => '39.00']);
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertSuccessful();
+
+        Http::assertNothingSent();
+        $this->assertSame('verified', $strategy->fresh()->deployment_status);
+    }
+
+    public function test_meta_respects_an_owner_pause_during_the_enable_request(): void
+    {
+        $strategy = $this->metaStage();
+        $state = 'PAUSED';
+        Http::fake(function (Request $request) use ($strategy, &$state) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if ($request->method() === 'POST' && str_ends_with($path, '/900')) {
+                $state = $request['status'];
+                if ($state === 'ACTIVE') {
+                    $strategy->campaign->update(['status' => CampaignStatus::Paused]);
+                }
+
+                return Http::response(['success' => true]);
+            }
+
+            return match (true) {
+                str_ends_with($path, '/900/adsets') => Http::response(['data' => [['id' => '901', 'status' => 'ACTIVE']]]),
+                str_ends_with($path, '/901/ads') => Http::response(['data' => [['id' => '902', 'status' => 'ACTIVE']]]),
+                str_ends_with($path, '/900') => Http::response([
+                    'id' => '900', 'account_id' => '222', 'daily_budget' => '4000', 'status' => $state,
+                ]),
+                default => throw new \RuntimeException("Unexpected Meta request: {$path}"),
+            };
+        });
+
+        $this->artisan('campaigns:activate', ['campaign' => $strategy->campaign_id])->assertFailed();
+
+        $this->assertSame('PAUSED', $state);
+        $this->assertSame('verified', $strategy->fresh()->deployment_status);
+        Queue::assertNotPushed(RecordSiteConversion::class);
+    }
+
+    private function metaStage(): Strategy
+    {
+        config(['services.facebook.system_user_token' => 'test-token']);
+        Setting::set('deployment_enabled', true, 'boolean');
+        EnabledPlatform::updateOrCreate(['slug' => 'facebook'], ['name' => 'Facebook', 'is_enabled' => true]);
+        $strategy = $this->deployedStrategy('Facebook Ads', ['facebook_ads_account_id' => 'act_222', 'service_type' => 'managed'], [
+            'approved_daily_budget' => '100.00',
+            'budget_confirmed_at' => now(),
+            'start_date' => now()->subDay()->toDateString(),
+            'end_date' => now()->addDay()->toDateString(),
+            'google_ads_campaign_id' => 'customers/1234567890/campaigns/55',
+            'platform_status' => 'PAUSED',
+        ]);
+        $strategy->forceFill([
+            'deployment_status' => 'verified', 'daily_budget' => '40.00', 'signed_off_at' => now(),
+            'facebook_campaign_id' => '900', 'facebook_adset_id' => '901',
+            'execution_result' => [
+                'platform_ids' => ['campaign' => '900', 'ad_set' => '901', 'image_ad_1' => '902', 'video_ad_2' => '903'],
+                'metadata' => ['facebook_activation_pending' => true],
+            ],
+        ])->save();
+
+        return $strategy;
     }
 
     public function test_activation_is_scheduled(): void

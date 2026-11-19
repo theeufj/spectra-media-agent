@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import { parseCollateral } from '@/contracts/campaign';
 
-export function useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview }) {
+export function useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview, creativeRelease }) {
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [generatingVideo, setGeneratingVideo] = useState(false);
-    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals, creativeReview });
+    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals, creativeReview, creativeRelease });
     const savedSelections = useRef(new Map());
     const applySavedSelection = (type, rows) => {
         const key = type === 'ad_copy' ? 'adCopy' : type === 'image' ? 'imageCollaterals' : 'videoCollaterals';
@@ -100,7 +100,7 @@ export function useCollateralGeneration({ currentStrategy, adCopy, imageCollater
             return;
         }
 
-        setCollateral(prev => ({ ...prev, creativeReview: data.creativeReview }));
+        setCollateral(prev => ({ ...prev, creativeReview: data.creativeReview, creativeRelease: data.creativeRelease }));
 
         // Update all collateral data
         const hasNewAdCopy = data.adCopy && (!current.adCopy || data.adCopy.updated_at !== current.adCopy?.updated_at);

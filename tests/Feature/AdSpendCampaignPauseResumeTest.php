@@ -9,6 +9,7 @@ use App\Services\AdSpendBillingService;
 use App\Services\Customers\DeactivateCustomerService;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Exceptions;
 use Tests\TestCase;
 
 /**
@@ -111,8 +112,8 @@ class AdSpendCampaignPauseResumeTest extends TestCase
         // restoreAccount() had already made the account read healthy.
         $customer = $this->customerWithPausedAccount();
 
-        // Microsoft only, and the customer has no microsoft_ads_account_id, so
-        // no platform call is attempted and the local write is what is under test.
+        // The query must work even when a missing account prevents resuming.
+        Exceptions::fake();
         $campaign = Campaign::factory()->create([
             'customer_id' => $customer->id,
             'status' => 'paused',
@@ -124,12 +125,9 @@ class AdSpendCampaignPauseResumeTest extends TestCase
 
         $campaign->refresh();
 
-        $this->assertSame('active', $campaign->status->value);
-        $this->assertSame(
-            'ENABLED',
-            $campaign->platform_status,
-            'Both columns move together, or the next billing run reads the campaign as still paused.'
-        );
+        $this->assertSame('paused', $campaign->status->value);
+        $this->assertSame('PAUSED', $campaign->platform_status);
+        Exceptions::assertReported(fn (\RuntimeException $e) => $e->getMessage() === 'Microsoft ad account is missing.');
     }
 
     public function test_a_campaign_paused_for_a_policy_violation_is_not_resumed_by_a_top_up(): void

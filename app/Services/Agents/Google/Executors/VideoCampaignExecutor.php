@@ -91,7 +91,7 @@ class VideoCampaignExecutor implements CampaignTypeExecutor
         // 3. Create Video Ad
         // Note: Video ads require a YouTube Video ID.
         // We assume the strategy or ad copy provides this, or we use a placeholder.
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%youtube%'])->first();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%youtube%'])->first();
 
         if ($adCopy && ! empty($adCopy->video_id)) {
             $createAdService = new CreateResponsiveVideoAd($this->customer);

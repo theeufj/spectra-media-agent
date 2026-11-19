@@ -6,6 +6,7 @@ use App\Models\VideoCollateral;
 use App\Services\GeminiService;
 use App\Services\OpenRouterService;
 use App\Services\StorageHelper;
+use App\Services\VideoGeneration\PerformanceMaxVideo;
 use App\Services\XaiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -136,6 +137,12 @@ class CheckVideoStatus implements ShouldQueue
 
     private function storeAndComplete(string $videoData, array $extraFields): void
     {
+        $isPerformanceMax = str_contains(strtolower($this->videoCollateral->platform ?? ''), 'performance max');
+        $duration = $isPerformanceMax ? PerformanceMaxVideo::duration($videoData) : null;
+        if ($duration !== null) {
+            $extraFields['generation_metadata'] = array_merge($this->videoCollateral->generation_metadata ?? [], ['duration_seconds' => $duration]);
+        }
+
         $filename = uniqid('vid_', true).'.mp4';
         $storagePath = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
 
@@ -159,6 +166,14 @@ class CheckVideoStatus implements ShouldQueue
             if (\App\Jobs\ExtendVideoForScript::needsExtension($this->videoCollateral->fresh())) {
                 \App\Jobs\ExtendVideoForScript::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
                 Log::info("CheckVideoStatus: script not fully narrated yet — extending video {$this->videoCollateral->id}");
+
+                return;
+            }
+
+            if ($isPerformanceMax && ($this->videoCollateral->provider ?? 'veo') === 'veo'
+                && ($this->videoCollateral->extension_count ?? 0) === 0
+                && ($duration === null || $duration < PerformanceMaxVideo::MIN_SECONDS)) {
+                ExtendPMaxVideo::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
 
                 return;
             }

@@ -85,7 +85,7 @@ function Forecast({ forecast, period, timezone, currency }) {
         <p className="text-xs font-semibold text-gray-500">Indicative traffic estimate</p>
         <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <div><dt className="text-gray-500">Clicks for the period</dt><dd className="font-semibold text-gray-900">{verified ? clicks(forecast.clicks) : 'Not verified'}</dd></div>
-            <div><dt className="text-gray-500">Estimated ad spend</dt><dd className="font-semibold text-gray-900">{verified ? money(forecast.cost_micros, currency) : 'Not verified'}</dd></div>
+            <div><dt className="text-gray-500">Estimated total ad spend</dt><dd className="font-semibold text-gray-900">{verified ? money(forecast.cost_micros, currency) : 'Not verified'}</dd></div>
             <div><dt className="text-gray-500">Estimated average CPC</dt><dd className="font-semibold text-gray-900">{averageCpc(forecast, currency)}</dd></div>
         </dl>
         <p className="mt-2 text-xs text-gray-500">{dates?.from && dates?.through ? `${dates.from} to ${dates.through}` : 'Forecast dates not verified'}{forecast?.period_days ? ` · ${forecast.period_days} days` : ''}{timezone ? ` · ${timezone}` : ''}</p>
@@ -143,7 +143,7 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {reasons.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">{[...new Set(reasons)].map(reason => <li key={reason}>{reason}</li>)}</ul>}
         {!pending && !stale && options.length > 0 && <fieldset className="mt-5" disabled={selectingDisabled}>
             <legend className="text-sm font-semibold text-gray-900">{onSelectBudgetOption ? 'Choose a researched daily budget' : 'Researched daily budget options'}</legend>
-            <p className="mt-1 text-sm text-gray-600"><strong>Indicative estimates.</strong> Each option uses the same keyword set, with a researched maximum CPC for each daily budget. Google forecasts clicks and ad spend for the dates shown; actual results can vary. Click counts are rounded.</p>
+            <p className="mt-1 text-sm text-gray-600"><strong>Indicative estimates.</strong> Each option uses the same keyword set, with a researched maximum CPC for each daily budget. Google forecasts clicks and ad spend for the dates shown; actual results can vary. Click counts are rounded. Estimated spend covers the full forecast period.</p>
             {result?.requires_explicit_option_selection === true && !selectedOptionId && <p role="status" className="mt-2 text-sm text-gray-700">No estimate is available for your starting amount. Choose an available researched option or research another amount. No budget has been selected.</p>}
             {asList(result?.strategies).some(costEfficientReach) && <p className="mt-2 text-sm text-gray-600">Bids favour lower estimated cost per click for the forecast traffic. Estimates do not establish sales or profitability.</p>}
             {littleBudgetGain && <div role="note" className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
@@ -191,6 +191,15 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
         {!pending && !stale && asList(result?.strategies).map((strategy, index) => {
             const code = strategy.currency_code || currency;
             const caveats = [...asList(strategy.caveats), ...asList(strategy.forecast?.caveats)].map(message).filter(Boolean);
+            if (strategy.channel === 'performance_max' && strategy.status !== 'preserved') return <article key={strategy.strategy_id || index} className="mt-5 space-y-2 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+                <h4 className="font-semibold text-gray-900">Google Performance Max</h4>
+                <p>Proposed daily budget {money(strategy.budget_micros, code)}</p>
+                <p>Bidding uses {biddingMode(strategy.bidding_strategy)}.</p>
+                {strategy.conversion_goal?.category && <p>Conversion goal {({ SIGNUP: 'Completed signup', PURCHASE: 'Purchase', SUBMIT_LEAD_FORM: 'Submitted lead form' })[strategy.conversion_goal.category] || strategy.conversion_goal.category}</p>}
+                {strategy.landing_page_url && <a className="block break-all text-blue-700 underline" href={strategy.landing_page_url}>{strategy.landing_page_url}</a>}
+                {strategy.conversion_setup_url && <a className="block font-medium text-blue-700 underline" href={strategy.conversion_setup_url}>Set up the conversion goal</a>}
+                {[...asList(strategy.reasons).map(message), ...caveats].filter(Boolean).map(text => <p key={text}>{text}</p>)}
+            </article>;
             const meta = strategy.evidence?.meta;
             if (strategy.status === 'preserved') return <article key={strategy.strategy_id || index} className="mt-5 rounded-lg border border-gray-200 p-4">
                 <h4 className="font-semibold text-gray-900">{strategy.platform || 'Ad platform'}{strategy.channel ? ` · ${strategy.channel}` : ''}</h4>
@@ -208,6 +217,20 @@ export default function MarketResearchPanel({ research: initialResearch, statusU
                 </dl> : <div className="mt-3 grid gap-5 sm:grid-cols-2">
                     <div><h5 className="text-sm font-semibold text-gray-700">Current plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.current_budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.current_bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.current_cpc_bid_micros, code)}</p><Keywords values={strategy.current_keywords} /></div>
                     <div><h5 className="text-sm font-semibold text-gray-700">Proposed plan</h5><p className="mt-2 text-sm text-gray-700">Daily budget: {money(strategy.budget_micros, code)}</p><p className="text-sm text-gray-700">Bidding: {biddingMode(strategy.bidding_strategy)}</p><p className="mb-3 text-sm text-gray-700">CPC limit: {money(strategy.cpc_bid_micros, code)}</p><Keywords values={strategy.proposed_keywords} /><Forecast forecast={strategy.forecast} period={strategy.forecast_period} timezone={strategy.time_zone} currency={code} /></div>
+                </div>}
+                {asList(strategy.search_offer_groups).length > 0 && <div className="mt-4 space-y-2">
+                    <h5 className="text-sm font-semibold text-gray-900">Search ad groups and landing pages</h5>
+                    {strategy.search_offer_groups.map(group => <details key={group.key} className="rounded-lg border border-gray-200 p-3 text-sm">
+                        <summary className="cursor-pointer font-medium text-gray-900">{group.name} · {group.keywords.length} keywords</summary>
+                        <a href={group.url} className="mt-2 inline-block break-all text-blue-700 underline" target="_blank" rel="noreferrer">{group.url}</a>
+                        <ul className="mt-2 space-y-1 text-gray-700">{group.headlines.map(text => <li key={text}>{text}</li>)}</ul>
+                        <ul className="mt-2 space-y-1 text-gray-700">{group.descriptions.map(text => <li key={text}>{text}</li>)}</ul>
+                        <div className="mt-2"><Keywords values={group.keywords} /></div>
+                    </details>)}
+                </div>}
+                {strategy.lower_budget_comparison && <div role="note" className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    <p className="font-semibold">Similar forecast traffic at a lower daily budget</p>
+                    <p className="mt-1">At {money(strategy.lower_budget_comparison.daily_budget_micros, code)} a day, Google estimates {clicks(strategy.lower_budget_comparison.forecast.clicks)} clicks and {money(strategy.lower_budget_comparison.forecast.cost_micros, code)} in total spend for the same dates, keywords and maximum CPC.</p>
                 </div>}
                 {limitedTraffic(strategy) && <div role="note" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     <p className="font-semibold">Limited forecast traffic</p>

@@ -160,17 +160,21 @@ class ImageCollateralController extends Controller
      */
     public function upload(Request $request, Campaign $campaign, Strategy $strategy)
     {
-        $user = Auth::user();
-        $this->authorize('view', $campaign);
+        $this->authorize('update', $campaign);
 
         if ($strategy->campaign_id !== $campaign->id) {
             abort(403, 'Strategy does not belong to this campaign.');
         }
 
+        $performanceMax = $strategy->campaign_type === 'performance_max' && str_contains(strtolower($strategy->platform), 'google');
+        $logo = $request->input('role') === 'logo';
         $request->validate([
-            'images' => 'required|array|min:1|max:20',
-            'images.*' => 'required|file|mimes:jpeg,jpg,png,webp|max:10240',
-        ]);
+            'role' => $performanceMax ? 'sometimes|required|in:logo' : 'prohibited',
+            'images' => $logo ? 'required|array|size:1' : 'required|array|min:1|max:20',
+            'images.*' => $logo
+                ? 'required|image|mimes:jpeg,jpg,png|max:5120|dimensions:min_width=128,min_height=128,ratio=1/1'
+                : 'required|file|mimes:jpeg,jpg,png,webp|max:10240',
+        ], ['images.*.dimensions' => 'Upload a square business logo at least 128 × 128 pixels.']);
 
         // Enforce per-campaign upload limit (10 uploaded images)
         $existingUploads = ImageCollateral::where('campaign_id', $campaign->id)
@@ -210,14 +214,17 @@ class ImageCollateralController extends Controller
             }
 
             [$width, $height] = $imageSize;
-            if ($width < $rules['min_width'] || $height < $rules['min_height']) {
+            if ($logo && $width !== $height) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['images.0' => 'The business logo must be square.']);
+            }
+            if (! $logo && ($width < $rules['min_width'] || $height < $rules['min_height'])) {
                 $errors[] = "{$file->getClientOriginalName()}: {$width}×{$height} is too small. Minimum: {$rules['min_width']}×{$rules['min_height']} for {$platform}.";
 
                 continue;
             }
 
             $contents = file_get_contents($file->getPathname());
-            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $ext = $file->extension() ?: 'jpg';
             $path = 'collateral/images/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
             $contentType = $file->getMimeType() ?: 'image/jpeg';
 
@@ -231,6 +238,8 @@ class ImageCollateralController extends Controller
                 'cloudfront_url' => $url,
                 'is_active' => true,
                 'source' => 'uploaded',
+                ...($logo ? ['layout' => 'logo', 'format' => 'square', 'should_deploy' => true,
+                    'generation_metadata' => ['role' => 'LOGO', 'provider' => 'customer_upload', 'sha256' => hash('sha256', $contents)]] : []),
             ]);
 
             $created++;

@@ -129,6 +129,19 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
     const [retrying, setRetrying] = useState(false);
     const toast = useToast();
 
+    const reloadAfterPayment = (result) => {
+        setShowPaymentForm(false);
+        router.reload({
+            onSuccess: () => {
+                if (result.campaign_recovery?.failed > 0 || result.campaign_recovery?.skipped > 0) {
+                    toast.warning(result.message || 'Payment successful. Campaign recovery needs attention.');
+                } else if (result.message) {
+                    toast.success(result.message);
+                }
+            },
+        });
+    };
+
     const handleRetryPayment = async () => {
         setRetrying(true);
         try {
@@ -138,7 +151,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
             // every retry on this page looked like a declined card.
             const result = await fetchJson(route('billing.ad-spend.retry'), { method: 'POST' });
             if (result.success) {
-                router.reload();
+                reloadAfterPayment(result);
             } else {
                 toast.error(result.error || 'Payment retry failed. Please update your payment method.');
                 setShowPaymentForm(true);
@@ -305,10 +318,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
                                     <PaymentForm
                                         isRetry={paymentFailed}
                                         buttonText={paymentFailed ? 'Update & Retry Payment' : 'Update Payment Method'}
-                                        onSuccess={() => {
-                                            setShowPaymentForm(false);
-                                            router.reload();
-                                        }}
+                                        onSuccess={reloadAfterPayment}
                                     />
                                     <button
                                         onClick={() => setShowPaymentForm(false)}

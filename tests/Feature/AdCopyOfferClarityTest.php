@@ -175,6 +175,57 @@ class AdCopyOfferClarityTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_performance_max_retries_an_incomplete_description_with_structured_feedback(): void
+    {
+        [$campaign, $strategy] = $this->campaign();
+        $strategy->update(['platform' => 'Google Ads (Performance Max)', 'campaign_type' => 'performance_max']);
+        $copy = ['headlines' => ['Local Bicycle Repairs', 'Prepare for Your Next Ride', 'Repairs for Your Daily Commute',
+            'Book a Bicycle Repair', 'Bicycle Repairs for Riders', 'Bike repairs', 'Bicycle Tune-Ups', 'Get Back on Your Bike',
+            'Bring Your Bike In', 'Ride to Work Again', 'Prepare Your Bike for Spring'],
+            'long_headlines' => ['Book a Local Bicycle Repair Before Your Next Weekend Ride',
+                'Get Your Bicycle Repaired and Ready for the Daily Commute',
+                'Explore Bicycle Tune-Ups for Your Next Season of Riding'],
+            'descriptions' => ['Book a bicycle repair to prepare for your next ride.',
+                'Get your bicycle repaired for your daily commute.', 'Explore our bicycle repair service for local riders.',
+                'Ask about a tune-up before you put your bicycle back on the road.', 'Bring in your bicycle for repairs before your next trip.']];
+        $attempt = 0;
+        $reviews = 0;
+        Http::fake(function (Request $request) use ($copy, &$attempt, &$reviews) {
+            $prompt = $request['contents'][0]['parts'][0]['text'];
+            if (str_starts_with($prompt, 'Review the following ad copy')) {
+                $this->assertStringContainsString("Long headlines:\n".$copy['long_headlines'][0], $prompt);
+                $reviews++;
+                $data = ['overall_score' => 95, 'factual_accuracy' => true, 'intent_relevance' => true,
+                    'feedback' => ['headlines' => [], 'descriptions' => []], 'blocking_issues' => []];
+            } else {
+                $data = $copy;
+                $schema = $request['generationConfig']['responseJsonSchema'];
+                $this->assertSame(['headlines', 'long_headlines', 'descriptions'], $schema['required']);
+                $this->assertSame(90, $schema['properties']['long_headlines']['items']['maxLength']);
+                $this->assertSame(11, $schema['properties']['headlines']['minItems']);
+                if (++$attempt === 1) {
+                    $data['descriptions'][0] = 'Book a bicycle re';
+                    $data['long_headlines'][0] = $data['headlines'][0];
+                } else {
+                    $this->assertStringContainsString('"rule_violations"', $prompt);
+                    $this->assertStringContainsString('Aim for 75 characters', $prompt);
+                    $this->assertStringContainsString('Long headline 1', $prompt);
+                }
+            }
+
+            return Http::response([['candidates' => [['content' => ['parts' => [['text' => json_encode($data, JSON_THROW_ON_ERROR)]]],
+                'finishReason' => 'STOP']]]]);
+        });
+
+        $job = (new GenerateAdCopy($campaign, $strategy, $strategy->platform))->withFakeQueueInteractions();
+        $job->handle();
+
+        $job->assertNotFailed();
+        $this->assertSame(2, $attempt);
+        $this->assertSame(1, $reviews);
+        $this->assertSame($copy, $strategy->adCopies()->sole()->only(['headlines', 'long_headlines', 'descriptions']));
+    }
+
     public static function unclearSets(): array
     {
         return ['all process headlines' => [false], 'clear opening with process-dominated remaining assets' => [true]];

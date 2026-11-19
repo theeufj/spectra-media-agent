@@ -41,7 +41,7 @@ return [
          * Default model for all general-purpose AI tasks:
          * copy generation, analysis, recommendations, reporting, etc.
          */
-        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.7-flash'),
+        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.8-flash'),
 
         /*
          * Reasoning model for competitor strategy, campaign planning and
@@ -53,7 +53,7 @@ return [
          * Lite/budget model for high-volume, low-complexity tasks
          * (batch keyword categorisation, simple scoring, extraction).
          */
-        'lite' => env('AI_MODEL_LITE', 'gemini-3.1-flash-lite-preview'),
+        'lite' => env('AI_MODEL_LITE', 'gemini-3.5-flash-lite'),
 
         /*
          * Embedding model for vector search and semantic similarity.
@@ -79,14 +79,10 @@ return [
         'embedding_fallback' => env('AI_MODEL_EMBEDDING_FALLBACK', 'gemini-embedding-001'),
 
         /*
-         * Image generation model. gemini-3.1-flash-image (Nano Banana 2) —
-         * validated end to end against production 2026-08-24: requires an
-         * explicit imageConfig.aspect_ratio (it does not default to square
-         * the way 2.5 did), and inline reference images must be downscaled
-         * (multi-MB payloads trip Google's anti-abuse layer). Both are
-         * handled in GeminiService.
+         * Image generation and reference-image editing. GeminiService sends
+         * the requested aspect ratio and downscales inline reference images.
          */
-        'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image'),
+        'image' => env('AI_MODEL_IMAGE', 'gemini-nano-banana-2.1'),
 
         /*
          * Video generation model. Veo 3.1 is the current generation as of
@@ -101,7 +97,7 @@ return [
          * lacks, and the reason chained extensions changed voice mid-video.
          * Only used on the Veo path; Grok video has single-pass native audio.
          */
-        'tts' => env('AI_MODEL_TTS', 'gemini-2.5-flash-preview-tts'),
+        'tts' => env('AI_MODEL_TTS', 'gemini-3.8-flash-tts'),
 
         /*
          * OpenRouter (Grok Imagine) models — the default creative providers
@@ -127,6 +123,7 @@ return [
          * one and hoping.
          */
         'text_xai' => env('AI_MODEL_TEXT_XAI', 'grok-4-fast'),
+        'text_xai_fallback' => env('AI_MODEL_TEXT_XAI_FALLBACK', 'grok-4.20-0309-non-reasoning'),
         'image_xai' => env('AI_MODEL_IMAGE_XAI', 'grok-imagine-image-2.0'),
         'video_xai' => env('AI_MODEL_VIDEO_XAI', 'grok-imagine-video-1.5'),
 
@@ -175,15 +172,20 @@ return [
      * will automatically try the next model in this chain before giving up.
      */
     'fallback_chain' => [
-        'gemini-4-argon' => 'gemini-3.1-pro-preview',
-        'gemini-3.7-flash' => 'gemini-3.5-flash',
-        'gemini-3.1-pro-preview' => 'gemini-3.5-flash',
-        'gemini-2.5-pro' => 'gemini-3.5-flash',
-        'gemini-3.5-flash' => 'gemini-2.5-flash',
-        'gemini-3-flash-preview' => 'gemini-3.5-flash',
-        'gemini-2.5-flash' => 'gemini-3.1-flash-lite-preview',
-        'gemini-3.1-flash-lite-preview' => 'gemini-2.5-flash-lite',
+        'gemini-4-argon' => 'gemini-3.8-flash',
+        'gemini-3.8-flash' => 'gemini-3.5-flash',
+        'gemini-3.7-flash' => 'gemini-3.8-flash',
+        'gemini-3.1-pro-preview' => 'gemini-3.8-flash',
+        'gemini-2.5-pro' => 'gemini-3.8-flash',
+        'gemini-3.5-flash' => 'gemini-3.5-flash-lite',
+        'gemini-3-flash-preview' => 'gemini-3.8-flash',
+        'gemini-2.5-flash' => 'gemini-3.5-flash-lite',
+        'gemini-2.5-flash-lite' => 'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite-preview' => 'gemini-3.5-flash-lite',
+        'gemini-3.5-flash-lite' => 'gemini-3.1-flash-lite',
     ],
+
+    'tts_models_with_speech_metadata' => ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'],
 
     /*
      * Model-specific GenerateContent limits, verified against Google's Argon
@@ -260,7 +262,13 @@ return [
             'input' => 1.50, 'output' => 7.50, 'cached' => 0.15,
             'introductory' => ['until' => '2027-01-01', 'input' => 0.75, 'output' => 3.75, 'cached' => 0.075],
         ],
+        'gemini-3.8-flash' => [
+            'input' => 1.50, 'output' => 7.50, 'cached' => 0.15,
+            'introductory' => ['until' => '2027-01-01', 'input' => 0.75, 'output' => 3.75, 'cached' => 0.075],
+        ],
         'gemini-3.5-flash' => ['input' => 1.50,   'output' => 9.00,  'cached' => 0.15],
+        'gemini-3.5-flash-lite' => ['input' => 0.30, 'output' => 2.50, 'cached' => 0.03],
+        'gemini-3.1-flash-lite' => ['input' => 0.25, 'output' => 1.50, 'cached' => 0.025],
         'gemini-3-flash-preview' => ['input' => 0.50,   'output' => 3.00,  'cached' => 0.05],
         'gemini-2.5-flash' => ['input' => 0.30,   'output' => 2.50,  'cached' => 0.03],
         'gemini-3.1-flash-lite-preview' => ['input' => 0.25,   'output' => 1.50,  'cached' => 0.025],
@@ -269,8 +277,17 @@ return [
         'gemini-2.5-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image-preview' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        'gemini-nano-banana-2.1' => ['input' => 1.50, 'output' => 7.50, 'image_output' => 30.00, 'cached' => 0.15],
         // TTS: text in at $0.50/1M, audio out at $10/1M tokens.
         'gemini-2.5-flash-preview-tts' => ['input' => 0.50, 'output' => 10.00, 'cached' => 0.00],
+        'gemini-3.8-flash-tts' => [
+            'input' => 1.00, 'output' => 18.00, 'cached' => 0.00,
+            'introductory' => ['until' => '2027-01-01', 'input' => 0.50, 'output' => 9.00, 'cached' => 0.00],
+        ],
+        'gemini-3.8-flash-lite-tts' => [
+            'input' => 1.00, 'output' => 12.00, 'cached' => 0.00,
+            'introductory' => ['until' => '2027-01-01', 'input' => 0.50, 'output' => 6.00, 'cached' => 0.00],
+        ],
         'gemini-embedding-2-preview' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         // Workers AI's list rate. Free-plan requests stop at the daily allowance.
@@ -295,6 +312,7 @@ return [
          */
         'grok-4-fast' => ['input' => 0.20, 'output' => 0.50, 'cached' => 0.05],
         'grok-4.3' => ['input' => 1.25, 'output' => 2.50, 'cached' => 0.20],
+        'grok-4.20-0309-non-reasoning' => ['input' => 1.25, 'output' => 2.50, 'cached' => 0.20],
         'grok-2-image-1212' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
         'grok-imagine-video' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second

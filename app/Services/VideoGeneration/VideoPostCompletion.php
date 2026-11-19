@@ -2,6 +2,7 @@
 
 namespace App\Services\VideoGeneration;
 
+use App\Jobs\UploadPMaxVideoAssets;
 use App\Mail\VideosGenerated;
 use App\Models\VideoCollateral;
 use Illuminate\Support\Facades\Log;
@@ -40,20 +41,15 @@ class VideoPostCompletion
             }
         }
 
-        // Direct xAI generation requests at least 10 seconds for PMax and can
-        // link straight to the asset group, like a clip that has already been extended.
-        $isPmax = str_contains(strtolower($video->platform ?? ''), 'performance max')
-            && $campaign->google_ads_campaign_id;
-
-        if ($isPmax) {
-            if ($video->provider !== 'xai' && ($video->extension_count ?? 0) < 1) {
-                \App\Jobs\ExtendPMaxVideo::dispatch($video)->delay(now()->addSeconds(20));
-            } else {
-                $strategyId = $video->strategy_id ?? $campaign->strategies()->latest()->value('id');
-                if ($strategyId) {
-                    \App\Jobs\UploadPMaxVideoAssets::dispatch($strategyId, $campaign->customer->cleanGoogleCustomerId())
-                        ->delay(now()->addSeconds(30));
-                }
+        if ($video->is_active && $video->should_deploy && $video->status === 'completed'
+            && (float) ($video->generation_metadata['duration_seconds'] ?? 0) >= PerformanceMaxVideo::MIN_SECONDS
+            && str_contains(strtolower($video->platform ?? ''), 'performance max')) {
+            $strategyId = $video->strategy_id ?? $video->generation_metadata['strategy_id'] ?? null;
+            $account = $campaign->customer->cleanGoogleCustomerId();
+            $strategy = $strategyId ? $campaign->strategies()->where('campaign_type', 'performance_max')->find($strategyId) : null;
+            if ($account && $strategy?->signed_off_at && $strategy->deployment_status === 'active' && $strategy->reusableGoogleCampaignId()
+                && in_array($video->id, $strategy->creative_approval['video_ids'] ?? [], true)) {
+                UploadPMaxVideoAssets::dispatch($strategy->id, $account, videoIds: [$video->id])->delay(now()->addSeconds(30));
             }
         }
 

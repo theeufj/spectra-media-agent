@@ -53,14 +53,27 @@ class CollateralPlan
             }
         }
         // Select the first eligible strategy, not the first Search strategy.
-        $owner = $campaign->strategies()->whereNotNull('signed_off_at')->orderBy('id')->get()
-            ->first(fn (Strategy $candidate) => $this->wantsVideo($campaign, $candidate));
+        $eligible = $campaign->strategies()->whereNotNull('signed_off_at')->orderBy('id')->get()
+            ->filter(fn (Strategy $candidate) => $this->wantsVideo($campaign, $candidate));
+        $performanceMax = $eligible->first(fn (Strategy $candidate) => $candidate->campaign_type === 'performance_max'
+            && str_contains(strtolower($candidate->platform), 'google'));
+        $owner = $performanceMax ?? $eligible->first();
         if ($includeVideo && $owner?->id === $strategy->id) {
-            $concepts = min(max(1, (int) config('ai.video_concepts_per_campaign', 2)), intdiv(VideoCollateral::remainingForCampaign($campaign), 2));
+            $remaining = VideoCollateral::remainingForCampaign($campaign);
+            $platforms = $performanceMax && ! $eligible->contains(fn (Strategy $candidate) => preg_match('/facebook|instagram|meta/i', $candidate->platform))
+                ? ['Google Ads (Performance Max)'] : ['Google Ads (Performance Max)', 'Facebook Ads'];
+            $availableConcepts = $performanceMax
+                ? (int) ceil($remaining / count($platforms))
+                : intdiv($remaining, count($platforms));
+            $concepts = min(max(1, (int) config('ai.video_concepts_per_campaign', 2)), $availableConcepts);
             for ($concept = 0; $concept < $concepts; $concept++) {
-                foreach (['Google Ads (Performance Max)', 'Facebook Ads'] as $shape => $platform) {
+                foreach ($platforms as $shape => $platform) {
+                    if ($remaining < 1) {
+                        break;
+                    }
                     $jobs[] = (new GenerateVideo($campaign, $strategy, $platform, $concept))
                         ->delay(now()->addSeconds(120 + ($strategy->id % 8) * 45 + $concept * 480 + $shape * 240));
+                    $remaining--;
                 }
             }
         }

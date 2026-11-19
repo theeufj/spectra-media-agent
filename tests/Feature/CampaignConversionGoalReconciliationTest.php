@@ -418,6 +418,29 @@ class CampaignConversionGoalReconciliationTest extends TestCase
         $this->assertCount(1, $this->service->operations);
     }
 
+    public function test_reuses_exact_custom_goal_created_for_another_campaign(): void
+    {
+        $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Signup', 'conversion_action_id' => '8']]);
+        $resource = 'customers/123/customConversionGoals/42';
+        $this->service->customs = [
+            ['resourceName' => $resource, 'name' => 'Existing signup goal', 'status' => 'ENABLED',
+                'conversionActions' => ['customers/123/conversionActions/8']],
+            ['resourceName' => 'customers/123/customConversionGoals/43', 'name' => 'Mixed goal', 'status' => 'ENABLED',
+                'conversionActions' => ['customers/123/conversionActions/8', 'customers/123/conversionActions/9']],
+        ];
+        $originalGoals = $this->service->customs;
+
+        $state = $this->service->reconcile($this->strategy);
+
+        $this->assertTrue($state['ready']);
+        $this->assertSame($resource, $state['intent']['custom_goal']);
+        $this->assertSame(0, $this->service->created);
+        $this->assertSame($originalGoals, $this->service->customs);
+        $this->assertSame($resource, $this->service->configuration['customConversionGoal']);
+        $this->assertTrue($this->service->reconcile($this->strategy)['ready']);
+        $this->assertCount(1, $this->service->operations);
+    }
+
     public function test_unrelated_custom_goal_is_not_adopted_for_a_selected_secondary_action(): void
     {
         $this->strategy->update(['conversion_goals' => ['primary_goal' => 'Signup', 'conversion_action_id' => '8']]);

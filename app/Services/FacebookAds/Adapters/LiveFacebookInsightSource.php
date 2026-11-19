@@ -27,14 +27,15 @@ class LiveFacebookInsightSource implements FacebookInsightSource
         string $dateEnd,
         string $level = 'account',
         ?array $fields = null,
-        int $limit = 100
+        int $limit = 100,
+        ?string $campaignId = null,
     ): array {
-        return $this->insights->getAccountInsightsByLevel($accountId, $dateStart, $dateEnd, $level, $fields, $limit);
+        return $this->insights->getAccountInsightsByLevel($accountId, $dateStart, $dateEnd, $level, $fields, $limit, $campaignId);
     }
 
-    public function getCampaignInsights(string $campaignId, string $dateStart, string $dateEnd, ?array $fields = null): ?array
+    public function getCampaignInsights(string $campaignId, string $dateStart, string $dateEnd, ?array $fields = null, bool $daily = true): ?array
     {
-        return $this->insights->getCampaignInsights($campaignId, $dateStart, $dateEnd, $fields);
+        return $this->insights->getCampaignInsights($campaignId, $dateStart, $dateEnd, $fields, $daily);
     }
 
     public function parseAction(?array $actions, string $actionType = 'purchase'): float

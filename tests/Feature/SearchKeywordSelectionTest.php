@@ -249,7 +249,7 @@ class SearchKeywordSelectionTest extends TestCase
         $specific = ['small business google ads setup melbourne', 'one time ppc setup melbourne'];
         $ai = Mockery::mock(GeminiService::class);
         foreach (['category and buyer-synonym' => array_slice($category, 0, 2), 'specific buying-intent' => $specific] as $profile => $seeds) {
-            $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.default')
+            $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.lite')
                 && str_contains($prompt, $profile) && str_contains($prompt, 'one-time Google Ads setup')
                 && str_contains($prompt, 'small businesses') && str_contains($prompt, 'Melbourne')
                 && str_contains($prompt, 'example.com') && str_contains($prompt, 'google-ads-setup'))->once()
@@ -262,6 +262,8 @@ class SearchKeywordSelectionTest extends TestCase
             && str_contains($prompt, 'one-time Google Ads setup'))->once()->andReturn(['text' => json_encode(['reviews' => $reviews])]);
         $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'negative keywords')
             && str_contains($prompt, $specific[0]) && str_contains($prompt, $category[11]))->once()->andReturn(['text' => '["jobs"]']);
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.lite')
+            && str_contains($prompt, 'Propose up to 75 distinct buying queries'))->once()->andReturn(['text' => '{"keywords":[]}']);
         $this->app->instance(GeminiService::class, $ai);
         $passes = [];
         $this->fakePlanner(function ($id, $seeds, $url, $language, $geos, $pageSize) use (&$passes, $category, $specific) {
@@ -270,7 +272,7 @@ class SearchKeywordSelectionTest extends TestCase
             $this->assertSame('https://example.com/google-ads-setup', $url);
             $this->assertSame('languageConstants/1000', $language);
             $this->assertSame(['geoTargetConstants/1000567'], $geos);
-            $this->assertSame(36, $pageSize);
+            $this->assertSame(84, $pageSize);
             if ($seeds === array_slice($category, 0, 2)) {
                 return [...array_map(fn ($keyword) => ['keyword' => $keyword, 'avg_monthly_searches' => 10000,
                     'competition_index' => 20], $category),
@@ -435,7 +437,7 @@ class SearchKeywordSelectionTest extends TestCase
     {
         $specific = ['multi agent ppc management', 'google ads management for small business'];
         $ai = Mockery::mock(GeminiService::class);
-        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.default')
+        $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => $model === config('ai.models.lite')
             && str_contains($prompt, 'category and buyer-synonym') && str_contains($prompt, 'job they pay to get done')
             && str_contains($prompt, 'customer buying language'))->once()->andReturn(['text' => '["google ads management service"]']);
         $ai->shouldReceive('generateContent')->withArgs(fn ($model, $prompt) => str_contains($prompt, 'specific buying-intent')

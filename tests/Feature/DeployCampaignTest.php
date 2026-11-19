@@ -6,6 +6,7 @@ use App\Jobs\DeployCampaign;
 use App\Models\AdSpendCredit;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Notifications\DeploymentCompleted;
@@ -63,6 +64,8 @@ class DeployCampaignTest extends TestCase
 
     public function test_deployment_fails_when_payment_issue(): void
     {
+        $this->user->forceFill(['subscription_status' => 'active'])->save();
+        Setting::set('managed_billing_enabled', true, 'boolean');
         $credit = AdSpendCredit::factory()->paused()->create([
             'customer_id' => $this->customer->id,
         ]);

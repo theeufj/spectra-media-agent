@@ -63,6 +63,11 @@ class ImageCollateral extends Model
         });
     }
 
+    public function scopeForDeployment($query, Strategy $strategy)
+    {
+        return app(\App\Services\Creative\CreativeRelease::class)->approvedMedia($this->scopeForStrategy($query, $strategy), $strategy, 'image');
+    }
+
     /**
      * Get the parent image that this image was refined from.
      */

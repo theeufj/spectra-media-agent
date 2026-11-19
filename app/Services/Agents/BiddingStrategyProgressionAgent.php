@@ -8,10 +8,12 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
 use App\Models\Strategy;
+use App\Notifications\PerformanceMaxValueBiddingReady;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 /** Evidence-based automatic progression. Thresholds are our policy, not Google eligibility rules. */
 class BiddingStrategyProgressionAgent
@@ -41,6 +43,9 @@ class BiddingStrategyProgressionAgent
             return $this->skip('A live enabled campaign with standard bidding must be confirmed.');
         }
         $current = $before['strategy'];
+        if ($before['channel'] === 'PERFORMANCE_MAX') {
+            return $this->recommendPerformanceMaxValueBidding($campaign, $strategy, $customerId, $resource, $before);
+        }
         $threshold = $this->thresholds()[$current] ?? null;
         if (! $threshold) {
             return $this->skip('Current bidding strategy is not in the supported progression.');
@@ -85,6 +90,9 @@ class BiddingStrategyProgressionAgent
         $before = $updater->readBiddingState($customerId, $resource);
         if (! $this->eligibleState($before, $resource) || ! in_array($before['strategy'], ['TARGET_CPA', 'TARGET_ROAS'], true)) {
             return $this->skip('Confirmed bidding strategy is not eligible for regression.');
+        }
+        if ($before['channel'] === 'PERFORMANCE_MAX') {
+            return $this->skip('Performance Max bidding changes are reviewed by the customer.');
         }
         $last = AgentActivity::where('campaign_id', $campaign->id)->where('customer_id', $campaign->customer_id)
             ->where('action', 'strategy_graduated')->latest('id')->first();
@@ -198,6 +206,53 @@ class BiddingStrategyProgressionAgent
         return ['success' => true, 'from' => $before['strategy'], 'to' => $next, 'target_cpa' => $cpa, 'target_roas' => $roas, 'reason' => $reason];
     }
 
+    private function recommendPerformanceMaxValueBidding(Campaign $campaign, Strategy $strategy, string $account, string $resource, array $before): array
+    {
+        if (! in_array($before['strategy'], ['MAXIMIZE_CONVERSIONS', 'TARGET_CPA'], true)) {
+            return $this->skip('Performance Max already uses value bidding or has a different reviewed bidding mode.');
+        }
+        $selected = $strategy->conversion_goals['value_action_resource'] ?? ($account === (string) config('conversions.google_ads_customer_id')
+            ? \App\Models\Setting::get('conversion_resource_name.paid_subscription') : null);
+        $tracking = app(\App\Services\GoogleAds\ConversionTrackingService::class, ['customer' => $campaign->customer]);
+        $evidence = $tracking->getPerformanceMaxPurchaseEvidence($account, $resource, $selected);
+        $valuedDays = collect($evidence['days'] ?? [])->filter(fn (array $day) => $day['conversions'] > 0 && $day['value'] > 0);
+        $count = $valuedDays->sum('conversions');
+        $weeklyEvidence = $valuedDays->keys()->map(fn (string $day) => intdiv((int) \Carbon\CarbonImmutable::parse($evidence['from'])->diffInDays($day), 7))->unique()->count();
+        $differentValues = $valuedDays->map(fn ($day) => round($day['value'] / $day['conversions'], 2))->unique()->count();
+        if ($count < 15 || $weeklyEvidence < 4 || $differentValues < 2) {
+            return $this->skip('The campaign needs four weeks of reliable, varying purchase values before recommending value bidding.');
+        }
+        $fresh = $this->context($campaign);
+        if (! $fresh || $fresh[1]->id !== $strategy->id || $fresh[3] !== $resource
+            || $fresh[1]->conversion_goals !== $strategy->conversion_goals
+            || $this->updater($fresh[0]->customer)->readBiddingState($account, $resource) !== $before) {
+            return $this->skip('Campaign, conversion goal or Google bidding changed during evaluation.');
+        }
+
+        $recorded = DB::transaction(function () use ($campaign, $resource, $evidence, $valuedDays, $count, $before): bool {
+            $locked = Campaign::lockForUpdate()->findOrFail($campaign->id);
+            $action = $evidence['action_resource'];
+            if (AgentActivity::where('campaign_id', $locked->id)->where('customer_id', $locked->customer_id)
+                ->where('action', 'review_performance_max_value_bidding')->where('details->purchase_action', $action)
+                ->where('details->campaign_resource', $resource)->exists()) {
+                return false;
+            }
+            AgentActivity::record('bidding', 'review_performance_max_value_bidding',
+                'Google reported '.(int) floor($count).' paid conversions with purchase value over four weeks. Consider switching this campaign to Maximize Conversion Value after reviewing the purchase goal and reported amounts.',
+                $locked->customer_id, $locked->id, ['campaign_resource' => $resource, 'purchase_action' => $action,
+                    'from' => $before['strategy'], 'to' => 'MAXIMIZE_CONVERSION_VALUE', 'conversions' => $count,
+                    'conversion_value_micros' => (int) round($valuedDays->sum('value') * 1_000_000), 'currency' => $before['currency'],
+                    'period_start' => $evidence['from'], 'period_end' => $evidence['through']], 'needs_review');
+            Notification::send($locked->customer->users, new PerformanceMaxValueBiddingReady($locked, (int) floor($count)));
+
+            return true;
+        });
+
+        return $recorded
+            ? ['success' => true, 'recommended' => true, 'to' => 'MAXIMIZE_CONVERSION_VALUE']
+            : $this->skip('The customer already has a recommendation for this purchase action.');
+    }
+
     private function context(Campaign $campaign): ?array
     {
         $campaign = $campaign->fresh();
@@ -205,7 +260,7 @@ class BiddingStrategyProgressionAgent
         if (! $campaign || ! $customer || $customer->is_sandbox || $customer->service_type !== 'managed'
             || ! EnabledPlatform::isEnabled('google')
             || ! \Laravel\Pennant\Feature::for($customer)->active(\App\Features\AutoOptimization::class)
-            || $customer->google_ads_link_status !== null && $customer->google_ads_link_status !== 'active'
+            || ! in_array($customer->google_ads_link_status, [null, 'active', 'managed'], true)
             || $campaign->status !== CampaignStatus::Active || strtoupper((string) $campaign->platform_status) === 'PAUSED' || $campaign->hasPassedEndDate()
             || $campaign->getRawOriginal('start_date') === null
             || $campaign->start_date->toDateString() > now($customer->timezone ?: config('app.timezone'))->toDateString()

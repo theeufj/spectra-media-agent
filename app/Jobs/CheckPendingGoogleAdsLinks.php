@@ -86,6 +86,7 @@ class CheckPendingGoogleAdsLinks implements ShouldQueue
                     'google_ads_link_confirmed_at' => now(),
                     'google_ads_manager_customer_id' => $managerId,
                 ]);
+                ResumeCampaignLaunches::dispatch($customer->id);
 
                 AgentActivity::record(
                     'onboarding',

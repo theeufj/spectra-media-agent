@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Notifications\MaintenanceSummaryNotification;
@@ -49,6 +50,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only')
                 ->where(fn ($qq) => $qq->whereNull('google_ads_link_status')
                     ->orWhere('google_ads_link_status', '!=', 'revoked')))
+            ->whereNotIn('status', [CampaignStatus::Paused, CampaignStatus::Completed, CampaignStatus::Ended])
             ->serving()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
@@ -95,6 +97,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             'ad_strength_unresolved' => 0,
             'errors' => 0,
             'read_only_campaigns' => 0,
+            'budget_failures' => [],
         ];
 
         foreach ($campaigns as $campaign) {
@@ -107,6 +110,14 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             }
 
             try {
+                $campaign->refresh();
+                if (in_array($campaign->status, [CampaignStatus::Paused, CampaignStatus::Completed, CampaignStatus::Ended], true)
+                    || $campaign->hasPassedEndDate()) {
+                    $summary['read_only_campaigns']++;
+
+                    continue;
+                }
+
                 Log::info('AutomatedCampaignMaintenance: Processing campaign', [
                     'campaign_id' => $campaign->id,
                     'name' => $campaign->name,
@@ -217,7 +228,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $budgetResults = $budgetAgent->optimize($campaign);
                 $budgetChanges = ConfirmedBudgetChanges::from($budgetResults['adjustments'] ?? []);
                 $summary['budget_adjustments'] += count($budgetChanges);
-                $summary['errors'] += count($budgetResults['errors'] ?? []);
+                $budgetErrors = $budgetResults['errors'] ?? [];
+                $summary['errors'] += count($budgetErrors);
+                if ($budgetErrors !== []) {
+                    $summary['budget_failures'][$campaign->id] = $budgetErrors;
+                }
 
                 // 4. Run Creative Intelligence
                 $creativeResults = $creativeAgent->analyze($campaign);

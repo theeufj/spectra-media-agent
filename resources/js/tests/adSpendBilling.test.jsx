@@ -1,8 +1,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, fireEvent, waitFor } from '@testing-library/react';
 
-const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
+const stripe = vi.hoisted(() => ({ createPaymentMethod: vi.fn() }));
 
 vi.mock('@inertiajs/react', () => ({
     Head: () => null,
@@ -21,8 +22,8 @@ vi.mock('@stripe/stripe-js', () => ({ loadStripe: () => null }));
 vi.mock('@stripe/react-stripe-js', () => ({
     Elements: ({ children }) => <div>{children}</div>,
     CardElement: () => null,
-    useStripe: () => null,
-    useElements: () => null,
+    useStripe: () => stripe,
+    useElements: () => ({ getElement: () => ({}) }),
 }));
 vi.mock('@/Components/Modal', () => ({
     default: ({ children, show }) => (show ? <div>{children}</div> : null),
@@ -30,6 +31,7 @@ vi.mock('@/Components/Modal', () => ({
 
 import AdSpend from '@/Pages/Billing/AdSpend';
 import AdSpendSetupModal from '@/Components/AdSpendSetupModal';
+import { router } from '@inertiajs/react';
 
 const auth = { user: { name: 'Test' } };
 
@@ -98,6 +100,10 @@ describe('ad spend transaction history', () => {
 describe('ad spend payment retry', () => {
     beforeEach(() => {
         toast.error.mockReset();
+        toast.success.mockReset();
+        toast.warning.mockReset();
+        router.reload.mockReset();
+        stripe.createPaymentMethod.mockReset();
         global.fetch = vi.fn();
     });
 
@@ -140,6 +146,52 @@ describe('ad spend payment retry', () => {
         fireEvent.click(getByText('Retry Payment'));
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Your card was declined.'));
+    });
+
+    it.each([
+        [{ resumed: 0, failed: 1, skipped: 0 }, 'Payment successful. Some campaigns could not be restarted. Review their status before assuming ads are running.'],
+        [{ resumed: 0, failed: 0, skipped: 1 }, 'Payment successful. Some campaigns still need review before further restart attempts.'],
+    ])('shows the campaign recovery warning after refreshing a successful payment', async (recovery, message) => {
+        global.fetch.mockResolvedValue({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ success: true, message, campaign_recovery: recovery }),
+        });
+        const { getByText } = render(
+            <AdSpend auth={auth} credit={null} transactions={[]} paymentFailed={true} />
+        );
+
+        fireEvent.click(getByText('Retry Payment'));
+        await waitFor(() => expect(router.reload).toHaveBeenCalledOnce());
+        expect(toast.warning).not.toHaveBeenCalled();
+
+        act(() => router.reload.mock.calls[0][0].onSuccess());
+        expect(toast.warning).toHaveBeenCalledWith(message);
+        expect(toast.error).not.toHaveBeenCalled();
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('preserves a recovery warning when a new card pays successfully', async () => {
+        const message = 'Payment method updated and payment successful. Some campaigns could not be restarted. Review their status before assuming ads are running.';
+        stripe.createPaymentMethod.mockResolvedValue({ paymentMethod: { id: 'pm_replacement' } });
+        global.fetch.mockResolvedValue({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ success: true, message, campaign_recovery: { resumed: 0, failed: 1, skipped: 0 } }),
+        });
+        const { getAllByText, getByRole } = render(
+            <AdSpend auth={auth} credit={null} transactions={[]} paymentFailed={true} />
+        );
+
+        fireEvent.click(getAllByText('Update Payment Method')[0]);
+        fireEvent.click(getByRole('button', { name: 'Update & Retry Payment' }));
+        await waitFor(() => expect(router.reload).toHaveBeenCalledOnce());
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ payment_method_id: 'pm_replacement', retry_payment: true });
+        act(() => router.reload.mock.calls[0][0].onSuccess());
+
+        expect(toast.warning).toHaveBeenCalledWith(message);
+        expect(toast.error).not.toHaveBeenCalled();
+        expect(toast.success).not.toHaveBeenCalled();
     });
 });
 

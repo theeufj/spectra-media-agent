@@ -66,10 +66,10 @@ function IdentitySection({ identity }) {
     );
 }
 
-function AdAccountsSection({ adAccounts, adInsights, selectedAccount, datePreset, insightPeriods }) {
+function AdAccountsSection({ adAccounts, adInsights, selectedAccount, datePreset, insightPeriods, selectedPageId }) {
     const currency = useCurrency();
     const select = (accountId, period) => {
-        router.get(route('facebook-api.verify'), { ad_account_id: accountId, date_preset: period }, {
+        router.get(route('facebook-api.verify'), { ad_account_id: accountId, date_preset: period, page_id: selectedPageId }, {
             preserveScroll: true,
         });
     };
@@ -196,7 +196,57 @@ function CampaignCreateSection({ selectedAccount }) {
     );
 }
 
-function BusinessSection({ businesses, businessAssets }) {
+function ReviewPixelForm({ businesses, selectedAccount }) {
+    const [businessId, setBusinessId] = useState('');
+    const [result, setResult] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const business = businesses.find((item) => item.id === businessId);
+
+    const provision = async () => {
+        if (!business || !selectedAccount || loading) return;
+        setLoading(true);
+        setResult(null);
+        try {
+            setResult(await fetchJson(route('facebook-api.review-pixel'), {
+                method: 'POST', json: { business_id: businessId, ad_account_id: selectedAccount.id },
+            }));
+        } catch (error) {
+            setResult({ error: error.body?.error ?? error.body?.message ?? 'Could not provision the review pixel.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="border-t border-gray-100 px-5 py-4">
+            <h2 className="mb-2 text-sm font-semibold text-gray-900">Provision a review pixel</h2>
+            <p className="mb-3 text-sm text-gray-600">Create and link a separate test pixel for a business-owned ad account. This does not install it on a website or send events.</p>
+            <label className="block text-sm font-medium text-gray-700">
+                Business portfolio
+                <select className="mt-1 block w-full rounded-md border-gray-300" value={businessId} disabled={loading}
+                    onChange={(event) => { setBusinessId(event.target.value); setResult(null); }}>
+                    <option value="">Select a business portfolio</option>
+                    {businesses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+            </label>
+            <p className="my-3 text-sm text-gray-700">{selectedAccount ? <>Ad account: <strong>{selectedAccount.name}</strong> ({selectedAccount.id})</> : 'Select the review ad account in the performance section above.'}</p>
+            <button type="button" onClick={provision} disabled={!business || !selectedAccount || loading}
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {loading ? 'Provisioning…' : 'Provision review pixel'}
+            </button>
+            {result?.linked && (
+                <div role="status" className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                    <p className="font-semibold">{result.created ? 'Pixel created and verified on the ad account' : 'Pixel verified on the ad account'}</p>
+                    <p>{result.name} · {result.pixel_id}</p>
+                    <p>{business.name} → {selectedAccount.name}</p>
+                </div>
+            )}
+            {result?.error && <p role="alert" className="mt-3 text-sm text-red-700">{result.error}</p>}
+        </div>
+    );
+}
+
+function BusinessSection({ businesses, businessAssets, selectedAccount }) {
     return (
         <SectionCard title="Business Manager — Assets" icon={BizIcon}
             error={businesses.error} status={businesses.status}
@@ -240,11 +290,18 @@ function BusinessSection({ businesses, businessAssets }) {
             {businessAssets?.error && (
                 <div className="px-5 py-3 border-t border-gray-100 text-xs text-amber-700 bg-amber-50">{businessAssets.error}</div>
             )}
+            {businesses.accounts?.length > 0 && <ReviewPixelForm key={selectedAccount?.id} businesses={businesses.accounts} selectedAccount={selectedAccount} />}
         </SectionCard>
     );
 }
 
-function PagesSection({ managedPages, pagePosts }) {
+function PagesSection({ managedPages, pagePosts, selectedPageId, selectedAccount, datePreset }) {
+    const selectPage = (pageId) => router.get(route('facebook-api.verify'), {
+        page_id: pageId,
+        ad_account_id: selectedAccount?.id,
+        date_preset: datePreset,
+    }, { preserveScroll: true });
+
     return (
         <SectionCard title="Managed Pages — Content & Engagement" icon={PageIcon}
             error={managedPages.error} status={managedPages.status}
@@ -269,37 +326,35 @@ function PagesSection({ managedPages, pagePosts }) {
                     </div>
                 </div>
             )}
-            {/* Page posts (pages_read_engagement) */}
             <div className="px-5 py-4">
+                {managedPages.pages?.length > 0 && (
+                    <label className="mb-4 block text-sm font-medium text-gray-700">
+                        Facebook Page
+                        <select className="mt-1 block w-full rounded-md border-gray-300" value={selectedPageId ?? ''}
+                            onChange={(event) => selectPage(event.target.value)}>
+                            <option value="">Select a Page to load its posts</option>
+                            {managedPages.pages.map((page) => <option key={page.id} value={page.id}>{page.name}</option>)}
+                        </select>
+                    </label>
+                )}
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                    Recent Posts from {pagePosts?.page_name ?? '—'} (pages_read_engagement)
+                    {pagePosts?.page_name ? `Published posts from ${pagePosts.page_name}` : 'Published Page posts'} (pages_read_engagement)
                 </p>
-                {pagePosts?.error ? (
-                    pagePosts.error.includes('pages_read_engagement') || pagePosts.error.includes('#10') ? (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                            <p className="text-sm font-semibold text-blue-900 mb-1">Scope active — endpoint gated on App Review</p>
-                            <p className="text-xs text-blue-800 leading-relaxed">
-                                The <code className="font-mono bg-blue-100 px-1 rounded">pages_read_engagement</code> scope is confirmed granted on this token
-                                (see Granted OAuth Scopes above). Meta gates the <code className="font-mono bg-blue-100 px-1 rounded">/feed</code> endpoint
-                                at the app level until App Review is complete — the token and page selection are correct.
-                            </p>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-red-500">{pagePosts.error}</p>
-                    )
+                {!pagePosts ? (
+                    <p className="text-sm text-gray-500">Select a Page to load the latest posts it published.</p>
+                ) : pagePosts.error ? (
+                    <p className="text-sm text-red-500">{pagePosts.error}</p>
                 ) : pagePosts?.posts?.length === 0 ? (
                     <p className="text-xs text-gray-500 italic">No recent posts found on this page.</p>
                 ) : (
                     <div className="space-y-3">
-                        {pagePosts?.posts?.map((post, i) => (
-                            <div key={i} className="bg-gray-50 rounded-lg px-4 py-3">
-                                <p className="text-sm text-gray-800 leading-relaxed line-clamp-2">
+                        {pagePosts.posts.map((post) => (
+                            <div key={post.id} className="bg-gray-50 rounded-lg px-4 py-3">
+                                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
                                     {post.message || <span className="italic text-gray-500">No text content</span>}
                                 </p>
                                 <div className="flex items-center gap-4 mt-2">
                                     <span className="text-xs text-gray-500">{new Date(post.created_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                                    <span className="text-xs text-gray-500">👍 {count(post.likes ?? 0)}</span>
-                                    <span className="text-xs text-gray-500">💬 {count(post.comments ?? 0)}</span>
                                 </div>
                             </div>
                         ))}
@@ -377,7 +432,7 @@ export default function FacebookApiVerify({
     identity, grantedPermissions,
     adAccounts, adInsights, selectedAccount, datePreset = 'last_30d', insightPeriods = {},
     businesses, businessAssets,
-    managedPages, pagePosts,
+    managedPages, pagePosts, selectedPageId,
 }) {
     const allOk = !token_expired
         && !identity?.error
@@ -419,14 +474,15 @@ export default function FacebookApiVerify({
                     <PermissionsSection grantedPermissions={grantedPermissions} />
                     <IdentitySection identity={identity ?? { error: null }} />
                     <AdAccountsSection adAccounts={adAccounts ?? { accounts: [] }} adInsights={adInsights}
-                        selectedAccount={selectedAccount} datePreset={datePreset} insightPeriods={insightPeriods} />
+                        selectedAccount={selectedAccount} datePreset={datePreset} insightPeriods={insightPeriods} selectedPageId={selectedPageId} />
                     <CampaignCreateSection key={selectedAccount?.id} selectedAccount={selectedAccount} />
-                    <BusinessSection businesses={businesses ?? { accounts: [] }} businessAssets={businessAssets} />
-                    <PagesSection managedPages={managedPages ?? { pages: [] }} pagePosts={pagePosts} />
+                    <BusinessSection businesses={businesses ?? { accounts: [] }} businessAssets={businessAssets} selectedAccount={selectedAccount} />
+                    <PagesSection managedPages={managedPages ?? { pages: [] }} pagePosts={pagePosts} selectedPageId={selectedPageId}
+                        selectedAccount={selectedAccount} datePreset={datePreset} />
                 </div>
 
                 <div className="flex gap-3">
-                    <Link href={route('facebook-api.verify', { ad_account_id: selectedAccount?.id, date_preset: datePreset })}
+                    <Link href={route('facebook-api.verify', { ad_account_id: selectedAccount?.id, date_preset: datePreset, page_id: selectedPageId })}
                         className="flex items-center gap-2 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

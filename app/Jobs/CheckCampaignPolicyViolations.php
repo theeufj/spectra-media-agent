@@ -5,11 +5,14 @@ namespace App\Jobs;
 use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\Strategy;
 use App\Services\Agents\CampaignAlertService;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxLaunchCheck;
 use App\Support\GoogleAdPolicy;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
@@ -118,6 +121,20 @@ class CheckCampaignPolicyViolations implements ShouldQueue
             $campaignResourceName = "customers/{$campaign->customer->cleanGoogleCustomerId()}/campaigns/{$campaignResourceName}";
         }
 
+        $performanceMax = $campaign->strategies()->where('campaign_type', 'performance_max')->get()
+            ->first(function (Strategy $strategy) use ($campaign, $campaignResourceName) {
+                $strategy->setRelation('campaign', $campaign);
+                $resource = $strategy->reusableGoogleCampaignId();
+
+                return str_contains(strtolower($strategy->platform ?? ''), 'google')
+                    && ($resource === $campaignResourceName || $resource === basename($campaignResourceName));
+            });
+        if ($performanceMax) {
+            $this->checkPerformanceMaxPolicy($campaign, $performanceMax, $campaignResourceName);
+
+            return false;
+        }
+
         $ads = $this->googleAds($campaign, $campaignResourceName);
 
         $disapprovedAds = [];
@@ -173,6 +190,44 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         // Policy checks report rejected ads without changing campaign controls.
         // The caller may still repair eligible copy issues on managed campaigns.
         return true;
+    }
+
+    private function checkPerformanceMaxPolicy(Campaign $campaign, Strategy $strategy, string $resource): void
+    {
+        $account = $campaign->customer->cleanGoogleCustomerId();
+        $reader = app(ReadCampaignConfiguration::class, ['customer' => $campaign->customer]);
+        $metadata = $strategy->execution_result['metadata'] ?? [];
+        if ($strategy->deployment_status === 'active' && isset($metadata['google_pmax_staging'])
+            && ! isset($metadata['configuration_verification'])) {
+            $snapshot = $reader->performanceMax($account, $resource);
+            app(PerformanceMaxLaunchCheck::class)->recordVerifiedConfiguration($strategy, $snapshot, 'ENABLED');
+            $rows = $snapshot['groups'];
+        } else {
+            $rows = $reader->performanceMaxGroups($account, $resource);
+        }
+
+        $groups = collect(array_column($rows, 'assetGroup'))->where('status', 'ENABLED');
+        $issues = [];
+        foreach ($groups as $group) {
+            $reasons = $group['primaryStatusReasons'] ?? [];
+            $limited = in_array('ASSET_GROUP_LIMITED', $reasons, true);
+            if ($limited || in_array('ASSET_GROUP_DISAPPROVED', $reasons, true)) {
+                $issues[] = [
+                    'platform' => 'google_ads', 'ad_resource_name' => $group['resourceName'], 'limited_approval' => $limited,
+                    'message' => $limited ? 'Google approved this Performance Max asset group with restrictions.' : 'Google disapproved this Performance Max asset group.',
+                    'action_required' => 'Review the asset group policy details in Google Ads.',
+                ];
+            }
+        }
+        $pending = $groups->contains(fn (array $group) => in_array('ASSET_GROUP_UNDER_REVIEW', $group['primaryStatusReasons'] ?? [], true));
+        $uncertain = null;
+        if ($issues === [] && ($groups->isEmpty() || $groups->contains(fn (array $group) => ($group['primaryStatus'] ?? null) !== 'ELIGIBLE'))) {
+            $uncertain = $pending ? 'Google is reviewing the Performance Max asset groups.' : 'Google has not confirmed eligibility for the enabled Performance Max asset groups.';
+        }
+        app(CampaignAlertService::class)->recordPolicyCheck($campaign, 'google_ads', $issues, $uncertain,
+            evidence: ['asset_groups' => $groups->map(fn (array $group) => [
+                'resource_name' => $group['resourceName'], 'ad_strength' => $group['adStrength'] ?? null,
+            ])->values()->all()]);
     }
 
     /** @return array<int, array<string, mixed>> */

@@ -3,6 +3,7 @@
 namespace App\Services\FacebookAds;
 
 use App\Models\Customer;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class PixelService extends BaseFacebookAdsService
@@ -26,21 +27,28 @@ class PixelService extends BaseFacebookAdsService
             return null;
         }
 
-        $accountId = $this->customer->facebook_ads_account_id;
+        $accountId = preg_replace('/^act_/', '', $this->customer->facebook_ads_account_id);
         $response = $this->get("/act_{$accountId}/adspixels", [
             'fields' => 'id,name,creation_time',
-            'limit' => 5,
+            'limit' => 100,
         ]);
 
-        if (! $response || empty($response['data'])) {
+        if (! is_array($response['data'] ?? null)) {
+            return null;
+        }
+
+        $pixel = collect($response['data'])->first(
+            fn ($item) => ctype_digit((string) ($item['id'] ?? '')) && ! str_starts_with($item['name'] ?? '', BusinessManagerService::REVIEW_PIXEL_PREFIX),
+        );
+        if (! $pixel) {
             Log::info('PixelService: No existing pixel found, will create one', [
                 'customer_id' => $this->customer->id,
             ]);
 
-            return $this->createPixel();
+            return isset($response['paging']['next']) ? null : $this->createPixel();
         }
 
-        $pixelId = $response['data'][0]['id'];
+        $pixelId = $pixel['id'];
         $this->customer->update(['facebook_pixel_id' => $pixelId]);
 
         Log::info('PixelService: Resolved pixel ID from ad account', [
@@ -58,54 +66,39 @@ class PixelService extends BaseFacebookAdsService
      */
     public function createPixel(): ?string
     {
-        $businessId = config('services.facebook.business_manager_id');
+        $businessId = (string) config('services.facebook.business_manager_id');
+        $accountId = preg_replace('/^act_/', '', (string) $this->customer->facebook_ads_account_id);
 
-        if (! $businessId) {
-            Log::error('PixelService: FACEBOOK_BUSINESS_MANAGER_ID not configured — cannot create BM-owned pixel', [
-                'customer_id' => $this->customer->id,
-            ]);
-
+        if (! ctype_digit($businessId) || ! ctype_digit($accountId ?? '') || ! $this->customer->uuid) {
             return null;
         }
 
-        // Create pixel at BM level so Spectra owns it
-        $response = $this->post("/{$businessId}/adspixels", [
-            'name' => 'Spectra — '.$this->customer->name,
-        ]);
-
-        if (! $response || empty($response['id'])) {
-            Log::error('PixelService: Failed to create BM-level pixel', [
-                'customer_id' => $this->customer->id,
-                'response' => $response,
-            ]);
-
-            return null;
-        }
-
-        $pixelId = $response['id'];
-        $accountId = $this->customer->facebook_ads_account_id;
-
-        // Share with the customer's ad account so their campaigns can use it
-        if ($accountId) {
-            $shared = $this->sharePixelWithAccount($pixelId, $accountId);
-            if (! $shared) {
-                Log::warning('PixelService: Pixel created but could not be shared with ad account', [
+        return Cache::lock('meta-workspace-pixel:'.$this->customer->uuid, 60)->get(function () use ($businessId, $accountId): ?string {
+            $name = 'Site to Spend workspace '.$this->customer->uuid.' dataset';
+            $owned = $this->get("/{$businessId}/owned_pixels", ['fields' => 'id,name', 'limit' => 100]);
+            if (! is_array($owned['data'] ?? null)) {
+                return null;
+            }
+            $pixelId = (string) (collect($owned['data'])->firstWhere('name', $name)['id'] ?? '');
+            if ($pixelId === '') {
+                if (isset($owned['paging']['next'])) {
+                    return null;
+                }
+                $pixelId = (string) ($this->post("/{$businessId}/adspixels", ['name' => $name])['id'] ?? '');
+            }
+            if (! ctype_digit($pixelId) || ! $this->sharePixelWithAccount($pixelId, $accountId)) {
+                Log::warning('PixelService: Meta did not verify dataset sharing with the ad account', [
                     'customer_id' => $this->customer->id,
                     'pixel_id' => $pixelId,
                     'account_id' => $accountId,
                 ]);
+
+                return null;
             }
-        }
+            $this->customer->update(['facebook_pixel_id' => $pixelId]);
 
-        $this->customer->update(['facebook_pixel_id' => $pixelId]);
-
-        Log::info('PixelService: Created BM-owned pixel and shared with ad account', [
-            'customer_id' => $this->customer->id,
-            'pixel_id' => $pixelId,
-            'account_id' => $accountId,
-        ]);
-
-        return $pixelId;
+            return $pixelId;
+        }) ?: null;
     }
 
     /**
@@ -123,6 +116,18 @@ class PixelService extends BaseFacebookAdsService
             'account_id' => $accountId,
         ]);
 
-        return ! empty($response['success']);
+        return ! empty($response['success']) && $this->isLinked($pixelId, $accountId);
+    }
+
+    public function isLinked(string $pixelId, string $accountId): bool
+    {
+        $accountId = preg_replace('/^act_/', '', $accountId);
+        if (! ctype_digit($pixelId) || ! ctype_digit($accountId ?? '')) {
+            return false;
+        }
+
+        $response = $this->get("/act_{$accountId}/adspixels", ['fields' => 'id', 'limit' => 100]);
+
+        return collect($response['data'] ?? [])->contains(fn ($row) => (string) ($row['id'] ?? '') === $pixelId);
     }
 }

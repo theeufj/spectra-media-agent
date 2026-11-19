@@ -156,6 +156,13 @@ class MaintenanceBudgetSummaryTest extends TestCase
         $this->assertSame('no_op', $run->status);
     }
 
+    public function test_maintenance_ignores_a_paused_campaign_with_stale_serving_status(): void
+    {
+        $campaign = Campaign::factory()->create(['status' => 'paused', 'primary_status' => 'ELIGIBLE', 'google_ads_campaign_id' => '111']);
+
+        $this->assertFalse(AutomatedCampaignMaintenance::eligibleCampaigns()->whereKey($campaign->id)->exists());
+    }
+
     public function test_maintenance_reports_only_verified_platform_change_during_partial_failure(): void
     {
         Notification::fake();
@@ -180,6 +187,7 @@ class MaintenanceBudgetSummaryTest extends TestCase
         $this->assertSame([$confirmed], $activity->details['adjustments']);
         $run = AgentRun::where('job', 'AutomatedCampaignMaintenance')->latest('id')->firstOrFail();
         $this->assertSame(1, $run->details['budget_adjustments']);
+        $this->assertSame(['Facebook did not confirm the requested budget.'], $run->details['budget_failures'][$campaign->id]);
         $this->assertSame(1, $run->errors);
         $this->assertSame('partial', $run->status);
     }

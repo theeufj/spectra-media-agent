@@ -115,7 +115,7 @@ class RegisteredUserController extends Controller
         $freshUser = $user->fresh();
         app(\App\Services\SiteSignupConversionService::class)->record($freshUser);
         if (! empty($freshUser->fbclid)) {
-            RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
+            RecordSiteFacebookConversion::dispatch($freshUser, 'signup', $request->url(), $request->userAgent());
         }
         if (! empty($freshUser->msclid)) {
             RecordSiteMicrosoftConversion::dispatch($freshUser, 'signup');

@@ -4,10 +4,16 @@ namespace App\Services\Campaigns;
 
 use App\Contracts\Ads\AdsServiceFactory;
 use App\Contracts\Ads\ReportsBudgetChanges;
+use App\Enums\CampaignStatus;
+use App\Models\AdSpendCredit;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Services\FacebookAds\AdAccountService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
+use App\Services\LinkedInAds\CampaignService as LinkedInCampaignService;
+use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use Illuminate\Support\Facades\Cache;
 
 /** One budget envelope for every platform; allocations and rounding use cents. */
@@ -42,7 +48,9 @@ class CampaignBudgetService
             }
         }
 
-        return self::split((int) round(max(0, min($requested, $this->ceiling($campaign))) * 100), $weights);
+        $ceilingCents = (int) floor(round(max(0, $this->ceiling($campaign)) * 100, 6));
+
+        return self::split(min((int) round(max(0, $requested) * 100), $ceilingCents), $weights);
     }
 
     /** @param array<string, int> $weights @return array<string, int> */
@@ -70,12 +78,35 @@ class CampaignBudgetService
         return $this->applyWithChanges($campaign, $requested)['success'];
     }
 
-    /**
-     * @return array{success: bool, changes: list<array{platform: string, resource_name: string, old_budget_micros: int, new_budget_micros: int, currency: string}>}
-     */
-    public function applyWithChanges(Campaign $campaign, float $requested): array
+    public function automaticHoldReason(Campaign $campaign): ?string
     {
-        return Cache::lock("campaign-budget:{$campaign->id}", 180)->block(10, function () use ($campaign, $requested) {
+        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+            return 'A bounded restart trial or spending hold is in effect.';
+        }
+        if (in_array($campaign->status, [CampaignStatus::Paused, CampaignStatus::Completed, CampaignStatus::Ended], true)
+            || $campaign->hasPassedEndDate()) {
+            return 'The campaign is paused or has ended.';
+        }
+        if ($campaign->customer?->service_type === 'setup_only'
+            || $campaign->customer?->google_ads_link_status === 'revoked') {
+            return 'Automatic management is unavailable for this account.';
+        }
+        $credit = $campaign->customer?->adSpendCredit()->first();
+        if (in_array($credit?->payment_status, [AdSpendCredit::PAYMENT_PAUSED, AdSpendCredit::PAYMENT_FAILED], true)
+            || ($credit && ! $campaign->customer->isSelfFundedAds() && ! $credit->canRunCampaigns())
+            || (float) ($campaign->billing_budget_multiplier ?? 1) <= 0) {
+            return 'Billing has suspended automatic budget updates.';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{success: bool, changes: list<array{platform: string, resource_name: string, old_budget_micros: int, new_budget_micros: int, currency: string}>, errors?: list<string>, read_only_reason?: string}
+     */
+    public function applyWithChanges(Campaign $campaign, float $requested, bool $automatic = false): array
+    {
+        return Cache::lock("campaign-budget:{$campaign->id}", 180)->block(10, function () use ($campaign, $requested, $automatic) {
             if ($campaign->exists) {
                 $campaign->refresh();
             }
@@ -83,120 +114,315 @@ class CampaignBudgetService
             if (! $customer) {
                 return ['success' => false, 'changes' => []];
             }
-            $ok = true;
+            if ($automatic && ($reason = $this->automaticHoldReason($campaign))) {
+                return ['success' => true, 'changes' => [], 'read_only_reason' => $reason];
+            }
             $attempted = false;
             $changes = [];
+            $errors = [];
             foreach ($this->allocations($campaign, $requested) as $platform => $cents) {
+                if ($automatic && $cents <= 0) {
+                    // Suspending delivery belongs to the campaign/billing lifecycle.
+                    continue;
+                }
                 try {
-                    if ($platform === 'google' && $campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
-                        $attempted = true;
-                        $targets = [];
-                        foreach ($campaign->strategies as $strategy) {
-                            if ($this->platform($strategy->platform) === 'google') {
-                                $id = $strategy->reusableGoogleCampaignId() ?? 'pending:'.$strategy->id;
-                                $targets[$id] = (int) round($strategy->daily_budget * 100);
-                            }
-                        }
-                        $targets = $targets ?: [$campaign->googleAdsResourceName() => 1];
-                        foreach (self::split($cents, $targets) as $id => $share) {
-                            if (str_starts_with($id, 'pending:')) {
-                                continue;
-                            }
-                            $resource = str_contains($id, '/') ? $id : "customers/{$customer->cleanGoogleCustomerId()}/campaigns/{$id}";
-                            $mutator = $this->ads->budgets($customer);
-                            if ($mutator instanceof ReportsBudgetChanges) {
-                                $result = $mutator->updateDailyBudgetWithChanges($customer->cleanGoogleCustomerId(), $resource, $share * 10000);
-                                $ok = $result['success'] && $ok;
-                                array_push($changes, ...$result['changes']);
-                            } else {
-                                // Legacy and sandbox writers cannot prove a live before/after change.
-                                $ok = $mutator->updateDailyBudget($customer->cleanGoogleCustomerId(), $resource, $share * 10000) && $ok;
-                            }
-                        }
-                    } elseif ($platform === 'facebook' && $campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
-                        $attempted = true;
-                        // Never route sandbox customers through a live Meta service.
-                        if ($customer->is_sandbox) {
-                            continue;
-                        }
-                        $service = new FacebookCampaignService($customer);
-                        $accountId = preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
-                        $account = $this->observe(fn () => (new AdAccountService($customer))->getAdAccount($accountId));
-                        $currency = ($account['id'] ?? null) === 'act_'.$accountId ? ($account['currency'] ?? null) : null;
-                        $remote = $service->getCampaign($campaign->facebook_ads_campaign_id);
-                        if (! $remote) {
-                            $ok = false;
-                        } elseif (! empty($remote['daily_budget'])) {
-                            $updated = $service->updateCampaign($campaign->facebook_ads_campaign_id, ['daily_budget' => $cents]);
-                            $ok = $updated && $ok;
-                            if ($updated) {
-                                $after = $this->observe(fn () => $service->getCampaign($campaign->facebook_ads_campaign_id));
-                                if ((string) ($remote['id'] ?? '') === (string) $campaign->facebook_ads_campaign_id
-                                    && (string) ($after['id'] ?? '') === (string) $campaign->facebook_ads_campaign_id) {
-                                    $this->recordChange($changes, 'facebook', (string) $campaign->facebook_ads_campaign_id,
-                                        $this->minorUnits($remote['daily_budget']), $this->minorUnits($after['daily_budget'] ?? null),
-                                        $cents * 10000, $currency);
-                                }
-                            }
-                        } else {
-                            $adSets = new AdSetService($customer);
-                            $weights = [];
-                            foreach ($adSets->listAdSets($campaign->facebook_ads_campaign_id) ?? [] as $adSet) {
-                                if (($adSet['daily_budget'] ?? 0) > 0) {
-                                    $weights[$adSet['id']] = (int) $adSet['daily_budget'];
-                                }
-                            }
-                            $ok = $weights !== [] && $ok;
-                            $updatedShares = [];
-                            foreach (self::split($cents, $weights) as $id => $share) {
-                                // Do not inflate each share to an API minimum and exceed the envelope.
-                                $updated = $adSets->updateAdSet((string) $id, ['daily_budget' => $share]);
-                                $ok = $updated && $ok;
-                                if ($updated) {
-                                    $updatedShares[$id] = $share;
-                                }
-                            }
-                            foreach ($updatedShares !== [] ? ($this->observe(fn () => $adSets->listAdSets($campaign->facebook_ads_campaign_id)) ?? []) : [] as $after) {
-                                $id = $after['id'] ?? '';
-                                if (isset($updatedShares[$id], $weights[$id])) {
-                                    $this->recordChange($changes, 'facebook', (string) $id, $weights[$id] * 10000,
-                                        $this->minorUnits($after['daily_budget'] ?? null), $updatedShares[$id] * 10000, $currency);
-                                }
-                            }
-                        }
-                    } elseif ($platform === 'microsoft' && $campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_account_id) {
-                        $attempted = true;
-                        // This adapter has no verified account-currency read. Keep reconciling,
-                        // but do not turn a successful write into an unproven change receipt.
-                        $ok = ($customer->is_sandbox || (new \App\Services\MicrosoftAds\CampaignService($customer))->updateBudget($campaign->microsoft_ads_campaign_id, $cents / 100)) && $ok;
-                    } elseif ($platform === 'linkedin' && $campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id) {
-                        $attempted = true;
-                        if (! $customer->is_sandbox) {
-                            $service = new \App\Services\LinkedInAds\CampaignService($customer);
-                            $before = $this->observe(fn () => $service->getCampaign($campaign->linkedin_campaign_id));
-                            $updated = (bool) $service->updateBudget($campaign->linkedin_campaign_id, $cents / 100);
-                            $ok = $updated && $ok;
-                            if ($updated) {
-                                $after = $this->observe(fn () => $service->getCampaign($campaign->linkedin_campaign_id));
-                                $id = preg_replace('/^urn:li:sponsoredCampaign:/', '', $campaign->linkedin_campaign_id);
-                                if (preg_replace('/^urn:li:sponsoredCampaign:/', '', (string) ($before['id'] ?? '')) === $id
-                                    && preg_replace('/^urn:li:sponsoredCampaign:/', '', (string) ($after['id'] ?? '')) === $id
-                                    && ($before['dailyBudget']['currencyCode'] ?? null) === ($after['dailyBudget']['currencyCode'] ?? null)) {
-                                    $this->recordChange($changes, 'linkedin', $campaign->linkedin_campaign_id,
-                                        $this->decimalMicros($before['dailyBudget']['amount'] ?? null), $this->decimalMicros($after['dailyBudget']['amount'] ?? null),
-                                        $cents * 10000, $after['dailyBudget']['currencyCode'] ?? null);
-                                }
-                            }
-                        }
+                    $reconciled = match ($platform) {
+                        'google' => $this->reconcileGoogle($campaign, $customer, $cents, $automatic, $changes),
+                        'facebook' => $this->reconcileMeta($campaign, $customer, $cents, $automatic, $changes),
+                        'microsoft' => $this->reconcileMicrosoft($campaign, $customer, $cents, $automatic),
+                        'linkedin' => $this->reconcileLinkedIn($campaign, $customer, $cents, $automatic, $changes),
+                    };
+                    if ($reconciled === null) {
+                        // A planned platform share stays reserved until deployment.
+                        continue;
+                    }
+                    $attempted = true;
+                    if (! $reconciled) {
+                        $errors[] = $platform;
                     }
                 } catch (\Throwable $e) {
                     report($e);
-                    $ok = false;
+                    $errors[] = $platform;
                 }
             }
 
-            return ['success' => $attempted && $ok, 'changes' => $changes];
+            return ['success' => $errors === [] && ($attempted || $automatic), 'changes' => $changes]
+                + ($errors === [] ? [] : ['errors' => $errors]);
         });
+    }
+
+    private function reconcileGoogle(Campaign $campaign, Customer $customer, int $cents, bool $automatic, array &$changes): ?bool
+    {
+        if (! $campaign->google_ads_campaign_id) {
+            return null;
+        }
+        if (! $customer->google_ads_customer_id) {
+            return false;
+        }
+
+        $accountId = $customer->cleanGoogleCustomerId();
+        $prefix = "customers/{$accountId}/campaigns/";
+        $targets = [];
+        $paused = [];
+        foreach ($campaign->strategies as $strategy) {
+            if ($this->platform($strategy->platform) !== 'google') {
+                continue;
+            }
+            $id = $strategy->reusableGoogleCampaignId();
+            $resource = $id === null ? 'pending:'.$strategy->id : (ctype_digit($id) ? $prefix.$id : $id);
+            $targets[$resource] = ($targets[$resource] ?? 0) + (int) round($strategy->daily_budget * 100);
+            if ($automatic && $strategy->deployment_status === 'paused') {
+                $paused[$resource] = true;
+            }
+        }
+
+        $targets = $targets ?: [$campaign->googleAdsResourceName() => 1];
+        $ok = true;
+        foreach (self::split($cents, $targets) as $resource => $share) {
+            if (isset($paused[$resource]) || str_starts_with($resource, 'pending:') || ($automatic && $share <= 0)) {
+                continue;
+            }
+            if (! str_starts_with($resource, $prefix) || ! ctype_digit(substr($resource, strlen($prefix)))) {
+                $ok = false;
+
+                continue;
+            }
+            try {
+                $mutator = $this->ads->budgets($customer);
+                if ($automatic && $mutator instanceof GoogleBudgetMutator) {
+                    $result = $mutator->reconcileDailyBudget($accountId, $resource, $share * 10000);
+                } elseif ($mutator instanceof ReportsBudgetChanges) {
+                    $result = $mutator->updateDailyBudgetWithChanges($accountId, $resource, $share * 10000);
+                } else {
+                    // Synthetic writers have no live change to report.
+                    $ok = $mutator->updateDailyBudget($accountId, $resource, $share * 10000) && $ok;
+
+                    continue;
+                }
+                $ok = $result['success'] && $ok;
+                array_push($changes, ...$result['changes']);
+            } catch (\Throwable $e) {
+                report($e);
+                $ok = false;
+            }
+        }
+
+        return $ok;
+    }
+
+    private function reconcileMeta(Campaign $campaign, Customer $customer, int $cents, bool $automatic, array &$changes): ?bool
+    {
+        $id = $campaign->facebook_ads_campaign_id;
+        if (! $id) {
+            return null;
+        }
+        if (! $customer->facebook_ads_account_id) {
+            return false;
+        }
+        if ($customer->is_sandbox) {
+            return true;
+        }
+
+        $service = new FacebookCampaignService($customer);
+        $accountId = preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
+        $before = $service->getCampaign($id);
+        if (! $before || (string) ($before['id'] ?? '') !== $id
+            || ($automatic && (string) ($before['account_id'] ?? '') !== $accountId)) {
+            return false;
+        }
+        if ($automatic && empty($before['status'])) {
+            return false;
+        }
+        if ($automatic && ($before['status'] !== 'ACTIVE' || ($before['lifetime_budget'] ?? 0) > 0)) {
+            return true;
+        }
+
+        $target = $cents * 10000;
+        $previous = $this->minorUnits($before['daily_budget'] ?? null);
+        if ($previous !== null && $previous > 0) {
+            if ($previous === $target) {
+                return true;
+            }
+            $currency = $this->metaCurrency($customer, $accountId);
+            if (($automatic && $currency === null) || ! $service->updateCampaign($id, ['daily_budget' => $cents])) {
+                return false;
+            }
+
+            $after = $this->observe(fn () => $service->getCampaign($id));
+            $confirmed = (string) ($after['id'] ?? '') === $id
+                && (! $automatic || (string) ($after['account_id'] ?? '') === $accountId)
+                && $this->minorUnits($after['daily_budget'] ?? null) === $target;
+            if ($confirmed) {
+                $this->recordChange($changes, 'facebook', $id, $previous, $target, $target, $currency);
+            }
+
+            return $confirmed || ! $automatic;
+        }
+
+        return $this->reconcileMetaAdSets($id, $customer, $accountId, $cents, $automatic, $changes);
+    }
+
+    private function metaCurrency(Customer $customer, string $accountId): ?string
+    {
+        $account = $this->observe(fn () => (new AdAccountService($customer))->getAdAccount($accountId));
+        $currency = ($account['id'] ?? null) === 'act_'.$accountId ? ($account['currency'] ?? null) : null;
+
+        return is_string($currency) && preg_match('/^[A-Z]{3}$/', $currency) ? $currency : null;
+    }
+
+    private function reconcileMetaAdSets(string $id, Customer $customer, string $accountId, int $cents, bool $automatic, array &$changes): bool
+    {
+        $service = new AdSetService($customer);
+        $adSets = $service->listAdSets($id);
+        if ($adSets === null) {
+            return false;
+        }
+        $weights = [];
+        $inactive = [];
+        foreach ($adSets as $adSet) {
+            if (! empty($adSet['id']) && ($adSet['daily_budget'] ?? 0) > 0) {
+                $weights[$adSet['id']] = (int) $adSet['daily_budget'];
+                if ($automatic && ($adSet['status'] ?? null) !== 'ACTIVE') {
+                    $inactive[$adSet['id']] = true;
+                }
+            }
+        }
+        if ($weights === []) {
+            return $automatic; // No daily budgets to adjust on this placement.
+        }
+
+        // Derive the same target shares again after a partial write. Once the
+        // requested amount or the ad-set configuration changes, read fresh weights.
+        if ($automatic) {
+            ksort($weights);
+        }
+        $shares = self::split($cents, $weights);
+        $intentKey = "meta-budget-intent:{$customer->id}:{$id}";
+        if ($automatic) {
+            $intent = Cache::get($intentKey);
+            if (($intent['total'] ?? null) === $cents && array_keys($intent['shares']) === array_keys($shares)) {
+                $shares = $intent['shares'];
+            } else {
+                Cache::put($intentKey, ['total' => $cents, 'shares' => $shares], now()->addDay());
+            }
+        }
+
+        $updatedShares = [];
+        $ok = true;
+        $currency = null;
+        foreach ($shares as $adSetId => $share) {
+            if (isset($inactive[$adSetId]) || $weights[$adSetId] === $share || ($automatic && $share <= 0)) {
+                continue;
+            }
+            $currency ??= $this->metaCurrency($customer, $accountId);
+            if ($automatic && $currency === null) {
+                return false;
+            }
+            // Do not inflate each share to an API minimum and exceed the envelope.
+            $updated = $service->updateAdSet((string) $adSetId, ['daily_budget' => $share]);
+            $ok = $updated && $ok;
+            if ($updated) {
+                $updatedShares[$adSetId] = $share;
+            }
+        }
+        if ($updatedShares !== []) {
+            foreach ($this->observe(fn () => $service->listAdSets($id)) ?? [] as $after) {
+                $adSetId = $after['id'] ?? null;
+                if (isset($updatedShares[$adSetId]) && $this->minorUnits($after['daily_budget'] ?? null) === $updatedShares[$adSetId] * 10000) {
+                    $this->recordChange($changes, 'facebook', (string) $adSetId, $weights[$adSetId] * 10000,
+                        $updatedShares[$adSetId] * 10000, $updatedShares[$adSetId] * 10000, $currency);
+                    unset($updatedShares[$adSetId]);
+                }
+            }
+        }
+        $ok = $ok && (! $automatic || $updatedShares === []);
+        if ($ok && $automatic) {
+            Cache::forget($intentKey);
+        }
+
+        return $ok;
+    }
+
+    private function reconcileMicrosoft(Campaign $campaign, Customer $customer, int $cents, bool $automatic): ?bool
+    {
+        $id = $campaign->microsoft_ads_campaign_id;
+        if (! $id) {
+            return null;
+        }
+        if (! $customer->microsoft_ads_account_id) {
+            return false;
+        }
+        if ($customer->is_sandbox) {
+            return true;
+        }
+
+        $service = new MicrosoftCampaignService($customer);
+        if (! $automatic) {
+            return $service->updateBudget($id, $cents / 100);
+        }
+        $get = function () use ($service, $id): ?array {
+            $row = $service->getCampaign($id)['Campaigns']['Campaign'] ?? [];
+            $row = array_is_list($row) ? ($row[0] ?? []) : $row;
+
+            return (string) ($row['Id'] ?? '') === $id ? $row : null;
+        };
+        $before = $get();
+        if (! $before || empty($before['Status'])) {
+            return false;
+        }
+
+        $target = $cents * 10000;
+
+        // There is no verified account-currency read. Confirm the amount, but
+        // do not publish a customer-facing change receipt without currency.
+        return $before['Status'] !== 'Active' || $this->decimalMicros($before['DailyBudget'] ?? null) === $target
+            || ($service->updateBudget($id, $cents / 100) && $this->decimalMicros($get()['DailyBudget'] ?? null) === $target);
+    }
+
+    private function reconcileLinkedIn(Campaign $campaign, Customer $customer, int $cents, bool $automatic, array &$changes): ?bool
+    {
+        $id = $campaign->linkedin_campaign_id;
+        if (! $id) {
+            return null;
+        }
+        if (! $customer->linkedin_ads_account_id) {
+            return false;
+        }
+        if ($customer->is_sandbox) {
+            return true;
+        }
+
+        $service = new LinkedInCampaignService($customer);
+        $campaignId = preg_replace('/^urn:li:sponsoredCampaign:/', '', $id);
+        $account = 'urn:li:sponsoredAccount:'.preg_replace('/^urn:li:sponsoredAccount:/', '', $customer->linkedin_ads_account_id);
+        $ownsCampaign = static fn (?array $row): bool => preg_replace('/^urn:li:sponsoredCampaign:/', '', (string) ($row['id'] ?? '')) === $campaignId
+            && (! $automatic || ($row['account'] ?? null) === $account);
+        $before = $this->observe(fn () => $service->getCampaign($campaignId));
+        if ($automatic && (! $ownsCampaign($before) || empty($before['status']))) {
+            return false;
+        }
+        if ($automatic && (($before['status'] ?? null) !== 'ACTIVE' || empty($before['dailyBudget']))) {
+            return true;
+        }
+
+        $target = $cents * 10000;
+        $previous = $this->decimalMicros($before['dailyBudget']['amount'] ?? null);
+        if ($ownsCampaign($before) && $previous === $target) {
+            return true;
+        }
+        if (! $service->updateBudget($campaignId, $cents / 100)) {
+            return false;
+        }
+
+        $after = $this->observe(fn () => $service->getCampaign($campaignId));
+        $currency = $after['dailyBudget']['currencyCode'] ?? null;
+        $confirmed = $ownsCampaign($before) && $ownsCampaign($after) && $currency === ($before['dailyBudget']['currencyCode'] ?? null)
+            && $this->decimalMicros($after['dailyBudget']['amount'] ?? null) === $target;
+        if ($confirmed) {
+            $this->recordChange($changes, 'linkedin', $id, $previous, $target, $target, $currency);
+        }
+
+        return $confirmed || ! $automatic;
     }
 
     private function recordChange(array &$changes, string $platform, string $resource, ?int $before, ?int $after, int $requested, ?string $currency): void

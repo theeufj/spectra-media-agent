@@ -4,6 +4,7 @@ namespace Tests\Feature\Agents;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Setting;
 use App\Services\Agents\CampaignDiagnosticsAgent;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -46,7 +47,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
         $findings = $this->agent->diagnose($campaign);
 
-        $this->assertIsArray($findings);
+        $this->assertTrue(array_is_list($findings));
 
         foreach ($findings as $finding) {
             $this->assertArrayHasKey('type', $finding);
@@ -78,7 +79,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
         $findings = $this->agent->diagnose($campaign);
 
-        $this->assertIsArray($findings);
+        $this->assertTrue(array_is_list($findings));
 
         foreach ($findings as $finding) {
             $this->assertArrayHasKey('type', $finding);
@@ -88,7 +89,10 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
     public function test_diagnosis_returns_empty_array_for_campaign_without_platforms(): void
     {
-        $customer = Customer::factory()->create();
+        foreach (['signup', 'try_now', 'pricing_visit', 'sandbox_launched'] as $goal) {
+            Setting::set('conversion_label.'.$goal, 'fixture-label');
+        }
+        $customer = Customer::factory()->create(['google_ads_customer_id' => null, 'facebook_ads_account_id' => null]);
         $campaign = Campaign::factory()->create([
             'customer_id' => $customer->id,
             'google_ads_campaign_id' => null,
@@ -97,8 +101,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
         $findings = $this->agent->diagnose($campaign);
 
-        // Conversion tracking check still runs but should find nothing if settings exist
-        $this->assertIsArray($findings);
+        $this->assertSame([], $findings);
     }
 
     public function test_meta_pixel_missing_detected_when_no_pixel_id(): void

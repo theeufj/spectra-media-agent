@@ -34,6 +34,20 @@ return [
         'allow_consecutive_exclamations' => false,
     ],
 
+    'google.performance_max' => [
+        'headline_min_length' => 5,
+        'headline_max_length' => 30,
+        'headline_count' => 11,
+        'long_headline_min_length' => 31,
+        'long_headline_max_length' => 90,
+        'long_headline_count' => 3,
+        'description_min_length' => 10,
+        'description_max_length' => 90,
+        'description_count' => 5,
+        'max_exclamations_per_element' => 1,
+        'allow_consecutive_exclamations' => false,
+    ],
+
     'facebook' => [
         'headline_min_length' => 5,
         'headline_max_length' => 40,

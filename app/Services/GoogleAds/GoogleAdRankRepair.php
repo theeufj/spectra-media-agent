@@ -93,6 +93,9 @@ class GoogleAdRankRepair
             if (! $strategy) {
                 return $this->result('held', 'approved_strategy_missing');
             }
+            if (! empty($strategy->bidding_strategy['search_offer_groups'])) {
+                return $this->result('needs_review', 'search_offer_copy_requires_group_review');
+            }
             $attempt = AgentActivity::where('campaign_id', $fresh->id)->where('customer_id', $fresh->customer_id)
                 ->where('action', 'ad_rank_repair')->latest('id')->first();
             $cooldown = $attempt?->details['next_check_at'] ?? Cache::get($this->quotaCacheKey($fresh));

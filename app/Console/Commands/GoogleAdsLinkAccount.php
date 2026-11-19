@@ -81,9 +81,23 @@ class GoogleAdsLinkAccount extends Command
             // The onboarding path. Setting the account id is the correct
             // behaviour here — it is what the customer supplied — and the job
             // handles status, resource name and the instruction email.
-            $customer->update(['google_ads_customer_id' => $clientId]);
+            if ($clientId !== $customer->cleanGoogleCustomerId()) {
+                if (in_array($customer->google_ads_link_status, ['active', 'managed', 'pending'], true)) {
+                    $this->error('Resolve the existing account relationship before replacing the Google Ads account.');
 
-            (new SendGoogleAdsLinkInvitation($customer->fresh()))->handle();
+                    return self::FAILURE;
+                }
+
+                $customer->updateQuietly([
+                    'google_ads_customer_id' => $clientId,
+                    'google_ads_link_status' => null,
+                    'google_ads_link_requested_at' => null,
+                    'google_ads_link_confirmed_at' => null,
+                    'google_ads_link_resource_name' => null,
+                ]);
+            }
+
+            (new SendGoogleAdsLinkInvitation($customer))->handle(retry: true);
 
             $after = $customer->fresh();
             $this->line('Status   : '.($after->google_ads_link_status ?? 'not set — check the log'));

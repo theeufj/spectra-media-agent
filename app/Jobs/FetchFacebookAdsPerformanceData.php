@@ -7,6 +7,7 @@ use App\Models\FacebookAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
 use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService;
 use App\Services\GoogleAds\RecommendationGenerationService;
 use Illuminate\Bus\Queueable;
@@ -67,6 +68,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 $dateStart = now()->subDays($daysBack)->format('Y-m-d');
                 $dateEnd = now()->format('Y-m-d');
 
+                $strategy = FacebookCampaignMetrics::strategy($this->campaign);
+                $actionType = FacebookCampaignMetrics::actionType($strategy);
                 $insights = $insightService->getCampaignInsights(
                     $this->campaign->facebook_ads_campaign_id,
                     $dateStart,
@@ -74,7 +77,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 );
 
                 if (is_array($insights) && empty($insights)) {
-                    $insights = $this->getFallbackAdSetInsights($this->campaign, $insightService, $dateStart, $dateEnd);
+                    $insights = $this->getFallbackAdSetInsights($this->campaign, $insightService, $dateStart, $dateEnd, $actionType);
                 }
 
                 if ($insights === null) {
@@ -95,7 +98,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     }
 
                     // Parse conversions from actions
-                    $conversions = $insightService->parseAction($insight['actions'] ?? null, 'purchase');
+                    $conversions = $insight['goal_conversions'] ?? FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $actionType);
+                    $clicks = (int) ($insight['inline_link_clicks'] ?? 0);
 
                     $cost = (float) ($insight['spend'] ?? 0);
                     $data = [
@@ -103,12 +107,12 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         'facebook_campaign_id' => $this->campaign->facebook_ads_campaign_id,
                         'date' => $date,
                         'impressions' => (int) ($insight['impressions'] ?? 0),
-                        'clicks' => (int) ($insight['inline_link_clicks'] ?? $insight['clicks'] ?? 0),
+                        'clicks' => $clicks,
                         'cost' => $cost,
                         'conversions' => $conversions,
                         'reach' => (int) ($insight['reach'] ?? null),
                         'frequency' => (float) ($insight['frequency'] ?? null),
-                        'cpc' => (float) ($insight['cpc'] ?? null),
+                        'cpc' => $clicks > 0 ? round($cost / $clicks, 4) : 0,
                         'cpm' => (float) ($insight['cpm'] ?? null),
                         'cpa' => $conversions > 0 ? round($cost / $conversions, 2) : 0.0,
                     ];
@@ -130,7 +134,6 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 ]);
 
                 // Generate recommendations based on performance
-                $strategy = $this->campaign->strategies()->latest()->first();
                 if ($strategy && ! empty($performanceData)) {
                     $recommendationService = new RecommendationGenerationService;
                     $campaignConfig = [
@@ -229,7 +232,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         Campaign $campaign,
         InsightService $insightService,
         string $dateStart,
-        string $dateEnd
+        string $dateEnd,
+        string $actionType = 'purchase',
     ): array {
         $adSetService = new AdSetService($campaign->customer);
         $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
@@ -253,32 +257,27 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         'date_start' => $date,
                         'date_stop' => $date,
                         'impressions' => 0,
-                        'clicks' => 0,
+                        'inline_link_clicks' => 0,
                         'spend' => 0.0,
                         'reach' => 0,
                         'frequency' => 0.0,
-                        'cpc' => 0.0,
                         'cpm' => 0.0,
-                        'cpa' => 0.0,
-                        'actions' => [],
+                        'goal_conversions' => 0,
                     ];
                 }
 
                 $aggregated[$date]['impressions'] += (int) ($insight['impressions'] ?? 0);
-                $aggregated[$date]['clicks'] += (int) ($insight['clicks'] ?? 0);
+                $aggregated[$date]['inline_link_clicks'] += (int) ($insight['inline_link_clicks'] ?? 0);
                 $aggregated[$date]['spend'] += (float) ($insight['spend'] ?? 0);
                 $aggregated[$date]['reach'] += (int) ($insight['reach'] ?? 0);
-                $aggregated[$date]['actions'] = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
+                $aggregated[$date]['goal_conversions'] += FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $actionType);
             }
         }
 
         // Recalculate per-unit metrics from aggregated totals — copying them from individual
         // ad sets produces incorrect blended rates when multiple ad sets are present.
         foreach ($aggregated as &$row) {
-            $row['cpc'] = $row['clicks'] > 0 ? round($row['spend'] / $row['clicks'], 4) : 0.0;
             $row['cpm'] = $row['impressions'] > 0 ? round($row['spend'] / $row['impressions'] * 1000, 4) : 0.0;
-            $purchases = collect($row['actions'])->where('action_type', 'purchase')->sum('value');
-            $row['cpa'] = $purchases > 0 ? round($row['spend'] / $purchases, 2) : 0.0;
             $row['frequency'] = $row['reach'] > 0 ? round($row['impressions'] / $row['reach'], 4) : 0.0;
         }
         unset($row);

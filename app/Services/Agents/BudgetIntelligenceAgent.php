@@ -8,7 +8,8 @@ use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
-use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\CampaignBudgetService;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -60,12 +61,16 @@ class BudgetIntelligenceAgent
             'errors' => [],
         ];
 
-        if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
-            return $results + ['read_only_reason' => 'Approved bounded trial or pause hold: preserve the agreed budget during review.'];
+        $campaign = $campaign->exists ? $campaign->fresh(['customer']) : $campaign;
+        if (! $campaign) {
+            return $results;
+        }
+        $writer = new CampaignBudgetService($this->ads());
+        if ($reason = $writer->automaticHoldReason($campaign)) {
+            return $results + ['read_only_reason' => $reason];
         }
 
-        if (! $campaign->customer || ! \Laravel\Pennant\Feature::for($campaign->customer)->active(\App\Features\AutoOptimization::class)
-            || $campaign->customer->adSpendCredit()->value('payment_status') === \App\Models\AdSpendCredit::PAYMENT_PAUSED) {
+        if (! $campaign->customer || ! \Laravel\Pennant\Feature::for($campaign->customer)->active(\App\Features\AutoOptimization::class)) {
             return $results;
         }
 
@@ -121,11 +126,13 @@ class BudgetIntelligenceAgent
         // writer shares the approved envelope and the persistent billing limit.
         $results['platform'] = 'multi_platform';
         try {
-            $writer = new \App\Services\Campaigns\CampaignBudgetService($this->ads());
             $proposed = (float) $campaign->daily_budget * max(0, $combinedMultiplier);
             $ceiling = $writer->ceiling($campaign);
             $target = min($ceiling, $proposed);
-            $outcome = $writer->applyWithChanges($campaign, $target);
+            $outcome = $writer->applyWithChanges($campaign, $target, automatic: true);
+            if (isset($outcome['read_only_reason'])) {
+                return $results + ['read_only_reason' => $outcome['read_only_reason']];
+            }
             $reason = $combinedMultiplier === 1.0
                 ? ($learningHold
                     ? 'Matched the configured campaign budget while the campaign is learning.'
@@ -142,14 +149,15 @@ class BudgetIntelligenceAgent
                 ]);
             }
             if (! $outcome['success']) {
-                $results['errors'][] = 'One or more platforms rejected the budget update.';
-                report(new \RuntimeException('Campaign '.$campaign->id.': platform budget reconciliation failed.'));
-                Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id]);
+                $failedPlatforms = $outcome['errors'] ?? ['unknown platform'];
+                $results['errors'][] = 'Budget reconciliation failed for '.implode(', ', $failedPlatforms).'.';
+                report(new \RuntimeException('Campaign '.$campaign->id.': '.$results['errors'][0]));
+                Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id, 'platforms' => $failedPlatforms]);
             }
         } catch (\Throwable $e) {
             report($e);
             Log::error('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id, 'exception' => $e]);
-            $results['errors'][] = $e->getMessage();
+            $results['errors'][] = 'Budget reconciliation could not run.';
         }
 
         return $results;
@@ -294,9 +302,10 @@ class BudgetIntelligenceAgent
                         $totalSpend = 0;
                         $totalConversions = 0;
                         $totalConversionValue = 0;
+                        $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
                         foreach ($insights as $day) {
                             $totalSpend += (float) ($day['spend'] ?? 0);
-                            $totalConversions += $insightService->parseAction($day['actions'] ?? null, 'purchase');
+                            $totalConversions += FacebookCampaignMetrics::conversions($day['actions'] ?? null, $goal);
                             // Extract purchase ROAS value if available
                             foreach ($day['action_values'] ?? [] as $av) {
                                 if (($av['action_type'] ?? '') === 'purchase') {
@@ -521,6 +530,6 @@ class BudgetIntelligenceAgent
 
     protected function updateCampaignBudget(Campaign $campaign, Customer $customer, float $newDailyBudget): bool
     {
-        return (new \App\Services\Campaigns\CampaignBudgetService($this->ads()))->apply($campaign, $newDailyBudget);
+        return (new CampaignBudgetService($this->ads()))->apply($campaign, $newDailyBudget);
     }
 }

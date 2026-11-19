@@ -310,7 +310,8 @@ class GenerateStrategy implements ShouldQueue
                 // Approval can change while the model is working. Normalize its
                 // suggestions inside the approval lock using the current budget.
                 $document = \App\Services\Campaigns\StrategyDocument::fromArray(
-                    $strategyData, $enabledPlatforms, (float) $current->daily_budget, requireCreativeCandidates: true
+                    $strategyData, $enabledPlatforms, (float) $current->daily_budget, requireCreativeCandidates: true,
+                    googleDefault: \App\Services\Campaigns\StrategyDocument::preferredGoogleType($current)
                 );
                 $strategyData['strategies'] = $document->strategies;
                 $oldIds = $this->campaign->strategies()->pluck('id');
@@ -358,6 +359,9 @@ class GenerateStrategy implements ShouldQueue
                                 'age_max' => $targeting['age_max'] ?? 65,
                                 'genders' => $targeting['genders'] ?? ['all'],
                                 'geo_locations' => $targeting['geo_locations'] ?? [],
+                                ...($newStrategy->campaign_type === 'performance_max' ? ['google_options' => [
+                                    'search_themes' => \App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals::themes($targeting['search_themes'] ?? []),
+                                ]] : []),
                                 'platform' => $strategy['platform'],
                             ]);
                             Log::info("Created targeting config for strategy {$newStrategy->id}");

@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents\Google\Executors;
 
+use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\ImageCollateral;
@@ -14,11 +15,18 @@ use App\Services\Agents\Google\BiddingStrategyApplier;
 use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
+use App\Services\Creative\CreativeRelease;
 use App\Services\GoogleAds\CommonServices\CreateTextAsset;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
+use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
 use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxAssetSpec;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxCopy;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxLogo;
+use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\StorageHelper;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
@@ -46,12 +54,43 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         ExecutionResult $result
     ): void {
         // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning('GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID', [
-                'provided_id' => $customerId,
-                'stored_id' => $this->customer->google_ads_customer_id,
-            ]);
-            $customerId = $this->customer->google_ads_customer_id;
+        if ($customerId !== $campaign->customer->cleanGoogleCustomerId() || $campaign->customer_id !== $this->customer->id) {
+            throw new \RuntimeException('The Performance Max campaign does not match the current Google account.');
+        }
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
+        if (! $adCopy instanceof AdCopy || ! PerformanceMaxCopy::hasCompleteDescriptions($adCopy->descriptions ?? [])) {
+            $result->addError('pmax_copy_incomplete', 'Generate and select complete Performance Max ad copy before launching.');
+
+            return;
+        }
+        $textAssets = PerformanceMaxAssetSpec::text($adCopy);
+        if (count($textAssets[AssetFieldType::HEADLINE]) < 3 || $textAssets[AssetFieldType::LONG_HEADLINE] === []
+            || count($textAssets[AssetFieldType::DESCRIPTION]) < 2 || ! array_any($textAssets[AssetFieldType::DESCRIPTION], fn (string $text) => mb_strlen($text) <= 60)) {
+            $result->addError('pmax_copy_incomplete', 'Performance Max needs three headlines, a long headline and two descriptions, including a description of 60 characters or fewer.');
+
+            return;
+        }
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->where('campaign_id', $campaign->id)->get();
+        $reviewedLogos = $strategy->creative_approval['logo_hashes'] ?? [];
+        if (! $imageCollaterals->contains(fn (ImageCollateral $image) => isset($reviewedLogos[$image->id])
+            && $reviewedLogos[$image->id] === PerformanceMaxLogo::digest($image, $strategy))) {
+            $result->addError('pmax_business_logo_required', PerformanceMaxLogo::REQUIRED);
+
+            return;
+        }
+        $businessName = trim((string) $this->customer->name);
+        if ($businessName === '') {
+            $result->addError('pmax_business_name_required', 'Add the advertiser’s business name to its customer profile before launching Performance Max.');
+
+            return;
+        }
+        $goals = app(ReconcileCampaignConversionGoals::class, ['customer' => $this->customer]);
+        $intent = $strategy->bidding_strategy['pmax_conversion_goal'] ?? null;
+        $prepared = $goals->prepare($strategy);
+        if (! $intent || ($prepared['ready'] ?? false) !== true || $intent != ($prepared['intent'] ?? null)) {
+            $result->addError('pmax_conversion_goal_unverified', 'Review the Performance Max conversion goal and rerun market research before creating the ads.');
+
+            return;
         }
 
         Log::info('GoogleAdsExecutionAgent: Creating Performance Max Campaign in account', [
@@ -73,22 +112,10 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             $createCampaignService = new CreatePerformanceMaxCampaign($this->customer);
             $campaignName = $campaign->name.' - PMax - '.$timestamp;
 
-            // Only set a Target CPA if the account has enough conversion history.
-            // Below 50 conversions, PMax uses Maximize Conversions (no target).
-            // BiddingStrategyProgressionAgent will add the target once data matures.
-            $conversionCount = $this->bidding->getConversionCountForCustomer($customerId);
-            $targetCpaMicros = null;
-            if ($strategy->cpa_target && $conversionCount >= 50) {
-                $targetCpaMicros = $strategy->cpa_target;
-            } elseif ($strategy->cpa_target && $conversionCount < 50) {
-                $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 50 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
-            }
-
             $campaignData = [
                 'businessName' => $campaignName,
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 ...GoogleCampaignSchedule::for($campaign),
-                'targetCpaMicros' => $targetCpaMicros,
             ];
 
             $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
@@ -100,6 +127,22 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             $strategy->recordGoogleCampaignId($campaignResourceName);
         }
 
+        $reader = app(ReadCampaignConfiguration::class, ['customer' => $this->customer]);
+        $stage = $reader->performanceMax($customerId, $campaignResourceName);
+        if (($stage['campaign']['campaign']['status'] ?? null) !== 'PAUSED'
+            || ($stage['campaign']['campaign']['advertisingChannelType'] ?? null) !== 'PERFORMANCE_MAX') {
+            $result->addError('pmax_paused_stage_required', 'Google must confirm a paused Performance Max campaign before creating or updating its ads.');
+
+            return;
+        }
+        $verified = $goals->reconcileStagedPerformanceMax($strategy, $campaignResourceName);
+        if (($verified['configuration_verified'] ?? false) !== true
+            || ($verified['intent']['action_resource'] ?? null) !== $intent['action_resource']) {
+            $result->addError('pmax_conversion_goal_unverified', 'Google did not confirm this campaign is bidding on the reviewed conversion action.');
+
+            return;
+        }
+
         // 1.5 Add Location Targeting
         $this->geo->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
 
@@ -108,50 +151,25 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         $createTextAssetService = new CreateTextAsset($this->customer);
         $uploadImageService = new UploadImageAsset($this->customer);
 
-        // 2.1 Text Assets
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-
-        if ($adCopy) {
-            // Headlines (Min 3, Max 5)
-            $headlines = array_slice($adCopy->headlines ?? [], 0, 5);
-            foreach ($headlines as $headline) {
-                $assetResourceName = ($createTextAssetService)($customerId, $headline);
+        // Use the reviewed business name and each copy asset in its own field.
+        $textAssets[AssetFieldType::BUSINESS_NAME] = [mb_substr($businessName, 0, 25)];
+        foreach ($textAssets as $field => $lines) {
+            foreach ($lines as $line) {
+                $assetResourceName = ($createTextAssetService)($customerId, $line);
                 if ($assetResourceName) {
-                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::HEADLINE];
+                    $assets[] = ['asset' => $assetResourceName, 'field_type' => $field];
+                } else {
+                    $result->addWarning('pmax_text_asset_unavailable', 'Google Ads could not register one of the reviewed Performance Max text assets.');
                 }
-            }
-
-            // Long Headlines (Min 1, Max 5)
-            $longHeadline = $headlines[0] ?? 'Discover Our Amazing Products';
-            $assetResourceName = ($createTextAssetService)($customerId, $longHeadline);
-            if ($assetResourceName) {
-                $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LONG_HEADLINE];
-            }
-
-            // Descriptions (Min 2, Max 5)
-            $descriptions = array_slice($adCopy->descriptions ?? [], 0, 5);
-            foreach ($descriptions as $description) {
-                $assetResourceName = ($createTextAssetService)($customerId, $description);
-                if ($assetResourceName) {
-                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::DESCRIPTION];
-                }
-            }
-
-            // Business Name (Min 1, Max 1) — max 25 chars
-            $rawBusinessName = $this->customer->name ?? 'ShopFree';
-            $businessName = mb_substr($rawBusinessName, 0, 25);
-            $assetResourceName = ($createTextAssetService)($customerId, $businessName);
-            if ($assetResourceName) {
-                $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::BUSINESS_NAME];
             }
         }
 
         // 2.2 Image Assets
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         $hasLogo = false;
-        $firstSquareAsset = null; // track for logo fallback
 
-        foreach ($imageCollaterals as $image) {
+        $approvedLogos = $imageCollaterals->filter(fn (ImageCollateral $image) => isset($reviewedLogos[$image->id]));
+        $marketingImages = $imageCollaterals->reject(fn (ImageCollateral $image) => PerformanceMaxLogo::designated($image));
+        foreach ($approvedLogos->take(5)->concat($marketingImages->take(15)) as $image) {
             try {
                 $imageData = StorageHelper::get($image->s3_path);
                 if (! $imageData) {
@@ -161,35 +179,28 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
 
                     continue;
                 }
+                if ($strategy->creative_approval !== null && ! app(CreativeRelease::class)->matchesMedia($strategy, 'image', $image->id, $imageData)) {
+                    $result->addError('pmax_image_changed', 'A selected image no longer matches the customer-approved render.');
+
+                    return;
+                }
+
+                $field = PerformanceMaxLogo::imageField($image, $strategy, $imageData);
+                if ($field === null) {
+                    $result->addWarning('pmax_image_format_unsupported', 'A reviewed image did not meet the Performance Max size or format requirements.');
+
+                    continue;
+                }
 
                 $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
+                if (! $assetResourceName) {
+                    $result->addWarning('pmax_image_asset_unavailable', 'Google Ads could not register a reviewed Performance Max image.');
 
-                if ($assetResourceName) {
-                    if (str_contains(strtolower($image->s3_path), 'logo')) {
-                        $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LOGO];
-                        $hasLogo = true;
-                    } else {
-                        $size = @getimagesizefromstring($imageData);
-                        $width = $size[0] ?? 0;
-                        $height = $size[1] ?? 1;
-                        $ratio = $height > 0 ? $width / $height : 1;
-
-                        // Google PMax accepted ratios (±5% tolerance):
-                        //   MARKETING_IMAGE:        1.91:1  (landscape) — ratio 1.8145–2.0055, min 600×314
-                        //   SQUARE_MARKETING_IMAGE: 1:1     (square)    — ratio 0.95–1.05,     min 300×300
-                        $is191 = $ratio >= 1.8145 && $ratio <= 2.0055 && $width >= 600 && $height >= 314;
-                        $isSquare = $ratio >= 0.95 && $ratio <= 1.05 && $width >= 300 && $height >= 300;
-                        if ($is191) {
-                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
-                        } elseif ($isSquare) {
-                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
-                            $firstSquareAsset ??= $assetResourceName;
-                        } else {
-                            Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax ratio requirements", [
-                                's3_path' => $image->s3_path,
-                            ]);
-                        }
-                    }
+                    continue;
+                }
+                $assets[] = ['asset' => $assetResourceName, 'field_type' => $field];
+                if ($field === AssetFieldType::LOGO) {
+                    $hasLogo = true;
                 }
             } catch (\Throwable $e) {
                 report($e);
@@ -197,23 +208,22 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             }
         }
 
-        // Logo is required for PMax. Use the first square image as fallback (logos must be image assets).
-        if (! $hasLogo && $firstSquareAsset) {
-            $assets[] = ['asset' => $firstSquareAsset, 'field_type' => AssetFieldType::LOGO];
-            Log::warning('GoogleAdsExecutionAgent: No explicit logo found, using first square image as logo fallback.');
-        } elseif (! $hasLogo) {
-            Log::warning('GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.');
+        if (! $hasLogo) {
+            $result->addError('pmax_business_logo_unavailable', 'Google could not register the customer-approved business logo. Check the selected logo and retry the paused deployment.');
+
+            return;
         }
 
         // 2.3 Video Assets — collected separately and linked AFTER the asset group
         // is created, so a short/invalid video can't abort the whole batch.
         $uploadVideoAssetService = new UploadVideoAsset($this->customer);
-        $videoCollaterals = VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)
+        $videoCollaterals = VideoCollateral::forDeployment($strategy)
+            ->where('status', 'completed')
             ->whereNotNull('youtube_video_id')
+            ->limit(15)
             ->get();
-        $videosWithoutYouTubeId = VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)
+        $videosWithoutYouTubeId = VideoCollateral::forDeployment($strategy)
+            ->where('status', 'completed')
             ->whereNull('youtube_video_id')
             ->count();
 
@@ -224,6 +234,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
                 $assetResourceName = ($uploadVideoAssetService)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
                 if ($assetResourceName) {
                     $videoAssetResourceNames[] = $assetResourceName;
+                } else {
+                    $result->addWarning('pmax_video_asset_unavailable', 'Google Ads could not register one of the reviewed video assets.');
                 }
             } catch (\Throwable $e) {
                 report($e);
@@ -238,14 +250,21 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         // 3. Create Asset Group with text + image assets only (no videos)
         // Videos are linked individually below so a short/rejected video skips gracefully.
         $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer);
-        $assetGroupName = 'Asset Group - '.$timestamp;
+        $assetGroupName = 'Reviewed asset group '.$strategy->id;
         $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
 
         if (! $finalUrl) {
             throw new \Exception('No landing page URL found for Asset Group creation.');
         }
 
-        $assetGroupResourceName = ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets);
+        $assetGroup = collect(array_column($stage['groups'], 'assetGroup'))->firstWhere('name', $assetGroupName);
+        if ($assetGroup && (($assetGroup['status'] ?? null) !== 'ENABLED' || $assetGroup['finalUrls'] !== [$finalUrl])) {
+            throw new \RuntimeException('The existing Performance Max asset group differs from the reviewed destination.');
+        }
+        if ($reader->campaignStatus($customerId, $campaignResourceName) !== 'PAUSED') {
+            throw new \RuntimeException('Google no longer confirms paused staging for the Performance Max assets.');
+        }
+        $assetGroupResourceName = $assetGroup['resourceName'] ?? ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets);
         if (! $assetGroupResourceName) {
             throw new \Exception('Failed to create Asset Group');
         }
@@ -254,7 +273,11 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         $linkAssetGroupService = new LinkAssetGroupAsset($this->customer);
         foreach ($videoAssetResourceNames as $videoAssetResource) {
             try {
-                ($linkAssetGroupService)($customerId, $assetGroupResourceName, $videoAssetResource, AssetFieldType::YOUTUBE_VIDEO);
+                if (! ($linkAssetGroupService)($customerId, $assetGroupResourceName, $videoAssetResource, AssetFieldType::YOUTUBE_VIDEO)) {
+                    $result->addWarning('pmax_video_link_failed', 'Google Ads did not link one of the reviewed video assets.');
+
+                    continue;
+                }
                 Log::info('GoogleAdsExecutionAgent: Linked video asset to PMax asset group', [
                     'asset_group' => $assetGroupResourceName,
                     'video_asset' => $videoAssetResource,
@@ -269,6 +292,13 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         }
 
         $result->addPlatformId('asset_group', $assetGroupResourceName);
+        $themes = AddAudienceSignals::themes($strategy->targetingConfig?->google_options['search_themes'] ?? []);
+        if ($themes !== []) {
+            $signals = app(AddAudienceSignals::class, ['customer' => $this->customer]);
+            if (! $signals->ensureSearchThemes($customerId, $assetGroupResourceName, $themes)) {
+                $result->addWarning('pmax_search_themes_unconfirmed', 'Google has not confirmed all the reviewed Performance Max search themes.');
+            }
+        }
 
         // Dispatch async job to upload any videos that don't have YouTube IDs yet
         if ($videosWithoutYouTubeId > 0) {
@@ -279,14 +309,9 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         // 4. Add Ad Extensions (Sitelinks, Callouts) - PMax can use campaign-level assets
         $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
 
-        // 5. Apply conversion value rules (device + audience modifiers)
-        try {
-            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
-            $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
-        }
+        $result->addMetadata('google_pmax_staging', ['campaign_resource' => $campaignResourceName,
+            'asset_group' => $assetGroupResourceName, 'final_urls' => [$finalUrl],
+            'goal_action' => $intent['action_resource'], 'budget_micros' => \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget)]);
     }
 
     /**

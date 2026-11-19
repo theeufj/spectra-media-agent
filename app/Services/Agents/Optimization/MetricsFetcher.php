@@ -2,10 +2,11 @@
 
 namespace App\Services\Agents\Optimization;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Contracts\Ads\CampaignPerformanceSource;
 use App\Models\Campaign;
 use App\Models\GoogleAdsPerformanceData;
-use App\Services\FacebookAds\InsightService;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -51,7 +52,7 @@ class MetricsFetcher
         }
 
         if ($campaign->facebook_ads_campaign_id && $campaign->customer) {
-            return $this->fetchFacebookHistorical($campaign);
+            return $this->fetchFacebook($campaign, daysAgo: 30);
         }
 
         if ($campaign->microsoft_ads_campaign_id) {
@@ -137,66 +138,42 @@ class MetricsFetcher
         }
     }
 
-    private function fetchFacebook(Campaign $campaign): ?array
+    private function fetchFacebook(Campaign $campaign, int $daysAgo = 0): ?array
     {
         try {
-            $insights = (new InsightService($campaign->customer))->getCampaignInsights(
+            $until = now($campaign->customer->timezone ?: config('app.timezone'))->subDays($daysAgo);
+            // Request a single period from Meta: reach and frequency are not additive across days.
+            $rows = app(AdsServiceFactory::class)->facebookInsights($campaign->customer)->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
-                now()->subDays(30)->format('Y-m-d'),
-                now()->format('Y-m-d')
+                $until->copy()->subDays(29)->toDateString(),
+                $until->toDateString(),
+                daily: false,
             );
-
-            if (empty($insights) || ! isset($insights['data'][0])) {
+            $data = $rows[0] ?? null;
+            if (! $data) {
                 return null;
             }
 
-            $data = $insights['data'][0];
+            $impressions = (int) ($data['impressions'] ?? 0);
+            $clicks = (int) ($data['inline_link_clicks'] ?? 0);
+            $costMicros = (float) ($data['spend'] ?? 0) * 1_000_000;
+            $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
+            $conversions = FacebookCampaignMetrics::conversions($data['actions'] ?? null, $goal);
 
             return [
-                'impressions' => (int) ($data['impressions'] ?? 0),
-                'clicks' => (int) ($data['clicks'] ?? 0),
-                'cost_micros' => (float) ($data['spend'] ?? 0) * 1_000_000,
-                'conversions' => $this->sumFbActions($data['actions'] ?? [], ['purchase', 'lead', 'complete_registration']),
-                'ctr' => ($data['impressions'] ?? 0) > 0 ? ($data['clicks'] ?? 0) / $data['impressions'] : 0,
-                'average_cpc' => (float) ($data['cpc'] ?? 0) * 1_000_000,
-                'cost_per_conversion' => (float) ($data['cost_per_action_type'][0]['value'] ?? 0) * 1_000_000,
+                'impressions' => $impressions,
+                'clicks' => $clicks,
+                'cost_micros' => $costMicros,
+                'conversions' => $conversions,
+                'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+                'average_cpc' => $clicks > 0 ? $costMicros / $clicks : 0,
+                'cost_per_conversion' => $conversions > 0 ? $costMicros / $conversions : 0,
                 'frequency' => (float) ($data['frequency'] ?? 0),
                 'reach' => (int) ($data['reach'] ?? 0),
             ];
         } catch (\Throwable $e) {
             report($e);
             Log::error("MetricsFetcher: Failed to get Facebook metrics for campaign {$campaign->id}: ".$e->getMessage());
-
-            return null;
-        }
-    }
-
-    private function fetchFacebookHistorical(Campaign $campaign): ?array
-    {
-        try {
-            $insights = (new InsightService($campaign->customer))->getCampaignInsights(
-                $campaign->facebook_ads_campaign_id,
-                now()->subDays(60)->format('Y-m-d'),
-                now()->subDays(30)->format('Y-m-d')
-            );
-
-            if (empty($insights) || ! isset($insights[0])) {
-                return null;
-            }
-
-            $data = $insights[0];
-
-            return [
-                'impressions' => (int) ($data['impressions'] ?? 0),
-                'clicks' => (int) ($data['clicks'] ?? 0),
-                'cost_micros' => (float) ($data['spend'] ?? 0) * 1_000_000,
-                'conversions' => $this->sumFbActions($data['actions'] ?? [], ['purchase', 'lead', 'complete_registration']),
-                'ctr' => ($data['impressions'] ?? 0) > 0 ? ($data['clicks'] ?? 0) / $data['impressions'] : 0,
-                'average_cpc' => (float) ($data['cpc'] ?? 0) * 1_000_000,
-                'cost_per_conversion' => (float) ($data['cost_per_action_type'][0]['value'] ?? 0) * 1_000_000,
-            ];
-        } catch (\Throwable $e) {
-            report($e);
 
             return null;
         }
@@ -264,17 +241,5 @@ class MetricsFetcher
             'average_cpc' => $clicks > 0 ? ($cost / $clicks) * 1_000_000 : 0,
             'cost_per_conversion' => $conversions > 0 ? ($cost / $conversions) * 1_000_000 : 0,
         ];
-    }
-
-    private function sumFbActions(array $actions, array $types): int
-    {
-        $total = 0;
-        foreach ($actions as $action) {
-            if (in_array($action['action_type'], $types)) {
-                $total += (int) $action['value'];
-            }
-        }
-
-        return $total;
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\BiddingStrategyProgressionAgent;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
+use App\Services\GoogleAds\ConversionTrackingService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -37,6 +38,39 @@ class BiddingStrategyProgressionTest extends TestCase
     public static function clickStrategies(): array
     {
         return [['MANUAL_CPC'], ['MAXIMIZE_CLICKS']];
+    }
+
+    public function test_performance_max_recommends_value_bidding_once_when_purchase_values_are_observed(): void
+    {
+        [$campaign, $strategy, $writer, $agent] = $this->fixture('MAXIMIZE_CONVERSIONS');
+        $owner = \App\Models\User::factory()->create();
+        $campaign->customer->users()->attach($owner);
+        $strategy->update(['campaign_type' => 'performance_max']);
+        $writer->state['channel'] = 'PERFORMANCE_MAX';
+        $tracking = $this->createMock(ConversionTrackingService::class);
+        $base = ['action_resource' => 'customers/1234567890/conversionActions/321', 'from' => '2026-09-01', 'through' => '2026-09-28'];
+        $sparse = ['2026-09-04' => ['conversions' => 98, 'value' => 0]];
+        $valued = [
+            '2026-09-04' => ['conversions' => 4, 'value' => 100],
+            '2026-09-11' => ['conversions' => 4, 'value' => 180],
+            '2026-09-18' => ['conversions' => 4, 'value' => 240],
+            '2026-09-25' => ['conversions' => 4, 'value' => 300],
+        ];
+        $tracking->expects($this->exactly(3))->method('getPerformanceMaxPurchaseEvidence')
+            ->with('1234567890', $writer->state['resource'], null)
+            ->willReturn($base + ['days' => $sparse], $base + ['days' => $valued], $base + ['days' => $valued]);
+        $this->app->bind(ConversionTrackingService::class, fn () => $tracking);
+
+        $agent->evaluate($campaign);
+        $reports = fn () => AgentActivity::where('campaign_id', $campaign->id)
+            ->where('action', 'review_performance_max_value_bidding')->get();
+        $this->assertCount(0, $reports());
+        $agent->evaluate($campaign);
+        $agent->evaluate($campaign);
+        $this->assertCount(1, $reports());
+        $this->assertSame('MAXIMIZE_CONVERSION_VALUE', $reports()->first()->details['to']);
+        $this->assertCount(1, $owner->notifications()->where('type', \App\Notifications\PerformanceMaxValueBiddingReady::class)->get());
+        $this->assertSame([], $writer->writes);
     }
 
     #[DataProvider('clickStrategies')]

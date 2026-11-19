@@ -10,6 +10,8 @@ use App\Models\Customer;
 use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Creative\CreativeRelease;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -223,7 +225,7 @@ class AdSpendBillingController extends Controller
             // Restore the account status AND actually resume the paused campaigns +
             // restore their budgets — restoreAccount() alone only clears ledger flags.
             $credit->restoreAccount();
-            $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
+            $recovery = $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
 
             Log::info('AdSpendBilling: Payment recovered via retry', [
                 'customer_id' => $customer->id,
@@ -233,7 +235,8 @@ class AdSpendBillingController extends Controller
             return response()->json([
                 'success' => true,
                 'new_balance' => $result['new_balance'],
-                'message' => 'Payment successful! Your campaigns will resume shortly.',
+                'message' => $this->paymentRecoveryMessage('Payment successful.', $recovery),
+                'campaign_recovery' => $recovery,
             ]);
         }
 
@@ -293,11 +296,12 @@ class AdSpendBillingController extends Controller
 
                     if ($result['success']) {
                         $credit->restoreAccount();
-                        $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
+                        $recovery = $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
 
                         return response()->json([
                             'success' => true,
-                            'message' => 'Payment method updated and payment successful! Your campaigns will resume shortly.',
+                            'message' => $this->paymentRecoveryMessage('Payment method updated and payment successful.', $recovery),
+                            'campaign_recovery' => $recovery,
                             'new_balance' => $result['new_balance'],
                         ]);
                     } else {
@@ -325,6 +329,24 @@ class AdSpendBillingController extends Controller
                 'error' => SafeError::message($e, "We couldn't update your payment method."),
             ], 400);
         }
+    }
+
+    /** @param array{resumed: int, failed: int, skipped: int} $recovery */
+    private function paymentRecoveryMessage(string $paymentMessage, array $recovery): string
+    {
+        if ($recovery['failed'] > 0) {
+            return $paymentMessage.' Some campaigns could not be restarted. Review their status before assuming ads are running.';
+        }
+
+        if ($recovery['skipped'] > 0) {
+            return $paymentMessage.' Some campaigns still need review before further restart attempts.';
+        }
+
+        if ($recovery['resumed'] > 0) {
+            return $paymentMessage.' Campaign resume requests were accepted.';
+        }
+
+        return $paymentMessage;
     }
 
     /**
@@ -358,6 +380,10 @@ class AdSpendBillingController extends Controller
             return response()->json(['success' => false, 'error' => 'Ad creation is currently unavailable. Funding will be available when creation resumes.'], 422);
         }
 
+        if (! $customer->hasPaidDeploymentAccess()) {
+            return response()->json(['success' => false, 'error' => 'Choose a paid campaign plan before funding ads.'], 422);
+        }
+
         // Never take money for a deploy the deploy endpoint will refuse. The
         // budget-confirmation gate used to live only there, after the charge.
         if ($request->campaign_id) {
@@ -388,6 +414,9 @@ class AdSpendBillingController extends Controller
             if (abs((float) $request->daily_budget - (float) $campaign->daily_budget) > 0.005) {
                 return response()->json(['success' => false, 'error' => 'This campaign budget has changed. Reload the campaign and review the current daily budget before funding.'], 422);
             }
+            if ($approved->contains(fn ($strategy) => ! $customer->allowsAdPlatform($strategy->platform))) {
+                return response()->json(['success' => false, 'error' => 'Choose platforms covered by your plan before funding this campaign.'], 422);
+            }
             $newStrategies = $approved->filter(function ($strategy) use ($campaign) {
                 $strategy->setRelation('campaign', $campaign);
 
@@ -401,8 +430,15 @@ class AdSpendBillingController extends Controller
                 }
             }
             $needsGoogle = $approved->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'));
-            if ($needsGoogle && (empty($customer->google_ads_customer_id) || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true))) {
+            if ($needsGoogle && ! CampaignLaunchIntent::googleReady($customer) && ! CampaignLaunchIntent::canProvisionGoogle($customer)) {
                 return response()->json(['success' => false, 'error' => 'Your Google Ads account needs setup. Submit the campaign for account setup first; no prepayment is collected yet.', 'requires_account_setup' => true], 422);
+            }
+            foreach ($approved->reject(fn ($strategy) => $strategy->isDeployed()) as $strategy) {
+                try {
+                    app(CreativeRelease::class)->assertReady($strategy, $request->input('creative_fingerprints.'.$strategy->id));
+                } catch (ValidationException $e) {
+                    return response()->json(['success' => false, 'error' => $e->validator->errors()->first()], 422);
+                }
             }
         }
 
@@ -503,6 +539,13 @@ class AdSpendBillingController extends Controller
                 'daily_budget' => $dailyBudget,
                 'credit_amount' => $chargedAmount,
             ]);
+            try {
+                \App\Jobs\ResumeCampaignLaunches::dispatch($customer->id);
+            } catch (\Throwable $e) {
+                // The scheduled sweep can resume this intent. A queue failure
+                // must not tell a payer that their completed payment failed.
+                report($e);
+            }
 
             return response()->json([
                 'success' => true,

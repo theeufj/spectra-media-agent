@@ -40,6 +40,22 @@ class StrategyCampaignTypeTest extends TestCase
         }
     }
 
+    public function test_managed_default_proposes_performance_max_with_conversion_count_bidding(): void
+    {
+        $campaign = new \App\Models\Campaign(['name' => 'Get more paid workshop registrations']);
+        $campaign->setRelation('customer', new \App\Models\Customer(['service_type' => 'managed']));
+        $campaign->setRelation('strategies', new \Illuminate\Database\Eloquent\Collection);
+        $default = StrategyDocument::preferredGoogleType($campaign);
+        $document = StrategyDocument::fromArray(['strategies' => [$this->strategy()]], ['Google Ads'], 50, googleDefault: $default);
+
+        $this->assertSame('performance_max', $document->strategies[0]['campaign_type']);
+        $this->assertSame('Google Ads (Performance Max)', $document->strategies[0]['platform']);
+        $this->assertSame(['name' => 'MAXIMIZE_CONVERSIONS'], $document->strategies[0]['bidding_strategy']);
+        $this->assertEquals(50, $document->strategies[0]['daily_budget']);
+        $campaign->name = 'Google Search only';
+        $this->assertNull(StrategyDocument::preferredGoogleType($campaign));
+    }
+
     public function test_a_conflicting_search_label_and_display_type_is_rejected(): void
     {
         $this->expectException(ValidationException::class);

@@ -145,13 +145,23 @@ class MicrosoftAdsRefreshToken extends Command
     private function listAccountsWithToken(string $accessToken): int
     {
         $config = config('microsoftads');
+        $baseUrl = 'https://clientcenter.api.bingads.microsoft.com/CustomerManagement/v13';
 
-        $response = Http::withHeaders([
-            'Authorization' => "Bearer {$accessToken}",
+        $client = Http::withToken($accessToken)->withHeaders([
             'DeveloperToken' => $config['developer_token'],
-            'Content-Type' => 'application/json',
-        ])->post('https://clientcenter.api.bingads.microsoft.com/CustomerManagement/v13/Accounts/Search', [
+        ])->timeout(15);
+        $user = $client->post($baseUrl.'/User/Query', ['UserId' => null]);
+        $userId = $user->json('User.Id');
+
+        if (! $user->successful() || ! $userId) {
+            $this->error("Could not identify the Microsoft Advertising user (HTTP {$user->status()}).");
+
+            return 1;
+        }
+
+        $response = $client->post($baseUrl.'/Accounts/Search', [
             'Predicates' => [
+                ['Field' => 'UserId', 'Operator' => 'Equals', 'Value' => (string) $userId],
                 ['Field' => 'AccountLifeCycleStatus', 'Operator' => 'Equals', 'Value' => 'Active'],
             ],
             'PageInfo' => ['Index' => 0, 'Size' => 100],

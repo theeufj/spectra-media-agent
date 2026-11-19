@@ -2,17 +2,39 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\CampaignStatus;
+use App\Jobs\RefreshApprovedPerformanceMaxCreative;
 use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
+use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\Creative\CreativeRelease;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CollateralApprovalController extends Controller
 {
+    public function release(Request $request, Campaign $campaign, Strategy $strategy, CreativeRelease $release): RedirectResponse
+    {
+        $this->authorize('update', $campaign);
+        abort_unless($strategy->campaign_id === $campaign->id, 404);
+        $validated = $request->validate(['fingerprint' => ['required', 'string', 'size:64']]);
+        DB::transaction(function () use ($campaign, $strategy, $release, $validated) {
+            $current = $campaign->newQuery()->lockForUpdate()->findOrFail($campaign->id);
+            $selected = $current->strategies()->lockForUpdate()->findOrFail($strategy->id);
+            abort_unless($current->status === CampaignStatus::Active && $selected->campaign_type === 'performance_max'
+                && $selected->deployment_status === 'active', 422, 'This campaign is not available for a live creative update.');
+            $release->approve($selected, $validated['fingerprint']);
+            RefreshApprovedPerformanceMaxCreative::dispatch($selected->id, $validated['fingerprint'])->afterCommit();
+        });
+
+        return back()->with('flash', ['type' => 'success', 'message' => 'Your approved ads are queued for an update in Google Ads.']);
+    }
+
     public function update(Request $request, Campaign $campaign): JsonResponse
     {
         $this->authorize('update', $campaign);

@@ -193,8 +193,8 @@ class BudgetIntelligenceAgentTest extends TestCase
         $this->assertCount(1, $budgets->writes);
         $this->assertNotEmpty($result['errors']);
         $this->assertNotContains('budget_updated', array_column($result['adjustments'], 'type'));
-        Exceptions::assertReported(fn (\RuntimeException $e) => $e->getMessage() === 'Campaign '.$campaign->id.': platform budget reconciliation failed.');
-        Log::shouldHaveReceived('error')->once()->with('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id]);
+        Exceptions::assertReported(fn (\RuntimeException $e) => $e->getMessage() === 'Campaign '.$campaign->id.': Budget reconciliation failed for google.');
+        Log::shouldHaveReceived('error')->once()->with('Campaign budget reconciliation failed', ['campaign_id' => $campaign->id, 'platforms' => ['google']]);
     }
 
     public function test_an_adapter_error_is_reported_without_aborting_the_batch(): void

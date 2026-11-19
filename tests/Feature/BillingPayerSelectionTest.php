@@ -5,12 +5,14 @@ namespace Tests\Feature;
 use App\Models\BrandGuideline;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Services\AdSpendBillingService;
 use App\Services\Billing\AdSpendPaymentGateway;
-use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Campaigns\CampaignMarketResearch;
+use App\Services\Creative\CreativeRelease;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
 use Stripe\ApiRequestor;
@@ -128,14 +130,24 @@ class BillingPayerSelectionTest extends TestCase
 
     private function campaignFor(Customer $customer): array
     {
-        // Payer selection runs after the separate market-consent boundary.
-        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->andReturnNull());
         Setting::set('deployment_enabled', true, 'boolean');
+        $plan = Plan::firstOrCreate(['slug' => 'growth'], ['name' => 'Growth', 'price_cents' => 10000, 'billing_interval' => 'month']);
+        $customer->update(['plan_id' => $plan->id]);
         BrandGuideline::create(['customer_id' => $customer->id, 'brand_voice' => [], 'tone_attributes' => [], 'writing_patterns' => [], 'color_palette' => [], 'typography' => [], 'visual_style' => [], 'messaging_themes' => [], 'unique_selling_propositions' => [], 'target_audience' => [], 'competitor_differentiation' => [], 'brand_personality' => [], 'do_not_use' => [], 'user_verified' => true, 'extracted_at' => now()]);
-        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'daily_budget' => 20]);
-        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Facebook Ads', 'signed_off_at' => now()]);
+        $campaign = Campaign::factory()->for($customer)->create(['daily_budget' => 20, 'approved_daily_budget' => 20, 'budget_confirmed_at' => now()]);
+        $strategy = Strategy::factory()->for($campaign)->create(['platform' => 'Facebook Ads', 'campaign_type' => 'display',
+            'signed_off_at' => now(), 'daily_budget' => 20]);
+        $strategy->adCopies()->create(['platform' => 'Facebook Ads', 'headlines' => ['Reviewed ad'],
+            'descriptions' => ['Reviewed description'], 'should_deploy' => true]);
+        $fingerprint = app(CreativeRelease::class)->selection($strategy)['fingerprint'];
+        $strategy->forceFill(['creative_release_review' => ['status' => 'passed', 'fingerprint' => $fingerprint, 'issues' => []]])->save();
+        $campaign->update(['search_delivery_state' => ['market_research' => [
+            'status' => 'ready', 'request_id' => 'payer-selection-research',
+            'approved_request_id' => 'payer-selection-research', 'result' => ['status' => 'ready'],
+            'approved_fingerprint' => app(CampaignMarketResearch::class)->approvalFingerprint($campaign),
+        ]]]);
 
-        return [$campaign, $strategy];
+        return [$campaign, $strategy, $fingerprint];
     }
 
     private function expectCharge(Customer $customer, User $payer, string $paymentMethod): void
@@ -156,12 +168,15 @@ class BillingPayerSelectionTest extends TestCase
         $payer->forceFill(['stripe_id' => 'cus_payer', 'pm_last_four' => '0005'])->save();
         $this->stripe->defaults['cus_payer'] = 'pm_saved';
         $this->actingAs($firstOwner)->withSession(['active_customer_id' => $customer->id]);
-        [$campaign, $strategy] = $this->campaignFor($customer);
+        [$campaign, $strategy, $fingerprint] = $this->campaignFor($customer);
 
         $this->get(route('billing.ad-spend'))->assertInertia(fn (Assert $page) => $page->where('paymentMethod.payer_name', $payer->name)->where('paymentMethod.last4', '0005'));
         $this->get(route('campaigns.collateral.show', [$campaign, $strategy]))->assertInertia(fn (Assert $page) => $page->where('hasPaymentMethod', true));
         $this->expectCharge($customer, $payer, 'pm_saved');
-        $this->postJson(route('billing.ad-spend.setup-for-deployment'), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20])
+        $this->postJson(route('billing.ad-spend.setup-for-deployment'), [
+            'campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20,
+            'creative_fingerprints' => [$strategy->id => $fingerprint],
+        ])
             ->assertOk()->assertJsonPath('credit_amount', '140.00');
 
         $this->assertNull($firstOwner->fresh()->stripe_id);
@@ -177,14 +192,17 @@ class BillingPayerSelectionTest extends TestCase
         $payer->forceFill(['stripe_id' => 'cus_payer', 'pm_last_four' => '4242'])->save();
         $this->stripe->defaults['cus_payer'] = 'pm_saved';
         $this->actingAs($actor)->withSession(['active_customer_id' => $customer->id]);
-        [$campaign, $strategy] = $this->campaignFor($customer);
+        [$campaign, $strategy, $fingerprint] = $this->campaignFor($customer);
 
         $this->postJson(route('billing.ad-spend.update-payment-method'), ['payment_method_id' => 'pm_replacement'])->assertOk();
         $this->assertNull($actor->fresh()->pm_type);
         $this->assertSame('0005', $payer->fresh()->pm_last_four);
         $this->get(route('billing.ad-spend'))->assertInertia(fn (Assert $page) => $page->where('paymentMethod.payer_name', $payer->name)->where('paymentMethod.last4', '0005'));
         $this->expectCharge($customer, $payer, 'pm_replacement');
-        $this->postJson(route('billing.ad-spend.setup-for-deployment'), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20])->assertOk();
+        $this->postJson(route('billing.ad-spend.setup-for-deployment'), [
+            'campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20,
+            'creative_fingerprints' => [$strategy->id => $fingerprint],
+        ])->assertOk();
         $this->assertDatabaseHas('ad_spend_credits', ['customer_id' => $customer->id, 'stripe_payment_method_id' => 'pm_replacement']);
         $this->assertNotContains('/v1/customers/'.$actor->stripe_id, array_column($this->stripe->requests, 'path'));
     }

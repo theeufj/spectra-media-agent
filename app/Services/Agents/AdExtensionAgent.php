@@ -11,6 +11,7 @@ use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\GetExtensionPerformance;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
+use App\Services\GoogleAds\CommonServices\SitelinkCoverage;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Support\Facades\Log;
 
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Log;
  * and rotates underperforming assets using AI-generated replacements.
  *
  * Minimum coverage per campaign:
- *   - 4 sitelinks
+ *   - 6 distinct sitelinks for Performance Max, 4 for other Google campaigns
  *   - 4 callouts
  *   - 1 call extension (if customer has a phone number)
  *   - 1 structured snippet
@@ -28,8 +29,6 @@ use Illuminate\Support\Facades\Log;
  */
 class AdExtensionAgent
 {
-    private const MIN_SITELINKS = 4;
-
     private const MIN_CALLOUTS = 4;
 
     private const MIN_SNIPPETS = 1;
@@ -61,8 +60,13 @@ class AdExtensionAgent
                 $counts[$field] = $perf->countByFieldType($customerId, $resource, $field);
             }
             $context = $this->buildBusinessContext($campaign);
-            if ($counts[AssetFieldType::SITELINK] < self::MIN_SITELINKS) {
-                $links = $this->repairSitelinks($campaign, self::MIN_SITELINKS - $counts[AssetFieldType::SITELINK], $strategy);
+            $target = SitelinkCoverage::target($strategy);
+            $existingSitelinks = $counts[AssetFieldType::SITELINK];
+            if ($strategy->campaign_type === 'performance_max') {
+                $existingSitelinks = app(SitelinkCoverage::class)->inventory($reader->sitelinks($customerId, $resource))['count'];
+            }
+            if ($existingSitelinks < $target) {
+                $links = $this->repairSitelinks($campaign, $target - $existingSitelinks, $strategy);
                 $result['created'] = $links['created'];
                 $result['errors'] = $links['errors'];
                 $result['unresolved'] = $links['unresolved'];
@@ -163,16 +167,9 @@ class AdExtensionAgent
 
             return $result;
         }
-        $evidence = app(\App\Services\Campaigns\AdvertisingEvidence::class);
         $existing = $reader->sitelinks($customerId, $resource);
-        $existingUrls = [];
-        foreach ($existing as $row) {
-            foreach ($row['asset']['finalUrls'] ?? [] as $url) {
-                $existingUrls[] = $evidence->url($url);
-            }
-        }
-        $links = array_values(array_filter($evidence->sitelinks($customer, [], 20), fn ($link) => ! in_array($evidence->url($link['url']), $existingUrls, true)));
-        foreach (array_slice($links, 0, $additional) as $link) {
+        $links = app(SitelinkCoverage::class)->plan($customer, $strategy, $existing, $additional)['links'];
+        foreach ($links as $link) {
             try {
                 if ($blocked = $guard->campaignMutationBlocked($campaign, $strategy, $reader)) {
                     $result['unresolved'][] = $blocked;

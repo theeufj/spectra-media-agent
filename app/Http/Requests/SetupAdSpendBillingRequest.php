@@ -21,6 +21,8 @@ class SetupAdSpendBillingRequest extends FormRequest
             // ready to deploy (e.g. auto-generated budget not yet confirmed).
             'campaign_id' => 'nullable|required_with:strategy_id|integer|exists:campaigns,id',
             'strategy_id' => 'sometimes|nullable|integer|exists:strategies,id',
+            'creative_fingerprints' => 'sometimes|array',
+            'creative_fingerprints.*' => 'required|string|regex:/^[a-f0-9]{64}$/',
         ];
     }
 }

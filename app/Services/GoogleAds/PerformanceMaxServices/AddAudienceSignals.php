@@ -15,12 +15,63 @@ use Illuminate\Support\Facades\Log;
  *
  * Supports two signal types:
  *   - Search themes (text strings like keywords — tells PMax what search intent to chase)
- *   - Audience references (user_interest or audience resource names)
+ *   - Audience references (Google Ads Audience resource names)
  *
  * Both types can be mixed in a single call.
  */
 class AddAudienceSignals extends BaseGoogleAdsService
 {
+    /** @return list<string> */
+    public static function themes(mixed $values): array
+    {
+        $themes = [];
+        foreach (is_array($values) ? $values : [] as $value) {
+            if (! is_string($value)) {
+                continue;
+            }
+            $theme = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+            if ($theme !== '' && mb_strlen($theme) <= 80 && count(explode(' ', $theme)) <= 10) {
+                $themes[mb_strtolower($theme)] ??= $theme;
+            }
+        }
+
+        return array_slice(array_values($themes), 0, 10);
+    }
+
+    /** Idempotent staged deployment. Only the missing reviewed themes are ever submitted. */
+    public function ensureSearchThemes(string $customerId, string $group, array $themes): bool
+    {
+        if ($this->customer?->cleanGoogleCustomerId() !== $customerId || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/assetGroups/\d+$#D', $group)) {
+            throw new \InvalidArgumentException('Invalid account or asset group for Performance Max search themes.');
+        }
+        $desired = self::themes($themes);
+        if ($desired === []) {
+            return true;
+        }
+        $compare = static fn (string $a, string $b) => strcmp(mb_strtolower($a), mb_strtolower($b));
+        $missing = array_udiff($desired, $this->existingThemes($customerId, $group), $compare);
+        if ($missing === []) {
+            return true;
+        }
+        $this->addSearchThemes($customerId, $group, $missing);
+
+        return array_udiff($desired, $this->existingThemes($customerId, $group), $compare) === [];
+    }
+
+    protected function existingThemes(string $customerId, string $group): array
+    {
+        $this->ensureClient();
+        $themes = [];
+        $rows = $this->searchQuery($customerId, "SELECT asset_group_signal.search_theme.text FROM asset_group_signal WHERE asset_group_signal.asset_group = '{$group}'");
+        foreach ($rows->iterateAllElements() as $row) {
+            if ($theme = $row->getAssetGroupSignal()->getSearchTheme()?->getText()) {
+                $themes[] = $theme;
+            }
+        }
+
+        return $themes;
+    }
+
     /**
      * Add search-theme signals to a PMax asset group.
      *
@@ -78,9 +129,9 @@ class AddAudienceSignals extends BaseGoogleAdsService
     }
 
     /**
-     * Add audience signals (user interests / in-market segments) to a PMax asset group.
+     * Add existing Audience resources to a PMax asset group.
      *
-     * @param  string[]  $audienceResourceNames  e.g. ['userInterests/92', 'userInterests/301']
+     * @param  string[]  $audienceResourceNames  e.g. ['customers/123/audiences/456']
      * @return int Number of signals successfully created
      */
     public function addAudienceInterests(string $customerId, string $assetGroupResourceName, array $audienceResourceNames): int
@@ -89,7 +140,7 @@ class AddAudienceSignals extends BaseGoogleAdsService
 
         $operations = [];
         foreach (array_unique($audienceResourceNames) as $resourceName) {
-            if (! $resourceName) {
+            if (! preg_match('#^customers/'.preg_quote($customerId, '#').'/audiences/\d+$#D', $resourceName)) {
                 continue;
             }
 

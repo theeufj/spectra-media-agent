@@ -25,9 +25,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Runs every 4 hours. Scans all live campaigns for disapproved ads, rewrites
- * them, and resubmits — without running the heavier daily maintenance tasks
- * (keyword mining, bid adjustments, extensions, etc.).
+ * Runs every 4 hours. Checks live campaigns for policy issues and restores
+ * approved assets where possible.
  */
 class RunSelfHealingChecks implements ShouldQueue
 {
@@ -107,11 +106,16 @@ class RunSelfHealingChecks implements ShouldQueue
                             Log::info('RunSelfHealingChecks: Google strength pass held', ['campaign_id' => $campaign->id, 'reason' => $blocked ?? 'strategy_not_approved']);
                             $warnings++;
                         } else {
+                            $sitelinkTarget = null;
                             foreach (app(HealAssetGroupStrength::class, ['customer' => $campaign->customer])->heal($campaign) as $r) {
-                                $addedCount = array_sum($r['added'] ?? []);
+                                if (! empty($r['requested_assets']['SITELINK'])) {
+                                    // Bound repeated requests while Google evaluates newly linked destinations.
+                                    $sitelinkTarget = 8;
+                                }
+                                $addedCount = array_sum($r['added']);
                                 if ($addedCount > 0) {
                                     $healed += $addedCount;
-                                    $imgCount = $r['added']['IMAGE'] ?? 0;
+                                    $imgCount = array_sum(array_intersect_key($r['added'], array_flip(['MARKETING_IMAGE', 'SQUARE_IMAGE', 'PORTRAIT_IMAGE', 'LOGO'])));
                                     $textCount = $addedCount - $imgCount;
                                     $parts = [];
                                     if ($textCount > 0) {
@@ -137,13 +141,43 @@ class RunSelfHealingChecks implements ShouldQueue
                                 }
 
                                 // Missing video is a major ad-strength gap PMax weights heavily.
-                                if (in_array('video', $r['missing_media'] ?? [], true)) {
+                                if ($r['requires_review']) {
+                                    $requested = $r['requested_assets'];
+                                    unset($requested['SITELINK']);
+                                    $formats = [];
+                                    foreach ($requested as $field => $count) {
+                                        $label = match ($field) {
+                                            'MARKETING_IMAGE' => 'landscape images',
+                                            'SQUARE_IMAGE' => 'square images',
+                                            'PORTRAIT_IMAGE' => 'portrait images',
+                                            'YOUTUBE_VIDEO_VERTICAL' => 'vertical YouTube videos',
+                                            'YOUTUBE_VIDEO_HORIZONTAL' => 'horizontal YouTube videos',
+                                            'YOUTUBE_VIDEO_SQUARE' => 'square YouTube videos',
+                                            default => strtolower(str_replace('_', ' ', $field)),
+                                        };
+                                        $formats[] = $count.' × '.$label;
+                                    }
+                                    $message = "Review more Performance Max assets for '{$r['asset_group']}' before adding them.";
+                                    if ($formats) {
+                                        $message .= ' Google requests '.implode(', ', $formats).'.';
+                                    }
+                                    $target = $r['resource'];
+                                    $pending = Recommendation::where('campaign_id', $campaign->id)->where('type', 'AD_STRENGTH')
+                                        ->where('status', 'pending')->where(function ($query) use ($target, $r) {
+                                            $query->where('target_entity->asset_group', $target)
+                                                ->orWhere('rationale', "Review more Performance Max assets for '{$r['asset_group']}' before adding them.");
+                                        })->firstOrNew();
+                                    $pending->fill(['campaign_id' => $campaign->id, 'type' => 'AD_STRENGTH', 'status' => 'pending',
+                                        'requires_approval' => true, 'target_entity' => ['asset_group' => $target],
+                                        'rationale' => $message, 'evidence' => ['requested_assets' => $requested]])->save();
+                                }
+                                if (in_array('YOUTUBE_VIDEO', $r['missing_media'], true)) {
                                     $this->ensurePMaxVideo($campaign, $strategy);
                                 }
                             }
 
                             // Ensure the campaign has sitelinks (improves ad strength + real estate).
-                            $sitelinksAdded = app(CreateSitelinkAssets::class, ['customer' => $campaign->customer])->heal($campaign);
+                            $sitelinksAdded = app(CreateSitelinkAssets::class, ['customer' => $campaign->customer])->heal($campaign, $sitelinkTarget);
                             if ($sitelinksAdded > 0) {
                                 $healed += $sitelinksAdded;
                                 Recommendation::create([
@@ -197,9 +231,7 @@ class RunSelfHealingChecks implements ShouldQueue
     }
 
     /**
-     * Ensure a PMax campaign has a video asset. Links an already-completed video, or
-     * generates one (completion auto-links it). Guarded to one action per campaign/day
-     * since video generation is slow and costly.
+     * Link a selected completed video or generate a new draft for review.
      */
     private function ensurePMaxVideo(Campaign $campaign, \App\Models\Strategy $strategy): void
     {
@@ -214,31 +246,26 @@ class RunSelfHealingChecks implements ShouldQueue
 
         $customerId = $campaign->customer->cleanGoogleCustomerId();
 
-        // A completed, extended (link-ready) video exists → link it.
-        if (VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)->where('status', 'completed')
-            ->where('extension_count', '>=', 1)->exists()) {
-            UploadPMaxVideoAssets::dispatch($strategy->id, $customerId);
+        $videos = VideoCollateral::forStrategy($strategy)->where('is_active', true)
+            ->where('platform', 'Google Ads (Performance Max)')->whereIn('status', ['pending', 'generating', 'completed'])->get();
+        $approvedIds = $strategy->creative_approval['video_ids'] ?? [];
+        $selected = $videos->filter(fn (VideoCollateral $video) => $video->status === 'completed' && $video->should_deploy
+            && in_array($video->id, $approvedIds, true))->modelKeys();
+        if ($selected !== []) {
+            UploadPMaxVideoAssets::dispatch($strategy->id, $customerId, videoIds: $selected);
             Cache::put($key, true, now()->addDay());
 
             return;
         }
 
-        // A video is already generating/extending → let the pipeline finish (it extends
-        // to >=10s then links on completion).
-        if (VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)
-            ->whereNotIn('status', ['completed', 'failed'])->exists()) {
+        if ($videos->isNotEmpty()) {
             return;
         }
 
-        // Nothing usable yet → generate. The 8s clip is auto-extended to ~15s (PMax's
-        // 10s minimum) and linked on completion. force=true since a PMax strategy may
-        // have marked video as N/A.
         GenerateVideo::dispatch($campaign, $strategy, 'Google Ads (Performance Max)', 0, true);
         AgentActivity::record(
             'maintenance', 'video_generation_started',
-            "Generating a video for '{$campaign->name}' (auto-extended to PMax length) to lift ad strength",
+            "Generating a Performance Max video for '{$campaign->name}' to review",
             $campaign->customer_id, $campaign->id, []
         );
         Cache::put($key, true, now()->addDay());

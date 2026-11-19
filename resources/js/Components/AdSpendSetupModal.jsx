@@ -128,7 +128,7 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
 };
 
 // Form for users who already have a payment method on file — no card entry needed
-const SavedCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }) => {
+const SavedCardForm = ({ campaign, strategy, creativeFingerprints, existingCredit, onSuccess, onCancel }) => {
     const currency = useCurrency();
     const [error, setError] = useState(null);
     const [processing, setProcessing] = useState(false);
@@ -145,6 +145,7 @@ const SavedCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel
                 json: {
                     campaign_id: campaign?.id,
                     strategy_id: strategy?.id,
+                    creative_fingerprints: creativeFingerprints,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
@@ -217,7 +218,7 @@ const SavedCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel
 };
 
 // Form for users with no payment method on file — collects card via Stripe Elements
-const NewCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }) => {
+const NewCardForm = ({ campaign, strategy, creativeFingerprints, existingCredit, onSuccess, onCancel }) => {
     const currency = useCurrency();
     const stripe = useStripe();
     const elements = useElements();
@@ -251,6 +252,7 @@ const NewCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }
                     payment_method_id: paymentMethod.id,
                     campaign_id: campaign?.id,
                     strategy_id: strategy?.id,
+                    creative_fingerprints: creativeFingerprints,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
@@ -321,7 +323,7 @@ const NewCardForm = ({ campaign, strategy, existingCredit, onSuccess, onCancel }
 };
 
 // Main Modal Component
-export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, strategy, existingCredit, hasPaymentMethod }) {
+export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, strategy, creativeFingerprints, existingCredit, hasPaymentMethod }) {
     const currency = useCurrency();
     const isTopUp = existingCredit && existingCredit.status === 'active';
     return (
@@ -344,6 +346,7 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                     <SavedCardForm
                         campaign={campaign}
                         strategy={strategy}
+                        creativeFingerprints={creativeFingerprints}
                         existingCredit={existingCredit}
                         onSuccess={onSuccess}
                         onCancel={onClose}
@@ -353,6 +356,7 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                         <NewCardForm
                             campaign={campaign}
                             strategy={strategy}
+                            creativeFingerprints={creativeFingerprints}
                             existingCredit={existingCredit}
                             onSuccess={onSuccess}
                             onCancel={onClose}

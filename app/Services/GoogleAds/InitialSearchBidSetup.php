@@ -24,9 +24,16 @@ class InitialSearchBidSetup
 {
     public function __construct(protected Customer $customer) {}
 
-    public function configure(Campaign $campaign, Strategy $strategy, string $customerId, string $resource, string $adGroup, ExecutionResult $result): bool
+    public function configure(Campaign $campaign, Strategy $strategy, string $customerId, string $resource, string|array $adGroup, ExecutionResult $result): bool
     {
         try {
+            $groups = array_values(array_unique((array) $adGroup));
+            $adGroup = $groups[0] ?? '';
+            foreach ($groups as $group) {
+                if (! preg_match('#^customers/'.preg_quote($customerId, '#').'/adGroups/\d+$#D', $group)) {
+                    throw new \RuntimeException('An initial Search ad group has an invalid account or resource.');
+                }
+            }
             $this->authorize($campaign, $strategy, $customerId, $resource, $adGroup);
             $snapshot = $this->snapshot($campaign, $resource);
             $this->authorize($campaign, $strategy, $customerId, $resource, $adGroup);
@@ -37,8 +44,9 @@ class InitialSearchBidSetup
                 return true;
             }
             $keywords = $snapshot['keywords'] ?? [];
-            if ($keywords === [] || array_filter($keywords, fn ($keyword) => ($keyword['ad_group_resource'] ?? null) !== $adGroup)) {
-                throw new \RuntimeException('Initial bid setup requires the verified keyword set in this strategy’s own ad group.');
+            $observedGroups = array_values(array_unique(array_map(fn ($keyword) => $keyword['ad_group_resource'] ?? '', $keywords)));
+            if ($keywords === [] || array_diff($groups, $observedGroups) || array_diff($observedGroups, $groups)) {
+                throw new \RuntimeException('Initial bid setup requires the verified keyword set in this strategy’s own ad groups.');
             }
             $snapshot = $this->withApproval($snapshot, $campaign, $strategy, $resource);
             $fingerprint = $this->fingerprint($snapshot);
@@ -101,7 +109,11 @@ class InitialSearchBidSetup
             if ($this->fingerprint($this->withApproval($current, $campaign, $strategy, $resource)) !== $fingerprint) {
                 throw new \RuntimeException('The approved allocation or CPC limit changed before the bid write. Repeat initial bid research.');
             }
-            if (! app(UpdateAdGroupCpcBid::class, ['customer' => $this->customer])($customerId, $adGroup, $bid)) {
+            $updateBid = app(UpdateAdGroupCpcBid::class, ['customer' => $this->customer]);
+            $updated = count($groups) === 1
+                ? $updateBid($customerId, $adGroup, $bid)
+                : $updateBid->updateAll($customerId, $groups, $bid);
+            if (! $updated) {
                 throw new \RuntimeException('Google did not acknowledge the initial bid update. Review its current settings before retrying.');
             }
             $readback = $this->withApproval($this->snapshot($campaign, $resource), $campaign, $strategy, $resource);

@@ -18,13 +18,14 @@ class RenderedSetReviewer
     {
         $images = $strategy->imageCollaterals()->where('generation_metadata->creative_run_id', $runId)->orderBy('id')->get();
         $slots = $images->pluck('generation_metadata')->pluck('slot')->unique()->values()->all();
-        $sheet = imagecreatetruecolor(990, 900);
+        $formats = array_values(array_intersect(['square', 'landscape', 'portrait', 'mrec'], $images->pluck('format')->all()));
+        $sheet = imagecreatetruecolor(330 * max(1, count($formats)), 900);
         imagefill($sheet, 0, 0, imagecolorallocate($sheet, 245, 245, 245));
         $ink = imagecolorallocate($sheet, 15, 25, 40);
         try {
             foreach ($images as $image) {
                 $slot = (int) ($image->generation_metadata['slot'] ?? -1);
-                $column = array_search($image->format, ['square', 'landscape', 'mrec'], true);
+                $column = array_search($image->format, $formats, true);
                 if ($slot < 0 || $slot > 2 || $column === false) {
                     continue;
                 }

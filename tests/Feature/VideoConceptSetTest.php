@@ -6,11 +6,17 @@ use App\Jobs\GenerateStrategyCollateral;
 use App\Jobs\GenerateVideo;
 use App\Models\Campaign;
 use App\Models\Plan;
+use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Models\VideoCollateral;
 use App\Prompts\StrategyPrompt;
+use App\Prompts\VideoFromScriptPrompt;
+use App\Services\GeminiService;
+use App\Services\VideoGeneration\VideoGenerationService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -69,6 +75,53 @@ class VideoConceptSetTest extends TestCase
         return $concepts;
     }
 
+    public function test_video_renderer_receives_the_brand_palette_with_a_custom_template(): void
+    {
+        [$campaign, $strategy] = $this->signedOffCampaign(videoAllowance: 5);
+        $campaign->customer->brandGuideline()->create([
+            'brand_voice' => [],
+            'tone_attributes' => [],
+            'color_palette' => ['primary_colors' => ['#FF4D00'], 'secondary_colors' => ['#FFC300']],
+            'typography' => [],
+            'visual_style' => [],
+            'messaging_themes' => [],
+            'unique_selling_propositions' => [],
+            'target_audience' => [],
+            'brand_personality' => [],
+            'extracted_at' => now(),
+        ]);
+        $strategy->update(['platform' => 'Facebook Ads', 'campaign_type' => 'display', 'generate_video' => true]);
+        Setting::set(VideoFromScriptPrompt::TEMPLATE_SETTING, "Create an animated short.\n{{voiceover_script}}", 'string');
+        config(['ai.video_provider' => 'xai', 'services.xai.api_key' => 'test-xai-key']);
+        Cache::forget('xai:unavailable');
+        Cache::forget('xai:unavailable:model:'.config('ai.models.video_xai'));
+        Http::fake(['api.x.ai/v1/videos/generations' => Http::response(['request_id' => 'test-video-request'])]);
+        $narration = $this->createMock(GeminiService::class);
+        $narration->expects($this->once())->method('generateContent')->willReturn(['text' => 'Meet the product.']);
+
+        (new GenerateVideo($campaign->fresh(), $strategy->fresh(), 'facebook'))->handle(app(VideoGenerationService::class), $narration);
+
+        Http::assertSent(fn ($request) => str_contains($request['prompt'], 'Meet the product.')
+            && str_contains($request['prompt'], '**Palette:** orange, warm gold')
+            && str_contains($request['prompt'], 'main accent')
+            && ! str_contains($request['prompt'], '#FF4D00')
+            && $request['aspect_ratio'] === '9:16');
+    }
+
+    public function test_manual_video_request_queues_a_render_when_automatic_video_is_off(): void
+    {
+        Queue::fake();
+        [$campaign, $strategy] = $this->signedOffCampaign(videoAllowance: 5);
+        $strategy->update(['platform' => 'Facebook Ads', 'campaign_type' => 'display', 'generate_video' => false]);
+
+        $this->actingAs($campaign->customer->users()->first())
+            ->post(route('campaigns.collateral.video.store', [$campaign, $strategy]), ['platform' => 'Facebook Ads'])
+            ->assertRedirect()
+            ->assertSessionHas('flash.type', 'success');
+
+        Queue::assertPushed(GenerateVideo::class, fn ($job) => (new \ReflectionProperty($job, 'force'))->getValue($job));
+    }
+
     public function test_two_concepts_go_out_each_in_both_shapes(): void
     {
         Queue::fake();
@@ -110,6 +163,7 @@ class VideoConceptSetTest extends TestCase
     {
         Queue::fake();
         [$campaign, $strategy] = $this->signedOffCampaign(videoAllowance: 10);
+        $campaign->update(['reason' => 'Create a Google Search campaign.']);
 
         // A prose explanation without the short N/A marker is treated as a
         // creative brief by the dispatcher, even when generate_video is false.

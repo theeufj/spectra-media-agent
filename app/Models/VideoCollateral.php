@@ -71,6 +71,11 @@ class VideoCollateral extends Model
         });
     }
 
+    public function scopeForDeployment($query, Strategy $strategy)
+    {
+        return app(\App\Services\Creative\CreativeRelease::class)->approvedMedia($this->scopeForStrategy($query, $strategy), $strategy, 'video');
+    }
+
     /** @return BelongsTo<Campaign, $this> */
     public function campaign(): BelongsTo
     {

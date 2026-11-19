@@ -17,10 +17,11 @@ interface FacebookInsightSource
         string $dateEnd,
         string $level = 'account',
         ?array $fields = null,
-        int $limit = 100
+        int $limit = 100,
+        ?string $campaignId = null,
     ): array;
 
-    public function getCampaignInsights(string $campaignId, string $dateStart, string $dateEnd, ?array $fields = null): ?array;
+    public function getCampaignInsights(string $campaignId, string $dateStart, string $dateEnd, ?array $fields = null, bool $daily = true): ?array;
 
     /**
      * Extract a single action total (purchases, leads…) from an insights row.

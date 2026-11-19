@@ -104,7 +104,7 @@ function checkedTime(value) {
     return <time dateTime={value}>{new Date(value).toLocaleString()}</time>;
 }
 
-export default function GoogleReadinessCard({ readiness, conversionGoals, admin = false, live = false }) {
+export default function GoogleReadinessCard({ readiness, conversionGoals, admin = false, live = false, assetGroupStrength }) {
     const state = resolveGoogleReadiness(readiness, conversionGoals);
     const status = googleReadinessStatus(readiness, conversionGoals);
     const goals = state?.conversion_goals;
@@ -121,15 +121,18 @@ export default function GoogleReadinessCard({ readiness, conversionGoals, admin 
     const neutralPending = live && status === 'pending' && awaitingEvaluation;
     const labels = { verified: 'Verified', pending: awaitingEvaluation ? evaluationLabel : 'Checks pending', needs_review: 'Needs attention', unknown: 'Unknown', on_hold: 'Checks on hold' };
     const goalLabel = goals?.status === 'ready' && goals.ready ? 'Verified' : goals?.status === 'needs_review' ? 'Needs review' : goals?.status === 'unknown' ? 'Unknown' : 'Not checked';
-    const strengthLabel = strength?.status === 'not_applicable' ? 'Not applicable to this campaign type' : strength?.checked && strength.verified && !strength.skipped ? 'Verified'
-        : strength?.errors?.length ? 'Unknown' : strength?.skipped ? 'Check on hold' : awaitingEvaluation ? evaluationLabel : strength?.unresolved?.length ? 'Needs review' : 'Not confirmed';
+    const assetGroupStrengthLabel = { POOR: 'Poor', AVERAGE: 'Average', GOOD: 'Good', EXCELLENT: 'Excellent', PENDING: 'Pending', INCOMPLETE: 'Incomplete', NO_ADS: 'No ads' }[assetGroupStrength];
+    const strengthLabel = assetGroupStrengthLabel || (strength?.status === 'not_applicable' ? 'Not applicable to this campaign type' : strength?.checked && strength.verified && !strength.skipped ? 'Verified'
+        : strength?.errors?.length ? 'Unknown' : strength?.skipped ? 'Check on hold' : awaitingEvaluation ? evaluationLabel : strength?.unresolved?.length ? 'Needs review' : 'Not confirmed');
     const audienceLabel = audiences?.status === 'not_applicable' ? 'Not applicable to this strategy' : audiences?.status === 'ready' && audiences.ready ? 'Verified'
         : audiences?.status === 'unknown' ? 'Unknown' : audiences?.status === 'needs_review' ? 'Needs review' : 'Not checked';
     const goalName = { SIGNUP: 'Sign-up', PURCHASE: 'Purchase', SUBMIT_LEAD_FORM: 'Lead form' }[goals?.intent?.category];
     return <section aria-label={live ? 'Google ad quality' : 'Google campaign readiness'} className={`mt-4 rounded-lg border p-4 ${status === 'verified' ? 'border-green-200 bg-green-50' : neutralPending ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
         <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-semibold text-gray-900">{live ? 'Google ad quality' : 'Google campaign readiness'}</h3><span className={`rounded-full px-2 py-1 text-xs font-semibold ${status === 'verified' ? 'bg-green-100 text-green-800' : neutralPending ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-900'}`}>{labels[status]}</span></div>
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-gray-600">Conversion goal{goalName ? ` · ${goalName}` : ''}</dt><dd className="font-medium text-gray-900">{goalLabel}</dd></div><div><dt className="text-gray-600">Ad strength</dt><dd className="font-medium text-gray-900">{strengthLabel}</dd></div><div><dt className="text-gray-600">Audience settings</dt><dd className="font-medium text-gray-900">{audienceLabel}</dd></div></dl>
-        {status === 'verified' && <p className="mt-3 text-sm text-gray-700">The last check confirmed the applicable conversion goal, ad strength and audience settings. Delivery still depends on approval, billing and pause settings.</p>}
+        {status === 'verified' && <p className="mt-3 text-sm text-gray-700">{assetGroupStrengthLabel
+            ? 'The last check confirmed the conversion goal. Google reports the current asset group rating above.'
+            : 'The last check confirmed the applicable conversion goal, ad strength and audience settings. Delivery still depends on approval, billing and pause settings.'}</p>}
         {status === 'pending' && <p className="mt-3 text-sm text-gray-700">{awaitingEvaluation
             ? live ? awaitingStrength
                 ? 'Your campaign is live. Google has not finished its ad-strength evaluation. Automatic checks will continue, and a prolonged wait will be flagged for review.'

@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\AdExtensionAgent;
+use App\Services\Creative\CreativeRelease;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CreateCalloutAsset;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
@@ -18,7 +19,12 @@ use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\GoogleAdStrengthRepair;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
+use Google\Ads\GoogleAds\V26\Enums\AdStrengthActionItemTypeEnum\AdStrengthActionItemType;
+use Google\Ads\GoogleAds\V26\Enums\AssetCoverageVideoAspectRatioRequirementEnum\AssetCoverageVideoAspectRatioRequirement;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Resources\AdStrengthActionItem;
+use Google\Ads\GoogleAds\V26\Resources\AdStrengthActionItem\AddAssetDetails;
+use Google\Ads\GoogleAds\V26\Resources\AssetCoverage;
 use Google\Ads\GoogleAds\V26\Resources\AssetGroup;
 use Google\Ads\GoogleAds\V26\Resources\AssetGroupAsset;
 use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
@@ -137,11 +143,19 @@ class GoogleExtensionMutationSafetyTest extends TestCase
         $this->assertContains('campaign_not_active', $result['unresolved']);
     }
 
-    public function test_pmax_pause_during_text_generation_prevents_all_google_asset_writes(): void
+    public function test_pmax_can_only_restore_approved_assets_and_detects_a_pause_before_linking(): void
     {
         $campaign = $this->campaign();
         $this->reader();
-        $group = new GoogleAdsRow(['asset_group' => new AssetGroup(['resource_name' => 'customers/123/assetGroups/77', 'id' => 77, 'name' => 'PMax', 'ad_strength' => 4])]);
+        $requests = [];
+        foreach ([[AssetFieldType::MARKETING_IMAGE, 2, 0], [AssetFieldType::SQUARE_MARKETING_IMAGE, 2, 0],
+            [AssetFieldType::YOUTUBE_VIDEO, 1, AssetCoverageVideoAspectRatioRequirement::VERTICAL],
+            [AssetFieldType::YOUTUBE_VIDEO, 1, AssetCoverageVideoAspectRatioRequirement::SQUARE], [AssetFieldType::SITELINK, 2, 0]] as [$field, $count, $ratio]) {
+            $requests[] = new AdStrengthActionItem(['action_item_type' => AdStrengthActionItemType::ADD_ASSET,
+                'add_asset_details' => new AddAssetDetails(['asset_field_type' => $field, 'asset_count' => $count, 'video_aspect_ratio_requirement' => $ratio])]);
+        }
+        $group = new GoogleAdsRow(['asset_group' => new AssetGroup(['resource_name' => 'customers/123/assetGroups/77', 'id' => 77,
+            'name' => 'PMax', 'ad_strength' => 4, 'asset_coverage' => new AssetCoverage(['ad_strength_action_items' => $requests])])]);
         $existing = [];
         foreach ([AssetFieldType::LOGO, AssetFieldType::MARKETING_IMAGE, AssetFieldType::SQUARE_MARKETING_IMAGE, AssetFieldType::PORTRAIT_MARKETING_IMAGE, AssetFieldType::YOUTUBE_VIDEO] as $field) {
             $existing[] = new GoogleAdsRow(['asset_group_asset' => new AssetGroupAsset(['field_type' => $field])]);
@@ -152,18 +166,28 @@ class GoogleExtensionMutationSafetyTest extends TestCase
         $assets->method('iterateAllElements')->willReturn(new \ArrayIterator($existing));
         $service = $this->createPartialMock(HealAssetGroupStrength::class, ['ensureClient', 'searchQuery']);
         $service->method('ensureClient')->willReturnCallback(fn () => null);
-        $service->method('searchQuery')->willReturnOnConsecutiveCalls($groups, $assets);
+        $service->method('searchQuery')->willReturnOnConsecutiveCalls($groups, $assets, $groups, $assets);
         (new \ReflectionProperty($service, 'customer'))->setValue($service, $campaign->customer);
-        $ai = $this->createMock(GeminiService::class);
-        $ai->expects($this->once())->method('generateContent')->willReturnCallback(function () use ($campaign) {
-            Campaign::whereKey($campaign->id)->update(['status' => 'paused']);
-
-            return ['text' => '{"headlines":["Manage Your Ads"],"long_headlines":[],"descriptions":[]}'];
-        });
-        (new \ReflectionProperty(HealAssetGroupStrength::class, 'gemini'))->setValue($service, $ai);
         $creator = $this->createMock(CreateTextAsset::class);
-        $creator->expects($this->never())->method('__invoke');
+        $creator->expects($this->once())->method('__invoke')->with('123', 'Manage Your Ads')
+            ->willReturnCallback(function () use ($campaign) {
+                Campaign::whereKey($campaign->id)->update(['status' => 'paused']);
+
+                return 'customers/123/assets/88';
+            });
         $this->app->bind(CreateTextAsset::class, fn () => $creator);
+        $unapproved = $service->heal($campaign);
+        $this->assertSame([], $unapproved[0]['added']);
+        $this->assertTrue($unapproved[0]['requires_review']);
+        $this->assertSame(['MARKETING_IMAGE' => 2, 'SQUARE_IMAGE' => 2, 'YOUTUBE_VIDEO_VERTICAL' => 1,
+            'YOUTUBE_VIDEO_SQUARE' => 1, 'SITELINK' => 2], $unapproved[0]['requested_assets']);
+        $this->assertEqualsCanonicalizing(['MARKETING_IMAGE', 'SQUARE_IMAGE'], $unapproved[0]['missing_media']);
+        $strategy = $campaign->strategies()->firstOrFail();
+        $strategy->adCopies()->create(['platform' => 'Google Ads', 'headlines' => ['Manage Your Ads'], 'descriptions' => [], 'should_deploy' => true]);
+        $release = app(CreativeRelease::class);
+        $fingerprint = $release->selection($strategy)['fingerprint'];
+        $strategy->update(['creative_release_review' => ['fingerprint' => $fingerprint, 'status' => 'passed', 'issues' => []]]);
+        $release->approve($strategy, $fingerprint);
         $this->expectException(\DomainException::class);
         $this->expectExceptionMessage('campaign_not_active');
         $service->heal($campaign);

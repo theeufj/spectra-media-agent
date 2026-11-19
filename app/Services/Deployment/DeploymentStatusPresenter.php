@@ -10,9 +10,14 @@ use Carbon\CarbonImmutable;
 /** Read stored deployment and delivery evidence without changing lifecycle state. */
 class DeploymentStatusPresenter
 {
-    /** @return array{deployment_complete: bool, configuration_verification: mixed, delivery_status: ?array{status: string, checked_at: ?string, reason: ?string}} */
+    /** @return array{deployment_complete: bool, configuration_verification: mixed, delivery_status: ?array{status: string, checked_at: ?string, reason: ?string, ad_strength?: string}} */
     public function present(Campaign $campaign, Strategy $strategy): array
     {
+        if ($strategy->deployment_status === CampaignLaunchIntent::WAITING) {
+            return ['deployment_complete' => false, 'configuration_verification' => null,
+                'delivery_status' => ['status' => 'awaiting_activation', 'checked_at' => null, 'reason' => 'Account access or funding is still pending.']];
+        }
+
         $metadata = $strategy->execution_result['metadata'] ?? [];
         $configuration = $metadata['configuration_verification'] ?? null;
         $scope = $configuration['scope'] ?? null;
@@ -26,6 +31,21 @@ class DeploymentStatusPresenter
             && $strategy->deployed_at !== null && $checked->greaterThanOrEqualTo($strategy->deployed_at);
         $complete = ! $failed && ($configurationPassed || $strategy->deployment_status === 'verified' && $configuration === null);
         $delivery = ['status' => 'unknown', 'checked_at' => null, 'reason' => 'Current delivery has not been confirmed.'];
+
+        if ($deployed && ! $failed && array_key_exists('facebook_activation_pending', $metadata)) {
+            $paused = $campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold
+                || $metadata['facebook_activation_pending'] === false;
+            $activated = $strategy->deployment_status === 'active';
+            $delivery = [
+                'status' => $paused ? 'paused' : ($activated ? 'enabled' : 'awaiting_activation'),
+                'checked_at' => $activated ? $strategy->updated_at?->toIso8601String() : null,
+                'reason' => $paused ? 'This Meta campaign is paused.'
+                    : ($activated ? 'Meta confirmed that the campaign is enabled. Check campaign reporting for delivery.'
+                        : 'The ads are staged. Site to Spend will enable delivery after the launch checks pass.'),
+            ];
+
+            return ['deployment_complete' => $complete || $activated, 'configuration_verification' => $configuration, 'delivery_status' => $delivery];
+        }
 
         if (! str_contains(strtolower($strategy->platform ?? ''), 'google')) {
             return ['deployment_complete' => $complete, 'configuration_verification' => $configuration, 'delivery_status' => null];
@@ -45,7 +65,7 @@ class DeploymentStatusPresenter
     }
 
     /** @param array<string, mixed> $metadata
-     * @return array{status: string, checked_at: ?string, reason: ?string}
+     * @return array{status: string, checked_at: ?string, reason: ?string, ad_strength?: string}
      */
     private function googleDelivery(Campaign $campaign, Strategy $strategy, array $metadata, bool $configurationPassed): array
     {
@@ -83,9 +103,11 @@ class DeploymentStatusPresenter
         if (($policy['issues'] ?? []) !== []) {
             return ['status' => 'needs_review', 'checked_at' => is_string($checkedAt) ? $checkedAt : null, 'reason' => 'Google policy restrictions need review.'];
         }
-        if ($this->fresh($checkedAt) && $campaign->platform_status === 'ENABLED' && $campaign->primary_status === 'PENDING'
-            && (in_array('MOST_ADS_UNDER_REVIEW', $campaign->primary_status_reasons ?? [], true)
-                || ($policy['error'] ?? null) === 'The current ads are still awaiting review. Approval has not been confirmed.')) {
+        if ($this->fresh($checkedAt) && $campaign->platform_status === 'ENABLED'
+            && (($policy['error'] ?? null) === 'Google is reviewing the Performance Max asset groups.'
+                || $campaign->primary_status === 'PENDING'
+                && (in_array('MOST_ADS_UNDER_REVIEW', $campaign->primary_status_reasons ?? [], true)
+                    || ($policy['error'] ?? null) === 'The current ads are still awaiting review. Approval has not been confirmed.'))) {
             return ['status' => 'under_review', 'checked_at' => $campaign->last_checked_at?->toIso8601String(), 'reason' => 'Google review is pending.'];
         }
         if (! $this->fresh($checkedAt) || ($policy['status'] ?? null) !== 'clear' || ! empty($policy['error'])) {
@@ -99,7 +121,29 @@ class DeploymentStatusPresenter
                 'checked_at' => $goal['checked_at'], 'reason' => 'Current conversion-goal settings need review.'];
         }
         if ($campaign->platform_status === 'ENABLED' && $campaign->isServing()) {
-            return ['status' => 'live', 'checked_at' => $campaign->last_checked_at?->toIso8601String(), 'reason' => null];
+            $delivery = ['status' => 'live', 'checked_at' => $campaign->last_checked_at?->toIso8601String(), 'reason' => null];
+            if ($strategy->campaign_type !== 'performance_max') {
+                return $delivery;
+            }
+
+            $group = collect($policy['evidence']['asset_groups'] ?? [])->firstWhere('resource_name', $metadata['google_pmax_staging']['asset_group'] ?? '');
+            if (! $group) {
+                return $unknown;
+            }
+            if (is_string($group['ad_strength'] ?? null)) {
+                $delivery['ad_strength'] = $group['ad_strength'];
+            }
+            if ($campaign->primary_status === 'LEARNING') {
+                $delivery['status'] = 'learning';
+                $delivery['reason'] = 'Google has enabled your campaign and its bidding strategy is learning. Check campaign reporting for impressions.';
+            } elseif (! $campaign->googleAdsPerformanceData()
+                ->where('date', '>=', $strategy->deployed_at?->copy()->setTimezone($campaign->customer->timezone ?: config('app.timezone'))->toDateString())
+                ->where('impressions', '>', 0)->exists()) {
+                $delivery['status'] = 'eligible';
+                $delivery['reason'] = 'Google reports that your campaign can serve. Impressions are awaiting confirmation.';
+            }
+
+            return $delivery;
         }
 
         return $unknown;

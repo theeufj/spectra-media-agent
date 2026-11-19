@@ -44,7 +44,11 @@ class FacebookMarketResearchTest extends TestCase
 
         Http::assertSent(fn (Request $request) => str_contains($request->url(), '/delivery_estimate?')
             && $request->hasHeader('Authorization', 'Bearer test-system-user')
-            && json_decode($request['targeting_spec'], true) === ['geo_locations' => ['countries' => ['AU']]]);
+            && json_decode($request['targeting_spec'], true) === [
+                'geo_locations' => ['countries' => ['AU']], 'age_min' => 18, 'age_max' => 65,
+                'targeting_automation' => ['advantage_audience' => 1],
+            ]
+            && json_decode($request['targeting_spec'], true) === $result['evidence']['meta']['targeting_spec']);
 
         // Strategy generation stores country names, while older drafts use codes.
         $campaign->geographic_targeting = null;

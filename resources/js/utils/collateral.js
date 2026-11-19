@@ -19,6 +19,7 @@ const PREFERRED_FORMAT = 'square';
 export const FORMAT_LABELS = {
     square: '1024×1024',
     landscape: '1200×628',
+    portrait: 'Portrait 4:5',
     mrec: '300×250',
 };
 

@@ -81,13 +81,16 @@ export function UnlockAction({ setupOnly, label, className }) {
     );
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null, brandVerified = true, googleNeedsSetup = false }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null, creativeRelease = null, brandVerified = true, googleNeedsSetup = false, googleLinkNeedsApproval = false }) {
     const currency = useCurrency();
+    const searchOffers = currentStrategy.bidding_strategy?.search_offer_groups || [];
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
-    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview });
+    const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview, creativeRelease });
+    const creativeFingerprints = Object.fromEntries(Object.entries(collateral.creativeRelease || {}).filter(([, state]) => state.status === 'passed').map(([id, state]) => [id, state.fingerprint]));
+    const isLivePerformanceMax = strategy => strategy?.campaign_type === 'performance_max' && strategy.deployment_status === 'active';
     const selectedImages = collateral.imageCollaterals.filter(image => image.should_deploy && image.is_active !== false);
     const [editingImage, setEditingImage] = useState(null);
     const [extendingVideo, setExtendingVideo] = useState(null);
@@ -217,6 +220,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 method: 'PUT', json: { type, ids, field, value },
             });
             applySavedSelection(type, result.rows);
+            if (field === 'should_deploy') setIsPolling(true);
             setApprovalMessage(field === 'is_seed' ? 'AI reference selection saved.' : 'Ad selection saved.');
         } catch (error) {
             setApprovalError(error?.body?.message || 'We could not save your selection. The previous saved selection is still shown. Please try again.');
@@ -231,12 +235,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
     const handleToggleConcept = (concept, field = 'should_deploy') => saveApproval('image', concept.ids, field, field === 'should_deploy' ? !concept.deployed : !concept.cover[field]);
 
-    const handleImageUpload = (strategyUuid, files) => {
+    const handleImageUpload = (strategyUuid, files, role = null) => {
         if (!files || files.length === 0) return;
         setUploadingImages(true);
         setImageUploadErrors([]);
 
         const formData = new FormData();
+        if (role) formData.append('role', role);
         Array.from(files).forEach((file) => {
             formData.append('images[]', file);
         });
@@ -344,9 +349,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         if (approvalPending.current || deploying) return;
         setDeploying(true);
         setConfirmModal(previous => ({ ...previous, show: false }));
-        router.post(route(strategy ? 'deployment.deploy-platform' : 'deployment.deploy'), {
-            campaign_id: campaign.id, ...(strategy ? { strategy_id: strategy.id } : {}),
-        }, {
+        const updating = isLivePerformanceMax(strategy);
+        const endpoint = updating ? route('campaigns.creative-release', { campaign: campaign.uuid, strategy: strategy.uuid })
+            : route(strategy ? 'deployment.deploy-platform' : 'deployment.deploy');
+        const payload = updating ? { fingerprint: creativeFingerprints[strategy.id] }
+            : { campaign_id: campaign.id, creative_fingerprints: creativeFingerprints, ...(strategy ? { strategy_id: strategy.id } : {}) };
+        router.post(endpoint, payload, {
             preserveScroll: true,
             onError: errors => toast.error(Object.values(errors).flat().join(' ') || 'Deployment could not start. Please retry.'),
             onFinish: () => setDeploying(false),
@@ -354,16 +362,18 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
     const requestLaunchConsent = (strategy = null, fundingMessage = '') => {
         const target = strategy ? strategy.platform.replace(/\s*\(SEM\)/gi, '') : 'all selected platforms';
-        const updating = strategy ? alreadyCreated(strategy) : launchStrategies.every(alreadyCreated);
+        const updating = strategy ? alreadyCreated(strategy) || isLivePerformanceMax(strategy) : launchStrategies.every(alreadyCreated);
+        const waitsForGoogle = googleNeedsSetup && (strategy ? /google/i.test(strategy.platform) : launchStrategies.some(item => /google/i.test(item.platform)));
+        const setupMessage = waitsForGoogle ? 'Ads will be created automatically after Google account access and funding are ready. ' : '';
         const action = `${updating ? 'Update' : setupOnly ? 'Create' : 'Launch'} ${adsLabel(strategy)}`;
         setConfirmModal({
             show: true,
-            title: `${action}?`,
-            message: `${fundingMessage ? `${fundingMessage} ` : ''}${setupOnly
+            title: isLivePerformanceMax(strategy) ? 'Update live Performance Max ads' : `${action}?`,
+            message: isLivePerformanceMax(strategy) ? 'Approve the selected copy, images and video for your live campaign. Your approved daily budget still applies.' : `${fundingMessage ? `${fundingMessage} ` : ''}${setupMessage}${setupOnly
                 ? `We'll ${updating ? 'update' : 'create'} your selected ads ${strategy ? `in your ${target} account` : 'across your selected platforms'} and leave them paused. Nothing spends until you switch them on.`
                 : `${updating ? 'Update' : 'Launch'} your selected ads on ${target}. Your approved campaign budget is ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day.`}`,
             onConfirm: () => confirmDeploy(strategy),
-            confirmText: action,
+            confirmText: isLivePerformanceMax(strategy) ? 'Approve and update ads' : action,
             isDestructive: false,
         });
     };
@@ -380,6 +390,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         if (selected.some(item => ['pending', 'reviewing', 'revising'].includes((item.id === currentStrategy.id ? collateral.creativeReview : item.creative_review)?.status))) {
             toast.info('Your creative is still being prepared and checked. Review the finished set before creating your ads.'); return;
         }
+        const blocked = selected.find(item => collateral.creativeRelease && !creativeFingerprints[item.id]);
+        if (blocked) {
+            toast.warning(collateral.creativeRelease[blocked.id]?.issues?.[0] || 'The selected ads need to pass creative review.'); return;
+        }
         if (!brandVerified) {
             toast.warning('Review and approve your current brand profile before launch.');
             router.visit(route('brand-guidelines.index', {
@@ -388,14 +402,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         }
         if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
         if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
+        if (isLivePerformanceMax(strategy)) { requestLaunchConsent(strategy); return; }
         if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
             toast.warning('Confirm your daily budget before launch.'); router.visit(route('campaigns.show', campaign.uuid)); return;
         }
         if (!setupOnly && managedBillingEnabled && adSpendCredit?.payment_status === 'paused') {
             toast.warning('Ad spend billing is paused. Update your payment method in Billing → Ad Spend before launch.'); return;
         }
-        if (googleNeedsSetup && selected.some(item => /google/i.test(item.platform))) {
-            requestLaunchConsent(strategy, 'Our team needs to finish your Google account setup. This request queues that work; no ad spend will be charged now.'); return;
+        if (googleLinkNeedsApproval && selected.some(item => /google/i.test(item.platform))) {
+            requestLaunchConsent(strategy, 'Your Google account still needs to accept our manager invitation.'); return;
         }
         if (!setupOnly && managedBillingEnabled) {
             const duration = campaign.start_date && campaign.end_date ? Math.max(1, Math.ceil((new Date(campaign.end_date) - new Date(campaign.start_date)) / 86400000) + 1) : 30;
@@ -443,7 +458,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     <div className="relative" ref={deployDropdownRef}>
                         <div className="flex">
                             <button
-                                onClick={() => handleDeploy(singleLaunchStrategy)}
+                                onClick={() => handleDeploy(isLivePerformanceMax(currentStrategy) ? currentStrategy : singleLaunchStrategy)}
                                 disabled={savingApproval || deploying}
                                 aria-describedby={setupOnly ? 'paused-ads-explanation' : undefined}
                                 className={`px-4 py-2 bg-brand-dark text-white ${hasPlatformChoices ? 'rounded-l-lg' : 'rounded-lg'} hover:bg-brand-darker transition font-medium`}
@@ -452,7 +467,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                     once to build an account they will run themselves,
                                     the button creates the ads — it does not start
                                     them. */}
-                                {launchLabel}
+                                {isLivePerformanceMax(currentStrategy) ? 'Update live ads' : launchLabel}
                             </button>
                             {hasPlatformChoices && <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
@@ -508,6 +523,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 campaign={campaign}
                 campaignName={deployTarget ? `${campaign.name} — ${deployTarget.platform}` : campaign.name}
                 strategy={deployTarget}
+                creativeFingerprints={creativeFingerprints}
                 existingCredit={adSpendCredit}
                 hasPaymentMethod={hasPaymentMethod}
             />
@@ -545,7 +561,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900">Your ad, as a customer could see it</h1>
                             <p className="mt-2 mb-5 text-sm text-gray-600">Review the message and destination, then approve the assets below.{setupOnly && ' Creating the ads leaves the campaign paused.'}</p>
-                            {collateral.adCopy ? <AdPreviewPanel adCopy={collateral.adCopy} images={selectedImages} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''} />
+                            {searchOffers.length > 0 ? <div className="space-y-4">
+                                {searchOffers.map(group => <div key={group.key}>
+                                    <h2 className="mb-2 text-sm font-semibold text-gray-900">{group.name}</h2>
+                                    <AdPreviewPanel adCopy={group} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={group.url} />
+                                </div>)}
+                            </div> : collateral.adCopy ? <AdPreviewPanel adCopy={collateral.adCopy} images={selectedImages} platform={currentStrategy.platform} campaignType={currentStrategy.campaign_type} brandName={reviewSummary.business_name} websiteUrl={reviewSummary.destination || campaign.landing_page_url || ''} />
                                 : <p role="status" className="rounded-lg bg-gray-50 p-5 text-gray-600">{isPolling ? 'Your ad copy is being prepared. The preview will appear here.' : 'Ad copy is not available yet. Use Generate ad copy below to retry.'}</p>}
                         </div>
                         <div className="lg:border-l lg:border-gray-100 lg:pl-6">
@@ -553,13 +574,19 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             <dl className="mt-4 space-y-4 text-sm">
                                 <div><dt className="text-gray-500">Daily budget</dt><dd className="mt-1 font-medium text-gray-900">{money(reviewSummary.daily_budget ?? campaign.daily_budget, reviewSummary.currency || currency)} per day</dd></div>
                                 <div><dt className="text-gray-500">Audience</dt><dd className="mt-1 text-gray-900">{reviewSummary.audience || campaign.target_market || 'See campaign targeting'}</dd></div>
-                                <div><dt className="text-gray-500">Destination</dt><dd className="mt-1 break-all text-gray-900">{reviewSummary.destination || campaign.landing_page_url}</dd></div>
+                                <div><dt className="text-gray-500">{searchOffers.length ? 'Destinations' : 'Destination'}</dt><dd className="mt-1 break-all text-gray-900">{searchOffers.length ? searchOffers.map(group => <div key={group.key}>{group.url}</div>) : reviewSummary.destination || campaign.landing_page_url}</dd></div>
                                 <div><dt className="text-gray-500">Placement</dt><dd className="mt-1 text-gray-900">{currentStrategy.platform} · {currentStrategy.campaign_type}</dd></div>
                             </dl>
                             <Link href={route('campaigns.show', { campaign: campaign.uuid })} className="mt-5 inline-block text-sm text-brand-dark underline">Review campaign details and creative direction</Link>
                             {setupOnly && ['deployed', 'verified'].includes(currentStrategy.deployment_status) && <Link href={route('dashboard')} className="mt-4 block text-sm font-semibold text-brand-dark underline">View your handover checklist</Link>}
                         </div>
                     </section>
+                    {collateral.creativeRelease?.[currentStrategy.id]?.issues?.length > 0 && <section role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                        <h2 className="font-semibold text-gray-900">Selected ads</h2>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                            {collateral.creativeRelease[currentStrategy.id].issues.map(issue => <li key={issue}>{issue}</li>)}
+                        </ul>
+                    </section>}
                     {collateral.creativeReview && <section role="status" className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
                         <h2 className="font-semibold text-gray-900">{({ pending: 'Preparing your creative set', reviewing: 'Reviewing the images together', revising: 'Refining selected creative', passed: 'Visual review complete', needs_review: 'Creative needs your review' })[collateral.creativeReview.status] || 'Creative review'}</h2>
                         <p className="mt-2 text-sm text-gray-600">{collateral.creativeReview.message || 'Checking the selling idea, visual variety, legibility and placement. Each concept can receive one automatic correction.'}</p>
@@ -642,9 +669,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             const totalImages = concepts.length;
                             const selVideos = collateral.videoCollaterals?.filter(v => v.should_deploy).length ?? 0;
                             const totalVideos = collateral.videoCollaterals?.length ?? 0;
-                            const selAdCopy = collateral.adCopy?.should_deploy ? 1 : 0;
+                            const selAdCopy = searchOffers.length || (collateral.adCopy?.should_deploy ? 1 : 0);
                             const totalSelected = selImages + selVideos + selAdCopy;
-                            const hasAny = totalImages > 0 || totalVideos > 0 || collateral.adCopy;
+                            const hasAny = totalImages > 0 || totalVideos > 0 || searchOffers.length > 0 || collateral.adCopy;
                             if (!hasAny) return null;
                             return (
                                 <div className={`mt-4 rounded-lg border-2 px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${totalSelected > 0 ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
@@ -654,7 +681,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         </span>
                                         <span className="text-sm text-gray-500">
                                             {[
-                                                selAdCopy ? `${selAdCopy} ad copy` : null,
+                                                searchOffers.length ? `${selAdCopy} Search ${selAdCopy === 1 ? 'ad' : 'ads'}` : selAdCopy ? '1 ad copy' : null,
                                                 totalImages ? `${selImages}/${totalImages} image concepts` : null,
                                                 totalVideos ? `${selVideos}/${totalVideos} videos` : null,
                                             ].filter(Boolean).join(' · ')}
@@ -672,6 +699,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             {allStrategies.map((strategyItem) => (
                                 activeTab === strategyItem.platform && (
                                     <div key={strategyItem.id}>
+                                        {!strategyItem.bidding_strategy?.search_offer_groups?.length && <section>
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">{strategyItem.platform} Ad Copy</h3>
                                         <p>Generate dynamic ad copy for {strategyItem.platform} based on the strategy.</p>
                                         
@@ -727,7 +755,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
+                                                                        const longHeadlines = collateral.adCopy.long_headlines;
+                                                                        const longHeadlineText = longHeadlines?.length ? `\n\nLong headlines:\n${longHeadlines.join('\n')}` : '';
+                                                                        const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}${longHeadlineText}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
                                                                         navigator.clipboard.writeText(copyText).then(() => toast.success('Ad copy copied to clipboard!')).catch(() => toast.error('Copy failed. Select the text and copy it manually.'));
                                                                     }}
                                                                     className="px-3 py-1 text-xs font-medium text-brand-dark bg-brand-tint-10 rounded-md hover:bg-brand-tint-20"
@@ -754,6 +784,16 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     ))}
                                                                 </ul>
                                                             </div>
+                                                            {collateral.adCopy.long_headlines?.length > 0 && (
+                                                                <div className="mb-4">
+                                                                    <h5 className="font-medium text-gray-700">Long headlines</h5>
+                                                                    <ul className="list-disc list-inside text-gray-600">
+                                                                        {collateral.adCopy.long_headlines.map((headline, index) => (
+                                                                            <li key={index}>{headline}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
                                                             <div>
                                                                 <h5 className="font-medium text-gray-700">Descriptions:</h5>
                                                                 <ul className="list-disc list-inside text-gray-600">
@@ -781,6 +821,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         <hr className="my-8" />
 
+                                        </section>}
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentStrategy.campaign_type === 'search' ? 'Supporting Search images' : 'Image concepts'}</h3>
                                         <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
                                         {strategyItem.campaign_type === 'search' && /google/i.test(strategyItem.platform) && (
@@ -843,6 +884,25 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     return `${uploaded}/10 uploaded`;
                                                 })()}
                                             </span>
+
+                                            {strategyItem.campaign_type === 'performance_max' && /google/i.test(strategyItem.platform) && (
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <label className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:border-brand-dark cursor-pointer focus-within:ring-2 focus-within:ring-brand-dark">
+                                                        Upload business logo
+                                                        <input
+                                                            type="file"
+                                                            accept="image/jpeg,image/png"
+                                                            className="sr-only"
+                                                            disabled={uploadingImages}
+                                                            onChange={(event) => {
+                                                                handleImageUpload(strategyItem.uuid, event.target.files, 'logo');
+                                                                event.target.value = '';
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <span className="text-xs text-gray-500">Square PNG or JPG · at least 128 × 128 · up to 5 MB</span>
+                                                </div>
+                                            )}
 
                                             {/* Harvested Assets Button */}
                                             {isSubscribed && (
@@ -1143,6 +1203,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             {concept.deployed ? (currentStrategy.campaign_type === 'search' ? 'Save to asset library' : 'Selected for ads') : 'Excluded'}
                                                         </span>
 
+                                                        {image.layout === 'logo' && <span className="text-xs font-medium text-gray-600">Business logo</span>}
                                                         {concept.formats.length > 1 && (
                                                             /*
                                                                The pill opens them.

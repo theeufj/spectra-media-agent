@@ -8,6 +8,7 @@ use App\Models\ImageCollateral;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\Creative\CreativeRelease;
 use App\Services\CreativeQuotaService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -56,6 +57,7 @@ class CollateralController extends Controller
 
         // Get all strategies for the campaign to build the tab navigation, including collateral counts
         $allStrategies = $campaign->strategies()->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals'])->get();
+        $creativeRelease = $this->releaseStates($allStrategies);
 
         // Find the specific ad copy for the current strategy and platform
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
@@ -79,7 +81,9 @@ class CollateralController extends Controller
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
             'brandVerified' => (bool) ($customer->brandGuideline?->user_verified && ($customer->brandGuideline->approved_version === null || $customer->brandGuideline->approved_version === $customer->brandGuideline->profile_version)),
-            'googleNeedsSetup' => ! $customer->google_ads_customer_id || in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true),
+            'googleNeedsSetup' => ! \App\Services\Deployment\CampaignLaunchIntent::googleReady($customer),
+            'googleLinkNeedsApproval' => ! \App\Services\Deployment\CampaignLaunchIntent::googleReady($customer)
+                && ! \App\Services\Deployment\CampaignLaunchIntent::canProvisionGoogle($customer),
             'reviewSummary' => [
                 'business_name' => $customer->name,
                 'destination' => $strategy->bidding_strategy['landing_page_url'] ?? $campaign->landing_page_url ?: $customer->website,
@@ -134,8 +138,9 @@ class CollateralController extends Controller
                worked on. Bounded by time so an old strategy whose generation
                genuinely failed does not poll for ever.
             */
-            'generationPending' => $this->generationPending($strategy),
+            'generationPending' => $this->generationPending($strategy) || collect($creativeRelease)->contains('status', 'pending'),
             'creativeReview' => $strategy->creative_review,
+            'creativeRelease' => $creativeRelease,
         ]);
     }
 
@@ -210,15 +215,30 @@ class CollateralController extends Controller
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
         $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get();
         $videoCollaterals = VideoCollateral::forStrategy($strategy)->where('is_active', true)->get();
+        $creativeRelease = $this->releaseStates($strategy->campaign->strategies()->get());
 
         return response()->json([
             'adCopy' => $adCopy,
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
             'collateralErrors' => $this->liveCollateralErrors($strategy, $adCopy, $imageCollaterals, $videoCollaterals),
-            'generationPending' => $this->generationPending($strategy),
+            'generationPending' => $this->generationPending($strategy) || collect($creativeRelease)->contains('status', 'pending'),
             'creativeReview' => $strategy->creative_review,
+            'creativeRelease' => $creativeRelease,
         ]);
+    }
+
+    private function releaseStates(iterable $strategies): array
+    {
+        $release = app(CreativeRelease::class);
+        $states = [];
+        foreach ($strategies as $strategy) {
+            if ($strategy->signed_off_at) {
+                $states[$strategy->id] = $release->state($strategy, true);
+            }
+        }
+
+        return $states;
     }
 
     /**
@@ -232,11 +252,13 @@ class CollateralController extends Controller
     {
         return collect($strategy->collateral_errors ?? [])
             ->reject(fn ($message, $key) => match (true) {
-                str_contains($key, 'ad_copy') => $adCopy !== null,
+                str_contains($key, 'ad_copy') => $adCopy !== null && ! is_array($message),
                 str_contains($key, 'image') => $imageCollaterals->isNotEmpty(),
                 str_contains($key, 'video') => $videoCollaterals->isNotEmpty(),
                 default => false,
             })
+            ->map(fn ($error) => is_array($error) ? ($error['message'] ?? null) : $error)
+            ->filter(fn ($message) => is_string($message) && $message !== '')
             ->all();
     }
 }

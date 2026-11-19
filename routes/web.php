@@ -258,6 +258,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/campaigns/{campaign}/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'show'])->name('campaigns.collateral.show');
 
     Route::put('/campaigns/{campaign}/collateral-approval', [\App\Http\Controllers\CollateralApprovalController::class, 'update'])->name('campaigns.collateral-approval.update');
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/creative-release', [\App\Http\Controllers\CollateralApprovalController::class, 'release'])->name('campaigns.creative-release');
 
     // Reviewing and approving what the AI produced is part of deciding whether
     // to pay, so it stays free.
@@ -899,6 +900,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/settings/facebook-api/verify', [App\Http\Controllers\FacebookApiOAuthController::class, 'verify'])->name('facebook-api.verify');
     Route::post('/settings/facebook-api/disconnect', [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
     Route::post('/settings/facebook-api/test-campaign', [App\Http\Controllers\FacebookApiOAuthController::class, 'createTestCampaign'])->name('facebook-api.test-campaign');
+    Route::post('/settings/facebook-api/review-pixel', [App\Http\Controllers\FacebookApiOAuthController::class, 'provisionReviewPixel'])->middleware('throttle:4,1,meta-review-pixel:')->name('facebook-api.review-pixel');
 });
 
 /*

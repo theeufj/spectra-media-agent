@@ -14,6 +14,7 @@ use App\Services\Agents\PreLaunchComplianceAgent;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Campaigns\SettleDeployedCampaign;
 use App\Services\Customers\HandOverAccount;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Services\Deployment\StrategyBudgetAllocator;
 use App\Services\DeploymentService;
 use App\Services\FacebookAds\CreateFacebookAdsAccount;
@@ -44,6 +45,8 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
 
     public $uniqueFor = 1800;
 
+    protected ?string $launchId = null;
+
     public function uniqueId(): string
     {
         return (string) $this->campaign->id;
@@ -52,8 +55,11 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
     public function __construct(
         protected Campaign $campaign,
         protected bool $useAgents = true,
-        protected ?int $strategyId = null
-    ) {}
+        protected ?int $strategyId = null,
+        ?string $launchId = null
+    ) {
+        $this->launchId = $launchId;
+    }
 
     public function handle(AdSpendBillingService $billingService): void
     {
@@ -72,8 +78,18 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $selected = $this->campaign->strategies->filter(fn ($strategy) => $strategy->signed_off_at !== null
-            && ($this->strategyId === null || $strategy->id === $this->strategyId));
+        $launch = $this->launchId === null ? null : app(CampaignLaunchIntent::class);
+        if ($launch) {
+            $selected = $launch->claim($this->campaign, $this->launchId);
+            if ($selected->isEmpty()) {
+                return;
+            }
+            $this->campaign->refresh()->load('customer');
+            $customer = $this->campaign->customer;
+        } else {
+            $selected = $this->campaign->strategies->filter(fn ($strategy) => $strategy->signed_off_at !== null
+                && $strategy->launch_intent === null && ($this->strategyId === null || $strategy->id === $this->strategyId));
+        }
         if ($selected->isEmpty()) {
             $message = 'Approve a researched strategy before creating or funding new ads.';
             $this->failPendingStrategies($message);
@@ -98,37 +114,91 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             }
         }
 
-        // Auto-provision Facebook ad account on first Facebook deployment.
-        if (! $customer->facebook_ads_account_id) {
-            $hasFacebookStrategy = $this->campaign->strategies->contains(
-                fn ($s) => str_contains(strtolower($s->platform), 'facebook') || str_contains(strtolower($s->platform), 'meta')
-            );
-            if ($hasFacebookStrategy) {
-                Log::info("DeployCampaign: No Facebook ad account — provisioning for customer {$customer->id}");
-                $accountResult = (new CreateFacebookAdsAccount($customer))(
-                    accountName: $customer->name.' Ads',
-                    currency: $customer->billingCurrency(),
-                    timezoneId: 1
-                );
-                if ($accountResult) {
-                    $customer->update(['facebook_ads_account_id' => $accountResult['account_id']]);
-                    $customer->refresh();
-                    Log::info('DeployCampaign: Facebook ad account provisioned', [
-                        'customer_id' => $customer->id,
-                        'account_id' => $accountResult['account_id'],
-                    ]);
-                } else {
-                    Log::warning('DeployCampaign: Could not provision Facebook ad account — compliance check may fail', [
-                        'customer_id' => $customer->id,
-                    ]);
+        if (! $customer || ! $customer->hasPaidDeploymentAccess()) {
+            $message = 'Choose a paid campaign plan before launching ads.';
+            $this->failPendingStrategies($message);
+            $this->notifyUsers(new DeploymentFailed($this->campaign, $message));
+
+            return;
+        }
+
+        // Split the campaign's daily budget evenly across strategies.
+        //
+        // Signed-off only: sign-off is the user's approval of what runs and
+        // what the budget is split across. Deploying every strategy meant an
+        // unreviewed one could go live AND halve the budget of the one the
+        // user actually approved.
+        $strategies = $selected;
+
+        /*
+           Filter strategies to the platforms this account's plan allows.
+           Was read off a user picked from the customer — the owner if one
+           existed, otherwise whoever came first — so on an account with several
+           people the platforms a campaign deployed to depended on row order.
+           The plan belongs to the business, so the business answers.
+        */
+        [$strategies, $planFiltered] = $strategies->partition(fn ($strategy) => $customer->allowsAdPlatform($strategy->platform));
+
+        // A dropped strategy must reach a terminal state the status page
+        // can display — leaving it at null read as "pending" and kept the
+        // page polling forever with no explanation.
+        foreach ($planFiltered as $skipped) {
+            $skipped->update([
+                'deployment_status' => 'skipped_plan',
+                'deployment_error' => "{$skipped->platform} isn't included in your current plan, so this strategy was not deployed. Upgrade your plan to run it.",
+            ]);
+        }
+
+        Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
+
+        // Nothing left to deploy is a failure the user must hear about, not a
+        // success with zero platforms. Falling through used to email
+        // "deployment completed" for a campaign where the plan filter had
+        // dropped every strategy, while the campaign never went Active.
+        if ($strategies->isEmpty()) {
+            Log::warning("DeployCampaign: no deployable strategies for Campaign ID: {$this->campaign->id}", [
+                'strategy_id_filter' => $this->strategyId,
+            ]);
+
+            $this->notifyUsers(new DeploymentFailed(
+                $this->campaign,
+                'None of this campaign\'s strategies can be deployed on your current plan. Upgrade your plan or adjust the campaign\'s platforms, then deploy again.'
+            ));
+
+            return;
+        }
+
+        $hasFacebookStrategy = $strategies->contains(fn ($strategy) => DeploymentService::normalizePlatform($strategy->platform) === 'facebook');
+
+        // Auto-provision the portfolio's ad account after the tenant's Page is linked.
+        if ($hasFacebookStrategy && ! $customer->facebook_ads_account_id && $customer->facebook_page_id) {
+            Log::info("DeployCampaign: No Facebook ad account — provisioning for customer {$customer->id}");
+            if ($accountId = app(CreateFacebookAdsAccount::class, ['customer' => $customer])->provision()) {
+                if ($launch) {
+                    $launch->attachProvisionedMetaAccount($this->campaign, $this->launchId);
                 }
+                $customer->refresh();
+                Log::info('DeployCampaign: Facebook ad account provisioned', [
+                    'customer_id' => $customer->id,
+                    'account_id' => $accountId,
+                ]);
+            } else {
+                Log::warning('DeployCampaign: Could not provision Facebook ad account — compliance check may fail', [
+                    'customer_id' => $customer->id,
+                ]);
             }
+        }
+
+        if ($hasFacebookStrategy && $launch && ($issue = $launch->metaAccountIssue($customer))) {
+            $launch->deferMetaAccount($this->campaign, $this->launchId, $issue);
+
+            return;
         }
 
         // Auto-provision Facebook pixel before compliance check.
         // PixelService will find an existing pixel on the ad account or create a
         // new BM-owned one and share it — no manual steps required.
-        if ($customer->facebook_ads_account_id && ! $customer->facebook_pixel_id) {
+        if ($hasFacebookStrategy && $customer->facebook_ads_account_id && ! $customer->facebook_pixel_id) {
             Log::info("DeployCampaign: No pixel on record — attempting auto-provision for customer {$customer->id}");
             $pixelId = (new PixelService($customer))->resolvePixelId();
             if ($pixelId) {
@@ -145,7 +215,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         }
 
         // Pre-launch compliance check — abort if any check fails
-        $complianceResult = (new PreLaunchComplianceAgent)->check($this->campaign);
+        $complianceResult = app(PreLaunchComplianceAgent::class)->check($this->campaign);
         if (! $complianceResult['passed']) {
             Log::warning("DeployCampaign: Campaign {$this->campaign->id} failed compliance check, aborting deployment.", [
                 'failures' => $complianceResult['failures'],
@@ -199,6 +269,10 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                 $credit = $customer->adSpendCredit;
 
                 if (! $credit) {
+                    if ($this->launchId !== null) {
+                        throw new \RuntimeException('Cannot deploy campaign: Payment issue. The approved launch is waiting for prepaid ad spend.');
+                    }
+
                     Log::info('Initializing ad spend credit for customer', [
                         'customer_id' => $customer->id,
                         'daily_budget' => $this->campaign->daily_budget,
@@ -239,62 +313,6 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             ]);
         }
 
-        // Split the campaign's daily budget evenly across strategies.
-        //
-        // Signed-off only: sign-off is the user's approval of what runs and
-        // what the budget is split across. Deploying every strategy meant an
-        // unreviewed one could go live AND halve the budget of the one the
-        // user actually approved.
-        $strategies = $selected;
-
-        /*
-           Filter strategies to the platforms this account's plan allows.
-           Was read off a user picked from the customer — the owner if one
-           existed, otherwise whoever came first — so on an account with several
-           people the platforms a campaign deployed to depended on row order.
-           The plan belongs to the business, so the business answers.
-        */
-        $allowed = $this->campaign->customer->allowedPlatforms();
-        [$strategies, $planFiltered] = $strategies->partition(function ($strategy) use ($allowed) {
-            $platformStr = strtolower($strategy->platform);
-            foreach ($allowed as $allow) {
-                if (str_contains($platformStr, $allow)) {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-
-        // A dropped strategy must reach a terminal state the status page
-        // can display — leaving it at null read as "pending" and kept the
-        // page polling forever with no explanation.
-        foreach ($planFiltered as $skipped) {
-            $skipped->update([
-                'deployment_status' => 'skipped_plan',
-                'deployment_error' => "{$skipped->platform} isn't included in your current plan, so this strategy was not deployed. Upgrade your plan to run it.",
-            ]);
-        }
-
-        Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
-
-        // Nothing left to deploy is a failure the user must hear about, not a
-        // success with zero platforms. Falling through used to email
-        // "deployment completed" for a campaign where the plan filter had
-        // dropped every strategy, while the campaign never went Active.
-        if ($strategies->isEmpty()) {
-            Log::warning("DeployCampaign: no deployable strategies for Campaign ID: {$this->campaign->id}", [
-                'strategy_id_filter' => $this->strategyId,
-            ]);
-
-            $this->notifyUsers(new DeploymentFailed(
-                $this->campaign,
-                'None of this campaign\'s strategies can be deployed on your current plan. Upgrade your plan or adjust the campaign\'s platforms, then deploy again.'
-            ));
-
-            return;
-        }
-
         app(StrategyBudgetAllocator::class)->allocate($this->campaign, $strategies);
 
         $deploymentResults = [];
@@ -304,7 +322,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         foreach ($strategies as $strategy) {
             // Skip strategies that are already deployed/verified — prevents duplicate campaigns
             // when the user clicks Deploy more than once or the job retries.
-            if (in_array($strategy->deployment_status, ['deployed', 'verified'])) {
+            if ($strategy->isDeployed()) {
                 Log::info('Skipping already-deployed strategy', [
                     'campaign_id' => $this->campaign->id,
                     'strategy_id' => $strategy->id,
@@ -483,6 +501,8 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
     {
         $this->campaign->strategies()
             ->when($this->strategyId !== null, fn ($query) => $query->whereKey($this->strategyId))
+            ->when($this->launchId !== null, fn ($query) => $query->where('launch_intent->id', $this->launchId),
+                fn ($query) => $query->whereNull('launch_intent'))
             ->whereIn('deployment_status', ['queued', 'deploying'])
             ->update(['deployment_status' => 'failed', 'deployment_error' => $message]);
     }

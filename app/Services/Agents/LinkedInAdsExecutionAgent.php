@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents;
 
+use App\Services\Campaigns\CampaignTrackingUrl;
 use App\Services\CampaignStatusHelper;
 use App\Services\LinkedInAds\CampaignService;
 use Illuminate\Support\Facades\Log;
@@ -277,7 +278,7 @@ PROMPT;
             'name' => $campaign?->name ?? 'New LinkedIn Campaign',
             'daily_budget' => $params['daily_budget'] ?? $context->strategy->daily_budget,
             'objective' => $params['objective'] ?? 'WEBSITE_VISITS',
-            'status' => $this->deployStatus(),
+            'status' => $context->strategy->launch_intent !== null ? 'PAUSED' : $this->deployStatus(),
             'targeting' => $targeting,
         ];
 
@@ -355,10 +356,10 @@ PROMPT;
             return ['status' => 'skipped', 'reason' => 'No LinkedIn campaign ID — campaign creation must succeed first'];
         }
 
-        $adCopy = $strategy->adCopies()
+        $adCopy = $strategy->deployableAdCopies()
             ->whereRaw('LOWER(platform) LIKE ?', ['%linkedin%'])
             ->first()
-            ?? $strategy->adCopies()->first();
+            ?? $strategy->deployableAdCopies()->first();
 
         if (! $adCopy) {
             Log::warning('[LinkedInAdsExecutionAgent] No ad copy for creative creation', ['strategy_id' => $strategy->id]);
@@ -366,10 +367,8 @@ PROMPT;
             return ['status' => 'skipped', 'reason' => 'No ad copy available'];
         }
 
-        $landingUrl = $campaign->landing_page_url
-            ?? $strategy->bidding_strategy['landing_page_url']
-            ?? $this->customer->website
-            ?? null;
+        $landingUrl = ($strategy->bidding_strategy['landing_page_url'] ?? null)
+            ?: ($campaign->landing_page_url ?: $this->customer->website);
 
         if (! $landingUrl) {
             Log::warning('[LinkedInAdsExecutionAgent] No landing URL for creative', ['strategy_id' => $strategy->id]);
@@ -380,7 +379,7 @@ PROMPT;
         $creative = $service->createCreative($campaignId, [
             'headline' => $adCopy->headlines[0] ?? 'Learn More',
             'description' => $adCopy->descriptions[0] ?? '',
-            'destination' => $landingUrl,
+            'destination' => CampaignTrackingUrl::forStrategy($landingUrl, $campaign, $strategy, 'linkedin'),
         ]);
 
         if ($creative) {

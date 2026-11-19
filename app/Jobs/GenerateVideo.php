@@ -138,6 +138,12 @@ class GenerateVideo implements ShouldQueue
     {
         Log::info("Starting video generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
+        if ($this->strategy->campaign_type === 'performance_max' && strtolower($this->platform) === 'google') {
+            $this->platform = 'Google Ads (Performance Max)';
+        }
+        $isPerformanceMax = str_contains(strtolower($this->platform), 'performance max');
+        $metaOffer = \App\Services\Creative\MetaOfferArt::applies($this->campaign, $this->strategy, $this->platform);
+
         // Idempotency: if a non-failed collateral already exists for this strategy+platform
         // (e.g. from a previous attempt that survived a retry), skip creation.
         // Only active collaterals block regeneration — a retired video (e.g. one too
@@ -190,18 +196,16 @@ class GenerateVideo implements ShouldQueue
             $actionableContent = $this->extractActionableVideoContent($videoStrategy);
 
             if (! $actionableContent) {
-                if (! $this->force) {
+                if (! $this->force && ! $isPerformanceMax && ! $metaOffer) {
                     Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found. Original strategy: '{$videoStrategy}'");
 
                     return;
                 }
-                // Forced (e.g. PMax ad-strength healing): PMax needs a video asset even when
-                // the written strategy said video was N/A. Fall back to a generic brief.
                 $brand = $this->campaign->customer->name ?? 'the brand';
                 $focus = $this->campaign->product_focus ?: 'the product/service';
-                $actionableContent = "Short, modern product-showcase video for {$brand}. Highlight {$focus} "
-                    .'with clean, high-quality visuals and upbeat pacing. No on-screen text overlays. '
-                    .'Suitable as a Performance Max video asset.';
+                $actionableContent = "Show {$brand}'s actual offer for {$focus} in a short product demonstration. "
+                    .'Identify the brand in the opening narration, show one supported benefit in action, and close with one supported next step. '
+                    .'Keep the visual action understandable without sound and the frame free of on-screen text. Do not invent results or testimonials.';
                 Log::info("GenerateVideo: forced generation with fallback brief for Strategy ID: {$this->strategy->id}");
             }
 
@@ -222,6 +226,13 @@ class GenerateVideo implements ShouldQueue
                 ? "Selling idea: {$concept['selling_idea']}\nSupported fact: {$concept['evidence']}\nVisual direction: {$concept['visual']}\nAdapt the following film brief to demonstrate this one idea. Open with the offer, demonstrate it, then one next action. Do not invent proof.\n".$actionableContent
                 : CreativeVariant::apply($actionableContent, $this->variationIndex);
 
+            if ($isPerformanceMax) {
+                $actionableContent .= "\nUse the exact brand name in speech. Describe one evidenced capability in qualified language. "
+                    .'Avoid claims about every action, guaranteed results, savings or coverage unless the evidence explicitly supports them. '
+                    .'If a brief calls for software on screen, illustrate the same idea with physical objects or abstract icon-only graphics. '
+                    .'Do not invent a dashboard, a screenshot, visible text, numbers or example results.';
+            }
+
             Log::info('Video concept', [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $this->strategy->id,
@@ -231,10 +242,28 @@ class GenerateVideo implements ShouldQueue
                 'scene' => trim(preg_replace('/\s+/', ' ', $actionableContent)),
             ]);
 
+            if ($metaOffer) {
+                $copy = $this->strategy->adCopies()->where('should_deploy', true)->orderByDesc('id')->first();
+                $offer = ['brand' => $this->campaign->customer->name, 'offer' => $this->campaign->product_focus,
+                    'selling_idea' => $concept['selling_idea'] ?? null, 'evidence' => $concept['evidence'] ?? null,
+                    'headlines' => $copy?->headlines, 'descriptions' => $copy?->descriptions, 'destination' => $this->campaign->landing_page_url];
+                $actionableContent = 'Write a voiceover for a branded typographic Meta ad using the provided offer as evidence. '
+                    .'Use the exact supplied brand in the first sentence. Write two or three short complete sentences, maximum 32 words in total. '
+                    .'Every sentence appears as one full-screen caption. Name a specific supported capability and end with one supported next action. '
+                    .'Do not narrate screen actions or invent a demonstration, example, testimonial or result. '
+                    .json_encode($offer, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+            }
             $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext, $this->variationIndex))->getPrompt();
             $scriptResponse = $geminiService->generateContent(config('ai.models.default'), $scriptPrompt);
 
             $script = $scriptResponse['text'] ?? null;
+            if ($metaOffer && ! \App\Services\VideoGeneration\MetaOfferVideo::scenes((string) $this->campaign->customer->name, (string) $script)) {
+                $retry = $geminiService->generateContent(config('ai.models.default'), $scriptPrompt."\nRewrite the voiceover with the exact supplied brand in its first sentence, two to four complete sentences, and no more than 35 words. Return the voiceover only.");
+                $script = $retry['text'] ?? '';
+                if (! \App\Services\VideoGeneration\MetaOfferVideo::scenes((string) $this->campaign->customer->name, $script)) {
+                    throw new \RuntimeException('The Meta voiceover did not meet the brand and length requirements after revision.');
+                }
+            }
             if (empty($script)) {
                 throw new \Exception('Failed to generate video script from Gemini.');
             }
@@ -259,7 +288,7 @@ class GenerateVideo implements ShouldQueue
             // strategy's Facebook deploy ever saw the video.
             $videoCollateral = VideoCollateral::reserve($this->campaign, [
                 'campaign_id' => $this->campaign->id,
-                'strategy_id' => null,
+                'strategy_id' => $metaOffer ? $this->strategy->id : null,
                 'platform' => $this->platform,
                 'script' => $script,
                 'variation_index' => $this->variationIndex,
@@ -273,10 +302,26 @@ class GenerateVideo implements ShouldQueue
                 ],
                 'status' => 'pending',
                 'is_active' => true,
+                ...(($isPerformanceMax || $metaOffer) && $this->strategy->hasDeploymentFootprint() ? ['should_deploy' => false] : []),
             ]);
 
             if (! $videoCollateral) {
                 Log::info('Video slot already reserved or plan allowance exhausted', ['campaign_id' => $this->campaign->id]);
+
+                return;
+            }
+
+            if ($metaOffer) {
+                $render = app(\App\Services\VideoGeneration\MetaOfferVideo::class)->render($this->campaign, $script, $this->variationIndex);
+                [$path, $url] = \App\Services\StorageHelper::put("collateral/videos/{$this->campaign->id}/branded-{$videoCollateral->id}.mp4", $render['bytes'], 'video/mp4');
+                $videoCollateral->update(['s3_path' => $path, 'cloudfront_url' => $url, 'status' => 'completed', 'provider' => 'site_to_spend',
+                    'narration_finalized_at' => now(), 'generation_metadata' => [...$videoCollateral->generation_metadata,
+                        'layout' => 'brand_offer', 'reference_ids' => $render['reference_ids'], 'duration_seconds' => $render['duration_seconds'], 'aspect_ratio' => '9:16',
+                        'tts_model' => config('ai.models.tts')]]);
+                $existing = $this->strategy->collateral_errors ?? [];
+                unset($existing['video']);
+                $this->strategy->update(['collateral_errors' => $existing ?: null]);
+                app(\App\Services\VideoGeneration\VideoPostCompletion::class)($videoCollateral);
 
                 return;
             }
@@ -291,6 +336,7 @@ class GenerateVideo implements ShouldQueue
             // it chooses only makes the choice worse.
             $endCardCopy = $this->strategy->adCopies()->first();
             $endCardText = $endCardCopy ? trim(implode("\n", array_filter($endCardCopy->headlines ?? []))) : '';
+            $colourDirection = $brandGuidelines?->getImageColorDirection() ?? '';
 
             // Provider-aware narration sizing: Grok generates up to 15s in a
             // single pass with native audio, so it gets the full script. Veo
@@ -303,12 +349,12 @@ class GenerateVideo implements ShouldQueue
             // handed Veo the full 15s script for an 8s clip, and the extension
             // chain then resumed at segment 1, so segment 0 was rushed and
             // everything after it was misaligned.
-            $promptForProvider = function (string $provider) use ($actionableContent, $script, $endCardText): string {
+            $promptForProvider = function (string $provider) use ($actionableContent, $script, $endCardText, $colourDirection): string {
                 $promptScript = $provider === 'veo'
                     ? (ExtendVideoForScript::scriptSegments($script)[0] ?? $script)
                     : $script;
 
-                return (new VideoFromScriptPrompt($actionableContent, $promptScript, $endCardText))->getPrompt();
+                return (new VideoFromScriptPrompt($actionableContent, $promptScript, $endCardText, $colourDirection))->getPrompt();
             };
 
             $videoPrompt = $promptForProvider('openrouter');
@@ -330,7 +376,7 @@ class GenerateVideo implements ShouldQueue
                     'customer_id' => $this->campaign->customer_id,
                     'task_type' => 'video_generation',
                 ],
-                forPerformanceMax: str_contains(strtolower($this->platform), 'performance max'),
+                forPerformanceMax: $isPerformanceMax,
             );
 
             if (! $result) {
@@ -377,9 +423,10 @@ class GenerateVideo implements ShouldQueue
             CheckVideoStatus::dispatch($videoCollateral)->delay(now()->addMinutes(1));
 
         } catch (\Throwable $e) {
-            if ($videoCollateral) {
+            if ($videoCollateral && $videoCollateral->status !== 'completed') {
                 $videoCollateral->update(['status' => 'failed']);
             }
+            report($e);
             Log::error("Error in GenerateVideo job for Campaign ID {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }

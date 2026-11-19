@@ -30,17 +30,17 @@ class CreateSitelinkAsset extends BaseGoogleAdsService
             [['text' => $linkText, 'url' => $finalUrl, 'desc1' => $description1, 'desc2' => $description2]], 1);
         $link = $links[0] ?? null;
         // This low-level writer must not silently substitute a different destination.
-        if (! $link || $link['url'] !== app(\App\Services\Campaigns\AdvertisingEvidence::class)->url($finalUrl)) {
+        if (! $link || $link['text'] !== $linkText || $link['url'] !== app(\App\Services\Campaigns\AdvertisingEvidence::class)->url($finalUrl)) {
             return null;
         }
         [$linkText, $description1, $description2] = [$link['text'], $link['desc1'], $link['desc2']];
         $this->ensureClient();
 
-        $sitelinkAsset = new SitelinkAsset([
-            'link_text' => $linkText,
-            'description1' => $description1,
-            'description2' => $description2,
-        ]);
+        $sitelinkAsset = new SitelinkAsset(['link_text' => $linkText]);
+        if ($description1 !== '' && $description2 !== '') {
+            $sitelinkAsset->setDescription1($description1);
+            $sitelinkAsset->setDescription2($description2);
+        }
 
         $asset = new Asset([
             'name' => 'Sitelink: '.$linkText.' - '.uniqid(),
@@ -65,7 +65,7 @@ class CreateSitelinkAsset extends BaseGoogleAdsService
 
             return $assetResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError('Failed to create Sitelink Asset: '.$e->getMessage());
+            $this->logError('Failed to create Sitelink Asset: '.$e->getMessage(), $e);
 
             return null;
         }

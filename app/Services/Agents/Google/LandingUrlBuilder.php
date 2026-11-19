@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionPlan;
+use App\Services\Campaigns\CampaignTrackingUrl;
 
 /**
  * Builds the final landing-page URL for an ad, including UTM tagging.
@@ -39,28 +40,11 @@ class LandingUrlBuilder
             return null;
         }
 
-        // Append Spectra UTM parameters for attribution tracking
-        return $this->appendUtmParameters($url, $campaign, $strategy, 'google');
+        return CampaignTrackingUrl::forStrategy($url, $campaign, $strategy, 'google');
     }
 
-    /**
-     * Append UTM parameters for attribution tracking.
-     */
-    protected function appendUtmParameters(string $url, Campaign $campaign, Strategy $strategy, string $platform): string
+    public function forOffer(string $url, Campaign $campaign, Strategy $strategy, string $offer): string
     {
-        $params = [
-            'utm_source' => $platform,
-            'utm_medium' => $strategy->campaign_type ?? 'cpc',
-            'utm_campaign' => 'spectra_'.$campaign->id,
-            'utm_content' => 'strategy_'.$strategy->id,
-        ];
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-
-        return $url.$separator.http_build_query($params);
+        return CampaignTrackingUrl::forStrategy($url, $campaign, $strategy, 'google', $offer);
     }
-
-    /**
-     * Handle execution errors with AI-powered recovery
-     */
 }

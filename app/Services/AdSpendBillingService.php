@@ -9,6 +9,7 @@ use App\Mail\AdSpendPaymentFailed;
 use App\Mail\AdSpendPaymentWarning;
 use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Notification;
@@ -464,23 +465,38 @@ class AdSpendBillingService
 
             // Resume campaigns and restore budgets to 100%. This branch is only
             // reached from the PAYMENT_PAUSED state, so the pause sweep did run.
-            $this->recoverCampaigns($customer, true);
+            $recovery = $this->recoverCampaigns($customer, true);
+            $needsReview = $recovery['failed'] > 0 || $recovery['skipped'] > 0;
 
             $user = $customer->users()->wherePivot('role', 'owner')->first()
                 ?? $customer->users()->first();
-            if ($user) {
+            if ($user && ! $needsReview && $recovery['resumed'] > 0) {
                 Mail::to($user->email)->queue(new AdSpendCampaignsResumed($customer, $credit));
             }
 
-            $this->notifyInApp(
-                $customer,
-                Notification::TYPE_BILLING_SUCCESS,
-                'Your ads are running again',
-                'Your payment went through and your campaigns are back to their full budgets.',
-            );
+            if ($needsReview) {
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_WARNING,
+                    'Payment received — your campaigns need review',
+                    'Your payment went through. Some campaigns could not be restarted or remain on hold. Review their status before restarting them.',
+                );
+            } else {
+                $this->notifyInApp(
+                    $customer,
+                    Notification::TYPE_BILLING_SUCCESS,
+                    $recovery['resumed'] > 0 ? 'Your ads are running again' : 'Your ad spend payment was received',
+                    $recovery['resumed'] > 0
+                        ? 'Your payment went through and the ad platforms accepted your campaign restarts.'
+                        : 'Your payment went through and your ad spend credit is available.',
+                );
+            }
 
             $result['success'] = true;
-            $result['action_taken'] = 'Payment recovered, campaigns resumed';
+            $result['campaign_recovery'] = $recovery;
+            $result['action_taken'] = $needsReview
+                ? 'Payment recovered, campaign recovery needs review'
+                : ($recovery['resumed'] > 0 ? 'Payment recovered, campaigns resumed' : 'Payment recovered');
 
             Log::info('AdSpendBilling: Payment recovered', [
                 'customer_id' => $customer->id,
@@ -1035,13 +1051,16 @@ class AdSpendBillingService
      * exactly the pair applyPlatformStatus('PAUSED') writes. CheckCampaign-
      * PolicyViolations only writes the local `status`, so a campaign parked for
      * a disapproved ad is not swept back on by a credit top-up.
+     * Unverified restarts are counted for review, never blindly retried.
+     *
+     * @return array{resumed: int, failed: int, skipped: int}
      */
-    protected function resumeAllCampaigns(Customer $customer): void
+    protected function resumeAllCampaigns(Customer $customer): array
     {
+        $summary = ['resumed' => 0, 'failed' => 0, 'skipped' => 0];
         $campaigns = $customer->campaigns()
             ->where('status', 'paused')
-            ->where('platform_status', 'PAUSED')
-            ->whereNull('spend_safety_hold')
+            ->whereIn('platform_status', ['PAUSED', 'UNKNOWN'])
             ->where(function ($q) {
                 // A platform id, not withDeployedPlatforms(): that scope also
                 // matches on a deployed strategy, and a campaign with no id
@@ -1054,62 +1073,79 @@ class AdSpendBillingService
             ->get();
 
         foreach ($campaigns as $campaign) {
+            $attemptedPlatforms = [];
+            $acceptedPlatforms = [];
             try {
-                if (\App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
-                    Log::info('AdSpendBilling: Leaving the bounded trial or safety hold paused for explicit review', ['campaign_id' => $campaign->id]);
+                if ($campaign->platform_status === 'UNKNOWN'
+                    || \App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
+                    $summary['skipped']++;
+                    Log::info('AdSpendBilling: Leaving the campaign unchanged for explicit review', ['campaign_id' => $campaign->id]);
 
                     continue;
                 }
+
+                // Check every deployed platform before starting any of them.
+                // A missing account must not leave a mixed campaign partly resumed.
+                foreach ([
+                    'Google' => [$campaign->google_ads_campaign_id, $customer->google_ads_customer_id],
+                    'Facebook' => [$campaign->facebook_ads_campaign_id, $customer->facebook_ads_account_id],
+                    'Microsoft' => [$campaign->microsoft_ads_campaign_id, $customer->microsoft_ads_account_id],
+                    'LinkedIn' => [$campaign->linkedin_campaign_id, $customer->linkedin_ads_account_id],
+                ] as $platform => [$campaignId, $accountId]) {
+                    if (! empty($campaignId) && empty($accountId)) {
+                        throw new \RuntimeException("{$platform} ad account is missing.");
+                    }
+                }
+
                 // Resume Google Ads campaign
-                if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
-                    $result = (new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer))
+                if (! empty($campaign->google_ads_campaign_id)) {
+                    $service = app(\App\Services\GoogleAds\CommonServices\UpdateCampaignStatus::class, ['customer' => $customer]);
+                    $attemptedPlatforms[] = 'google';
+                    $result = $service
                         ->enable($customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName(), ownerApprovedRestart: true);
 
                     // enable() reports failure by return value, so a refusal is
                     // silent. Don't mark the campaign active off the back of one.
                     if (! ($result['success'] ?? false)) {
-                        report(new \RuntimeException(
-                            "Ad spend resume refused for campaign {$campaign->id}: ".($result['error'] ?? 'unknown')
-                        ));
-                        Log::error('AdSpendBilling: Failed to resume campaign', [
-                            'campaign_id' => $campaign->id,
-                            'error' => $result['error'] ?? 'unknown',
-                        ]);
-
-                        continue;
+                        throw new \RuntimeException('Google refused to resume the campaign: '.($result['error'] ?? 'unknown'));
                     }
+                    $acceptedPlatforms[] = 'google';
                 }
 
                 // Resume Facebook Ads campaign
                 if (! empty($campaign->facebook_ads_campaign_id)) {
-                    $this->resumeFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
+                    $attemptedPlatforms[] = 'facebook';
+                    if (! $this->resumeFacebookCampaign($customer, $campaign->facebook_ads_campaign_id)) {
+                        throw new \RuntimeException('Facebook refused to resume the campaign.');
+                    }
+                    $acceptedPlatforms[] = 'facebook';
                 }
 
                 // Resume Microsoft Ads campaign
-                if (! empty($campaign->microsoft_ads_campaign_id) && ! empty($customer->microsoft_ads_account_id)) {
-                    try {
-                        $msService = new \App\Services\MicrosoftAds\CampaignService($customer);
-                        $msService->updateStatus($campaign->microsoft_ads_campaign_id, 'Active');
-                    } catch (\Throwable $e) {
-                        Log::warning('AdSpendBilling: Failed to resume Microsoft campaign', ['error' => $e->getMessage()]);
+                if (! empty($campaign->microsoft_ads_campaign_id)) {
+                    $msService = app(\App\Services\MicrosoftAds\CampaignService::class, ['customer' => $customer]);
+                    $attemptedPlatforms[] = 'microsoft';
+                    if (! $msService->updateStatus($campaign->microsoft_ads_campaign_id, 'Active')) {
+                        throw new \RuntimeException('Microsoft refused to resume the campaign.');
                     }
+                    $acceptedPlatforms[] = 'microsoft';
                 }
 
                 // Resume LinkedIn Ads campaign
-                if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
-                    try {
-                        $liService = new \App\Services\LinkedInAds\CampaignService($customer);
-                        $liService->updateStatus($campaign->linkedin_campaign_id, 'ACTIVE');
-                    } catch (\Throwable $e) {
-                        report($e);
-                        Log::warning('AdSpendBilling: Failed to resume LinkedIn campaign', ['error' => $e->getMessage()]);
+                if (! empty($campaign->linkedin_campaign_id)) {
+                    $liService = app(\App\Services\LinkedInAds\CampaignService::class, ['customer' => $customer]);
+                    $attemptedPlatforms[] = 'linkedin';
+                    if ($liService->updateStatus($campaign->linkedin_campaign_id, 'ACTIVE') === null) {
+                        throw new \RuntimeException('LinkedIn refused to resume the campaign.');
                     }
+                    $acceptedPlatforms[] = 'linkedin';
                 }
 
                 // Both columns together — billing and every serving check read
                 // one or the other, so writing only `status` leaves the campaign
                 // half-resumed.
                 $campaign->applyPlatformStatus('ENABLED');
+                $summary['resumed']++;
 
                 Log::info('AdSpendBilling: Resumed campaign', [
                     'campaign_id' => $campaign->id,
@@ -1117,13 +1153,39 @@ class AdSpendBillingService
                 ]);
 
             } catch (\Throwable $e) {
+                $summary['failed']++;
                 report($e);
+                if ($attemptedPlatforms !== []) {
+                    try {
+                        // A failed or partial write cannot certify that every
+                        // platform remains paused. Require review before retrying.
+                        $campaign->applyPlatformStatus('UNKNOWN');
+                        AgentActivity::record(
+                            'billing',
+                            'campaign_resume_failed',
+                            'Payment recovery could not confirm every campaign restart. Review the campaign before restarting it.',
+                            $customer->id,
+                            $campaign->id,
+                            ['attempted_platforms' => $attemptedPlatforms, 'accepted_platforms' => $acceptedPlatforms,
+                                'error' => $e->getMessage()],
+                            'failed',
+                        );
+                    } catch (\Throwable $recordError) {
+                        report($recordError);
+                        Log::error('AdSpendBilling: Failed to record the unverified resume', [
+                            'campaign_id' => $campaign->id,
+                            'error' => $recordError->getMessage(),
+                        ]);
+                    }
+                }
                 Log::error('AdSpendBilling: Failed to resume campaign', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
+
+        return $summary;
     }
 
     /**
@@ -1141,14 +1203,18 @@ class AdSpendBillingService
      * after which the credit row can no longer answer the question. A top-up on
      * an account that only ever reached grace period must restore budgets
      * without un-pausing campaigns nobody's billing paused.
+     *
+     * @return array{resumed: int, failed: int, skipped: int}
      */
-    public function recoverCampaigns(Customer $customer, bool $campaignsWerePaused = true): void
+    public function recoverCampaigns(Customer $customer, bool $campaignsWerePaused = true): array
     {
-        if ($campaignsWerePaused) {
-            $this->resumeAllCampaigns($customer);
-        }
+        $summary = $campaignsWerePaused
+            ? $this->resumeAllCampaigns($customer)
+            : ['resumed' => 0, 'failed' => 0, 'skipped' => 0];
 
         $this->reduceCampaignBudgets($customer, 1.0);
+
+        return $summary;
     }
 
     /**
@@ -1157,14 +1223,15 @@ class AdSpendBillingService
      * (Pausing one now goes through DeactivateCustomerService::pauseCampaign,
      * which is the only remaining copy of the per-platform pause calls.)
      */
-    protected function resumeFacebookCampaign(Customer $customer, string $campaignId): void
+    protected function resumeFacebookCampaign(Customer $customer, string $campaignId): bool
     {
         if (empty($customer->facebook_ads_account_id)) {
-            return;
+            throw new \RuntimeException('Facebook ad account is missing.');
         }
 
-        $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
-        $campaignService->updateCampaign($campaignId, ['status' => 'ACTIVE']);
+        $campaignService = app(\App\Services\FacebookAds\CampaignService::class, ['customer' => $customer]);
+
+        return $campaignService->updateCampaign($campaignId, ['status' => 'ACTIVE']);
     }
 
     /**

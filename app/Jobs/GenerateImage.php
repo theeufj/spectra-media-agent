@@ -85,14 +85,19 @@ class GenerateImage implements ShouldQueue
         return now()->addMinutes(10);
     }
 
+    protected ?string $onlyFormat = null;
+
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected int $slot = 0,
         protected ?string $creativeRunId = null,
         protected ?string $replaceConceptKey = null,
-        protected ?string $reviewFeedback = null
-    ) {}
+        protected ?string $reviewFeedback = null,
+        ?string $onlyFormat = null,
+    ) {
+        $this->onlyFormat = $onlyFormat;
+    }
 
     /**
      * Execute the job.
@@ -103,6 +108,12 @@ class GenerateImage implements ShouldQueue
 
         try {
             $this->strategy->refresh();
+            $metaOffer = \App\Services\Creative\MetaOfferArt::applies($this->campaign, $this->strategy, $this->strategy->platform);
+            $isPerformanceMax = $this->strategy->campaign_type === 'performance_max'
+                && str_contains(strtolower($this->strategy->platform), 'google');
+            if ($this->onlyFormat !== null && ($this->onlyFormat !== 'portrait' || ! $isPerformanceMax || ! $this->strategy->signed_off_at)) {
+                throw new \InvalidArgumentException('This image format requires a reviewed Performance Max strategy.');
+            }
             if ($this->creativeRunId && ($this->strategy->creative_review['run_id'] ?? null) !== $this->creativeRunId) {
                 return; // A newer generation owns this strategy now.
             }
@@ -152,7 +163,9 @@ class GenerateImage implements ShouldQueue
             }
 
             // Defer before AI review or splitting: waiting must not spend provider calls.
-            $adCopy = $this->strategy->adCopies()->first();
+            $adCopy = $metaOffer
+                ? $this->strategy->adCopies()->where('should_deploy', true)->orderByDesc('id')->first()
+                : $this->strategy->adCopies()->first();
 
             if (! $adCopy && $this->creativeRunId) {
                 if ($this->attempts() >= 45 || ! empty($this->strategy->collateral_errors['ad_copy'])) {
@@ -181,15 +194,18 @@ class GenerateImage implements ShouldQueue
                 Log::warning("Generating images without ad copy for strategy {$this->strategy->id} after {$this->attempts()} attempts");
             }
 
-            $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
-
-            if (! $review['is_valid']) {
-                $feedback = implode(' ', $review['feedback']);
-                throw new \Exception("Image prompt failed validation: {$feedback}");
+            if (! $metaOffer) {
+                $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
+                if (! $review['is_valid']) {
+                    $feedback = implode(' ', $review['feedback']);
+                    throw new \Exception("Image prompt failed validation: {$feedback}");
+                }
             }
 
             $concept = $this->strategy->creative_concepts[$this->slot % 3] ?? null;
-            if ($concept) {
+            if ($metaOffer) {
+                $prompts = [$concept['selling_idea'] ?? $this->campaign->product_focus ?? ''];
+            } elseif ($concept) {
                 // These are the approved distinct selling ideas. Do not ask three
                 // independent splitter calls to invent a different set for each slot.
                 $prompts = ["Selling idea: {$concept['selling_idea']}\nSupported fact: {$concept['evidence']}\nPicture: {$concept['visual']}"];
@@ -247,12 +263,13 @@ class GenerateImage implements ShouldQueue
             // lifestyle photos, so generated ads look like their business
             // rather than a generic render.
             $seedContextImages = [];
-            $seeds = $this->campaign->imageCollaterals()
+            $seeds = $metaOffer ? new \Illuminate\Database\Eloquent\Collection : $this->campaign->imageCollaterals()
                 ->where('is_seed', true)
+                ->whereNotNull('s3_path')
                 ->where('is_active', true)
                 ->get();
 
-            if ($seeds->isEmpty()) {
+            if ($seeds->isEmpty() && ! $metaOffer) {
                 $seeds = \App\Models\HarvestedAsset::where('customer_id', $this->campaign->customer_id)
                     ->usable()
                     ->whereIn('classification', ['product', 'lifestyle'])
@@ -304,7 +321,7 @@ class GenerateImage implements ShouldQueue
                  * already holds gives each picture its own index, because a
                  * concept's rows are written before the next one is composed.
                  */
-                $lens = $this->slot;
+                $lens = $this->slot + ($metaOffer && $this->reviewFeedback ? 1 : 0);
                 $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens, $this->strategy->campaign_type, isset($concept['visual_style']) ? $concept : null);
                 $scene = $concept ? $prompt : CreativeVariant::apply($prompt, $lens);
                 if (isset($concept['visual_style'])) {
@@ -334,8 +351,15 @@ class GenerateImage implements ShouldQueue
                  * model may draw from, and this is which line leads.
                  */
                 $headline = $this->headlineForLens($adCopy, $lens);
+                if ($metaOffer && ! $headline) {
+                    throw new \RuntimeException('Generate and select Meta ad copy before composing the branded creative.');
+                }
 
-                $imagePrompt = (new ImagePrompt(
+                if ($metaOffer) {
+                    $layout = 'brand_offer';
+                    $scene = $headline;
+                }
+                $imagePrompt = $metaOffer ? $headline : (new ImagePrompt(
                     $scene,
                     $brandGuidelines,
                     $productContext,
@@ -403,9 +427,32 @@ class GenerateImage implements ShouldQueue
                     // slice through the subject.
                     'mrec' => ['size' => [300, 250], 'aspect' => '4:3'],
                 ];
+                if ($isPerformanceMax || $metaOffer) {
+                    $adFormats['portrait'] = ['size' => [960, 1200], 'aspect' => '4:5'];
+                    // MREC cannot be attached to a Performance Max asset group.
+                    // Honour it when replacing older concepts that already include it.
+                    if (! $replacement || ($metaOffer && ! $this->strategy->imageCollaterals()->where('concept_key', $this->replaceConceptKey)->where('format', 'mrec')->exists())) {
+                        unset($adFormats['mrec']);
+                    }
+                }
+                if ($this->onlyFormat !== null) {
+                    $adFormats = array_intersect_key($adFormats, [$this->onlyFormat => true]);
+                }
 
                 $bases = [];
-                foreach (array_unique(array_column($adFormats, 'aspect')) as $aspect) {
+                if ($metaOffer) {
+                    $art = app(\App\Services\Creative\MetaOfferArt::class);
+                    $source = $art->campaignSource($this->campaign, $lens);
+                    foreach ($adFormats as $spec) {
+                        [$width, $height] = $spec['size'];
+                        $png = $art->render($this->campaign, $headline,
+                            $approvedDescriptions[$lens % max(1, count($approvedDescriptions))] ?? null, $width, $height, $lens, $source['bytes'] ?? null);
+                        $bases[$spec['aspect']] = ['mimeType' => 'image/png', 'data' => base64_encode($png),
+                            'provenance' => ['provider' => 'site_to_spend', 'layout' => $layout, 'ad_copy_id' => $adCopy->id,
+                                'source' => $source ? 'campaign_seed' : 'brand_and_copy', 'reference_ids' => $source ? [$source['id']] : [], 'generated_at' => now()->toIso8601String()]];
+                    }
+                }
+                foreach (array_diff(array_unique(array_column($adFormats, 'aspect')), array_keys($bases)) as $aspect) {
                     $generated = $this->generateAtAspect(
                         $imagePrompt,
                         $aspect,
@@ -518,7 +565,10 @@ class GenerateImage implements ShouldQueue
                      * often while the providers are rate-limiting. It now takes
                      * the nearest shape available and says what that costs.
                      */
-                    $fill = $this->nearestBase($bases, $spec['aspect'], $targetW, $targetH, $format);
+                    // A portrait is composed for its own frame. A missing base
+                    // should remain visible as a missing asset in review.
+                    $fill = $format === 'portrait' && ! isset($bases['4:5']) ? null
+                        : $this->nearestBase($bases, $spec['aspect'], $targetW, $targetH, $format);
                     $imageData = $fill['base'] ?? null;
 
                     if ($imageData === null) {
@@ -570,7 +620,7 @@ class GenerateImage implements ShouldQueue
                         $encoded = (string) $img->encode();
                     } catch (\Throwable $e) {
                         Log::warning("Failed to apply overlay for format {$format}: ".$e->getMessage());
-                        if (in_array($layout, ['statement', 'editorial'], true)) {
+                        if ($format === 'portrait' || in_array($layout, ['statement', 'editorial'], true)) {
                             throw $e; // Do not silently ship a wordless finished ad.
                         }
                         $encoded = $decodedImage;
@@ -588,6 +638,7 @@ class GenerateImage implements ShouldQueue
                         'cloudfront_url' => $cloudFrontUrl,
                         'format' => $format,
                         'layout' => $layout,
+                        ...(($this->onlyFormat !== null || $metaOffer) && $this->strategy->hasDeploymentFootprint() ? ['should_deploy' => false] : []),
                         'generation_metadata' => ($imageData['provenance'] ?? []) + [
                             'generation_id' => $this->strategy->generation_id,
                             'creative_run_id' => $this->creativeRunId,
@@ -742,6 +793,7 @@ class GenerateImage implements ShouldQueue
         '16:9' => '1376x720',
         // 1.200, matching 300x250 exactly.
         '4:3' => '1200x1000',
+        '4:5' => '960x1200',
     ];
 
     /**
@@ -930,7 +982,9 @@ class GenerateImage implements ShouldQueue
                         ? app(\App\Services\XaiService::class)->generateImage(
                             $imagePrompt,
                             $creativeContext,
-                            $aspect
+                            // xAI offers 3:4 as its closest portrait frame. The
+                            // renderer scales it to the exact 4:5 Google slot.
+                            $aspect === '4:5' ? '3:4' : $aspect
                         )
                         : app(\App\Services\OpenRouterService::class)->generateImage(
                             $imagePrompt,

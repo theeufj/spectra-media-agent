@@ -93,6 +93,13 @@ class MonitorCampaignStatus implements ShouldQueue
         }
 
         $oldStatus = $campaign->primary_status;
+        if (count($platformResults) > 1 && ($platformResults['google']['platform_status'] ?? null) === 'PAUSED'
+            && $campaign->strategies()->where('campaign_type', 'search')->where('deployment_status', 'paused')
+                ->where('google_ads_campaign_id', $campaign->google_ads_campaign_id)
+                ->whereNotNull('execution_result->metadata->owner_paused_at')->exists()) {
+            // The owner stood down this placement only. The other platforms still determine campaign status.
+            unset($platformResults['google']);
+        }
 
         $worstSeverity = -1;
         $worstStatus = 'UNKNOWN';

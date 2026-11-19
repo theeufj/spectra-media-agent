@@ -11,7 +11,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Fires a server-side Facebook CAPI event for a sitetospend.com own-site conversion.
@@ -21,7 +20,7 @@ use Illuminate\Support\Str;
  *
  * Requires:
  *  - $user->fbclid to be set (captured by CaptureClickIds middleware)
- *  - FACEBOOK_SYSTEM_USER_TOKEN and customer's facebook_pixel_id
+ *  - FACEBOOK_SYSTEM_USER_TOKEN and the Site to Spend dataset
  *
  * Uses the Spectra Business Manager's system user token — same credential
  * used for all Facebook API calls. The pixel must be the Spectra-owned pixel
@@ -42,12 +41,22 @@ class RecordSiteFacebookConversion implements ShouldQueue
 
     public function __construct(
         protected User $user,
-        protected string $event
+        protected string $event,
+        protected ?string $eventSourceUrl = null,
+        protected ?string $clientUserAgent = null,
     ) {}
 
     public function handle(): void
     {
         if (! $this->user->fbclid) {
+            return;
+        }
+
+        $source = $this->eventSourceUrl ?? null;
+        $userAgent = $this->clientUserAgent ?? null;
+        if (! $source || parse_url($source, PHP_URL_HOST) !== 'sitetospend.com' || ! filled($userAgent)) {
+            Log::warning('RecordSiteFacebookConversion: Site to Spend browser event context is missing.');
+
             return;
         }
 
@@ -74,13 +83,14 @@ class RecordSiteFacebookConversion implements ShouldQueue
         $eventData = [
             'event_name' => $fbEventName,
             'event_time' => now()->timestamp,
-            'event_id' => Str::uuid()->toString(),
+            'event_id' => hash('sha256', "sitetospend:{$this->event}:{$this->user->id}"),
             'action_source' => 'website',
+            'event_source_url' => $source,
             'user_data' => [
                 'em' => hash('sha256', strtolower(trim($this->user->email))),
                 'fn' => hash('sha256', strtolower(explode(' ', trim($this->user->name))[0])),
                 'fbc' => "fb.1.{$this->user->created_at->timestamp}.{$this->user->fbclid}",
-                'client_ip_address' => null,
+                'client_user_agent' => $userAgent,
             ],
         ];
 

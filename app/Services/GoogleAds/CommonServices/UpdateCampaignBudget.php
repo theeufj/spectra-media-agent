@@ -23,9 +23,13 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
     /**
      * @return array{success: bool, changes: list<array{platform: string, resource_name: string, old_budget_micros: int, new_budget_micros: int, currency: string}>}
      */
-    public function updateWithChanges(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): array
+    public function updateWithChanges(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros, bool $automatic = false): array
     {
         $result = ['success' => false, 'changes' => []];
+        if ($this->customer?->cleanGoogleCustomerId() !== $customerId
+            || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#D', $campaignResourceName)) {
+            return $result;
+        }
         $local = CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
         if ($local && ! CampaignSpendGuardrails::permitsDailyBudget($local, (int) $newDailyBudgetMicros)) {
             $this->logError('Budget mutation refused: exceeds the approved bounded-trial daily limit.');
@@ -41,15 +45,27 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
 
                 return $result;
             }
-            if (! $this->writeBudget($customerId, $before['budget_resource'], (int) $newDailyBudgetMicros)) {
+            if ($automatic && ($before['platform_status'] ?? null) !== 'ENABLED') {
+                return ['success' => in_array($before['platform_status'] ?? null, ['PAUSED', 'REMOVED'], true), 'changes' => []];
+            }
+            $sameBudget = $before['daily_budget_micros'] === (int) $newDailyBudgetMicros;
+            if ($automatic && ! $sameBudget && ($before['explicitly_shared'] ?? false)) {
+                $this->logError('Automatic reconciliation refused a shared Google budget.');
+
+                return $result;
+            }
+            if ((! $sameBudget || $this->dryRun) && ! $this->writeBudget($customerId, $before['budget_resource'], (int) $newDailyBudgetMicros)) {
                 return $result;
             }
             if ($this->dryRun) {
                 return ['success' => true, 'changes' => []];
             }
+            // Matching amounts avoid redundant writes, but pacing still needs
+            // independent confirmation of the currently effective budget.
             $readback = $this->readBudget($customerId, $campaignResourceName);
             if (! $readback || $readback['budget_resource'] !== $before['budget_resource']
                 || $readback['currency_code'] !== $before['currency_code']
+                || $readback['account_timezone'] !== $before['account_timezone']
                 || $readback['daily_budget_micros'] !== (int) $newDailyBudgetMicros) {
                 $this->logError('Google budget mutation was not confirmed by readback.');
 
@@ -78,13 +94,15 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
 
     protected function readBudget(string $customerId, string $campaignResourceName): ?array
     {
-        $query = 'SELECT campaign.resource_name, campaign.campaign_budget, campaign_budget.amount_micros, '
+        $query = 'SELECT campaign.resource_name, campaign.status, campaign.campaign_budget, campaign_budget.amount_micros, campaign_budget.explicitly_shared, '
             ."customer.currency_code, customer.time_zone FROM campaign WHERE campaign.resource_name = '$campaignResourceName'";
         foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
             $snapshot = ['campaign_resource' => $row->getCampaign()->getResourceName(),
                 'budget_resource' => $row->getCampaign()->getCampaignBudget(),
                 'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros(),
-                'currency_code' => $row->getCustomer()->getCurrencyCode(), 'account_timezone' => $row->getCustomer()->getTimeZone()];
+                'currency_code' => $row->getCustomer()->getCurrencyCode(), 'account_timezone' => $row->getCustomer()->getTimeZone(),
+                'explicitly_shared' => $row->getCampaignBudget()->getExplicitlyShared(),
+                'platform_status' => \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::name($row->getCampaign()->getStatus())];
             if ($snapshot['campaign_resource'] === $campaignResourceName
                 && str_starts_with($snapshot['budget_resource'], "customers/{$customerId}/campaignBudgets/")
                 && preg_match('/^[A-Z]{3}$/', $snapshot['currency_code'])

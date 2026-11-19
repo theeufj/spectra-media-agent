@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ReviewCreativeRelease;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\User;
+use App\Services\Creative\CreativeRelease;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -107,8 +110,12 @@ class CollateralPollsOnArrivalTest extends TestCase
             }
         }
 
-        // Everything asked for has arrived, so the page has nothing to wait on
-        // and should not poll a completed set on every load.
+        // The rendered media has arrived. The page should keep polling while
+        // the exact selection is reviewed, then settle when the result arrives.
+        $this->assertTrue($this->pendingFlag($user, $strategy->fresh()));
+        Queue::assertPushed(ReviewCreativeRelease::class);
+        $fingerprint = app(CreativeRelease::class)->selection($strategy->fresh())['fingerprint'];
+        $strategy->update(['creative_release_review' => ['fingerprint' => $fingerprint, 'status' => 'passed', 'issues' => []]]);
         $this->assertFalse($this->pendingFlag($user, $strategy->fresh()));
     }
 }

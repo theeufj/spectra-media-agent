@@ -20,6 +20,7 @@ class AdCopy extends Model
         'persona_id',
         'platform',
         'headlines',
+        'long_headlines',
         'descriptions',
         // DeploymentController::toggleCollateral() flips this through update();
         // without it here the toggle was accepted and discarded, and excluded
@@ -34,6 +35,7 @@ class AdCopy extends Model
      */
     protected $casts = [
         'headlines' => 'array',
+        'long_headlines' => 'array',
         'descriptions' => 'array',
         'should_deploy' => 'boolean',
     ];

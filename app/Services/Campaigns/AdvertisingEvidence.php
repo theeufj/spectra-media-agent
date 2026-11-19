@@ -16,7 +16,7 @@ class AdvertisingEvidence
         if (! $customer) {
             return [];
         }
-        $landingPage = $campaign->landing_page_url ?: ($strategy?->bidding_strategy['landing_page_url'] ?? $customer->website);
+        $landingPage = ($strategy?->bidding_strategy['landing_page_url'] ?? null) ?: ($campaign->landing_page_url ?: $customer->website);
         $sources = $this->pages($customer);
         $landing = $this->url((string) $landingPage);
         if ($landing && $this->sameSite($landing, (string) $customer->website)) {
@@ -79,29 +79,53 @@ class AdvertisingEvidence
             $url = $this->url((string) ($item['url'] ?? ''));
             $page = $pages[$url] ?? null;
             $text = trim((string) ($item['text'] ?? $item['link_text'] ?? ''));
-            if (! $page || $text === '' || ! $this->labelMatchesPage($text, $page)) {
+            if (! $page || ! $this->usableSitelinkLabel($text) || ! $this->labelMatchesPage($text, $page)) {
                 continue;
             }
-            $links[$url] = ['text' => $this->shortText($text, 25), 'url' => $url,
+            $links[$url] = ['text' => $text, 'url' => $url,
                 'desc1' => $this->supportedDescription($item['description1'] ?? $item['desc1'] ?? '', $page),
                 'desc2' => $this->supportedDescription($item['description2'] ?? $item['desc2'] ?? '', $page)];
         }
+        // Prefer commercial and navigation pages, even when articles were crawled more recently.
+        $pages = collect($pages)->sortBy(fn (array $page) => preg_match('#/(blog|articles?|guides?|news|resources)(/|$)#i', parse_url($page['url'], PHP_URL_PATH) ?? ''));
         foreach ($pages as $url => $page) {
             if (count($links) >= $limit) {
                 break;
             }
             // A sitelink should take the visitor somewhere beyond the main home-page destination.
-            if (isset($links[$url]) || ! trim((string) parse_url($url, PHP_URL_PATH), '/')) {
+            $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+            if (isset($links[$url]) || $path === '' || preg_match('#(^|/)(?:privacy(?:-policy)?|terms(?:-(?:and-conditions|of-(?:service|use)))?|legal|cookie(?:s|-policy)?|support|help|login|sign-in|admin|dashboard|cart|checkout|password)(?:/|$)#i', $path)) {
                 continue;
             }
-            $title = preg_split('/\s+[|—–]\s+/', (string) $page['title'])[0];
-            $text = $this->shortText($title, 25);
-            if (mb_strlen($text) >= 3) {
+            $text = $this->sitelinkLabel((string) $page['title'], $path);
+            if ($text !== null) {
                 $links[$url] = ['text' => $text, 'url' => $url, 'desc1' => '', 'desc2' => ''];
             }
         }
 
         return array_slice(array_values($links), 0, $limit);
+    }
+
+    private function sitelinkLabel(string $title, string $path): ?string
+    {
+        $primary = trim(preg_split('/\s*[|:—–]\s*|\s+-\s+|(?<=[?!])\s+/u', $title, 2)[0]);
+        if ($this->usableSitelinkLabel($primary)) {
+            return $primary;
+        }
+        // A short URL slug can supply a complete label when a long SEO title cannot.
+        $slug = str_replace(['-', '_'], ' ', rawurldecode(basename($path)));
+        if (preg_match('/^[\pL\pN ]+$/u', $slug) && mb_stripos($title, $slug) !== false && $this->usableSitelinkLabel($slug)) {
+            return mb_substr($title, mb_stripos($title, $slug), mb_strlen($slug));
+        }
+        $firstPhrase = trim(preg_split('/\s+(?:&|and)\s+|,\s+/iu', $primary, 2)[0]);
+
+        return $this->usableSitelinkLabel($firstPhrase) ? $firstPhrase : null;
+    }
+
+    private function usableSitelinkLabel(string $text): bool
+    {
+        return mb_strlen($text) >= 2 && mb_strwidth($text) <= 25
+            && ! preg_match('/(?:[,&:;|—–-]|\b(?:a|an|and|for|of|or|the|to|with))$/iu', $text);
     }
 
     public function shortText(string $text, int $limit): string
@@ -131,7 +155,7 @@ class AdvertisingEvidence
             .(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
     }
 
-    private function sameSite(string $url, string $site): bool
+    public function sameSite(string $url, string $site): bool
     {
         return preg_replace('/^www\./', '', strtolower((string) parse_url($url, PHP_URL_HOST)))
             === preg_replace('/^www\./', '', strtolower((string) parse_url($site, PHP_URL_HOST)));

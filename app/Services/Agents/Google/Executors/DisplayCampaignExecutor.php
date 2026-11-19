@@ -146,7 +146,7 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 3. Upload Image Assets
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->get();
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->get();
         $imageAssetResourceNames = [];
 
         if ($imageCollaterals->isNotEmpty()) {
@@ -175,7 +175,7 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 4. Create Responsive Display Ad
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
         if ($adCopy && ! empty($imageAssetResourceNames)) {
             $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
 

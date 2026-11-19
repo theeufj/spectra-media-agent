@@ -8,10 +8,12 @@ use App\Models\Campaign;
 use App\Models\Setting;
 use App\Models\Strategy;
 use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
 use App\Services\GoogleAds\Diagnostics\OfficialTroubleshootingDocs;
+use App\Services\GoogleAds\GoogleAdStrengthRepair;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use Carbon\Carbon;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
@@ -52,7 +54,7 @@ class CampaignDiagnosticsAgent
     /**
      * Diagnose a campaign and return all findings.
      *
-     * @return array<int, array{type: string, severity: string, platform: string, message: string, details: array, can_auto_fix: bool, recommended_action: string}>
+     * @return array<int, array{type: string, severity: string, platform: string, message: string, details: array, can_auto_fix: bool, auto_fix_action?: ?string, recommended_action: string}>
      */
     public function diagnose(Campaign $campaign): array
     {
@@ -77,15 +79,14 @@ class CampaignDiagnosticsAgent
 
     // ─── Meta / Facebook Ads ─────────────────────────────────────────────────
 
-    private function diagnoseMeta(Campaign $campaign): array
+    public function diagnoseMeta(Campaign $campaign): array
     {
         $findings = [];
-        $customer = $campaign->customer;
-
         try {
-            $insights = $this->fetchMetaPerformance($campaign);
+            $strategy = FacebookCampaignMetrics::strategy($campaign);
+            $insights = $this->fetchMetaPerformance($campaign, FacebookCampaignMetrics::actionType($strategy));
 
-            if ($finding = $this->checkMetaConversionStarvation($campaign, $insights)) {
+            if ($finding = $this->conversionStarvationFinding($strategy, $insights, 'meta')) {
                 $findings[] = $finding;
             }
 
@@ -111,7 +112,7 @@ class CampaignDiagnosticsAgent
         return $findings;
     }
 
-    private function fetchMetaPerformance(Campaign $campaign): array
+    private function fetchMetaPerformance(Campaign $campaign, string $actionType): array
     {
         $customer = $campaign->customer;
         $since = now()->subDays(30)->toDateString();
@@ -122,45 +123,29 @@ class CampaignDiagnosticsAgent
             $campaign->facebook_ads_campaign_id,
             $since,
             $today,
-            ['impressions', 'clicks', 'spend', 'frequency', 'actions', 'reach', 'date_start', 'date_stop']
+            ['impressions', 'inline_link_clicks', 'spend', 'frequency', 'actions', 'reach', 'date_start', 'date_stop']
         ) ?? [];
 
-        $result = ['spend' => 0.0, 'clicks' => 0, 'conversions' => 0.0, 'impressions' => 0, 'frequency' => 0.0, 'days' => 0];
+        $result = ['spend' => 0.0, 'link_clicks' => 0, 'conversion_event' => $actionType, 'conversions' => 0.0,
+            'impressions' => 0, 'frequency' => 0.0, 'days' => 0];
 
         foreach ($rows as $row) {
             $result['spend'] += (float) ($row['spend'] ?? 0);
-            $result['clicks'] += (int) ($row['clicks'] ?? 0);
+            $result['link_clicks'] += (int) ($row['inline_link_clicks'] ?? 0);
+            $result['conversions'] += FacebookCampaignMetrics::conversions($row['actions'] ?? [], $actionType);
             $result['impressions'] += (int) ($row['impressions'] ?? 0);
             $result['days']++;
 
-            // Max frequency across days (most recent signal)
+            // Keep the maximum reported one-day frequency for the fatigue check.
             $result['frequency'] = max($result['frequency'], (float) ($row['frequency'] ?? 0));
-
-            // Count lead/signup/registration conversions
-            foreach ($row['actions'] ?? [] as $action) {
-                if (in_array($action['action_type'], [
-                    'lead',
-                    'offsite_conversion.fb_pixel_lead',
-                    'onsite_conversion.lead_grouped',
-                    'complete_registration',
-                    'purchase',
-                ])) {
-                    $result['conversions'] += (float) ($action['value'] ?? 0);
-                }
-            }
         }
 
         return $result;
     }
 
-    private function checkMetaConversionStarvation(Campaign $campaign, array $perf): ?array
+    private function conversionStarvationFinding(?Strategy $strategy, array $perf, string $platform): ?array
     {
-        $deployedAt = $campaign->strategies()
-            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
-            ->whereNotNull('deployed_at')
-            ->min('deployed_at');
-
-        if (! $deployedAt || now()->diffInDays($deployedAt) < self::STARVATION_MIN_DAYS) {
+        if (! $strategy?->isDeployed() || ! $strategy->deployed_at || $strategy->deployed_at->gt(now()->subDays(self::STARVATION_MIN_DAYS))) {
             return null;
         }
 
@@ -169,17 +154,17 @@ class CampaignDiagnosticsAgent
         }
 
         return [
-            'type' => 'meta_conversion_starvation',
+            'type' => $platform === 'meta' ? 'meta_conversion_starvation' : 'conversion_starvation',
             'severity' => 'critical',
-            'platform' => 'meta',
+            'platform' => $platform,
             'message' => sprintf(
-                'Meta campaign has spent $%s over 30 days with zero conversions — pixel may be misconfigured or creative is not resonating',
+                'The campaign spent %s in account currency during the reporting window with zero attributed conversions for its goal.',
                 number_format($perf['spend'], 2)
             ),
             'details' => $perf,
-            'can_auto_fix' => true,
-            'auto_fix_action' => 'refresh_meta_creative',
-            'recommended_action' => 'Refresh ad creative with new copy and image; verify pixel is firing on conversion pages',
+            'can_auto_fix' => false,
+            'auto_fix_action' => null,
+            'recommended_action' => 'Verify the approved conversion event on the landing page and check where visitors drop off. Review any resulting creative changes in Site to Spend.',
         ];
     }
 
@@ -219,13 +204,13 @@ class CampaignDiagnosticsAgent
             'severity' => 'high',
             'platform' => 'meta',
             'message' => sprintf(
-                'Meta audience frequency is %.1fx — the same people are seeing the same ad repeatedly, causing ad fatigue and rising CPCs',
+                'Meta reported a one-day frequency of %.1fx during this campaign. Check whether repeat exposure is reducing website response.',
                 $perf['frequency']
             ),
             'details' => ['frequency' => $perf['frequency'], 'impressions' => $perf['impressions'], 'spend' => $perf['spend']],
-            'can_auto_fix' => true,
-            'auto_fix_action' => 'refresh_meta_creative',
-            'recommended_action' => 'Refresh creative immediately; consider broadening the audience or adding exclusions for recent converters',
+            'can_auto_fix' => false,
+            'auto_fix_action' => null,
+            'recommended_action' => 'Compare link clicks and signups across the active ads. If the creative needs refreshing, review and approve the new selection in Site to Spend.',
         ];
     }
 
@@ -276,7 +261,8 @@ class CampaignDiagnosticsAgent
         try {
             $perf = $this->fetchGooglePerformance($campaign);
 
-            if ($finding = $this->checkConversionStarvation($campaign, $perf)) {
+            $strategy = app(GoogleAdStrengthRepair::class)->strategyForCampaign($campaign);
+            if ($finding = $this->conversionStarvationFinding($strategy, $perf, 'google_ads')) {
                 $findings[] = $finding;
             }
 
@@ -400,7 +386,7 @@ class CampaignDiagnosticsAgent
         }
     }
 
-    private function fetchGooglePerformance(Campaign $campaign): array
+    protected function fetchGooglePerformance(Campaign $campaign): array
     {
         $customer = $campaign->customer;
         $customerId = $customer->cleanGoogleCustomerId();
@@ -454,36 +440,6 @@ class CampaignDiagnosticsAgent
         return $service->fetch($customerId, $campaignId);
     }
 
-    private function checkConversionStarvation(Campaign $campaign, array $perf): ?array
-    {
-        $deployedAt = $campaign->strategies()
-            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
-            ->whereNotNull('deployed_at')
-            ->min('deployed_at');
-
-        if (! $deployedAt || now()->diffInDays($deployedAt) < self::STARVATION_MIN_DAYS) {
-            return null;
-        }
-
-        if ($perf['spend'] < self::STARVATION_MIN_SPEND || $perf['conversions'] > 0) {
-            return null;
-        }
-
-        return [
-            'type' => 'conversion_starvation',
-            'severity' => 'critical',
-            'platform' => 'google_ads',
-            'message' => sprintf(
-                'Campaign has spent $%s over 30 days with zero conversions — the bidding algorithm is flying blind',
-                number_format($perf['spend'], 2)
-            ),
-            'details' => $perf,
-            'can_auto_fix' => true,
-            'auto_fix_action' => 'refresh_creative',
-            'recommended_action' => 'Refresh ad copy and images to give the algorithm new signals; verify conversion tracking is firing',
-        ];
-    }
-
     private function diagnosePMax(Campaign $campaign): array
     {
         $findings = [];
@@ -499,17 +455,12 @@ class CampaignDiagnosticsAgent
             {
                 $this->ensureClient();
 
-                $signalCount = 0;
-                try {
-                    $resp = $this->searchQuery($customerId,
-                        "SELECT asset_group_signal.asset_group FROM asset_group_signal
-                         WHERE campaign.id = {$campaignId} LIMIT 1"
-                    );
-                    foreach ($resp->getIterator() as $_) {
-                        $signalCount++;
-                    }
-                } catch (\Throwable $e) {
-                    report($e);
+                $signalledGroups = [];
+                $resp = $this->searchQuery($customerId,
+                    "SELECT asset_group_signal.asset_group FROM asset_group_signal WHERE campaign.id = {$campaignId}"
+                );
+                foreach ($resp->iterateAllElements() as $row) {
+                    $signalledGroups[$row->getAssetGroupSignal()->getAssetGroup()] = true;
                 }
 
                 $landingUrls = [];
@@ -517,7 +468,7 @@ class CampaignDiagnosticsAgent
 
                 $resp = $this->searchQuery($customerId,
                     "SELECT asset_group.resource_name, asset_group.name, asset_group.final_urls
-                     FROM asset_group WHERE campaign.id = {$campaignId}"
+                     FROM asset_group WHERE campaign.id = {$campaignId} AND asset_group.status = 'ENABLED'"
                 );
                 foreach ($resp->getIterator() as $row) {
                     $ag = $row->getAssetGroup();
@@ -531,7 +482,7 @@ class CampaignDiagnosticsAgent
                 }
 
                 return [
-                    'signal_count' => $signalCount,
+                    'missing_signal_groups' => array_values(array_filter($assetGroups, fn ($group) => ! isset($signalledGroups[$group['resource_name']]))),
                     'landing_urls' => array_unique($landingUrls),
                     'asset_groups' => $assetGroups,
                 ];
@@ -541,16 +492,16 @@ class CampaignDiagnosticsAgent
         try {
             $data = $service->inspect($customerId, $campaignId);
 
-            if ($data['signal_count'] === 0) {
+            if ($data['missing_signal_groups'] !== []) {
                 $findings[] = [
                     'type' => 'pmax_no_audience_signals',
                     'severity' => 'high',
                     'platform' => 'google_ads',
-                    'message' => 'PMax campaign has no audience signals — Google has zero guidance on who to target, so it is spending on broad, unqualified audiences',
-                    'details' => ['campaign_id' => $campaignId, 'asset_groups' => $data['asset_groups']],
+                    'message' => 'An enabled Performance Max asset group has no audience or search-theme signals.',
+                    'details' => ['campaign_id' => $campaignId, 'asset_groups' => $data['missing_signal_groups']],
                     'can_auto_fix' => true,
                     'auto_fix_action' => 'add_audience_signals',
-                    'recommended_action' => 'Add search-theme and in-market audience signals so PMax knows who to target',
+                    'recommended_action' => 'Add relevant search themes from the campaign offer.',
                 ];
             }
 

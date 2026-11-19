@@ -32,4 +32,14 @@ class GoogleBudgetMutator implements ReportsBudgetChanges
             $newDailyBudgetMicros
         );
     }
+
+    public function reconcileDailyBudget(string $customerId, string $campaignResourceName, int $newDailyBudgetMicros): array
+    {
+        return (new UpdateCampaignBudget($this->customer))->updateWithChanges(
+            $customerId,
+            $campaignResourceName,
+            $newDailyBudgetMicros,
+            automatic: true
+        );
+    }
 }

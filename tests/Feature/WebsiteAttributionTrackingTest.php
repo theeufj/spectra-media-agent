@@ -7,8 +7,12 @@ use App\Models\AttributionTouchpoint;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\GoogleAdsPerformanceData;
+use App\Models\Strategy;
 use App\Models\User;
+use App\Services\Agents\Google\LandingUrlBuilder;
+use App\Services\Campaigns\CampaignTrackingUrl;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -83,6 +87,39 @@ class WebsiteAttributionTrackingTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(0, AttributionTouchpoint::forCustomer($customer->id)->count());
+    }
+
+    public function test_every_platform_landing_url_can_attribute_a_website_conversion(): void
+    {
+        $customer = Customer::factory()->create(['website' => 'https://example.com']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        foreach (['google', 'facebook', 'microsoft', 'linkedin'] as $platform) {
+            $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => $platform]);
+            $destination = 'https://example.com/quote?offer=spring%20sale&utm_source=old&utm_campaign=old#form';
+            $url = $platform === 'google'
+                ? (new LandingUrlBuilder($customer))->forOffer($destination, $campaign, $strategy, 'quote')
+                : CampaignTrackingUrl::forStrategy($destination, $campaign, $strategy, $platform);
+            parse_str(parse_url($url, PHP_URL_QUERY), $parameters);
+            $this->assertSame('form', parse_url($url, PHP_URL_FRAGMENT));
+            $this->assertStringContainsString('offer=spring%20sale&', $url);
+            $this->assertSame($platform, $parameters['utm_source']);
+            $this->assertSame('spectra_'.$campaign->id, $parameters['utm_campaign']);
+            $this->assertSame('strategy_'.$strategy->id.($platform === 'google' ? '_offer_quote' : ''), $parameters['utm_content']);
+
+            $visit = $this->payload($customer, ['visitor_id' => (string) Str::uuid(), 'page_url' => $url]);
+            $this->withHeader('Origin', 'https://example.com')->post('/api/tracking/touchpoint', $visit + $parameters)->assertCreated();
+            $eventId = (string) Str::uuid();
+            $this->post('/api/tracking/conversion', $visit + [
+                'event_id' => $eventId,
+                'conversion_type' => 'lead',
+                'conversion_value' => 0,
+            ])->assertCreated();
+
+            $conversion = AttributionConversion::forCustomer($customer->id)->where('event_id', $eventId)->sole();
+            $this->assertSame($platform, $conversion->touchpoints[0]['utm_source']);
+            $this->assertEquals(1, $conversion->attributed_to['last_click'][0]['credit']);
+        }
     }
 
     public function test_conversion_cannot_claim_another_site_or_future_browser_journey(): void

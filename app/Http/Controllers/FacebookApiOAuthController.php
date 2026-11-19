@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Connection;
+use App\Services\FacebookAds\BusinessManagerService;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -118,6 +119,7 @@ class FacebookApiOAuthController extends Controller
         $selection = $request->validate([
             'ad_account_id' => ['nullable', 'string', 'regex:/\Aact_[0-9]+\z/'],
             'date_preset' => ['nullable', Rule::in(array_keys(self::INSIGHT_PERIODS))],
+            'page_id' => ['nullable', 'string', 'regex:/\A[0-9]+\z/'],
         ]);
         $datePreset = $selection['date_preset'] ?? 'last_30d';
 
@@ -149,11 +151,17 @@ class FacebookApiOAuthController extends Controller
             ? $this->fetchAdInsights($token, $selectedAccount['id'], $datePreset)
             : null;
 
-        // Fetch posts for the first managed page — use the page's own access token from /me/accounts
-        $firstPage = $managedPages['pages'][0] ?? null;
-        $firstPageId = $firstPage['id'] ?? null;
-        $firstPageToken = $firstPage['page_token'] ?? $token;
-        $pagePosts = $firstPageId ? $this->fetchPagePosts($firstPageToken, $firstPageId, $firstPage['name'] ?? '') : ['error' => 'No managed pages found.', 'posts' => []];
+        $pageId = $selection['page_id'] ?? null;
+        $selectedPage = $pageId ? collect($managedPages['pages'])->firstWhere('id', $pageId) : null;
+        if ($pageId && ! $selectedPage && ! $managedPages['error']) {
+            abort(404);
+        }
+        $pagePosts = null;
+        if ($selectedPage) {
+            $pagePosts = empty($selectedPage['page_token'])
+                ? ['error' => 'Meta did not return a Page token for this Page.', 'posts' => []]
+                : $this->fetchPagePosts($selectedPage['page_token'], $selectedPage['id'], $selectedPage['name']);
+        }
         $managedPages['pages'] = array_map(fn ($page) => Arr::except($page, 'page_token'), $managedPages['pages']);
 
         // Fetch pages linked to first business (business_management asset demonstration)
@@ -173,6 +181,7 @@ class FacebookApiOAuthController extends Controller
             'businesses' => $businesses,
             'businessAssets' => $businessAssets,
             'managedPages' => $managedPages,
+            'selectedPageId' => $selectedPage['id'] ?? null,
             'pagePosts' => $pagePosts,
         ]);
     }
@@ -250,6 +259,18 @@ class FacebookApiOAuthController extends Controller
 
         return redirect()->route('facebook-api.show')
             ->with('status', 'Facebook API connection removed.');
+    }
+
+    public function provisionReviewPixel(Request $request, BusinessManagerService $manager)
+    {
+        $selection = $request->validate([
+            'business_id' => ['required', 'string', 'regex:/\A[0-9]+\z/'],
+            'ad_account_id' => ['required', 'string', 'regex:/\Aact_[0-9]+\z/'],
+        ]);
+
+        $result = $manager->provisionReviewPixel($selection['business_id'], $selection['ad_account_id']);
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 
     // -------------------------------------------------------------------------
@@ -363,20 +384,20 @@ class FacebookApiOAuthController extends Controller
     private function fetchPagePosts(string $token, string $pageId, string $pageName): array
     {
         try {
-            $response = Http::get(self::GRAPH.'/'.$pageId.'/feed', [
-                'fields' => 'id,message,story,created_time,likes.summary(true),comments.summary(true)',
+            // The verification tool displays only posts published by this managed Page.
+            $response = Http::get(self::GRAPH.'/'.$pageId.'/published_posts', [
+                'fields' => 'id,message,created_time',
                 'limit' => 5,
                 'access_token' => $token,
             ]);
 
             if (! $response->successful()) {
-                Log::warning('FacebookApiOAuth: page feed failed', [
+                Log::warning('FacebookApiOAuth: published posts fetch failed', [
                     'page_id' => $pageId,
                     'status' => $response->status(),
                     'error_code' => $response->json('error.code'),
                     'error_subcode' => $response->json('error.error_subcode'),
                     'error_message' => $response->json('error.message'),
-                    'token_is_user' => strlen($token) < 200,
                 ]);
 
                 return ['error' => $response->json('error.message') ?? 'Posts fetch failed', 'posts' => [], 'status' => $response->status()];
@@ -390,10 +411,8 @@ class FacebookApiOAuthController extends Controller
                 'page_name' => $pageName,
                 'posts' => array_map(fn ($p) => [
                     'id' => $p['id'] ?? '',
-                    'message' => $p['message'] ?? ($p['story'] ?? ''),
+                    'message' => $p['message'] ?? '',
                     'created_time' => $p['created_time'] ?? '',
-                    'likes' => $p['likes']['summary']['total_count'] ?? 0,
-                    'comments' => $p['comments']['summary']['total_count'] ?? 0,
                 ], $posts),
                 'count' => count($posts),
             ];

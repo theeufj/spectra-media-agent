@@ -100,16 +100,26 @@ class StorageHelper
     /**
      * Read file contents from wherever it's stored.
      */
-    public static function get(string $path): ?string
+    public static function get(string $path, ?int $maxBytes = null): ?string
     {
         $s3Bucket = config('filesystems.disks.s3.bucket');
         $s3Key = config('filesystems.disks.s3.key');
+        $disk = Storage::disk($s3Bucket && $s3Key ? 's3' : 'public');
 
-        if ($s3Bucket && $s3Key) {
-            return Storage::disk('s3')->get($path);
+        if ($maxBytes === null) {
+            return $disk->get($path);
         }
+        $stream = $disk->readStream($path);
+        if (! is_resource($stream)) {
+            return null;
+        }
+        try {
+            $bytes = stream_get_contents($stream, $maxBytes + 1);
 
-        return Storage::disk('public')->get($path);
+            return is_string($bytes) && strlen($bytes) <= $maxBytes && feof($stream) ? $bytes : null;
+        } finally {
+            fclose($stream);
+        }
     }
 
     /**

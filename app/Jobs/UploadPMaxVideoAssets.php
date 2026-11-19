@@ -2,194 +2,184 @@
 
 namespace App\Jobs;
 
-use App\Models\Campaign;
-use App\Models\Customer;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
-use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\Creative\CreativeRelease;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
+use App\Services\GoogleAds\VideoServices\UploadPMaxVideoToGoogle;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
+use App\Services\StorageHelper;
+use App\Services\VideoGeneration\PerformanceMaxVideo;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Uploads video collaterals to YouTube (if not already uploaded) and links them
- * as YOUTUBE_VIDEO assets to an existing PMax asset group.
- *
- * Dispatched automatically after PMax deployment when videos have no YouTube IDs.
- * Also used by the pmax:repair-assets command for already-deployed campaigns.
- */
+/** Prepare selected video uploads and optionally link the processed videos to their asset group. */
 class UploadPMaxVideoAssets implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 2;
+    public int $tries = 16;
 
     public int $timeout = 600;
+
+    public array $backoff = [60, 120, 300];
+
+    private ?array $videoIds = null;
+
+    private bool $prepareOnly = false;
 
     public function __construct(
         protected int $strategyId,
         protected string $customerId,
-        protected ?string $assetGroupResourceName = null
-    ) {}
+        protected ?string $assetGroupResourceName = null,
+        ?array $videoIds = null,
+        bool $prepareOnly = false,
+    ) {
+        $this->videoIds = $videoIds;
+        $this->prepareOnly = $prepareOnly;
+    }
 
     public function handle(): void
     {
-        $strategy = Strategy::find($this->strategyId);
-        if (! $strategy) {
-            Log::error("UploadPMaxVideoAssets: Strategy {$this->strategyId} not found");
-
+        $strategy = Strategy::with('campaign.customer')->find($this->strategyId);
+        $campaign = $strategy?->campaign;
+        $customer = $campaign?->customer;
+        if (! $customer || $customer->cleanGoogleCustomerId() !== $this->customerId
+            || $strategy->campaign_type !== 'performance_max' || ! $strategy->signed_off_at || $campaign->hasPassedEndDate()) {
             return;
         }
 
-        $customer = $strategy->campaign?->customer;
-        if (! $customer) {
-            Log::error("UploadPMaxVideoAssets: No customer found for strategy {$this->strategyId}");
-
+        $resource = $strategy->reusableGoogleCampaignId();
+        if ($resource && ctype_digit($resource)) {
+            $resource = "customers/{$this->customerId}/campaigns/{$resource}";
+        }
+        if (! $resource || ! preg_match('#^customers/'.$this->customerId.'/campaigns/\d+$#D', $resource)) {
             return;
         }
 
-        // Resolve the asset group if a caller (e.g. video-completion) didn't pass one.
-        $assetGroupResourceName = $this->assetGroupResourceName
-            ?: $this->resolveAssetGroupResource($customer, $strategy->campaign);
-        if (! $assetGroupResourceName) {
-            Log::warning("UploadPMaxVideoAssets: No asset group resolved for strategy {$this->strategyId}");
-
+        $release = app(CreativeRelease::class);
+        if (! $release->isApproved($strategy)) {
             return;
         }
-
-        // Look up at campaign level — videos are shared across all strategies. Only
-        // completed videos with a stored file are linkable; skipping failed/in-progress
-        // ones avoids passing a null s3_path into the YouTube uploader.
-        $videos = VideoCollateral::where('campaign_id', $strategy->campaign_id)
-            ->where('is_active', true)
-            ->where('status', 'completed')
-            ->whereNotNull('s3_path')
-            ->get();
-
+        $videos = VideoCollateral::forDeployment($strategy)->where('campaign_id', $campaign->id)
+            ->where('status', 'completed')->whereNotNull('s3_path')
+            ->when($this->videoIds !== null, fn ($query) => $query->whereKey($this->videoIds))->get();
         if ($videos->isEmpty()) {
-            Log::info("UploadPMaxVideoAssets: No active videos for campaign {$strategy->campaign_id}");
-
             return;
         }
 
-        $youtubeUploader = new UploadVideoToYouTube;
-        $adAssetUploader = new UploadVideoAsset($customer);
-        $assetLinker = new LinkAssetGroupAsset($customer);
-        $linked = 0;
-
-        foreach ($videos as $video) {
-            try {
-                // Step 1: Upload to YouTube if no ID yet
-                if (! $video->youtube_video_id) {
-                    $title = 'Ad Video - '.($strategy->campaign->name ?? 'Campaign')." #{$video->id}";
-                    $youtubeId = ($youtubeUploader)($video->s3_path, $title);
-
-                    if (! $youtubeId) {
-                        Log::warning("UploadPMaxVideoAssets: Could not upload video {$video->id} to YouTube — skipping", [
-                            's3_path' => $video->s3_path,
-                        ]);
-
-                        continue;
-                    }
-
-                    $video->update(['youtube_video_id' => $youtubeId]);
-                    Log::info('UploadPMaxVideoAssets: Uploaded video to YouTube', [
-                        'video_id' => $video->id,
-                        'youtube_video_id' => $youtubeId,
-                    ]);
-                }
-
-                // Step 2: Register as Google Ads video asset
-                $assetResourceName = ($adAssetUploader)(
-                    $this->customerId,
-                    $video->youtube_video_id,
-                    "Video Asset #{$video->id}"
-                );
-
-                if (! $assetResourceName) {
-                    Log::warning("UploadPMaxVideoAssets: Could not register video {$video->id} as Google Ads asset");
-
-                    continue;
-                }
-
-                // Step 3: Link to asset group
-                $linkResourceName = ($assetLinker)(
-                    $this->customerId,
-                    $assetGroupResourceName,
-                    $assetResourceName,
-                    AssetFieldType::YOUTUBE_VIDEO
-                );
-
-                if ($linkResourceName) {
-                    $linked++;
-                    Log::info('UploadPMaxVideoAssets: Linked video asset to asset group', [
-                        'video_id' => $video->id,
-                        'youtube_video_id' => $video->youtube_video_id,
-                        'asset_resource_name' => $assetResourceName,
-                        'link_resource_name' => $linkResourceName,
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                report($e);
-                // A video Google rejects as too short can never link — retire it so it
-                // stops being retried and the self-heal can generate a compliant one.
-                if (str_contains($e->getMessage(), 'YOUTUBE_VIDEO_TOO_SHORT')) {
-                    $video->update(['is_active' => false]);
-                    Log::warning("UploadPMaxVideoAssets: video {$video->id} too short for PMax — retired", [
-                        'youtube_video_id' => $video->youtube_video_id,
-                    ]);
-                }
-                Log::error("UploadPMaxVideoAssets: Error processing video {$video->id}: ".$e->getMessage());
+        $group = null;
+        if (! $this->prepareOnly) {
+            $reader = app(ReadCampaignConfiguration::class, ['customer' => $customer]);
+            $groups = collect(array_column($reader->performanceMaxGroups($this->customerId, $resource), 'assetGroup'))->where('status', 'ENABLED');
+            $requestedGroup = $this->assetGroupResourceName ?? $strategy->execution_result['metadata']['google_pmax_staging']['asset_group'] ?? null;
+            $group = $requestedGroup ? $groups->firstWhere('resourceName', $requestedGroup) : ($groups->count() === 1 ? $groups->first() : null);
+            if (! $group) {
+                throw new \RuntimeException('The selected Performance Max asset group is not enabled in this campaign.');
             }
         }
 
-        Log::info("UploadPMaxVideoAssets: Done — linked {$linked}/{$videos->count()} videos to asset group", [
-            'strategy_id' => $this->strategyId,
-            'asset_group' => $assetGroupResourceName,
-        ]);
-    }
+        $googleUpload = app(UploadPMaxVideoToGoogle::class, ['customer' => $customer]);
+        $pending = false;
+        $error = null;
+        foreach ($videos as $video) {
+            $lease = Cache::lock('pmax-video-upload:'.$video->id, $this->timeout + 30);
+            if (! $lease->get()) {
+                $pending = true;
 
-    /** Resolve the first enabled asset group resource name for a PMax campaign. */
-    private function resolveAssetGroupResource(Customer $customer, ?Campaign $campaign): ?string
-    {
-        $campId = $campaign?->googleCampaignNumericId();
-        if (! $campId) {
-            return null;
-        }
-
-        try {
-            $svc = new class($customer) extends BaseGoogleAdsService
-            {
-                public function get(string $cid, string $campId): ?string
-                {
-                    $this->ensureClient();
-                    $q = 'SELECT asset_group.resource_name FROM asset_group '
-                        ."WHERE campaign.id = {$campId} AND asset_group.status = 'ENABLED'";
-                    foreach ($this->searchQuery($cid, $q)->getIterator() as $row) {
-                        return $row->getAssetGroup()->getResourceName();
-                    }
-
-                    return null;
+                continue;
+            }
+            try {
+                $video->refresh();
+                if (! $video->is_active || ! $video->should_deploy || $video->status !== 'completed' || ! $video->s3_path) {
+                    continue;
                 }
-            };
+                $bytes = StorageHelper::get($video->s3_path);
+                if (! $bytes || ! $release->matchesMedia($strategy, 'video', $video->id, $bytes)) {
+                    throw new \RuntimeException('A selected video no longer matches the customer-approved render.');
+                }
+                $youtubeId = $this->prepareVideo($video, $googleUpload, $campaign->name);
+                if (! $youtubeId) {
+                    $pending = true;
 
-            return $svc->get($customer->cleanGoogleCustomerId(), $campId);
-        } catch (\Throwable $e) {
-            Log::warning('UploadPMaxVideoAssets: asset group resolve failed: '.$e->getMessage());
+                    continue;
+                }
+                $video->refresh();
+                $current = $strategy->fresh();
+                if ($group && $video->is_active && $video->should_deploy
+                    && $current && $release->isApproved($current)
+                    && $strategy->creative_approval['fingerprint'] === $current->creative_approval['fingerprint']
+                    && ! $googleUpload->isLinked($this->customerId, $group['resourceName'], $youtubeId)) {
+                    $uploadAsset = app(UploadVideoAsset::class, ['customer' => $customer]);
+                    $linkAsset = app(LinkAssetGroupAsset::class, ['customer' => $customer]);
+                    $asset = $uploadAsset($this->customerId, $youtubeId, 'Ad video '.$video->id);
+                    if (! $asset || ! $linkAsset($this->customerId, $group['resourceName'], $asset, AssetFieldType::YOUTUBE_VIDEO)) {
+                        throw new \RuntimeException('Google has not confirmed the video asset group link.');
+                    }
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+                $error ??= $exception;
+            } finally {
+                $lease->release();
+            }
+        }
 
-            return null;
+        if ($error) {
+            throw $error;
+        }
+        if ($pending) {
+            $this->release(45);
         }
     }
 
-    public function failed(\Throwable $e): void
+    private function prepareVideo(VideoCollateral $video, UploadPMaxVideoToGoogle $googleUpload, string $campaignName): ?string
     {
-        Log::error("UploadPMaxVideoAssets: Job failed for strategy {$this->strategyId}: ".$e->getMessage());
+        if (preg_match('/^[A-Za-z0-9_-]{11}$/D', $video->youtube_video_id ?? '')) {
+            return $video->youtube_video_id;
+        }
+
+        $metadata = $video->generation_metadata ?? [];
+        $upload = $metadata['google_ads_video_upload'] ?? null;
+        if ($upload) {
+            $youtubeId = $googleUpload->processedVideoId($this->customerId, $upload);
+        } else {
+            $duration = $metadata['duration_seconds'] ?? PerformanceMaxVideo::duration(StorageHelper::get($video->s3_path) ?? '');
+            if ($duration === null || $duration < PerformanceMaxVideo::MIN_SECONDS) {
+                throw new \RuntimeException('The selected Performance Max video must run for at least 10 seconds.');
+            }
+
+            $title = "{$campaignName} - ad video {$video->id}";
+            if (filled(config('services.youtube.client_id')) && filled(config('services.youtube.client_secret')) && filled(config('services.youtube.refresh_token'))) {
+                $youtubeId = app(UploadVideoToYouTube::class)($video->s3_path, $title);
+                if (! $youtubeId) {
+                    throw new \RuntimeException('The YouTube upload could not be started.');
+                }
+            } else {
+                $upload = $googleUpload->start($this->customerId, $video->s3_path, $title, $video->provider !== null && $video->source !== 'uploaded');
+                $video->update(['generation_metadata' => $metadata + ['google_ads_video_upload' => $upload]]);
+
+                return null;
+            }
+        }
+
+        if ($youtubeId) {
+            $video->update(['youtube_video_id' => $youtubeId]);
+        }
+
+        return $youtubeId;
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('Performance Max video upload failed', ['strategy_id' => $this->strategyId, 'error' => $exception->getMessage()]);
     }
 }

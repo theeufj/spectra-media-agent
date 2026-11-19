@@ -13,8 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Weekly job that evaluates all active Google Ads campaigns and graduates
- * their bidding strategy when conversion data thresholds are met.
+ * Weekly review of bidding readiness and the results of earlier changes.
  *
  * Schedule: Tuesdays at 05:00.
  */
@@ -49,7 +48,7 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
             ->whereNotNull('google_ads_campaign_id')
             ->get();
 
-        $summary = ['evaluated' => 0, 'graduated' => 0, 'reverted' => 0, 'skipped' => 0, 'errors' => 0];
+        $summary = ['evaluated' => 0, 'recommended' => 0, 'graduated' => 0, 'reverted' => 0, 'skipped' => 0, 'errors' => 0];
 
         foreach ($campaigns as $campaign) {
             try {
@@ -59,6 +58,8 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
 
                 if ($result['skipped'] ?? false) {
                     $summary['skipped']++;
+                } elseif ($result['recommended'] ?? false) {
+                    $summary['recommended']++;
                 } elseif ($result['success'] ?? false) {
                     $summary['graduated']++;
                     Log::info("EvaluateBiddingStrategyProgression: Graduated {$campaign->id}", $result);

@@ -12,6 +12,7 @@ use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\MicrosoftAdsExecutionAgent;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
@@ -45,6 +46,12 @@ class DeploymentService
         if (! $current || ! $target || $target->campaign_id !== $current->id
             || $current->customer_id !== $customer->id) {
             return ['success' => false, 'error' => 'The strategy and advertising account do not belong to this campaign.'];
+        }
+        if ($target->launch_intent !== null && ! app(CampaignLaunchIntent::class)->canPublish($target)) {
+            $message = 'The approved campaign, selected ads, platform account or funding changed. Review the campaign again before launching.';
+            $target->update(['deployment_status' => 'failed', 'deployment_error' => $message]);
+
+            return ['success' => false, 'error' => $message];
         }
         $target->setRelation('campaign', $current);
         if ($target->requiresInitialMarketResearch()) {
@@ -308,7 +315,7 @@ class DeploymentService
         };
     }
 
-    protected static function normalizePlatform(string $platform): string
+    public static function normalizePlatform(string $platform): string
     {
         $normalized = strtolower(trim($platform));
 

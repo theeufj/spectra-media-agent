@@ -10,11 +10,18 @@ use App\Models\VideoCollateral;
 use App\Prompts\FacebookAdsExecutionPrompt;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\CampaignTrackingUrl;
 use App\Services\CampaignStatusHelper;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\BusinessManagerService;
 use App\Services\FacebookAds\CampaignService;
 use App\Services\FacebookAds\CreativeService;
+use App\Services\FacebookAds\FacebookAudienceTargeting;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
+use App\Services\FacebookAds\FacebookCreativeCopy;
+use App\Services\FacebookAds\PixelService;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 
@@ -93,16 +100,28 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             return $result;
         }
 
-        // Check Pixel installation (warning only - campaigns can run without it)
+        $strategy = $context->strategy;
+        if ($strategy->launch_intent !== null) {
+            $issue = app(BusinessManagerService::class)->launchAccountIssue($this->customer->facebook_ads_account_id);
+            if ($issue) {
+                $result->addError($issue['code'], $issue['message']);
+
+                return $result;
+            }
+        }
+
         if (! $this->hasPixelInstalled($context)) {
-            $result->addWarning('no_pixel', 'No Facebook Pixel configured - conversion tracking and Advantage+ campaigns will be limited');
+            if ($this->targetsWebsiteSignup($strategy)) {
+                $result->addError('signup_dataset_missing', 'Connect and verify the website signup dataset on this Meta ad account before deploying.');
+            } else {
+                $result->addWarning('no_pixel', 'No verified Meta dataset is available for this ad account. Conversion tracking and Advantage+ campaigns will be limited.');
+            }
         }
 
         // Validate creative assets
-        $strategy = $context->strategy;
-        $hasImages = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
-        $hasVideos = VideoCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
-        $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->exists();
+        $hasImages = ImageCollateral::forDeployment($strategy)->exists();
+        $hasVideos = VideoCollateral::forDeployment($strategy)->exists();
+        $hasAdCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->exists();
 
         if (! $hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Facebook Ads');
@@ -142,7 +161,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         // Check Dynamic Creative eligibility
         $imageCount = ImageCollateral::forStrategy($strategy)->where('is_active', true)->count();
-        $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
+        $adCopy = $strategy->deployableAdCopies()->where('platform', 'facebook')->first();
         $headlineCount = $adCopy && isset($adCopy->headlines) ? count($adCopy->headlines) : 0;
         $descriptionCount = $adCopy && isset($adCopy->descriptions) ? count($adCopy->descriptions) : 0;
 
@@ -300,45 +319,41 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $accountId = str_replace('act_', '', $this->customer->facebook_ads_account_id);
         $strategy = $context->strategy;
         $campaign = $context->campaign;
+        $childStatus = $this->childStatus();
 
         Log::info("FacebookAdsExecutionAgent: Starting plan execution for Campaign {$campaign->id}");
 
         try {
+            $variations = FacebookCreativeCopy::variations($strategy);
+            $callToAction = $this->targetsWebsiteSignup($strategy) ? 'SIGN_UP' : 'LEARN_MORE';
+
             // 1. Create Facebook Campaign
             $fbCampaign = $this->createCampaign($accountId, $campaign, $strategy, $plan, $result);
 
             // 2. Create Ad Set with targeting
             $fbAdSet = $this->createAdSet($accountId, $fbCampaign, $campaign, $strategy, $plan, $result);
 
-            // 3. Deploy every available creative — one ad per image, one per video.
-            //    Facebook optimises delivery across all ads in the ad set, so more
-            //    creatives = better signal and faster convergence on the best performer.
-            $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
             $destinationUrl = $this->getDestinationUrl($campaign, $strategy);
-            $primaryText = $plan->getCreativeStrategy()['primary_text']
-                ?? ($adCopy->descriptions[0] ?? '')
-                ?: 'Discover our products and services';
-            $headline = $adCopy->headlines[0] ?? 'Learn More';
-
             $adsCreated = 0;
 
             // 3a. Image ads — one ad per image marked for deployment
-            $images = ImageCollateral::forStrategy($strategy)
-                ->where('is_active', true)
-                ->where('should_deploy', true)
+            $images = ImageCollateral::forDeployment($strategy)
                 ->get();
 
             foreach ($images as $index => $image) {
                 try {
+                    $copy = $variations[$index % count($variations)];
                     $imageUrl = StorageHelper::url($image->s3_path);
                     $creative = $this->creativeService->createImageCreative(
                         $accountId,
                         $campaign->name.' - Image Creative '.($index + 1),
                         $imageUrl,
-                        $headline,
-                        $primaryText,
-                        'LEARN_MORE',
-                        $destinationUrl
+                        $copy['headline'],
+                        $copy['body'],
+                        $callToAction,
+                        $destinationUrl,
+                        reviewedImageHash: $strategy->creative_approval !== null
+                            ? $this->creativeService->reviewedImageHash($strategy, $image, upload: true) : null,
                     );
                     if (! $creative || ! isset($creative['id'])) {
                         Log::warning("FacebookAdsExecutionAgent: Failed to create image creative for image {$image->id}");
@@ -349,7 +364,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         $accountId,
                         $fbAdSet['id'],
                         $campaign->name.' - Image Ad '.($index + 1),
-                        $creative['id']
+                        $creative['id'],
+                        $childStatus,
                     );
                     if ($ad && isset($ad['id'])) {
                         $result->addPlatformId('image_ad_'.$image->id, $ad['id']);
@@ -369,21 +385,20 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             }
 
             // 3b. Video ads — one ad per video marked for deployment
-            $videos = VideoCollateral::forStrategy($strategy)
-                ->where('is_active', true)
-                ->where('should_deploy', true)
+            $videos = VideoCollateral::forDeployment($strategy)
                 ->get();
 
             foreach ($videos as $index => $video) {
                 try {
+                    $copy = $variations[($images->count() + $index) % count($variations)];
                     $videoUrl = StorageHelper::url($video->s3_path);
                     $creative = $this->creativeService->createVideoCreative(
                         $accountId,
                         $campaign->name.' - Video Creative '.($index + 1),
                         $videoUrl,
-                        $headline,
-                        $adCopy->descriptions[0] ?? 'Discover our story',
-                        'LEARN_MORE',
+                        $copy['headline'],
+                        $copy['body'],
+                        $callToAction,
                         $destinationUrl
                     );
                     if (! $creative || ! isset($creative['id'])) {
@@ -395,7 +410,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         $accountId,
                         $fbAdSet['id'],
                         $campaign->name.' - Video Ad '.($index + 1),
-                        $creative['id']
+                        $creative['id'],
+                        $childStatus,
                     );
                     if ($ad && isset($ad['id'])) {
                         $result->addPlatformId('video_ad_'.$video->id, $ad['id']);
@@ -423,6 +439,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'videos_available' => $videos->count(),
             ]);
 
+            $result->addMetadata('facebook_activation_pending', $childStatus === 'ACTIVE');
             $result->executionTime = microtime(true) - $startTime;
 
             return $result;
@@ -471,14 +488,17 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int) (($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
+        $budget = $strategy->daily_budget ?: $campaign->daily_budget;
+        $dailyBudgetCents = $budget
+            ? intdiv(CampaignSpendGuardrails::moneyToMicros($budget), 10_000)
+            : intdiv(CampaignSpendGuardrails::moneyToMicros($campaign->total_budget), 300_000);
 
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
             $campaign->name,
-            $campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC',
+            $this->targetsWebsiteSignup($strategy) ? 'OUTCOME_LEADS' : ($campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC'),
             $dailyBudgetCents,
-            CampaignStatusHelper::getFacebookAdsStatus()
+            'PAUSED',
         );
 
         if (! $fbCampaign || ! isset($fbCampaign['id'])) {
@@ -536,21 +556,22 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $row = collect($research['result']['strategies'] ?? [])->firstWhere('strategy_id', $strategy->id);
         $countries = $row['evidence']['meta']['countries'] ?? [];
         if (($research['approved'] ?? false) && $countries !== []) {
-            // Use the reviewed country and demographics. The model's interest,
-            // behaviour and audience IDs were not verified against Meta.
-            $demographics = $strategy->targetingConfig;
-            $targeting['geo_locations'] = ['countries' => $countries];
-            $targeting['age_min'] = $demographics->age_min ?? 18;
-            $targeting['age_max'] = $demographics->age_max ?? 65;
-            $targeting['genders'] = $demographics?->getFacebookGenderTargeting() ?? [1, 2];
-            $targeting['targeting_automation'] = ['advantage_audience' => 0];
-            unset($targeting['interests'], $targeting['behaviors'], $targeting['custom_audiences']);
+            // Use the same audience the customer approved in market research. For
+            // older country-only estimates, rebuild the broad country audience.
+            $targeting = $row['evidence']['meta']['targeting_spec'] ?? FacebookAudienceTargeting::forReview($strategy, $countries);
         }
+
+        $websiteSignup = $this->targetsWebsiteSignup($strategy);
+        $endDate = $campaign->getAttribute('end_date');
+        $endTime = $endDate === null ? null : \Carbon\CarbonImmutable::parse(
+            $endDate->toDateString(), $this->customer->timezone ?: config('app.timezone')
+        )->endOfDay()->toIso8601String();
 
         // Wire pixel promoted_object when available — required for conversion objectives
         $promotedObject = null;
         if ($this->customer->facebook_pixel_id) {
             $eventType = match (true) {
+                $websiteSignup => 'COMPLETE_REGISTRATION',
                 str_contains($objective, 'LEADS') => 'LEAD',
                 str_contains($objective, 'SALES') => 'PURCHASE',
                 default => 'LEAD',
@@ -569,9 +590,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaignId,
             $campaign->name.' - Ad Set',
             $targeting,
-            $optimizationGoal,
-            CampaignStatusHelper::getFacebookAdsStatus(),
-            $promotedObject
+            $websiteSignup ? 'OFFSITE_CONVERSIONS' : $optimizationGoal,
+            $this->childStatus(),
+            $promotedObject,
+            endTime: $endTime,
+            destinationType: $websiteSignup ? 'WEBSITE' : null,
         );
 
         if (! $fbAdSet || ! isset($fbAdSet['id'])) {
@@ -585,6 +608,18 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         return $fbAdSet;
     }
 
+    private function childStatus(): string
+    {
+        return $this->customer->service_type === 'setup_only'
+            ? 'PAUSED'
+            : CampaignStatusHelper::getFacebookAdsStatus();
+    }
+
+    private function targetsWebsiteSignup(Strategy $strategy): bool
+    {
+        return FacebookCampaignMetrics::actionType($strategy) === 'complete_registration';
+    }
+
     /**
      * Create single image ad
      */
@@ -596,8 +631,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $imageCollateral = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->first();
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
+        $imageCollateral = ImageCollateral::forDeployment($strategy)->first();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if (! $imageCollateral || ! $adCopy) {
             throw new \Exception('No image or ad copy available for Facebook ad');
@@ -657,8 +692,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->take(10)->get();
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->take(10)->get();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if ($imageCollaterals->count() < 2 || ! $adCopy) {
             throw new \Exception('Need at least 2 images and ad copy for carousel ad');
@@ -723,8 +758,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $videoCollateral = VideoCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->first();
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
+        $videoCollateral = VideoCollateral::forDeployment($strategy)->first();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if (! $videoCollateral || ! $adCopy) {
             throw new \Exception('No video or ad copy available for Facebook video ad');
@@ -799,7 +834,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         // built inside other methods — so this passed null into a parameter
         // typed array and every deployment died here before placements were set.
         $placementStrategy = $this->determinePlacementStrategy($plan, $plan->getCreativeStrategy());
-        if (! empty($placementStrategy)) {
+        if (! $placementStrategy['automatic']) {
             $targetingConfig['publisher_platforms'] = $placementStrategy['platforms'];
             if (! empty($placementStrategy['positions'])) {
                 $targetingConfig['facebook_positions'] = $placementStrategy['positions']['facebook'] ?? [];
@@ -1009,14 +1044,12 @@ PROMPT;
     {
         try {
             $adAccountId = $context->customer->facebook_ads_account_id;
-            if (! $adAccountId) {
+            $pixelId = $context->customer->facebook_pixel_id;
+            if (! $adAccountId || ! $pixelId) {
                 return false;
             }
 
-            $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
-            $pixels = $adAccountService->getPixels('act_'.$adAccountId);
-
-            return ! empty($pixels);
+            return app(PixelService::class, ['customer' => $context->customer])->isLinked($pixelId, $adAccountId);
         } catch (\Throwable $e) {
             report($e);
             Log::warning('Failed to check Pixel installation: '.$e->getMessage());
@@ -1073,16 +1106,7 @@ PROMPT;
      */
     protected function appendUtmParameters(string $url, Campaign $campaign, Strategy $strategy): string
     {
-        $params = [
-            'utm_source' => 'facebook',
-            'utm_medium' => $strategy->campaign_type ?? 'social',
-            'utm_campaign' => 'spectra_'.$campaign->id,
-            'utm_content' => 'strategy_'.$strategy->id,
-        ];
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-
-        return $url.$separator.http_build_query($params);
+        return CampaignTrackingUrl::forStrategy($url, $campaign, $strategy, 'facebook');
     }
 
     /**
@@ -1090,7 +1114,8 @@ PROMPT;
      */
     protected function getDestinationUrl(Campaign $campaign, Strategy $strategy): string
     {
-        $url = $campaign->landing_page_url ?? $campaign->customer?->website ?? '';
+        $url = ($strategy->bidding_strategy['landing_page_url'] ?? null)
+            ?: ($campaign->landing_page_url ?: $campaign->customer?->website);
         if (empty($url)) {
             return '';
         }

@@ -176,12 +176,10 @@ class BrandGuideline extends Model
 
         $family = match (true) {
             $hue < 15 || $hue >= 345 => 'red',
-            // The warm band splits on saturation, not hue alone: #C4A470 and
-            // #FF4D00 are 19 degrees apart and nobody would call them the same
-            // colour. A muted warm mid-tone is gold; a vivid one is orange.
+            // Muted warm mid-tones and bright hues close to yellow read as gold.
             $hue < 50 => match (true) {
                 $lightness < 0.35 => 'brown',
-                $saturation < 0.6 => 'warm gold',
+                $saturation < 0.6 || $hue >= 43 => 'warm gold',
                 default => 'orange',
             },
             $hue < 70 => 'yellow',

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CampaignStatus;
 use App\Jobs\CheckGoogleCampaignReadiness;
 use App\Jobs\RecordSiteConversion;
+use App\Models\AdSpendCredit;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Setting;
@@ -34,6 +35,7 @@ class StagedSearchActivationTest extends TestCase
     private function fixture(array $campaignAttributes = [], bool $reachReady = true, bool $enableSucceeds = true): array
     {
         $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890', 'service_type' => 'managed']);
+        AdSpendCredit::factory()->create(['customer_id' => $customer->id]);
         $resource = 'customers/1234567890/campaigns/456';
         $campaign = Campaign::factory()->create($campaignAttributes + ['customer_id' => $customer->id, 'status' => 'draft',
             'google_ads_campaign_id' => $resource, 'platform_status' => 'PAUSED', 'end_date' => now()->addDays(30)]);
@@ -164,6 +166,22 @@ class StagedSearchActivationTest extends TestCase
         $this->assertFalse($settler->settle($campaign), 'A completed activation is idempotent.');
         $this->assertCount(1, $writer->enabled);
         Queue::assertPushed(CheckGoogleCampaignReadiness::class, 1);
+    }
+
+    public function test_google_launch_waits_for_funded_ad_credit(): void
+    {
+        Setting::set('managed_billing_enabled', true, 'boolean');
+        [$campaign, , $builder, , $service, $settler] = $this->fixture();
+        $credit = $campaign->customer->adSpendCredit()->firstOrFail();
+        $credit->update(['current_balance' => 0]);
+
+        $this->assertFalse($settler->settle($campaign));
+        $this->assertSame([], $service->enabled);
+        $this->assertSame(0, $builder->calls);
+
+        $credit->addCredit(100, 'Settled ad spend prepayment', 'pi_campaign_funded');
+        $this->assertTrue($settler->settle($campaign));
+        $this->assertCount(1, $service->enabled);
     }
 
     public static function aiMaxOwners(): array

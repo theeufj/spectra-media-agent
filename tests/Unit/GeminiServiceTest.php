@@ -345,7 +345,13 @@ class GeminiServiceTest extends TestCase
 
     public function test_generate_image_returns_array_on_success(): void
     {
-        Http::fake([self::VERTEX_URL => Http::response($this->imageChunk(), 200)]);
+        $response = $this->imageChunk();
+        array_unshift(
+            $response[0]['candidates'][0]['content']['parts'],
+            ['thought' => true, 'inlineData' => ['data' => 'draft', 'mimeType' => 'image/png']],
+            ['text' => 'Here is the image.']
+        );
+        Http::fake([self::VERTEX_URL => Http::response($response, 200)]);
 
         $result = $this->service->generateImage('A cat');
 
@@ -382,6 +388,27 @@ class GeminiServiceTest extends TestCase
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
+    }
+
+    public function test_speech_sends_only_the_script_as_text_and_requests_raw_pcm(): void
+    {
+        config(['ai.models.tts' => 'gemini-3.8-flash-tts']);
+        $pcm = "\x01\x00\x02\x00";
+        Http::fake([self::VERTEX_URL => Http::response([
+            'candidates' => [['content' => ['parts' => [['inlineData' => ['data' => base64_encode($pcm)]]]]]],
+        ])]);
+
+        $this->assertSame($pcm, $this->service->synthesizeSpeech('Start today.', 'Charon'));
+
+        Http::assertSent(function ($request) {
+            $part = $request['contents'][0]['parts'][0];
+            $generation = $request['generationConfig'];
+
+            return $part['text'] === 'Start today.'
+                && filled($part['speechMetadata']['style'] ?? null)
+                && $generation['speechConfig']['voiceConfig'] === ['voice' => 'Charon']
+                && $generation['responseFormat'] === [['audio' => ['mimeType' => 'AUDIO_L16']]];
+        });
     }
 
     // ─── startVideoGeneration ─────────────────────────────────────────────────

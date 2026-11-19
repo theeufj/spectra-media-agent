@@ -10,9 +10,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
+ * @property string $campaign_type
  * @property array<int, array<string, mixed>>|null $creative_concepts
  * @property array<int, array<string, mixed>>|null $creative_candidates
  * @property array<string, mixed>|null $creative_review
+ * @property array<string, mixed>|null $creative_release_review
+ * @property array<string, mixed>|null $creative_approval
+ * @property array<string, mixed>|null $launch_intent
  */
 class Strategy extends Model
 {
@@ -30,6 +34,8 @@ class Strategy extends Model
 
     /** Live states that still need an ENABLED transition on the platform. */
     public const ACTIVATABLE_STATUSES = ['deployed', 'verified'];
+
+    protected $hidden = ['launch_intent'];
 
     public function supportsVideo(): bool
     {
@@ -90,6 +96,8 @@ class Strategy extends Model
         'creative_concepts',
         'creative_candidates',
         'creative_review',
+        'creative_release_review',
+        'creative_approval',
         'video_strategy',
         'signed_off_at',
         'bidding_strategy',
@@ -118,6 +126,9 @@ class Strategy extends Model
         'creative_concepts' => 'array',
         'creative_candidates' => 'array',
         'creative_review' => 'array',
+        'creative_release_review' => 'array',
+        'creative_approval' => 'array',
+        'launch_intent' => 'array',
         'ad_extensions' => 'array',
         'conversion_goals' => 'array',
         'execution_plan' => 'array',
@@ -229,6 +240,12 @@ class Strategy extends Model
     public function adCopies(): HasMany
     {
         return $this->hasMany(AdCopy::class);
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Builder<AdCopy> */
+    public function deployableAdCopies(): \Illuminate\Database\Eloquent\Builder
+    {
+        return app(\App\Services\Creative\CreativeRelease::class)->approvedCopy($this->adCopies()->getQuery(), $this);
     }
 
     /**

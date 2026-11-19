@@ -39,9 +39,9 @@ class CampaignAlertService
      * Persist a verified platform read and its incident transition atomically.
      * Unknown retains the last evidence; only a successful verification clears it.
      */
-    public function recordPolicyCheck(Campaign $campaign, string $platform, array $issues, ?string $uncertainReason = null, bool $readSucceeded = true): array
+    public function recordPolicyCheck(Campaign $campaign, string $platform, array $issues, ?string $uncertainReason = null, bool $readSucceeded = true, array $evidence = []): array
     {
-        $state = DB::transaction(function () use ($campaign, $platform, $issues, $uncertainReason, $readSucceeded) {
+        $state = DB::transaction(function () use ($campaign, $platform, $issues, $uncertainReason, $readSucceeded, $evidence) {
             $locked = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
             $state = self::policyStatus($locked) ?? ['platforms' => []];
             $previous = $state['platforms'][$platform] ?? [];
@@ -52,6 +52,7 @@ class CampaignAlertService
                 'last_successful_checked_at' => $readSucceeded ? $checkedAt : ($previous['last_successful_checked_at'] ?? null),
                 'issues' => $status === 'unknown' ? ($previous['issues'] ?? []) : $issues,
                 'error' => $uncertainReason,
+                'evidence' => $evidence,
             ]);
             if ($status === 'unknown' && $next['issues'] === []
                 && ($next['pending_alert']['type'] ?? null) === 'policy_check_unavailable'

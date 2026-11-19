@@ -5,32 +5,17 @@ namespace App\Console\Commands;
 use App\Jobs\UploadPMaxVideoAssets;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
-use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
-use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
-use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
-use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use App\Services\Creative\CreativeRelease;
 use Illuminate\Console\Command;
 
-/**
- * Repair an existing PMax campaign's asset group by uploading missing video assets.
- *
- * Usage (auto-upload to YouTube):
- *   php artisan pmax:repair-assets --strategy=730
- *
- * Usage (manual YouTube IDs, no upload needed):
- *   php artisan pmax:repair-assets --strategy=730 --youtube-ids=dQw4w9WgXcQ,abc123xyz
- *
- * The --youtube-ids option assigns IDs to videos in order (first ID → oldest video, etc.)
- * and then links them to the asset group immediately without any upload step.
- */
 class RepairPMaxAssets extends Command
 {
     protected $signature = 'pmax:repair-assets
                             {--strategy= : Strategy ID to repair}
-                            {--youtube-ids= : Comma-separated YouTube video IDs to assign (skips upload)}
+                            {--youtube-ids= : Only restore the approved videos with these processed YouTube IDs}
                             {--async : Dispatch upload as a background job instead of running inline}';
 
-    protected $description = 'Upload missing video assets to a deployed PMax asset group';
+    protected $description = 'Restore customer-approved videos in a deployed Performance Max asset group';
 
     public function handle(): int
     {
@@ -66,129 +51,30 @@ class RepairPMaxAssets extends Command
             return self::FAILURE;
         }
 
-        $this->info("Strategy: {$strategyId} | Customer: {$customerId}");
-        $this->info("Asset group: {$assetGroupResourceName}");
+        if (! app(CreativeRelease::class)->isApproved($strategy)) {
+            $this->error('Approve the exact creative selection in Site to Spend before restoring videos.');
 
-        // Look up at campaign level — videos are shared across all strategies.
-        $videos = VideoCollateral::where('campaign_id', $strategy->campaign_id)
-            ->where('is_active', true)
-            ->get();
+            return self::FAILURE;
+        }
+        $videos = VideoCollateral::forDeployment($strategy)->where('status', 'completed');
+        $youtubeIds = array_values(array_filter(array_map('trim', explode(',', $this->option('youtube-ids') ?? ''))));
+        if ($youtubeIds !== []) {
+            $videos->whereIn('youtube_video_id', $youtubeIds);
+        }
+        $ids = $videos->pluck('id')->all();
+        if ($ids === [] || ($youtubeIds !== [] && count($ids) !== count(array_unique($youtubeIds)))) {
+            $this->error('No approved videos matched the request.');
 
-        if ($videos->isEmpty()) {
-            $this->warn("No active video collaterals found for campaign {$strategy->campaign_id}");
-
-            return self::SUCCESS;
+            return self::FAILURE;
         }
 
-        $this->info("Found {$videos->count()} video(s)");
-
-        // If manual YouTube IDs provided, assign them and link directly
-        $manualIds = $this->option('youtube-ids')
-            ? array_filter(explode(',', $this->option('youtube-ids')))
-            : [];
-
-        if (! empty($manualIds)) {
-            return $this->linkManualIds($videos, $manualIds, $customerId, $assetGroupResourceName, $customer);
+        if ($this->option('async') || $videos->whereNull('youtube_video_id')->exists()) {
+            UploadPMaxVideoAssets::dispatch($strategy->id, $customerId, $assetGroupResourceName, videoIds: $ids);
+            $this->info('Queued the approved videos for restoration.');
+        } else {
+            UploadPMaxVideoAssets::dispatchSync($strategy->id, $customerId, $assetGroupResourceName, videoIds: $ids);
         }
 
-        // Otherwise upload to YouTube (async or inline)
-        if ($this->option('async')) {
-            UploadPMaxVideoAssets::dispatch($strategyId, $customerId, $assetGroupResourceName);
-            $this->info("Dispatched UploadPMaxVideoAssets job for strategy {$strategyId}");
-
-            return self::SUCCESS;
-        }
-
-        return $this->uploadAndLink($videos, $customerId, $assetGroupResourceName, $customer);
-    }
-
-    private function linkManualIds($videos, array $manualIds, string $customerId, string $assetGroupResourceName, $customer): int
-    {
-        $adAssetUploader = new UploadVideoAsset($customer);
-        $assetLinker = new LinkAssetGroupAsset($customer);
-        $linked = 0;
-
-        foreach ($manualIds as $index => $youtubeId) {
-            $youtubeId = trim($youtubeId);
-            $video = $videos->get($index);
-
-            if ($video && ! $video->youtube_video_id) {
-                $video->update(['youtube_video_id' => $youtubeId]);
-                $this->line("  Saved youtube_video_id={$youtubeId} → video #{$video->id}");
-            }
-
-            $this->line("  Registering YouTube video {$youtubeId} as Google Ads asset...");
-            $assetResourceName = ($adAssetUploader)($customerId, $youtubeId, "Video Asset #{$index}");
-
-            if (! $assetResourceName) {
-                $this->error("  Failed to register video {$youtubeId} as Google Ads asset");
-
-                continue;
-            }
-
-            $linkResourceName = ($assetLinker)($customerId, $assetGroupResourceName, $assetResourceName, AssetFieldType::YOUTUBE_VIDEO);
-
-            if ($linkResourceName) {
-                $linked++;
-                $this->info("  ✓ Linked {$youtubeId} to asset group");
-            } else {
-                $this->error("  ✗ Failed to link {$youtubeId} to asset group");
-            }
-        }
-
-        $this->info("Done — linked {$linked}/".count($manualIds).' videos');
-
-        return $linked > 0 ? self::SUCCESS : self::FAILURE;
-    }
-
-    private function uploadAndLink($videos, string $customerId, string $assetGroupResourceName, $customer): int
-    {
-        $youtubeUploader = new UploadVideoToYouTube;
-        $adAssetUploader = new UploadVideoAsset($customer);
-        $assetLinker = new LinkAssetGroupAsset($customer);
-        $linked = 0;
-
-        foreach ($videos as $video) {
-            $this->line("Processing video #{$video->id} ({$video->s3_path})");
-
-            if (! $video->youtube_video_id) {
-                $this->line('  Uploading to YouTube...');
-                $title = 'Ad Video - '.($strategy->campaign->name ?? 'Campaign')." #{$video->id}";
-                $youtubeId = ($youtubeUploader)($video->s3_path, $title);
-
-                if (! $youtubeId) {
-                    $this->error('  Failed to upload to YouTube. Is GOOGLE_YOUTUBE_REFRESH_TOKEN set?');
-                    $this->line("  Hint: php artisan pmax:repair-assets --strategy={$this->option('strategy')} --youtube-ids=YOUR_ID");
-
-                    continue;
-                }
-
-                $video->update(['youtube_video_id' => $youtubeId]);
-                $this->line("  Uploaded → YouTube ID: {$youtubeId}");
-            } else {
-                $this->line("  Already has YouTube ID: {$video->youtube_video_id}");
-            }
-
-            $assetResourceName = ($adAssetUploader)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
-
-            if (! $assetResourceName) {
-                $this->error('  Failed to register as Google Ads asset');
-
-                continue;
-            }
-
-            $linkResourceName = ($assetLinker)($customerId, $assetGroupResourceName, $assetResourceName, AssetFieldType::YOUTUBE_VIDEO);
-
-            if ($linkResourceName) {
-                $linked++;
-                $this->info('  ✓ Linked to asset group');
-            } else {
-                $this->error('  ✗ Failed to link to asset group');
-            }
-        }
-
-        $this->info("Done — linked {$linked}/{$videos->count()} videos to asset group");
-
-        return $linked > 0 ? self::SUCCESS : self::FAILURE;
+        return self::SUCCESS;
     }
 }

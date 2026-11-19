@@ -21,12 +21,55 @@ class GoogleSearchConfigurationCheck
         return $issues;
     }
 
+    public function compareOfferGroups(array $expected, array $actual): array
+    {
+        $expectedAds = $expected['ads'] ?? [];
+        $resources = $expected['offer_ad_groups'] ?? [];
+        if ($resources === [] || count($expectedAds) !== count($resources)
+            || array_diff($resources, array_column($expectedAds, 'ad_group_resource'))) {
+            return ['Every reviewed Search offer needs its own deployed ad group and ad.'];
+        }
+        $actualKeywords = [];
+        foreach ($actual['keywords'] ?? [] as $row) {
+            $criterion = $row['adGroupCriterion'] ?? [];
+            if (! ($criterion['negative'] ?? false)) {
+                $actualKeywords[] = [$criterion['adGroup'] ?? '', $this->keyword($criterion['keyword']['text'] ?? '', $criterion['keyword']['matchType'] ?? '')];
+            }
+        }
+        $expectedKeywords = array_map(fn ($keyword) => [$keyword['ad_group_resource'] ?? '',
+            $this->keyword($keyword['text'], $keyword['match_type'])], $expected['keywords'] ?? []);
+        sort($actualKeywords);
+        sort($expectedKeywords);
+        $issues = [];
+        if ($expectedKeywords === [] || $actualKeywords !== $expectedKeywords) {
+            $issues[] = 'Google did not confirm the reviewed keywords and match types in their intended offer groups.';
+        }
+        $activeAds = array_values(array_filter($actual['ads'] ?? [], fn ($row) => ($row['adGroupAd']['status'] ?? null) === 'ENABLED'
+            && ($row['adGroup']['status'] ?? null) === 'ENABLED'));
+        if (count($activeAds) !== count($expectedAds) || ! array_all($expectedAds, fn ($ad) => array_any($activeAds,
+            fn ($row) => $this->offerAdMatches($ad, $row) && ($row['adGroupAd']['policySummary']['approvalStatus'] ?? '') !== 'DISAPPROVED'))) {
+            $issues[] = 'Google did not confirm an eligible ad and the reviewed landing page in every Search offer group.';
+        }
+
+        return $issues;
+    }
+
+    public function offerAdMatches(array $ad, array $row): bool
+    {
+        $remote = $row['adGroupAd']['ad'] ?? [];
+
+        return ($ad['ad_group_resource'] ?? null) === ($row['adGroup']['resourceName'] ?? null)
+            && $this->sameSet($ad['headlines'], array_column($remote['responsiveSearchAd']['headlines'] ?? [], 'text'))
+            && $this->sameSet($ad['descriptions'], array_column($remote['responsiveSearchAd']['descriptions'] ?? [], 'text'))
+            && $this->sameSet($ad['final_urls'], $remote['finalUrls'] ?? []);
+    }
+
     private function compareConfiguration(array $expected, array $actual, bool $verifyConversionGoals): array
     {
         if (empty($expected['keywords']) || empty($expected['ads'])) {
             return ['The deployment has no complete verification baseline.'];
         }
-        $issues = [];
+        $issues = empty($expected['offer_ad_groups']) ? [] : $this->compareOfferGroups($expected, $actual);
         $campaign = $actual['campaign']['campaign'] ?? [];
         if (($campaign['advertisingChannelType'] ?? '') !== 'SEARCH') {
             $issues[] = 'The deployed campaign is not Search.';

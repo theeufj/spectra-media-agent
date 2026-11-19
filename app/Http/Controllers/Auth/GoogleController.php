@@ -95,7 +95,7 @@ class GoogleController extends Controller
 
             app(\App\Services\SiteSignupConversionService::class)->record($user);
             if (! empty($user->fbclid)) {
-                RecordSiteFacebookConversion::dispatch($user, 'signup');
+                RecordSiteFacebookConversion::dispatch($user, 'signup', route('register'), request()->userAgent());
             }
             if (! empty($user->msclid)) {
                 RecordSiteMicrosoftConversion::dispatch($user, 'signup');

@@ -110,6 +110,45 @@ class DeploymentJourneyGuardsTest extends TestCase
         $this->assertStringContainsString('billed directly', $response->json('error'));
     }
 
+    public function test_a_saved_card_alone_cannot_fund_or_launch_ads(): void
+    {
+        [$user, $customer] = $this->subscribedOwner();
+        $user->forceFill(['subscription_status' => 'guest', 'pm_type' => 'visa', 'pm_last_four' => '4242'])->save();
+        $campaign = Campaign::factory()->for($customer)->create();
+        Strategy::factory()->for($campaign)->create(['signed_off_at' => now()]);
+        $this->mock(\App\Services\Billing\AdSpendPaymentGateway::class)->shouldNotReceive('collect');
+
+        $this->actingAs($user)->postJson(route('billing.ad-spend.setup-for-deployment'), [
+            'daily_budget' => 20,
+            'campaign_id' => $campaign->id,
+        ])->assertUnprocessable()->assertJson(['error' => 'Choose a paid campaign plan before funding ads.']);
+
+        $this->post(route('deployment.deploy'), ['campaign_id' => $campaign->id])
+            ->assertRedirect(route('subscription.pricing'));
+
+        Queue::assertNotPushed(DeployCampaign::class);
+        $this->assertNull($customer->adSpendCredit()->first());
+    }
+
+    public function test_funding_waits_for_the_selected_platform_to_be_covered_by_the_plan(): void
+    {
+        [$user, $customer] = $this->subscribedOwner();
+        $campaign = Campaign::factory()->for($customer)->create([
+            'daily_budget' => 20,
+            'approved_daily_budget' => 20,
+            'budget_confirmed_at' => now(),
+        ]);
+        Strategy::factory()->for($campaign)->create(['platform' => 'LinkedIn Ads', 'signed_off_at' => now()]);
+        $this->mock(\App\Services\Billing\AdSpendPaymentGateway::class)->shouldNotReceive('collect');
+
+        $this->actingAs($user)->postJson(route('billing.ad-spend.setup-for-deployment'), [
+            'daily_budget' => 20,
+            'campaign_id' => $campaign->id,
+        ])->assertUnprocessable()->assertJson(['error' => 'Choose platforms covered by your plan before funding this campaign.']);
+
+        $this->assertNull($customer->adSpendCredit()->first());
+    }
+
     public function test_only_signed_off_strategies_are_selected_for_deployment(): void
     {
         [, $customer] = $this->subscribedOwner();
@@ -181,6 +220,7 @@ class DeploymentJourneyGuardsTest extends TestCase
 
     public function test_a_broken_google_link_routes_to_the_admin_queue_not_the_api(): void
     {
+        $this->withoutExceptionHandling();
         Queue::fake();
         Mail::fake();
         Notification::fake();
@@ -188,15 +228,28 @@ class DeploymentJourneyGuardsTest extends TestCase
             'google_ads_customer_id' => '1234567890',
             'google_ads_link_status' => 'refused',
         ]);
-        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
-        Strategy::factory()->create([
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id,
+            'daily_budget' => 50, 'approved_daily_budget' => 50, 'budget_confirmed_at' => now(),
+        ]);
+        $strategy = Strategy::factory()->create([
             'campaign_id' => $campaign->id,
             'platform' => 'Google Ads',
+            'campaign_type' => 'search',
             'signed_off_at' => now(),
+            'daily_budget' => 50,
         ]);
+        $strategy->adCopies()->create(['platform' => 'Google Ads', 'headlines' => ['Approved ad'],
+            'descriptions' => ['Approved description'], 'should_deploy' => true]);
+        $fingerprint = app(\App\Services\Creative\CreativeRelease::class)->selection($strategy)['fingerprint'];
+        $strategy->forceFill(['creative_release_review' => ['status' => 'passed', 'fingerprint' => $fingerprint, 'issues' => []]])->save();
+        $campaign->update(['search_delivery_state' => ['market_research' => ['status' => 'ready',
+            'request_id' => 'approved-research', 'approved_request_id' => 'approved-research', 'result' => ['status' => 'ready'],
+            'approved_fingerprint' => app(\App\Services\Campaigns\CampaignMarketResearch::class)->approvalFingerprint($campaign)],
+        ]]);
 
         $this->actingAs($user)->post(route('deployment.deploy'), [
             'campaign_id' => $campaign->id,
+            'creative_fingerprints' => [$strategy->id => $fingerprint],
         ])->assertRedirect();
 
         $campaign->refresh();

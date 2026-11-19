@@ -175,6 +175,31 @@ class DeploymentStatusReachableTest extends TestCase
         $this->assertSame('active', $campaign->refresh()->status->value);
     }
 
+    public function test_performance_max_learning_and_first_impression_are_separate_from_verified_deployment(): void
+    {
+        [$campaign, $strategy] = $this->servingGoogleCampaign();
+        $group = 'customers/1234567890/assetGroups/222';
+        $result = $strategy->execution_result;
+        $result['metadata']['google_pmax_staging'] = ['asset_group' => $group];
+        $strategy->update(['campaign_type' => 'performance_max', 'execution_result' => $result]);
+        $policy = $campaign->policy_checks;
+        $policy['platforms']['google_ads']['evidence'] = ['asset_groups' => [['resource_name' => $group, 'ad_strength' => 'POOR']]];
+        $campaign->update(['primary_status' => 'LEARNING', 'policy_checks' => $policy]);
+
+        $statusUrl = route('api.campaigns.deployment-status', $campaign);
+        $this->getJson($statusUrl)->assertOk()->assertJsonPath('overall_progress', 100)
+            ->assertJsonPath('deployments.0.delivery_status.status', 'learning')
+            ->assertJsonPath('deployments.0.delivery_status.ad_strength', 'POOR');
+
+        $campaign->update(['primary_status' => 'ELIGIBLE']);
+        $this->getJson($statusUrl)->assertOk()->assertJsonPath('deployments.0.delivery_status.status', 'eligible');
+
+        $campaign->googleAdsPerformanceData()->create([
+            'date' => now()->toDateString(), 'impressions' => 1, 'clicks' => 0, 'cost' => 0, 'conversions' => 0,
+        ]);
+        $this->getJson($statusUrl)->assertOk()->assertJsonPath('deployments.0.delivery_status.status', 'live');
+    }
+
     public function test_completed_construction_is_separate_from_google_policy_review_and_actual_restrictions(): void
     {
         [$campaign] = $this->servingGoogleCampaign();

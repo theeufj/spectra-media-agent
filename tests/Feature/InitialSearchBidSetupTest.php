@@ -182,6 +182,32 @@ class InitialSearchBidSetupTest extends TestCase
         $this->assertSame(5_000_000, $this->remote['daily_budget_micros']);
     }
 
+    public function test_initial_bid_is_applied_and_verified_across_all_offer_groups(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture('managed');
+        $second = 'customers/1234567890/adGroups/790';
+        $this->remote['keywords'][] = [...$this->remote['keywords'][0],
+            'resource_name' => 'customers/1234567890/adGroupCriteria/790~101',
+            'ad_group_resource' => $second, 'text' => 'google ads management'];
+        $writer = $this->createMock(UpdateAdGroupCpcBid::class);
+        $writer->expects($this->never())->method('__invoke');
+        $writer->expects($this->once())->method('updateAll')
+            ->with(self::ACCOUNT, [self::GROUP, $second], self::BID)
+            ->willReturnCallback(function (string $account, array $groups, int $bid): bool {
+                $this->setRemoteBid($bid);
+
+                return true;
+            });
+        $this->app->bind(UpdateAdGroupCpcBid::class, fn () => $writer);
+        $result = ExecutionResult::success();
+
+        $this->assertTrue((new InitialSearchBidSetup($customer))->configure($campaign, $strategy,
+            self::ACCOUNT, self::CAMPAIGN, [self::GROUP, $second], $result), $result->errorMessage());
+        $this->assertSame('verified', $result->metadata['initial_search_bid']['status']);
+        $this->assertSame([self::BID, self::BID], array_column($this->remote['keywords'], 'ad_group_cpc_bid_micros'));
+        $this->assertSame(GoogleStatus::PAUSED, $this->remote['status']);
+    }
+
     public static function services(): array
     {
         return ['managed' => ['managed'], 'paid setup' => ['setup_only']];

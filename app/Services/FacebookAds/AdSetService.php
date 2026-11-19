@@ -90,7 +90,9 @@ class AdSetService extends BaseFacebookAdsService
         array $targeting = [],
         string $optimizationGoal = 'LINK_CLICKS',
         string $status = 'PAUSED',
-        ?array $promotedObject = null
+        ?array $promotedObject = null,
+        ?string $endTime = null,
+        ?string $destinationType = null,
     ): ?array {
         // billing_event for standard traffic/awareness campaigns is always IMPRESSIONS.
         // The old default of LINK_CLICKS as billing_event causes API errors with OUTCOME_* objectives.
@@ -122,6 +124,12 @@ class AdSetService extends BaseFacebookAdsService
 
             if ($promotedObject !== null) {
                 $data['promoted_object'] = json_encode($promotedObject);
+            }
+            if ($endTime !== null) {
+                $data['end_time'] = $endTime;
+            }
+            if ($destinationType !== null) {
+                $data['destination_type'] = $destinationType;
             }
 
             // Add targeting if provided

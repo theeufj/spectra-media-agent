@@ -108,6 +108,7 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
 
         if ($customer->google_ads_customer_id) {
             InvitePaidSetupCustomer::dispatchIfReady($customer);
+            ResumeCampaignLaunches::dispatch($customer->id);
 
             return;
         }
@@ -186,7 +187,10 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
             'google_ads_customer_id' => $result['customer_id'],
             'google_ads_manager_customer_id' => $managerId,
             'google_ads_customer_is_manager' => false,
+            'google_ads_link_status' => 'managed',
+            'google_ads_link_confirmed_at' => now(),
         ]);
+        ResumeCampaignLaunches::dispatch($customer->id);
 
         AgentActivity::record(
             'onboarding',

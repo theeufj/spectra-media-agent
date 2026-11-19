@@ -7,6 +7,7 @@ use App\Jobs\DeployCampaign;
 use App\Models\BrandGuideline;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Plan;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Services\AdSpendBillingService;
@@ -204,7 +205,9 @@ class CampaignMarketResearchBoundaryTest extends TestCase
     public function test_no_stripe_customer_payment_method_or_credit_is_created_for_unresearched_campaign(): void
     {
         $owner = User::factory()->create(['email_verified_at' => now(), 'stripe_id' => null, 'subscription_status' => 'active']);
-        $customer = Customer::factory()->create(['service_type' => 'managed']);
+        $customer = Customer::factory()->create(['service_type' => 'managed', 'plan_id' => Plan::firstOrCreate(
+            ['slug' => 'growth'], ['name' => 'Growth', 'price_cents' => 24900, 'billing_interval' => 'month'],
+        )->id]);
         $customer->users()->attach($owner, ['role' => 'owner']);
         BrandGuideline::create(['customer_id' => $customer->id, 'brand_voice' => [], 'tone_attributes' => [],
             'writing_patterns' => [], 'color_palette' => [], 'typography' => [], 'visual_style' => [],
@@ -213,7 +216,7 @@ class CampaignMarketResearchBoundaryTest extends TestCase
             'user_verified' => true, 'extracted_at' => now()]);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'daily_budget' => '20.00',
             'approved_daily_budget' => '20.00', 'budget_confirmed_at' => now()]);
-        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'signed_off_at' => now()]);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'signed_off_at' => now()]);
         $this->mock(CampaignMarketResearchWorkflow::class, function ($mock) {
             $mock->shouldReceive('assertApproved')->once()
                 ->andThrow(ValidationException::withMessages(['daily_budget' => 'The researched proposal must be approved before funding.']));

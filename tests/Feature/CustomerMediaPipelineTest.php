@@ -207,6 +207,7 @@ class CustomerMediaPipelineTest extends TestCase
             'platform' => 'Google Ads',
             'signed_off_at' => now(),
             'collateral_errors' => [
+                ['message' => 'Collateral batch failed.', 'failed_at' => now()->toIso8601String()],
                 'ad_copy' => 'Failed to generate approved ad copy after 10 attempts. Last violations: null',
                 'images' => 'Image generation failed.',
             ],
@@ -227,6 +228,7 @@ class CustomerMediaPipelineTest extends TestCase
         $errors = $response->json('collateralErrors');
         $this->assertArrayNotHasKey('ad_copy', $errors);
         $this->assertArrayHasKey('images', $errors);
+        $this->assertSame('Collateral batch failed.', $errors[0]);
     }
 
     public function test_onboarding_extraction_kicks_off_the_website_asset_harvest(): void

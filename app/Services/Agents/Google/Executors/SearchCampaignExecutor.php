@@ -17,7 +17,9 @@ use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\SearchOfferGroups;
 use App\Services\CampaignStatusHelper;
+use App\Services\Deployment\GoogleSearchConfigurationCheck;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
@@ -61,6 +63,11 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
                 'stored_id' => $this->customer->google_ads_customer_id,
             ]);
             $customerId = $this->customer->cleanGoogleCustomerId();
+        }
+
+        $offerGroups = $strategy->bidding_strategy['search_offer_groups'] ?? [];
+        if ($offerGroups !== []) {
+            app(SearchOfferGroups::class)->assertCurrent($campaign, $offerGroups, $this->keywords->getKeywords($campaign, $strategy, $plan));
         }
 
         $setupOnlyStaging = $this->customer->fresh()?->isPaidSetupOnly() === true;
@@ -153,44 +160,70 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // 1.5 Add Location Targeting
         $this->geo->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
 
-        // 2. Create Ad Group — reuse if already created in a prior attempt
-        if (! empty($strategy->google_ads_ad_group_id)) {
-            $adGroupResourceName = $strategy->google_ads_ad_group_id;
-            Log::info('GoogleAdsExecutionAgent: Reusing existing Search ad group from prior attempt', [
-                'strategy_id' => $strategy->id,
-                'google_ads_ad_group_id' => $adGroupResourceName,
-            ]);
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-        } else {
-            $createAdGroupService = app(CreateSearchAdGroup::class, ['customer' => $this->customer]);
-            $adGroupName = 'Default Ad Group - '.$timestamp;
-            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-            if (! $adGroupResourceName) {
-                throw new \Exception('Failed to create search ad group');
+        $offerResources = [];
+        if ($offerGroups === []) {
+            // 2. Create Ad Group — reuse if already created in a prior attempt
+            if (! empty($strategy->google_ads_ad_group_id)) {
+                $adGroupResourceName = $strategy->google_ads_ad_group_id;
+                Log::info('GoogleAdsExecutionAgent: Reusing existing Search ad group from prior attempt', [
+                    'strategy_id' => $strategy->id,
+                    'google_ads_ad_group_id' => $adGroupResourceName,
+                ]);
+                $result->addPlatformId('ad_group', $adGroupResourceName);
+            } else {
+                $createAdGroupService = app(CreateSearchAdGroup::class, ['customer' => $this->customer]);
+                $adGroupName = 'Default Ad Group - '.$timestamp;
+                $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+                if (! $adGroupResourceName) {
+                    throw new \Exception('Failed to create search ad group');
+                }
+
+                $result->addPlatformId('ad_group', $adGroupResourceName);
+                $strategy->google_ads_ad_group_id = $adGroupResourceName;
+                $strategy->save();
             }
 
-            $result->addPlatformId('ad_group', $adGroupResourceName);
+            // 3. Preserve the selected keywords; Planner supplies metrics, not replacements.
+            $keywords = $this->keywords->getKeywords($campaign, $strategy, $plan);
+            if (empty($keywords)) {
+                // Fallback: use AI keyword research to generate initial keywords
+                $keywords = $this->keywords->researchKeywords($customerId, $campaign, $strategy);
+            }
+            // Missing Planner metrics must not erase a reviewed keyword or widen its match type.
+            if (! empty($keywords)) {
+                $keywords = $this->keywords->validateAndEnrichKeywords($customerId, $keywords, $campaign, $strategy);
+            }
+            if ($keywords === []) {
+                throw new \RuntimeException('No relevant Search keywords could be selected. Review the campaign keywords before retrying.');
+            }
+            $result->addMetadata('selected_keywords', $keywords);
+            $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result, $campaign);
+            if (! $result->success) {
+                return;
+            }
+
+        } else {
+            $keywords = [];
+            $createAdGroup = app(CreateSearchAdGroup::class, ['customer' => $this->customer]);
+            foreach ($offerGroups as $group) {
+                $id = $createAdGroup($customerId, $campaignResourceName, 'Search offer '.$group['key']);
+                if (! $id) {
+                    throw new \RuntimeException('Google could not stage the reviewed Search offer ad group.');
+                }
+                $offerResources[$group['key']] = $id;
+                $result->addPlatformId('ad_group_'.$group['key'], $id);
+                $groupKeywords = array_map(fn ($keyword) => [...$keyword, 'ad_group_resource' => $id], $group['keywords']);
+                $this->keywords->addKeywords($customerId, $id, $groupKeywords, $result, $campaign);
+                if (! $result->success) {
+                    return;
+                }
+                $keywords = [...$keywords, ...$groupKeywords];
+            }
+            $adGroupResourceName = reset($offerResources);
             $strategy->google_ads_ad_group_id = $adGroupResourceName;
             $strategy->save();
-        }
-
-        // 3. Preserve the selected keywords; Planner supplies metrics, not replacements.
-        $keywords = $this->keywords->getKeywords($campaign, $strategy, $plan);
-        if (empty($keywords)) {
-            // Fallback: use AI keyword research to generate initial keywords
-            $keywords = $this->keywords->researchKeywords($customerId, $campaign, $strategy);
-        }
-        // Missing Planner metrics must not erase a reviewed keyword or widen its match type.
-        if (! empty($keywords)) {
-            $keywords = $this->keywords->validateAndEnrichKeywords($customerId, $keywords, $campaign, $strategy);
-        }
-        if ($keywords === []) {
-            throw new \RuntimeException('No relevant Search keywords could be selected. Review the campaign keywords before retrying.');
-        }
-        $result->addMetadata('selected_keywords', $keywords);
-        $this->keywords->addKeywords($customerId, $adGroupResourceName, $keywords, $result, $campaign);
-        if (! $result->success) {
-            return;
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+            $result->addMetadata('selected_keywords', $keywords);
         }
 
         // 3.2 Add negative keywords at campaign creation time
@@ -200,13 +233,15 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 3.5 Add Audience Targeting
-        $this->audiences->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
+        foreach ($offerResources ?: [$adGroupResourceName] as $audienceGroup) {
+            $this->audiences->addAudienceTargeting($customerId, $audienceGroup, $strategy, $result);
+        }
 
         // Configure an explicit initial bid for every Search build, including
         // managed accounts and the Manual CPC fallback for Smart Bidding.
         // The estimator never changes a running campaign or authorizes launch.
         if (! $result->success || ! app(InitialSearchBidSetup::class, ['customer' => $this->customer])
-            ->configure($campaign, $strategy, $customerId, $campaignResourceName, $adGroupResourceName, $result)) {
+            ->configure($campaign, $strategy, $customerId, $campaignResourceName, $offerResources ?: $adGroupResourceName, $result)) {
             return;
         }
 
@@ -241,7 +276,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         // through the API; attaching them requires the Google Ads UI.
         // https://developers.google.com/google-ads/api/docs/assets/overview
         $imageAssetResourceNames = [];
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->limit(15)->get();
         if ($imageCollaterals->isNotEmpty()) {
             $uploadImageAssetService = new UploadImageAsset($this->customer);
 
@@ -281,54 +316,59 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             return;
         }
 
-        // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
-        $adCopies = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->limit(3)->get();
-        if ($adCopies->isEmpty()) {
-            $adCopies = $strategy->adCopies()->limit(3)->get();
-        }
-        $expectedAds = [];
+        if ($offerResources !== []) {
+            $expectedAds = $this->writeOfferAds($customerId, $campaignResourceName, $campaign, $strategy, $offerGroups, $offerResources, $result);
+        } else {
+            // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
+            $adCopies = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->limit(3)->get();
+            if ($adCopies->isEmpty()) {
+                $adCopies = $strategy->deployableAdCopies()->limit(3)->get();
+            }
+            $expectedAds = [];
 
-        if ($adCopies->isNotEmpty()) {
-            $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
+            if ($adCopies->isNotEmpty()) {
+                $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
 
-            if (! $finalUrl) {
-                $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
-            } else {
-                $createAdService = app(CreateResponsiveSearchAd::class, ['customer' => $this->customer]);
+                if (! $finalUrl) {
+                    $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
+                } else {
+                    $createAdService = app(CreateResponsiveSearchAd::class, ['customer' => $this->customer]);
 
-                foreach ($adCopies as $adCopy) {
-                    $expectedAds[] = ['ad_copy_id' => $adCopy->id, 'headlines' => $adCopy->headlines ?? [], 'descriptions' => $adCopy->descriptions ?? [], 'final_urls' => [$finalUrl]];
-                    $adData = [
-                        'finalUrls' => [$finalUrl],
-                        'headlines' => $adCopy->headlines ?? [],
-                        'descriptions' => $adCopy->descriptions ?? [],
-                    ];
-                    $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-                    if ($adResourceName) {
-                        $result->addPlatformId('ad', $adResourceName);
-                        $expectedAds[array_key_last($expectedAds)]['resource'] = $adResourceName;
-                    }
-                }
-
-                // If only 1 ad copy with enough headlines, create a second RSA variant
-                // with rotated headlines so Google has two containers to A/B test.
-                if ($adCopies->count() === 1) {
-                    $firstCopy = $adCopies->first();
-                    $allHeadlines = $firstCopy->headlines ?? [];
-                    if (count($allHeadlines) >= 6) {
-                        $rotated = array_merge(array_slice($allHeadlines, 4), array_slice($allHeadlines, 0, 4));
-                        $adData2 = [
+                    foreach ($adCopies as $adCopy) {
+                        $expectedAds[] = ['ad_copy_id' => $adCopy->id, 'headlines' => $adCopy->headlines ?? [], 'descriptions' => $adCopy->descriptions ?? [], 'final_urls' => [$finalUrl]];
+                        $adData = [
                             'finalUrls' => [$finalUrl],
-                            'headlines' => $rotated,
-                            'descriptions' => array_reverse($firstCopy->descriptions ?? []),
+                            'headlines' => $adCopy->headlines ?? [],
+                            'descriptions' => $adCopy->descriptions ?? [],
                         ];
-                        $adResourceName2 = ($createAdService)($customerId, $adGroupResourceName, $adData2);
-                        if ($adResourceName2) {
-                            $result->addPlatformId('ad', $adResourceName2);
+                        $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
+                        if ($adResourceName) {
+                            $result->addPlatformId('ad', $adResourceName);
+                            $expectedAds[array_key_last($expectedAds)]['resource'] = $adResourceName;
+                        }
+                    }
+
+                    // If only 1 ad copy with enough headlines, create a second RSA variant
+                    // with rotated headlines so Google has two containers to A/B test.
+                    if ($adCopies->count() === 1) {
+                        $firstCopy = $adCopies->first();
+                        $allHeadlines = $firstCopy->headlines ?? [];
+                        if (count($allHeadlines) >= 6) {
+                            $rotated = array_merge(array_slice($allHeadlines, 4), array_slice($allHeadlines, 0, 4));
+                            $adData2 = [
+                                'finalUrls' => [$finalUrl],
+                                'headlines' => $rotated,
+                                'descriptions' => array_reverse($firstCopy->descriptions ?? []),
+                            ];
+                            $adResourceName2 = ($createAdService)($customerId, $adGroupResourceName, $adData2);
+                            if ($adResourceName2) {
+                                $result->addPlatformId('ad', $adResourceName2);
+                            }
                         }
                     }
                 }
             }
+
         }
 
         // 6. Add Ad Extensions (Sitelinks, Callouts)
@@ -338,6 +378,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         $extensionTypes = ['sitelink_asset', 'callout_asset', 'structured_snippet_asset', 'call_asset', 'price_asset', 'promotion_asset'];
         $result->addMetadata('google_search_baseline', [
             'version' => 1, 'keywords' => $keywords, 'ads' => $expectedAds,
+            ...($offerResources === [] ? [] : ['offer_ad_groups' => $offerResources]),
             'locations' => $result->metadata['expected_locations'] ?? [],
             'location_mode' => 'PRESENCE',
             'networks' => ['targetGoogleSearch' => true, 'targetSearchNetwork' => false, 'targetContentNetwork' => false],
@@ -351,6 +392,16 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             'conversion_category' => ReconcileCampaignConversionGoals::categoryFor($strategy),
             'conversion_goal' => $goalReadiness['intent'] ?? null,
         ]);
+
+        if ($offerResources !== []) {
+            $current = app(ReadCampaignConfiguration::class, ['customer' => $this->customer])->read($customerId, $campaignResourceName);
+            $issues = app(GoogleSearchConfigurationCheck::class)->compareOfferGroups($result->metadata['google_search_baseline'], $current);
+            if ($issues !== []) {
+                $result->addError('search_offer_groups_unverified', implode(' ', $issues));
+
+                return;
+            }
+        }
 
         // 8. Apply conversion value rules (device + audience modifiers)
         if (! $setupOnlyStaging) {
@@ -368,6 +419,36 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $staging['checked_at'] = now()->toIso8601String();
             $result->addMetadata('google_search_staging', $staging);
         }
+    }
+
+    private function writeOfferAds(string $customerId, string $resource, Campaign $campaign, Strategy $strategy, array $groups, array $resources, ExecutionResult $result): array
+    {
+        $known = app(ReadCampaignConfiguration::class, ['customer' => $this->customer])->ads($customerId, $resource);
+        $writer = app(CreateResponsiveSearchAd::class, ['customer' => $this->customer]);
+        $check = app(GoogleSearchConfigurationCheck::class);
+        $expected = [];
+        foreach ($groups as $group) {
+            $id = $resources[$group['key']];
+            $ad = ['ad_group_resource' => $id, 'headlines' => $group['headlines'], 'descriptions' => $group['descriptions'],
+                'final_urls' => [$this->urls->forOffer($group['url'], $campaign, $strategy, $group['key'])]];
+            $previous = collect($known)->first(fn ($row) => $check->offerAdMatches($ad, $row));
+            if ($previous && ($previous['adGroupAd']['status'] ?? null) !== 'ENABLED') {
+                throw new \RuntimeException('A previously staged Search offer ad is paused. Review the existing ad before retrying.');
+            }
+            if (! $this->confirmPausedStage($customerId, $resource, $result)) {
+                throw new \RuntimeException('Google did not confirm paused staging for the Search offer ads.');
+            }
+            $adId = $previous['adGroupAd']['resourceName'] ?? $writer($customerId, $id, [
+                'headlines' => $ad['headlines'], 'descriptions' => $ad['descriptions'], 'finalUrls' => $ad['final_urls'],
+            ]);
+            if (! $adId) {
+                throw new \RuntimeException('Google did not confirm the reviewed Search offer ad.');
+            }
+            $result->addPlatformId('ad', $adId);
+            $expected[] = [...$ad, 'resource' => $adId];
+        }
+
+        return $expected;
     }
 
     protected function confirmPausedStage(string $customerId, string $resource, ExecutionResult $result): bool

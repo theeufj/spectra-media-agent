@@ -31,20 +31,8 @@ parameters:
 			path: app/Console/Commands/ProvisionConversionActions.php
 
 		-
-			message: '#^Parameter \#1 \$strategyId of job class App\\Jobs\\UploadPMaxVideoAssets constructor expects int in App\\Jobs\\UploadPMaxVideoAssets\:\:dispatch\(\), string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Console/Commands/RepairPMaxAssets.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>google_ads_customer_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Console/Commands/RepairPMaxAssets.php
-
-		-
-			message: '#^Variable \$strategy on left side of \?\? is never defined\.$#'
-			identifier: nullCoalesce.variable
 			count: 1
 			path: app/Console/Commands/RepairPMaxAssets.php
 
@@ -713,18 +701,6 @@ parameters:
 			path: app/Jobs/RunPerformanceAnomalyCheck.php
 
 		-
-			message: '#^Offset ''added'' on array\{asset_group\: string, ad_strength\: string, added\: array, missing_media\: array\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
-			message: '#^Offset ''missing_media'' on array\{asset_group\: string, ad_strength\: string, added\: array, missing_media\: array\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
 			message: '#^Variable \$findings in empty\(\) always exists and is not falsy\.$#'
 			identifier: empty.variable
 			count: 1
@@ -887,12 +863,6 @@ parameters:
 			path: app/Services/AdSpendBillingService.php
 
 		-
-			message: '#^Call to function is_string\(\) with array will always evaluate to false\.$#'
-			identifier: function.impossibleType
-			count: 2
-			path: app/Services/AdminMonitorService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\CampaignHourlyPerformance\:\:\$avg_hourly_spend\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1037,12 +1007,6 @@ parameters:
 			path: app/Services/Agents/FacebookAdsExecutionAgent.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>website" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
 			message: '#^Parameter \#2 \$days of method App\\Services\\Agents\\FacebookLearningPhaseAgent\:\:notifyStalled\(\) expects int, float given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1054,12 +1018,6 @@ parameters:
 			count: 1
 			path: app/Services/Agents/FacebookLearningPhaseAgent.php
 
-
-		-
-			message: '#^Comparison operation "\<" between int\<min, 49\> and 50 is always true\.$#'
-			identifier: smaller.alwaysTrue
-			count: 1
-			path: app/Services/Agents/Google/Executors/PerformanceMaxCampaignExecutor.php
 
 		-
 			message: '#^Property App\\Services\\Agents\\GoogleAdsExecutionAgent\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'
@@ -1194,30 +1152,6 @@ parameters:
 			path: app/Services/Deployment/FacebookAdsDeploymentStrategy.php
 
 		-
-			message: '#^Match arm comparison between ''app'' and ''app'' is always true\.$#'
-			identifier: match.alwaysTrue
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
-			message: '#^Match arm comparison between ''app'' and ''demand_gen'' is always false\.$#'
-			identifier: match.alwaysFalse
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
-			message: '#^Match arm comparison between ''app'' and ''local_services'' is always false\.$#'
-			identifier: match.alwaysFalse
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
-			message: '#^Match arm comparison between ''app'' and ''performance_max'' is always false\.$#'
-			identifier: match.alwaysFalse
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
-
-		-
 			message: '#^PHPDoc tag @param references unknown parameter\: \$billingEvent$#'
 			identifier: parameter.notFound
 			count: 1
@@ -1300,18 +1234,6 @@ parameters:
 			identifier: varTag.variableNotFound
 			count: 1
 			path: app/Services/GoogleAds/CreateCampaignBudget.php
-
-		-
-			message: '#^Parameter \#3 \$dailyBudgetMicros of callable App\\Services\\GoogleAds\\CreateCampaignBudget expects int, float given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/PerformanceMaxServices/CreatePerformanceMaxCampaign.php
-
-		-
-			message: '#^Offset ''low'' on array\{best\: array, good\: array, low\: array, pending\: array, learning\: array\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/GoogleAds/PerformanceMaxServices/GetAssetGroupPerformance.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
@@ -1416,27 +1338,9 @@ parameters:
 			path: routes/console.php
 
 		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertIsArray\(\) with array\<int, array\{type\: string, severity\: string, platform\: string, message\: string, details\: array, can_auto_fix\: bool, recommended_action\: string\}\> will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 3
-			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
-
-		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertNotNull\(\) with null and non\-falsy\-string will always evaluate to false\.$#'
-			identifier: method.impossibleType
-			count: 1
-			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 10
-			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
-
-		-
-			message: '#^Offset ''auto_fix_action'' on array\{type\: string, severity\: string, platform\: string, message\: string, details\: array, can_auto_fix\: true, recommended_action\: string\} on left side of \?\? does not exist\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
 			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
 
 		-

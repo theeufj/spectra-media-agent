@@ -147,6 +147,15 @@ class CampaignController extends Controller
     {
         $customer = $campaign->customer;
 
+        if ($campaign->strategies()->where('deployment_status', \App\Services\Deployment\CampaignLaunchIntent::WAITING)->exists()) {
+            \App\Jobs\ResumeCampaignLaunches::dispatch($campaign->customer_id);
+
+            return redirect()->back()->with('flash', [
+                'type' => 'info',
+                'message' => 'The customer-approved launch will be retried after the account and funding are ready.',
+            ]);
+        }
+
         // Verify the account ID is now attached before we try to deploy
         $hasGoogleStrategy = $campaign->strategies()
             ->whereNotNull('signed_off_at')
@@ -163,6 +172,8 @@ class CampaignController extends Controller
         // Reset deployment_status so the idempotency guard allows deployment
         $campaign->strategies()
             ->whereNotNull('signed_off_at')
+            ->whereNull('launch_intent')
+            ->where(fn ($query) => $query->whereNull('deployment_status')->orWhereNotIn('deployment_status', [...\App\Models\Strategy::DEPLOYED_STATUSES, 'queued', 'deploying']))
             ->update(['deployment_status' => null]);
 
         \App\Jobs\DeployCampaign::dispatch($campaign, useAgents: true);

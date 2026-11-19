@@ -17,7 +17,9 @@ use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\SupportTicket;
 use App\Models\User;
-use App\Services\Campaigns\CampaignMarketResearchWorkflow;
+use App\Services\Campaigns\CampaignMarketResearch;
+use App\Services\Creative\CreativeRelease;
+use App\Services\Deployment\CampaignLaunchIntent;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -61,18 +63,21 @@ class OperationsJourneyTest extends TestCase
     public function test_single_platform_launch_has_same_budget_gate_and_only_queues_its_target(): void
     {
         [, $customer] = $this->workspace();
-        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'auto_generated_at' => now(), 'budget_confirmed_at' => null]);
-        $target = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'signed_off_at' => now()]);
-        $other = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Facebook Ads', 'signed_off_at' => now()]);
-        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertSessionHas('flash.type', 'error');
+        $campaign = Campaign::factory()->for($customer)->create(['auto_generated_at' => now(), 'budget_confirmed_at' => null,
+            'daily_budget' => 40, 'approved_daily_budget' => 40]);
+        [$target, $fingerprint] = $this->reviewedGoogleStrategy($campaign);
+        $other = Strategy::factory()->for($campaign)->create(['platform' => 'Facebook Ads', 'signed_off_at' => now(), 'daily_budget' => 20]);
+        AdSpendCredit::factory()->for($customer)->create();
+        $payload = ['campaign_id' => $campaign->id, 'strategy_id' => $target->id, 'creative_fingerprints' => [$target->id => $fingerprint]];
+        $this->post(route('deployment.deploy-platform'), $payload)->assertSessionHas('flash.type', 'error');
         Queue::assertNotPushed(DeployCampaign::class);
         $campaign->update(['budget_confirmed_at' => now()]);
         // A confirmed amount alone cannot skip the market-consent boundary;
         // this test continues downstream to check single-target queueing.
-        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertSessionHas('flash.type', 'error');
+        $this->post(route('deployment.deploy-platform'), $payload)->assertSessionHas('flash.type', 'error');
         Queue::assertNotPushed(DeployCampaign::class);
-        $this->mock(CampaignMarketResearchWorkflow::class, fn ($mock) => $mock->shouldReceive('assertApproved')->once()->andReturnNull());
-        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $target->id])->assertRedirect(route('campaigns.deployment-status', $campaign, absolute: false));
+        $this->approveProposal($campaign);
+        $this->post(route('deployment.deploy-platform'), $payload)->assertRedirect(route('campaigns.deployment-status', $campaign, absolute: false));
         $this->assertSame('queued', $target->fresh()->deployment_status);
         $this->assertNull($other->fresh()->deployment_status);
         Queue::assertPushed(DeployCampaign::class, 1);
@@ -84,11 +89,34 @@ class OperationsJourneyTest extends TestCase
     {
         [, $customer] = $this->workspace();
         AdSpendCredit::factory()->paused()->create(['customer_id' => $customer->id]);
-        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
-        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'signed_off_at' => now()]);
-        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id])->assertRedirect(route('billing.ad-spend', absolute: false));
+        $campaign = Campaign::factory()->for($customer)->create(['daily_budget' => 20, 'approved_daily_budget' => 20, 'budget_confirmed_at' => now()]);
+        [$strategy, $fingerprint] = $this->reviewedGoogleStrategy($campaign);
+        $this->approveProposal($campaign);
+        $this->post(route('deployment.deploy-platform'), ['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id,
+            'creative_fingerprints' => [$strategy->id => $fingerprint]])->assertRedirect(route('billing.ad-spend', absolute: false));
         Queue::assertNotPushed(DeployCampaign::class);
-        $this->assertNull($strategy->fresh()->deployment_status);
+        $this->assertSame(CampaignLaunchIntent::WAITING, $strategy->fresh()->deployment_status);
+        $this->assertNotNull($strategy->fresh()->launch_intent);
+    }
+
+    private function reviewedGoogleStrategy(Campaign $campaign): array
+    {
+        $strategy = Strategy::factory()->for($campaign)->create(['platform' => 'Google Ads', 'campaign_type' => 'search',
+            'daily_budget' => 20, 'signed_off_at' => now()]);
+        $strategy->adCopies()->create(['platform' => 'Google Ads', 'headlines' => ['Reviewed ad'],
+            'descriptions' => ['Reviewed description'], 'should_deploy' => true]);
+        $fingerprint = app(CreativeRelease::class)->selection($strategy)['fingerprint'];
+        $strategy->forceFill(['creative_release_review' => ['status' => 'passed', 'fingerprint' => $fingerprint, 'issues' => []]])->save();
+
+        return [$strategy, $fingerprint];
+    }
+
+    private function approveProposal(Campaign $campaign): void
+    {
+        $campaign->update(['search_delivery_state' => ['market_research' => [
+            'status' => 'ready', 'request_id' => 'operations-research', 'approved_request_id' => 'operations-research',
+            'result' => ['status' => 'ready'], 'approved_fingerprint' => app(CampaignMarketResearch::class)->approvalFingerprint($campaign),
+        ]]]);
     }
 
     public function test_funding_refuses_unreviewed_creative_before_touching_stripe(): void

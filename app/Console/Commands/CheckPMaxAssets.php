@@ -163,6 +163,7 @@ class CheckPMaxAssets extends Command
             return [
                 'low_detected' => 0,
                 'text_replaced' => 0,
+                'text_flagged' => 0,
                 'image_flagged' => 0,
                 'errors' => [$e->getMessage()],
             ];
@@ -175,9 +176,9 @@ class CheckPMaxAssets extends Command
     private function outputResult(array $result, Campaign $campaign): void
     {
         $this->info(sprintf(
-            '    Low detected: %d | Text replaced: %d | Images flagged: %d',
+            '    Low detected: %d | Text flagged: %d | Images flagged: %d',
             $result['low_detected'],
-            $result['text_replaced'],
+            $result['text_flagged'],
             $result['image_flagged']
         ));
 

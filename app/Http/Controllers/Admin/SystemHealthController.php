@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\GeminiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Inertia;
 
@@ -130,24 +130,23 @@ class SystemHealthController extends Controller
     private function checkGemini(): array
     {
         try {
-            $apiKey = config('services.google.gemini_api_key');
+            $gemini = app(GeminiService::class);
 
-            if (! $apiKey) {
+            if (! $gemini->isVertexConfigured()) {
                 return [
                     'name' => 'Gemini AI',
                     'status' => 'not_configured',
-                    'message' => 'API key not configured',
+                    'message' => 'Vertex project or credentials missing',
                     'icon' => 'sparkles',
                 ];
             }
 
-            // Quick connectivity test
-            $response = Http::timeout(5)->get("https://generativelanguage.googleapis.com/v1beta/models?key={$apiKey}");
+            $connected = $gemini->checkVertexConnectivity();
 
             return [
                 'name' => 'Gemini AI',
-                'status' => $response->successful() ? 'healthy' : 'error',
-                'message' => $response->successful() ? 'API responding' : 'API not responding',
+                'status' => $connected ? 'healthy' : 'error',
+                'message' => $connected ? 'Vertex AI responding' : 'Vertex AI check failed',
                 'icon' => 'sparkles',
             ];
         } catch (\Throwable $e) {

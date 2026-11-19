@@ -46,7 +46,7 @@ class GoogleAdStrengthRepair
     }
 
     /** Re-read local approval and money holds before every repair write. */
-    public function mutationBlocked(Campaign $campaign, \App\Models\Strategy $strategy, bool $stagedRankCreative = false): ?string
+    public function mutationBlocked(Campaign $campaign, \App\Models\Strategy $strategy, bool $stagedRankCreative = false, bool $rewritesSearchCopy = false): ?string
     {
         $fresh = Campaign::with('customer')->find($campaign->id);
         $customer = $fresh?->customer;
@@ -76,6 +76,7 @@ class GoogleAdStrengthRepair
                 && (! $stagedRankCreative || ($fresh->spend_guardrails['allow_ad_rank_repairs'] ?? false) !== true) => 'approved_bounded_trial',
             $customer->service_type === 'setup_only' => 'setup_only',
             ! $approved?->signed_off_at => 'strategy_not_approved',
+            ($stagedRankCreative || $rewritesSearchCopy) && ! empty($approved->bidding_strategy['search_offer_groups']) => 'search_offer_copy_requires_group_review',
             basename((string) $approved->reusableGoogleCampaignId()) !== basename((string) $campaign->googleAdsResourceName()) => 'google_strategy_target_changed',
             ! \Laravel\Pennant\Feature::for($customer)->active(\App\Features\AutoHealing::class) => 'auto_healing_disabled',
             \App\Models\Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds()

@@ -7,6 +7,7 @@ use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CreateCampaignExperiment;
@@ -314,7 +315,7 @@ class ABTestingAgent
     {
         try {
             $insightService = new FacebookInsightService($customer);
-            $accountId = "act_{$customer->facebook_ads_account_id}";
+            $accountId = 'act_'.preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
             $dateEnd = now()->format('Y-m-d');
             $dateStart = $test->started_at->format('Y-m-d');
 
@@ -323,7 +324,8 @@ class ABTestingAgent
                 $dateStart,
                 $dateEnd,
                 'ad',
-                ['ad_id', 'ad_name', 'impressions', 'clicks', 'spend', 'actions']
+                ['campaign_id', 'ad_id', 'ad_name', 'impressions', 'inline_link_clicks', 'spend', 'actions'],
+                campaignId: $campaign->facebook_ads_campaign_id,
             );
 
             if (empty($adInsights)) {
@@ -332,7 +334,12 @@ class ABTestingAgent
 
             // Build lookup by ad name/id
             $insightLookup = [];
+            $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
             foreach ($adInsights as $insight) {
+                if ((string) ($insight['campaign_id'] ?? '') !== (string) $campaign->facebook_ads_campaign_id || empty($insight['ad_id'])) {
+                    continue;
+                }
+
                 $key = $insight['ad_name'] ?? $insight['ad_id'] ?? '';
                 if (! isset($insightLookup[$key])) {
                     $insightLookup[$key] = [
@@ -343,8 +350,8 @@ class ABTestingAgent
                     ];
                 }
                 $insightLookup[$key]['impressions'] += (int) ($insight['impressions'] ?? 0);
-                $insightLookup[$key]['clicks'] += (int) ($insight['clicks'] ?? 0);
-                $insightLookup[$key]['conversions'] += $insightService->parseAction($insight['actions'] ?? null, 'purchase');
+                $insightLookup[$key]['clicks'] += (int) ($insight['inline_link_clicks'] ?? 0);
+                $insightLookup[$key]['conversions'] += FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $goal);
                 $insightLookup[$key]['cost'] += (float) ($insight['spend'] ?? 0);
             }
 

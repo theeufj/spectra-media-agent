@@ -8,11 +8,13 @@ use App\Models\AdSpendCredit;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Notification;
+use App\Models\Strategy;
 use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\Agents\CampaignAlertService;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Customers\DeactivateCustomerService;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
@@ -68,6 +70,48 @@ class CampaignPolicyVisibilityTest extends TestCase
         $healer->expects($this->never())->method('heal');
         $job->handle($healer);
         $campaign->refresh();
+    }
+
+    public function test_active_performance_max_backfills_configuration_and_checks_asset_group_policy(): void
+    {
+        [$campaign] = $this->campaign('active', 'managed');
+        $resource = $campaign->google_ads_campaign_id;
+        $group = 'customers/1234567890/assetGroups/789';
+        $goal = 'customers/1234567890/conversionActions/987';
+        $stage = ['campaign_resource' => $resource, 'asset_group' => $group, 'goal_action' => $goal,
+            'budget_micros' => 60_000_000, 'final_urls' => ['https://example.com']];
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'campaign_type' => 'performance_max', 'platform' => 'Google Ads',
+            'daily_budget' => '60.00', 'signed_off_at' => now()->subHour(), 'deployed_at' => now()->subMinutes(30),
+            'google_ads_campaign_id' => $resource, 'deployment_status' => 'active', 'execution_result' => ['metadata' => [
+                'google_pmax_staging' => $stage, 'conversion_goal_readiness' => ['configuration_verified' => true, 'campaign_resource' => $resource,
+                    'intent' => ['action_resource' => $goal], 'checked_at' => now()->subMinute()->toIso8601String()],
+            ]]]);
+        $groups = [['assetGroup' => ['resourceName' => $group, 'status' => 'ENABLED', 'primaryStatus' => 'ELIGIBLE',
+            'adStrength' => 'POOR', 'finalUrls' => $stage['final_urls']]]];
+        $reader = $this->createMock(ReadCampaignConfiguration::class);
+        $reader->expects($this->once())->method('performanceMax')->with('1234567890', $resource)->willReturn([
+            'campaign' => ['campaign' => ['resourceName' => $resource, 'status' => 'ENABLED', 'advertisingChannelType' => 'PERFORMANCE_MAX',
+                'biddingStrategyType' => 'MAXIMIZE_CONVERSIONS', 'assetAutomationSettings' => [
+                    ['assetAutomationType' => 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', 'assetAutomationStatus' => 'OPTED_OUT'],
+                    ['assetAutomationType' => 'TEXT_ASSET_AUTOMATION', 'assetAutomationStatus' => 'OPTED_OUT'],
+                ]], 'campaignBudget' => ['amountMicros' => '60000000']], 'groups' => $groups,
+        ]);
+        $groups[0]['assetGroup']['primaryStatus'] = 'NOT_ELIGIBLE';
+        $groups[0]['assetGroup']['primaryStatusReasons'] = ['ASSET_GROUP_DISAPPROVED'];
+        $reader->expects($this->once())->method('performanceMaxGroups')->with('1234567890', $resource)->willReturn($groups);
+        $this->app->bind(ReadCampaignConfiguration::class, fn () => $reader);
+
+        $this->runCheck($campaign, [], new \RuntimeException('Search ad reads should not run for Performance Max.'));
+        $this->assertTrue($strategy->refresh()->execution_result['metadata']['configuration_verification']['passed']);
+        $policy = CampaignAlertService::policyStatus($campaign)['platforms']['google_ads'];
+        $this->assertSame('clear', $policy['status']);
+        $this->assertSame('POOR', $policy['evidence']['asset_groups'][0]['ad_strength']);
+
+        $this->runCheck($campaign, [], new \RuntimeException('Search ad reads should not run for Performance Max.'));
+        $policy = CampaignAlertService::policyStatus($campaign)['platforms']['google_ads'];
+        $this->assertSame('issues', $policy['status']);
+        $this->assertSame($group, $policy['issues'][0]['ad_resource_name']);
+        $this->assertSame('active', $strategy->refresh()->deployment_status);
     }
 
     public function test_paused_setup_campaign_records_destination_evidence_and_alerts_without_mutating_spend(): void

@@ -96,7 +96,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         // Validate creative assets
         $strategy = $context->strategy;
         $hasImages = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
-        $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
+        $hasAdCopy = ($strategy->campaign_type === 'search' && ! empty($strategy->bidding_strategy['search_offer_groups']))
+            || $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
 
         if (! $hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Google Ads');
@@ -379,8 +380,17 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 return $result;
             }
             $result->addMetadata('reviewed_campaign_type', $campaignType);
-            $finalUrl = (new LandingUrlBuilder($this->customer))->getFinalUrl($campaign, $strategy, $plan);
-            if ($finalUrl || in_array($campaignType, ['search', 'display', 'performance_max', 'demand_gen'], true)) {
+            $urlBuilder = new LandingUrlBuilder($this->customer);
+            $requiresDestination = in_array($campaignType, ['search', 'display', 'performance_max', 'demand_gen'], true);
+            $offers = $campaignType === 'search' ? ($strategy->bidding_strategy['search_offer_groups'] ?? []) : [];
+            if ($offers === []) {
+                $finalUrl = $urlBuilder->getFinalUrl($campaign, $strategy, $plan);
+                $destinations = $finalUrl || $requiresDestination
+                    ? [$finalUrl] : [];
+            } else {
+                $destinations = array_map(fn ($group) => $urlBuilder->forOffer($group['url'], $campaign, $strategy, $group['key']), $offers);
+            }
+            foreach ($destinations as $finalUrl) {
                 $destination = app(\App\Services\Deployment\AdDestinationCheck::class)->check($finalUrl);
                 $result->addMetadata('destination_check', $destination);
                 if ($destination['status'] !== 'reachable') {

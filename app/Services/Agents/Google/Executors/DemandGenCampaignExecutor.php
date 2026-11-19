@@ -92,7 +92,7 @@ class DemandGenCampaignExecutor implements CampaignTypeExecutor
         $strategy->save();
 
         // 3. Upload Image Assets
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->get();
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->get();
         $imageAssetResourceNames = [];
         $logoAssetResourceNames = [];
 
@@ -122,7 +122,7 @@ class DemandGenCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 4. Create Demand Gen Multi-Asset Ad
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
+        $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
         if ($adCopy && ! empty($imageAssetResourceNames)) {
             $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
 

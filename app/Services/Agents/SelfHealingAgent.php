@@ -10,13 +10,11 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
-use App\Prompts\AdCompliancePrompt;
 use App\Services\Agents\Concerns\ParsesLlmJson;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Support\GoogleAdPolicy;
 use Google\Ads\GoogleAds\V26\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
 use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
@@ -34,7 +32,7 @@ use Laravel\Pennant\Feature;
  * - Facebook Ads: Ad disapprovals, account restrictions, creative issues
  *
  * Features:
- * - AI-powered ad copy regeneration for policy violations
+ * - Policy diagnostics and review of replacement ads
  * - Automatic budget reallocation
  * - Delivery issue detection and remediation
  * - Cross-platform healing coordination
@@ -45,15 +43,12 @@ class SelfHealingAgent
     use ParsesLlmJson;
     use RetryableApiOperation;
 
-    protected GeminiService $gemini;
-
     protected array $config;
 
     protected string $platform = 'self_healing';
 
-    public function __construct(GeminiService $gemini, ?AdsServiceFactory $ads = null)
+    public function __construct(protected GeminiService $gemini, ?AdsServiceFactory $ads = null)
     {
-        $this->gemini = $gemini;
         $this->ads = $ads;
         $this->config = config('budget_rules.self_healing', []);
     }
@@ -245,7 +240,7 @@ class SelfHealingAgent
     }
 
     /**
-     * Handle a disapproved Google ad by generating a compliant alternative.
+     * Surface a disapproved Google ad for replacement review.
      */
     protected function handleGoogleDisapprovedAd(Campaign $campaign, Customer $customer, string $customerId, array $ad, array &$results): void
     {
@@ -311,121 +306,12 @@ class SelfHealingAgent
             return;
         }
 
-        // Diagnostics-only mode: say what is wrong, change nothing.
-        if (! $this->autoHealingEnabled) {
-            $results['warnings'][] = [
-                'type' => 'disapproved_ad',
-                'platform' => 'google_ads',
-                'message' => "Ad {$ad['resource_name']} is disapproved ({$violationReason}) — auto-healing is off for this customer",
-                'severity' => 'high',
-            ];
-
-            return;
-        }
-
-        // A replacement RSA is rejected without a final URL, so bail before
-        // spending a Gemini call on copy that can never be submitted.
-        $finalUrl = $campaign->landing_page_url ?: $customer->website;
-        if (! $finalUrl) {
-            $results['warnings'][] = [
-                'type' => 'no_landing_page',
-                'platform' => 'google_ads',
-                'message' => 'Cannot rebuild the disapproved ad: campaign has no landing page URL and the customer has no website',
-                'severity' => 'high',
-            ];
-
-            return;
-        }
-
-        Log::info('SelfHealingAgent: Attempting to fix disapproved Google ad', [
-            'ad_resource_name' => $ad['resource_name'],
-            'violation' => $violationReason,
-        ]);
-
-        // Generate compliant ad copy using AI
-        $prompt = AdCompliancePrompt::generate([
-            'headlines' => $ad['headlines'],
-            'descriptions' => $ad['descriptions'],
+        $results['warnings'][] = [
+            'type' => 'disapproved_ad',
             'platform' => 'google_ads',
-        ], $violationReason);
-
-        try {
-            $response = $this->gemini->generateContent(
-                model: config('ai.models.default'),
-                prompt: $prompt,
-                config: ['temperature' => 0.7]
-            );
-
-            // Extract JSON from response
-            if ($response && isset($response['text']) && preg_match('/\{.*\}/s', $response['text'], $matches)) {
-                $newAdData = json_decode($matches[0], true);
-
-                if ($newAdData && isset($newAdData['headlines'], $newAdData['descriptions'])) {
-                    // Create new ad with compliant copy using retry logic
-                    $newAdResourceName = $this->executeWithRetry(
-                        operation: function () use ($customer, $customerId, $ad, $newAdData, $finalUrl) {
-                            $createAdService = new CreateResponsiveSearchAd($customer);
-
-                            // One $adData array, not positional headline/description
-                            // lists: the old call handed the headlines straight in as
-                            // $adData, so every regeneration died on a null final_urls
-                            // before it ever reached Google.
-                            return ($createAdService)($customerId, $ad['ad_group_resource_name'], [
-                                'finalUrls' => [$finalUrl],
-                                'headlines' => $newAdData['headlines'],
-                                'descriptions' => $newAdData['descriptions'],
-                            ]);
-                        },
-                        operationName: 'create_compliant_google_ad',
-                        context: ['ad' => $ad['resource_name']]
-                    );
-
-                    if ($newAdResourceName) {
-                        $results['actions_taken'][] = [
-                            'type' => 'google_ad_resubmitted',
-                            'platform' => 'google_ads',
-                            'original_ad' => $ad['resource_name'],
-                            'new_ad' => $newAdResourceName,
-                            'reason' => $violationReason,
-                            'changes' => $newAdData['changes_made'] ?? 'Ad copy modified for compliance',
-                        ];
-
-                        Log::info('SelfHealingAgent: Created compliant Google ad', [
-                            'original' => $ad['resource_name'],
-                            'new' => $newAdResourceName,
-                        ]);
-
-                        // The escalation check above counts these rows. Without one
-                        // written per regeneration the same violation is retried for
-                        // ever, one Gemini call at a time.
-                        AgentActivity::record(
-                            'self_healing',
-                            'google_ad_regenerated',
-                            "Rebuilt disapproved ad for policy violation: {$violationReason}",
-                            $customer->id,
-                            $campaign->id,
-                            [
-                                'violation_topic' => $primaryTopic,
-                                'violation' => $violationReason,
-                                'original_ad' => $ad['resource_name'],
-                                'new_ad' => $newAdResourceName,
-                            ]
-                        );
-
-                        // Schedule approval verification 24h later to track healing success rate
-                        \App\Jobs\VerifyAdApproval::dispatch($customer, $newAdResourceName, $campaign->id)
-                            ->delay(now()->addHours(24));
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'Failed to create compliant Google ad: '.$e->getMessage();
-            Log::error('SelfHealingAgent: Failed to create compliant Google ad', [
-                'ad' => $ad['resource_name'],
-                'error' => $e->getMessage(),
-            ]);
-        }
+            'message' => "Google rejected ad {$ad['resource_name']} ({$violationReason}). Review corrected creative before replacing it.",
+            'severity' => 'high',
+        ];
     }
 
     /**
@@ -670,7 +556,7 @@ class SelfHealingAgent
     }
 
     /**
-     * Handle a disapproved Facebook ad by generating a compliant alternative.
+     * Surface a disapproved Meta ad for replacement review.
      */
     protected function handleFacebookDisapprovedAd(Campaign $campaign, Customer $customer, array $ad, array &$results): void
     {
@@ -680,155 +566,12 @@ class SelfHealingAgent
             ? implode(', ', array_values($reviewFeedback))
             : ($reviewFeedback ?: 'Unknown policy violation');
 
-        // Diagnostics-only mode: report the disapproval rather than replacing the
-        // creative and pausing the original ad behind the customer's back.
-        if (! $this->autoHealingEnabled) {
-            $results['warnings'][] = [
-                'type' => 'disapproved_ad',
-                'platform' => 'facebook_ads',
-                'message' => 'Ad '.($ad['id'] ?? 'unknown')." is disapproved ({$violationReason}) — auto-healing is off for this customer",
-                'severity' => 'high',
-            ];
-
-            return;
-        }
-
-        Log::info('SelfHealingAgent: Attempting to fix disapproved Facebook ad', [
-            'ad_id' => $ad['id'] ?? 'unknown',
-            'violation' => $violationReason,
-        ]);
-
-        // Get the current ad creative
-        $creative = $ad['creative'] ?? [];
-        $currentCopy = [
-            'headline' => $creative['title'] ?? '',
-            'primary_text' => $creative['body'] ?? '',
-            'description' => $creative['link_description'] ?? '',
-            'cta' => $creative['call_to_action_type'] ?? '',
-        ];
-
-        // Generate compliant ad copy using AI
-        $prompt = AdCompliancePrompt::generate([
-            'headline' => $currentCopy['headline'],
-            'primary_text' => $currentCopy['primary_text'],
-            'description' => $currentCopy['description'],
+        $results['warnings'][] = [
+            'type' => 'disapproved_ad',
             'platform' => 'facebook_ads',
-        ], $violationReason);
-
-        try {
-            $response = $this->gemini->generateContent(
-                model: config('ai.models.default'),
-                prompt: $prompt,
-                config: ['temperature' => 0.7]
-            );
-
-            if ($response && isset($response['text']) && preg_match('/\{.*\}/s', $response['text'], $matches)) {
-                $newAdData = json_decode($matches[0], true);
-
-                if ($newAdData) {
-                    // Create new creative with compliant copy
-                    $creativeService = $this->ads()->facebookAds($customer);
-
-                    // Build new creative data
-                    // Note: This would need to be expanded based on the creative type
-                    $newCreativeData = [
-                        'name' => ($ad['name'] ?? 'Ad').' - Compliant Version',
-                        'title' => $newAdData['headline'] ?? $currentCopy['headline'],
-                        'body' => $newAdData['primary_text'] ?? $currentCopy['primary_text'],
-                        'link_description' => $newAdData['description'] ?? $currentCopy['description'],
-                    ];
-
-                    // Auto-deploy the new compliant creative
-                    $accountId = str_replace('act_', '', $customer->facebook_ads_account_id);
-                    $imageUrl = $creative['image_url'] ?? $creative['thumbnail_url'] ?? null;
-                    $linkUrl = $creative['link_url'] ?? $customer->website ?? '';
-
-                    $newCreativeId = null;
-                    if ($imageUrl) {
-                        try {
-                            $newCreative = $creativeService->createImageCreative(
-                                $accountId,
-                                $newCreativeData['name'],
-                                $imageUrl,
-                                $newCreativeData['title'],
-                                $newCreativeData['body'],
-                                $creative['call_to_action_type'] ?? 'LEARN_MORE',
-                                $linkUrl
-                            );
-                            $newCreativeId = $newCreative['id'] ?? null;
-                        } catch (\Throwable $e) {
-                            report($e);
-                            Log::warning('SelfHealingAgent: Could not create Facebook creative', [
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                    }
-
-                    if ($newCreativeId) {
-                        // Create a new ad with the compliant creative
-                        try {
-                            $replacementAdService = $this->ads()->facebookAds($customer);
-                            $newAd = $replacementAdService->createAd(
-                                $accountId,
-                                $ad['adset_id'] ?? '',
-                                $newCreativeData['name'],
-                                $newCreativeId,
-                                'ACTIVE'
-                            );
-
-                            // Pause the original disapproved ad
-                            if (! empty($ad['id'])) {
-                                $replacementAdService->pauseAd($ad['id']);
-                            }
-
-                            $results['actions_taken'][] = [
-                                'type' => 'facebook_ad_replaced',
-                                'platform' => 'facebook_ads',
-                                'original_ad' => $ad['id'] ?? 'unknown',
-                                'new_ad' => $newAd['id'] ?? 'unknown',
-                                'new_creative' => $newCreativeId,
-                                'reason' => $violationReason,
-                                'changes' => $newCreativeData,
-                            ];
-                        } catch (\Throwable $e) {
-                            report($e);
-                            Log::warning('SelfHealingAgent: Could not deploy replacement Facebook ad', [
-                                'error' => $e->getMessage(),
-                            ]);
-                            $results['actions_taken'][] = [
-                                'type' => 'facebook_ad_healing_initiated',
-                                'platform' => 'facebook_ads',
-                                'original_ad' => $ad['id'] ?? 'unknown',
-                                'reason' => $violationReason,
-                                'suggested_changes' => $newCreativeData,
-                                'note' => 'Compliant creative created but ad deployment failed',
-                            ];
-                        }
-                    } else {
-                        $results['actions_taken'][] = [
-                            'type' => 'facebook_ad_healing_initiated',
-                            'platform' => 'facebook_ads',
-                            'original_ad' => $ad['id'] ?? 'unknown',
-                            'reason' => $violationReason,
-                            'suggested_changes' => $newCreativeData,
-                            'note' => $imageUrl ? 'Creative creation failed' : 'No image available to create replacement creative',
-                        ];
-                    }
-
-                    Log::info('SelfHealingAgent: Prepared compliant Facebook ad copy', [
-                        'original_ad' => $ad['id'] ?? 'unknown',
-                        'changes' => $newAdData['changes_made'] ?? 'Ad copy modified',
-                    ]);
-                }
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            $results['errors'][] = 'Failed to generate compliant Facebook ad: '.$e->getMessage();
-            Log::error('SelfHealingAgent: Failed to generate compliant Facebook ad', [
-                'ad' => $ad['id'] ?? 'unknown',
-                'error' => $e->getMessage(),
-            ]);
-        }
+            'message' => 'Meta rejected ad '.($ad['id'] ?? 'unknown')." ({$violationReason}). Review corrected creative before replacing it.",
+            'severity' => 'high',
+        ];
     }
 
     /**
@@ -840,20 +583,24 @@ class SelfHealingAgent
             $insightService = $this->ads()->facebookInsights($customer);
 
             // Get today's insights
-            $dateToday = now()->format('Y-m-d');
+            $localTime = now($customer->timezone ?: config('app.timezone'));
+            $dateToday = $localTime->toDateString();
             $insights = $insightService->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
                 $dateToday,
                 $dateToday
             );
 
-            $data = $insights['data'][0] ?? [];
+            if ($insights === null) {
+                return;
+            }
+            $data = $insights[0] ?? [];
             $impressions = $data['impressions'] ?? 0;
             $spend = $data['spend'] ?? 0;
 
             // Check for delivery issues
             $dailyBudget = $campaign->daily_budget ?? 0;
-            $hourOfDay = (int) now()->format('H');
+            $hourOfDay = $localTime->hour;
 
             // No impressions by mid-day
             if ($hourOfDay > 12 && $impressions == 0 && $campaign->status === CampaignStatus::Active) {
@@ -894,18 +641,20 @@ class SelfHealingAgent
             // Check for frequency fatigue (high frequency = creative fatigue)
             $insightService = $this->ads()->facebookInsights($customer);
 
-            $dateEnd = now()->format('Y-m-d');
-            $dateStart = now()->subDays(7)->format('Y-m-d');
+            $periodEnd = now($customer->timezone ?: config('app.timezone'));
+            $dateEnd = $periodEnd->toDateString();
+            $dateStart = $periodEnd->copy()->subDays(6)->toDateString();
 
             $insights = $insightService->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
                 $dateStart,
-                $dateEnd
+                $dateEnd,
+                daily: false,
             );
 
-            $data = $insights['data'][0] ?? [];
+            $data = $insights[0] ?? [];
             $frequency = $data['frequency'] ?? 0;
-            $ctr = $data['ctr'] ?? 0;
+            $ctr = ($data['impressions'] ?? 0) > 0 ? 100 * ($data['inline_link_clicks'] ?? 0) / $data['impressions'] : 0;
 
             // High frequency indicates creative fatigue
             if ($frequency > 4) {

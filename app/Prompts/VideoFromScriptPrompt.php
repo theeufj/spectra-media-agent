@@ -18,7 +18,7 @@ class VideoFromScriptPrompt
 
     private string $adText;
 
-    public function __construct(string $strategy, string $script, string $adText = '')
+    public function __construct(string $strategy, string $script, string $adText = '', private string $colourDirection = '')
     {
         $this->strategy = $strategy;
         $this->script = $script;
@@ -104,10 +104,20 @@ PROMPT;
 
     public function getPrompt(): string
     {
-        return strtr(self::activeTemplate(), [
+        $prompt = strtr(self::activeTemplate(), [
             '{{creative_strategy}}' => $this->strategy,
             '{{voiceover_script}}' => $this->script,
             '{{ad_text}}' => $this->adText !== '' ? $this->adText : '(none provided — end with no text)',
         ]);
+
+        if ($this->colourDirection === '') {
+            return $prompt;
+        }
+
+        // The palette also applies when an admin supplies a custom template.
+        return $prompt."\n\n--- BRAND COLOURS ---\n".$this->colourDirection
+            .'Use the first listed colour as the main accent, with the other colours as supporting accents and neutral backgrounds. '
+            .'Apply this palette consistently to designed graphics and transitions. It takes precedence over conflicting colours in the creative strategy. '
+            .'Preserve the real colours of any supplied product imagery.';
     }
 }

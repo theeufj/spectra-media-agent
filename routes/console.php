@@ -75,6 +75,8 @@ Schedule::job(new VerifyGtmInstallation)->dailyAt('05:15')->withoutOverlapping()
 // Nothing else reconciles that state, so it is terminal without this.
 Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
+Schedule::job(new \App\Jobs\ResumeCampaignLaunches)->everyFiveMinutes()->withoutOverlapping();
+
 // Turns on campaigns that legitimately deployed paused. This command existed but
 // was never scheduled, so a paused deploy stayed paused until someone ran it by
 // hand: the customer was mailed "deployment completed" for ads that never served.
@@ -87,7 +89,7 @@ Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 // admins would be mailed every hour forever. Real exceptions go to the admin
 // dashboard through the per-strategy report().
 Schedule::command('campaigns:activate')
-    ->hourly()
+    ->everyFiveMinutes()
     ->runInBackground()
     ->withoutOverlapping();
 

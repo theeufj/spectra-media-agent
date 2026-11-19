@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AdCopy;
 use App\Prompts\AdCopyReviewPrompt;
 use App\Services\Agents\AgentIssue;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxCopy;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
@@ -23,13 +24,17 @@ class AdminMonitorService
      * @param  string  $platform  The platform name.
      * @return array|null The rules array or null if not found.
      */
-    public static function getRulesForPlatform(string $platform): ?array
+    public static function getRulesForPlatform(string $platform, ?string $campaignType = null): ?array
     {
         // Standardize the platform name to match the keys in the config file.
         $platformKey = strtolower($platform);
         $platformKey = str_replace(' ads (sem)', '.sem', $platformKey);
         $platformKey = str_replace(' advertising', '', $platformKey);
         $platformKey = str_replace(' ads', '', $platformKey);
+        if (str_starts_with($platformKey, 'google') && ($campaignType === 'performance_max'
+            || in_array($platformKey, ['google (performance max)', 'google performance max', 'google.performance_max'], true))) {
+            $platformKey = 'google.performance_max';
+        }
 
         Log::info("Standardized platform key: {$platformKey}");
 
@@ -61,22 +66,30 @@ class AdminMonitorService
      * @param  AdCopy  $adCopy  The AdCopy model instance to review.
      * @return array An array containing programmatic validation and Gemini's qualitative feedback.
      */
-    public function reviewAdCopy(AdCopy $adCopy, bool $existingSearchAd = false): array
+    public function reviewAdCopy(AdCopy $adCopy, bool $existingSearchAd = false, ?int $timeoutSeconds = null): array
     {
         $platform = $adCopy->platform;
-        $headlines = is_string($adCopy->headlines) ? json_decode($adCopy->headlines, true) : $adCopy->headlines;
-        $descriptions = is_string($adCopy->descriptions) ? json_decode($adCopy->descriptions, true) : $adCopy->descriptions;
+        $headlines = $this->copyAssets($adCopy->headlines);
+        $descriptions = $this->copyAssets($adCopy->descriptions);
+        $strategy = $adCopy->strategy;
+        $rules = self::getRulesForPlatform($platform, $existingSearchAd ? null : $strategy?->campaign_type);
+        $performanceMax = ! $existingSearchAd && isset($rules['long_headline_count']);
+        $longHeadlines = $performanceMax ? $this->copyAssets($adCopy->long_headlines) : [];
 
         Log::info("AdminMonitorService: Validating ad copy for platform {$platform}.", [
             'headlines' => $headlines,
             'descriptions' => $descriptions,
         ]);
 
-        $validationResults = $this->validateAdCopy($platform, $headlines, $descriptions, $existingSearchAd);
-        $strategy = $adCopy->strategy;
+        $validationResults = $this->validateAdCopy($platform, $rules, $headlines, $descriptions, $longHeadlines, $existingSearchAd);
+        if ($performanceMax && ! $validationResults['is_valid']) {
+            return ['programmatic_validation' => $validationResults, 'qualitative_review_status' => 'skipped',
+                'gemini_feedback' => null, 'warnings' => [], 'overall_status' => 'needs_revision'];
+        }
+
         $evidence = $strategy?->campaign
             ? app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($strategy->campaign, $strategy) : [];
-        $feeScope = app(AdCopyFeeScopeValidator::class)->validate($headlines, $descriptions, $evidence);
+        $feeScope = app(AdCopyFeeScopeValidator::class)->validate($headlines, $descriptions, $evidence, $longHeadlines);
         $validationResults['fee_scope'] = $feeScope;
         if (! $feeScope['is_valid']) {
             $validationResults['is_valid'] = false;
@@ -85,16 +98,25 @@ class AdminMonitorService
             }
         }
 
-        // If programmatic validation fails critically, we might not even call Gemini.
-        // For now, we'll always call Gemini but include programmatic results.
+        // A release with a known placement or fee error already needs a customer edit.
+        // The generation path still requests additional feedback for the next draft.
+        if ($timeoutSeconds !== null && ! $validationResults['is_valid']) {
+            return ['programmatic_validation' => $validationResults, 'qualitative_review_status' => 'skipped',
+                'gemini_feedback' => null, 'warnings' => [], 'overall_status' => 'needs_revision'];
+        }
+
         $geminiFeedback = null;
+        $qualitativeStatus = 'unavailable';
         try {
             $headlinesString = implode("\n", $headlines);
             $descriptionsString = implode("\n", $descriptions);
 
-            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString, $evidence, $validationResults))->getPrompt();
+            $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString, $evidence, $validationResults, implode("\n", $longHeadlines)))->getPrompt();
 
-            $generatedResponse = $this->geminiService->generateContent(config('ai.models.default'), $reviewPrompt);
+            $generatedResponse = $timeoutSeconds === null
+                ? $this->geminiService->generateContent(config('ai.models.default'), $reviewPrompt)
+                : $this->geminiService->generateContent(config('ai.models.default'), $reviewPrompt, maxRetries: 1,
+                    context: ['text_timeout_seconds' => $timeoutSeconds, 'task_type' => 'creative_release_review']);
 
             if (is_null($generatedResponse)) {
                 Log::error("AdminMonitorService: Failed to get ad copy review from Gemini for AdCopy ID {$adCopy->id}.");
@@ -116,6 +138,7 @@ class AdminMonitorService
                     if (! is_array($geminiFeedback) || ! isset($geminiFeedback['overall_score']) || ! isset($geminiFeedback['feedback'])) {
                         throw new \Exception('Gemini did not return a valid JSON object with overall_score and feedback.');
                     }
+                    $qualitativeStatus = 'completed';
                 } catch (\Throwable $e) {
                     report($e);
                     Log::error("AdminMonitorService: Failed to parse Gemini's ad copy review response for AdCopy ID {$adCopy->id}: ".$e->getMessage(), [
@@ -168,6 +191,7 @@ class AdminMonitorService
 
         $finalReview = [
             'programmatic_validation' => $validationResults,
+            'qualitative_review_status' => $qualitativeStatus,
             'gemini_feedback' => $geminiFeedback,
             'warnings' => $warnings,
             'overall_status' => ($validationResults['is_valid'] && ($geminiFeedback['overall_score'] ?? 0) > 75) ? 'approved' : 'needs_revision',
@@ -178,10 +202,18 @@ class AdminMonitorService
         return $finalReview;
     }
 
+    /** Read current array casts and legacy copy stored as JSON text. */
+    private function copyAssets(mixed $stored): array
+    {
+        $decoded = is_string($stored) ? json_decode($stored, true) : $stored;
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
     /** Only a complete, length-only objection quoting an exact candidate can be disproved numerically. */
     private function verifiedLengthFalsePositive(string $issue, array $validation): ?array
     {
-        foreach (['headlines' => 'Headline', 'descriptions' => 'Description'] as $field => $label) {
+        foreach (['headlines' => 'Headline', 'long_headlines' => 'Long headline', 'descriptions' => 'Description'] as $field => $label) {
             $policy = $validation['numeric_policy'][$field] ?? null;
             if (! is_array($policy) || ! is_int($policy['min_characters'] ?? null) || ! is_int($policy['max_characters'] ?? null)) {
                 continue;
@@ -193,7 +225,7 @@ class AdminMonitorService
                 $text = preg_quote($asset['text'], '~');
                 $quoted = "(?:'{$text}'|\"{$text}\"|‘{$text}’|“{$text}”)";
                 $pattern = '~\A(?i:'.$label.')(?:\s+\d+)?\s+'.$quoted.'\s+(?i:exceeds\s+(?:the\s+)?)(\d+)(?i:(?:-|\s+)character\s+limit)[.!]?\z~u';
-                $length = mb_strlen($asset['text']);
+                $length = $asset['characters'];
                 if (preg_match($pattern, $issue, $match) === 1 && (int) $match[1] === $policy['max_characters']
                     && $length >= $policy['min_characters'] && $length <= $policy['max_characters']) {
                     return ['code' => 'model_false_positive', 'reason' => 'verified_character_count_within_platform_limits',
@@ -314,99 +346,71 @@ class AdminMonitorService
         ];
     }
 
-    /**
-     * Performs programmatic validation of ad copy against platform-specific rules.
-     *
-     * @param  string  $platform  The platform for which the ad copy is intended.
-     * @param  array  $headlines  An array of headlines.
-     * @param  array  $descriptions  An array of descriptions.
-     * @return array An array containing validation results.
-     */
-    private function validateAdCopy(string $platform, ?array $headlines, ?array $descriptions, bool $existingSearchAd = false): array
+    /** Performs programmatic validation against platform-specific rules. */
+    private function validateAdCopy(string $platform, ?array $rules, array $headlines, array $descriptions, array $longHeadlines, bool $existingSearchAd): array
     {
-        // Ensure headlines and descriptions are arrays to prevent errors.
-        $headlines = $headlines ?? [];
-        $descriptions = $descriptions ?? [];
-
-        $isValid = true;
-        $feedback = [
-            'headlines' => [],
-            'descriptions' => [],
-            'general' => [],
-        ];
-
-        $platformRules = self::getRulesForPlatform($platform);
-
-        if (is_null($platformRules)) {
-            $isValid = false;
+        $feedback = ['headlines' => [], 'descriptions' => [], 'general' => []];
+        if ($rules === null) {
             $feedback['general'][] = "No specific rules defined for platform: {$platform}.";
             Log::warning("AdminMonitorService: No programmatic rules found for platform {$platform}.");
 
-            return ['is_valid' => $isValid, 'feedback' => $feedback];
+            return ['is_valid' => false, 'feedback' => $feedback];
         }
 
-        $numericPolicy = [
-            'headlines' => ['min_characters' => $platformRules['headline_min_length'], 'max_characters' => $platformRules['headline_max_length'], 'assets' => []],
-            'descriptions' => ['min_characters' => $platformRules['description_min_length'], 'max_characters' => $platformRules['description_max_length'], 'assets' => []],
+        $performanceMax = ! $existingSearchAd && isset($rules['long_headline_count']);
+        $fields = [
+            'headlines' => ['headline', 'Headline', $headlines, 3, 15],
+            'descriptions' => ['description', 'Description', $descriptions, 2, 4],
         ];
-
-        // Validate Headlines
-        if ($existingSearchAd ? count($headlines) < 3 || count($headlines) > 15 : count($headlines) !== $platformRules['headline_count']) {
-            $isValid = false;
-            $feedback['headlines'][] = "Expected {$platformRules['headline_count']} headlines, but got ".count($headlines).'.';
-        }
-        foreach ($headlines as $index => $headline) {
-            $length = mb_strlen($headline);
-            $numericPolicy['headlines']['assets'][] = ['text' => $headline, 'characters' => $length];
-            if ($length < $platformRules['headline_min_length'] || $length > $platformRules['headline_max_length']) {
-                $isValid = false;
-                $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") is {$length} characters long. Expected between {$platformRules['headline_min_length']} and {$platformRules['headline_max_length']} characters.";
-            }
-            // Check for excessive exclamation marks
-            if (isset($platformRules['max_exclamations_per_element'])) {
-                $exclamationCount = substr_count($headline, '!');
-                if ($exclamationCount > $platformRules['max_exclamations_per_element']) {
-                    $isValid = false;
-                    $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
-                }
-            }
-            if (isset($platformRules['allow_consecutive_exclamations']) && ! $platformRules['allow_consecutive_exclamations']) {
-                if (strpos($headline, '!!') !== false) {
-                    $isValid = false;
-                    $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") contains consecutive exclamation marks, which is not allowed.";
-                }
-            }
-            // Add more formatting checks here (e.g., no special characters, capitalization rules)
+        if ($performanceMax) {
+            $fields['long_headlines'] = ['long_headline', 'Long headline', $longHeadlines, 1, 5];
+            $feedback['long_headlines'] = [];
         }
 
-        // Validate Descriptions
-        if ($existingSearchAd ? count($descriptions) < 2 || count($descriptions) > 4 : count($descriptions) !== $platformRules['description_count']) {
-            $isValid = false;
-            $feedback['descriptions'][] = "Expected {$platformRules['description_count']} descriptions, but got ".count($descriptions).'.';
-        }
-        foreach ($descriptions as $index => $description) {
-            $length = mb_strlen($description);
-            $numericPolicy['descriptions']['assets'][] = ['text' => $description, 'characters' => $length];
-            if ($length < $platformRules['description_min_length'] || $length > $platformRules['description_max_length']) {
-                $isValid = false;
-                $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") is {$length} characters long. Expected between {$platformRules['description_min_length']} and {$platformRules['description_max_length']} characters.";
+        $numericPolicy = [];
+        foreach ($fields as $field => [$rule, $label, $assets, $searchMin, $searchMax]) {
+            $min = $rules[$rule.'_min_length'];
+            $max = $rules[$rule.'_max_length'];
+            $expectedCount = $rules[$rule.'_count'];
+            $numericPolicy[$field] = ['min_characters' => $min, 'max_characters' => $max, 'assets' => []];
+            $count = count($assets);
+            if ($existingSearchAd ? $count < $searchMin || $count > $searchMax : $count !== $expectedCount) {
+                $expected = $existingSearchAd ? "{$searchMin} to {$searchMax}" : $expectedCount;
+                $feedback[$field][] = "Expected {$expected} ".str_replace('_', ' ', $field).", but got {$count}.";
             }
-            // Check for excessive exclamation marks
-            if (isset($platformRules['max_exclamations_per_element'])) {
-                $exclamationCount = substr_count($description, '!');
-                if ($exclamationCount > $platformRules['max_exclamations_per_element']) {
-                    $isValid = false;
-                    $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
+            if ($performanceMax && ! array_is_list($assets)) {
+                $feedback[$field][] = "Return {$field} as a list of strings.";
+            }
+
+            foreach (array_values($assets) as $index => $asset) {
+                $name = $label.' '.($index + 1);
+                if (! is_string($asset)) {
+                    $feedback[$field][] = "{$name} is not text.";
+
+                    continue;
                 }
-            }
-            if (isset($platformRules['allow_consecutive_exclamations']) && ! $platformRules['allow_consecutive_exclamations']) {
-                if (strpos($description, '!!') !== false) {
-                    $isValid = false;
-                    $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") contains consecutive exclamation marks, which is not allowed.";
+                $length = $performanceMax ? PerformanceMaxCopy::characters($asset) : mb_strlen($asset);
+                $numericPolicy[$field]['assets'][] = ['text' => $asset, 'characters' => $length];
+                if ($length < $min || $length > $max) {
+                    $feedback[$field][] = "{$name} (\"{$asset}\") is {$length} characters long. Expected between {$min} and {$max} characters.";
+                }
+                $maxExclamations = $rules['max_exclamations_per_element'] ?? null;
+                $exclamations = substr_count($asset, '!');
+                if ($maxExclamations !== null && $exclamations > $maxExclamations) {
+                    $feedback[$field][] = "{$name} (\"{$asset}\") has {$exclamations} exclamation marks. Max allowed: {$maxExclamations}.";
+                }
+                if (! ($rules['allow_consecutive_exclamations'] ?? true) && str_contains($asset, '!!')) {
+                    $feedback[$field][] = "{$name} (\"{$asset}\") contains consecutive exclamation marks, which is not allowed.";
                 }
             }
         }
 
-        return ['is_valid' => $isValid, 'feedback' => $feedback, 'numeric_policy' => $numericPolicy];
+        if ($performanceMax) {
+            foreach (PerformanceMaxCopy::coverageIssues($headlines, $longHeadlines, $descriptions) as $field => $issues) {
+                $feedback[$field] = array_merge($feedback[$field], $issues);
+            }
+        }
+
+        return ['is_valid' => array_filter($feedback) === [], 'feedback' => $feedback, 'numeric_policy' => $numericPolicy];
     }
 }

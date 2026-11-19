@@ -4,6 +4,8 @@ namespace App\Services\Campaigns;
 
 use App\Enums\CampaignStatus;
 use App\Models\Campaign;
+use App\Models\Customer;
+use App\Models\Setting;
 use Carbon\CarbonImmutable;
 
 /** Shared mutation limits, so an optimiser cannot undo an approved bounded trial. */
@@ -138,6 +140,18 @@ class CampaignSpendGuardrails
         }
 
         return $campaign->status !== CampaignStatus::Paused || $ownerApprovedRestart;
+    }
+
+    /**
+     * Funding can change between platform checks and the final activation call.
+     *
+     * @phpstan-impure
+     */
+    public static function hasLaunchFunding(Customer $customer): bool
+    {
+        return $customer->isSelfFundedAds()
+            || ! Setting::get('managed_billing_enabled', true)
+            || $customer->adSpendCredit()->first()?->canRunCampaigns() === true;
     }
 
     public static function permitsDailyBudget(Campaign $campaign, int $micros): bool

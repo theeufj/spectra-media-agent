@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents;
 
+use App\Services\Campaigns\CampaignTrackingUrl;
 use App\Services\CampaignStatusHelper;
 use App\Services\MicrosoftAds\AdGroupService;
 use App\Services\MicrosoftAds\AssetService;
@@ -217,7 +218,8 @@ PROMPT;
 
             try {
                 $stepResult = match ($action) {
-                    'import_from_google' => $this->executeGoogleImport($params),
+                    'import_from_google' => $context->strategy->launch_intent === null
+                        ? $this->executeGoogleImport($params) : ['error' => 'Launch only the campaign and creative approved in Site to Spend.'],
                     'create_campaign' => $this->executeCreateCampaign($params, $context),
                     'create_ad_groups',
                     'create_ads' => $this->executeCreateAdGroups($context),
@@ -446,7 +448,7 @@ PROMPT;
         $result = $campaignService->createSearchCampaign([
             'name' => $name,
             'daily_budget' => (float) $dailyBudget,
-            'status' => $this->deployStatus(),
+            'status' => $context->strategy->launch_intent !== null ? 'Paused' : $this->deployStatus(),
         ]);
 
         // `isset($result['CampaignIds'])` was the whole check, and AddCampaigns
@@ -518,10 +520,10 @@ PROMPT;
             : ['skipped' => 'No keywords in strategy'];
 
         // Source ad copy from strategy — prefer Microsoft-specific copy, fall back to any copy
-        $adCopy = $context->strategy->adCopies()
+        $adCopy = $context->strategy->deployableAdCopies()
             ->whereRaw('LOWER(platform) LIKE ?', ['%microsoft%'])
             ->first()
-            ?? $context->strategy->adCopies()->first();
+            ?? $context->strategy->deployableAdCopies()->first();
 
         $headlines = $adCopy?->headlines ?? [];
         $descriptions = $adCopy?->descriptions ?? [];
@@ -541,9 +543,8 @@ PROMPT;
             ];
         }
 
-        $finalUrl = $biddingStrategy['landing_page_url']
-            ?? $this->customer->website
-            ?? null;
+        $finalUrl = ($biddingStrategy['landing_page_url'] ?? null)
+            ?: ($context->campaign->landing_page_url ?: $this->customer->website);
 
         if (! $finalUrl) {
             Log::warning('[MicrosoftAdsExecutionAgent] No landing page URL for ad, skipping ad creation', [
@@ -556,6 +557,8 @@ PROMPT;
                 'error' => 'Ad group created but no ad — no landing page URL on the campaign, strategy or customer',
             ];
         }
+
+        $finalUrl = CampaignTrackingUrl::forStrategy($finalUrl, $context->campaign, $context->strategy, 'microsoft');
 
         $adResult = $adGroupService->addExpandedTextAds($adGroupId, [[
             'headlines' => array_slice($headlines, 0, 15),
@@ -607,9 +610,7 @@ PROMPT;
                 return ['skipped' => 'no_microsoft_campaign_id'];
             }
 
-            $images = \App\Models\ImageCollateral::forStrategy($strategy)
-                ->where('is_active', true)
-                ->where('should_deploy', true)
+            $images = \App\Models\ImageCollateral::forDeployment($strategy)
                 ->limit(5)
                 ->get();
 

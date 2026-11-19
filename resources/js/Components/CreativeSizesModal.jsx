@@ -3,22 +3,11 @@ import Modal from '@/Components/Modal';
 import { FORMAT_LABELS } from '@/utils/collateral';
 
 /**
- * The same photograph at each size it will run at.
- *
- * One concept is generated as a square for feeds, 1200x628 for landscape
- * placements and 300x250 for display, and the collateral page shows only the
- * square — the other two existed but there was no way to look at them. The
- * card said "3 sizes" without ever being able to show them, which is a promise
- * the page could not keep.
- *
- * Worth seeing rather than trusting: the three are generated separately at
- * their own aspect ratios, so they are not crops of one another, and the
- * headline is composited per size. Whether a 300x250 still reads is a question
- * only looking at it answers.
+ * Review the independently generated size variants of one concept.
  */
 
 /** Square first, because it is the one the scene was composed for. */
-const ORDER = ['square', 'landscape', 'mrec'];
+const ORDER = ['square', 'landscape', 'portrait', 'mrec'];
 
 function ordered(images) {
     return [...(images || [])].sort(

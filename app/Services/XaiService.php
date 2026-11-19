@@ -32,26 +32,29 @@ class XaiService
 {
     private const BASE = 'https://api.x.ai/v1';
 
-    /**
-     * Marks the account unusable for a while after a hard refusal.
-     *
-     * Same reasoning as the OpenRouter breaker: a 402 means the balance is
-     * empty and no number of retries adds credit, and hammering a 429 is how a
-     * rate limit stays hit. Without it one exhausted account drove ~135 calls
-     * in two minutes into the fallback provider.
-     */
     private const UNAVAILABLE_KEY = 'xai:unavailable';
 
     private const UNAVAILABLE_MINUTES = 15;
+
+    private const MODEL_COOLDOWN_SECONDS = 60;
 
     public function isConfigured(): bool
     {
         return filled(config('services.xai.api_key'));
     }
 
-    public static function isUnavailable(): bool
+    /** A preceding provider request or another worker may have changed the shared cooldown.
+     * @phpstan-impure
+     */
+    public static function isUnavailable(?string $model = null): bool
     {
-        return (bool) Cache::get(self::UNAVAILABLE_KEY, false);
+        return (bool) Cache::get(self::UNAVAILABLE_KEY, false)
+            || ($model !== null && (bool) Cache::get(self::modelCooldownKey($model), false));
+    }
+
+    private static function modelCooldownKey(string $model): string
+    {
+        return self::UNAVAILABLE_KEY.':model:'.$model;
     }
 
     /**
@@ -72,8 +75,6 @@ class XaiService
             return null;
         }
 
-        $model = (string) config('ai.models.text_xai');
-
         $messages = [];
 
         if ($systemInstruction) {
@@ -82,7 +83,7 @@ class XaiService
 
         $messages[] = ['role' => 'user', 'content' => $prompt];
 
-        $payload = ['model' => $model, 'messages' => $messages];
+        $payload = ['messages' => $messages];
 
         // Gemini takes responseMimeType; the OpenAI-compatible APIs take
         // response_format. The caller asked for JSON either way.
@@ -100,12 +101,37 @@ class XaiService
             }
         }
 
+        $models = array_unique(array_filter([
+            (string) config('ai.models.text_xai'),
+            (string) config('ai.models.text_xai_fallback'),
+        ]));
+        foreach ($models as $model) {
+            if (self::isUnavailable($model)) {
+                continue;
+            }
+
+            $result = $this->requestText($model, $payload, $context);
+            if ($result !== null || ! self::isUnavailable($model)) {
+                return $result;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @return array{text: string}|null
+     */
+    private function requestText(string $model, array $payload, array $context): ?array
+    {
         try {
             $started = hrtime(true);
 
             $response = Http::withToken(config('services.xai.api_key'))
-                ->timeout(120)
-                ->post(self::BASE.'/chat/completions', $payload);
+                ->timeout(max(1, min(120, (int) ($context['text_timeout_seconds'] ?? 120))))
+                ->post(self::BASE.'/chat/completions', ['model' => $model] + $payload);
 
             if ($response->failed()) {
                 $this->noteFailure('text generation', $model, $response->status(), $response->body());
@@ -150,11 +176,10 @@ class XaiService
      */
     public function generateImage(string $prompt, array $context = [], string $aspectRatio = '1:1'): ?array
     {
-        if (! $this->isConfigured() || self::isUnavailable()) {
+        $model = (string) config('ai.models.image_xai');
+        if (! $this->isConfigured() || self::isUnavailable($model)) {
             return null;
         }
-
-        $model = (string) config('ai.models.image_xai');
 
         try {
             $response = Http::withToken(config('services.xai.api_key'))
@@ -201,11 +226,11 @@ class XaiService
      */
     public function startVideoGeneration(string $prompt, int $durationSeconds, string $aspectRatio, array $context = []): ?string
     {
-        if (! $this->isConfigured() || self::isUnavailable()) {
+        $model = (string) config('ai.models.video_xai');
+        if (! $this->isConfigured() || self::isUnavailable($model)) {
             return null;
         }
 
-        $model = (string) config('ai.models.video_xai');
         $duration = max(1, min(15, $durationSeconds));
 
         try {
@@ -303,14 +328,6 @@ class XaiService
         }
     }
 
-    /**
-     * A refusal that will not change on retry marks the provider down for a while.
-     *
-     * 402 is an empty balance and 429 is a rate limit already being hit;
-     * asking again immediately makes both worse and, because the fallback
-     * treats "unavailable" as a reason to use the other provider, multiplies
-     * the load onto it.
-     */
     private function noteFailure(string $what, string $model, int $status, string $body): void
     {
         Log::error("XaiService: {$what} failed", [
@@ -321,13 +338,12 @@ class XaiService
 
         BillingAlert::check('xAI', $body, $status);
 
-        if (in_array($status, [402, 429], true)) {
+        // Billing applies to the account. A capacity or rate-limit response
+        // only cools down the model so other text and media models can serve.
+        if ($status === 402) {
             Cache::put(self::UNAVAILABLE_KEY, true, now()->addMinutes(self::UNAVAILABLE_MINUTES));
-
-            Log::warning('XaiService: marking provider unavailable', [
-                'status' => $status,
-                'minutes' => self::UNAVAILABLE_MINUTES,
-            ]);
+        } elseif ($status === 429) {
+            Cache::put(self::modelCooldownKey($model), true, now()->addSeconds(self::MODEL_COOLDOWN_SECONDS));
         }
     }
 
@@ -370,7 +386,7 @@ class XaiService
      */
     private function recordTokenCost(string $model, string $operation, array $usage, int $durationMs, array $context): void
     {
-        $rates = config('ai.pricing.'.$model);
+        $rates = (config('ai.pricing') ?? [])[$model] ?? null;
 
         if (! is_array($rates)) {
             // A model named in code but absent from the pricing table has its

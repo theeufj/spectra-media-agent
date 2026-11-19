@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RecordSiteFacebookConversion;
 use App\Models\Customer;
+use App\Models\User;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
@@ -32,6 +34,25 @@ class FacebookGraphWriteTest extends TestCase
         config(['services.facebook.system_user_token' => 'test-token']);
 
         return $customer;
+    }
+
+    public function test_site_signup_sends_meta_the_browser_context_for_a_website_event(): void
+    {
+        config(['services.facebook.spectra_pixel_id' => '123456789', 'services.facebook.system_user_token' => 'test-token']);
+        Http::fake(['graph.facebook.com/*/123456789/events' => Http::response(['events_received' => 1])]);
+        $user = User::factory()->create(['fbclid' => 'test-click', 'tenant_key' => 'sitetospend']);
+
+        (new RecordSiteFacebookConversion($user, 'signup', 'https://sitetospend.com/register', 'TestBrowser/1.0'))->handle();
+
+        Http::assertSent(function ($request) {
+            $event = json_decode($request['data'], true)[0];
+
+            return $event['event_name'] === 'CompleteRegistration'
+                && $event['action_source'] === 'website'
+                && $event['event_source_url'] === 'https://sitetospend.com/register'
+                && $event['user_data']['client_user_agent'] === 'TestBrowser/1.0'
+                && str_ends_with($event['user_data']['fbc'], '.test-click');
+        });
     }
 
     public function test_updating_an_ad_posts_to_the_node_rather_than_putting(): void

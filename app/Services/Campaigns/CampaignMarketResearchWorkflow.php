@@ -3,11 +3,14 @@
 namespace App\Services\Campaigns;
 
 use App\Jobs\ProvisionGoogleAdsAccount;
+use App\Jobs\ProvisionMetaAdAccount;
 use App\Jobs\ResearchCampaignMarket;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\Google\SearchKeywordBuilder;
+use App\Services\DeploymentService;
+use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
@@ -77,15 +80,20 @@ class CampaignMarketResearchWorkflow
             return $requestId;
         });
         if ($dispatch) {
-            $fresh = $campaign->fresh()->load('customer');
+            $fresh = $campaign->fresh()->load(['customer', 'strategies']);
             $customer = $fresh->customer;
             $paid = $customer->isPaidSetupOnly()
                 || $customer->users->contains(fn ($user) => $user->hasSubscriptionAccess($customer));
-            $google = $fresh->strategies()->where(fn ($query) => $query->where('platform', 'ilike', '%google%'))->exists();
-            if ($google && ! $customer->google_ads_customer_id && ! $customer->is_sandbox && ($prepareAccount || $paid)) {
-                // Provisioning precedes research, never approval. Free website
-                // previews create no accounts without this explicit intent.
-                Bus::chain([(new ProvisionGoogleAdsAccount($customer))->afterCommit(), new ResearchCampaignMarket($fresh, $requestId)])->dispatch();
+            $platforms = $fresh->strategies->map(fn (Strategy $strategy) => DeploymentService::normalizePlatform($strategy->platform));
+            $preparation = [];
+            if ($platforms->contains('google') && ! $customer->google_ads_customer_id && ! $customer->is_sandbox && ($prepareAccount || $paid)) {
+                $preparation[] = (new ProvisionGoogleAdsAccount($customer))->afterCommit();
+            }
+            if ($platforms->contains('facebook') && CreateFacebookAdsAccount::canProvision($customer)) {
+                $preparation[] = (new ProvisionMetaAdAccount($fresh, $requestId))->afterCommit();
+            }
+            if ($preparation !== []) {
+                Bus::chain([...$preparation, new ResearchCampaignMarket($fresh, $requestId)])->dispatch();
             } else {
                 ResearchCampaignMarket::dispatch($fresh, $requestId)->afterCommit();
             }
@@ -275,6 +283,17 @@ class CampaignMarketResearchWorkflow
                 if ($keywords === []) {
                     throw ValidationException::withMessages(['daily_budget' => 'The researched Search keyword selection is missing.']);
                 }
+                $groups = $row['search_offer_groups'] ?? [];
+                if ($groups !== []) {
+                    try {
+                        app(SearchOfferGroups::class)->assertCurrent($campaign, $groups, $keywords);
+                    } catch (\RuntimeException $e) {
+                        throw ValidationException::withMessages(['daily_budget' => $e->getMessage()]);
+                    }
+                    $bidding['search_offer_groups'] = $groups;
+                } else {
+                    unset($bidding['search_offer_groups']);
+                }
                 $bidding['keywords'] = $keywords;
                 $bidding['name'] = 'ManualCpc';
                 $cap = $row['cpc_bid_micros'] ?? null;
@@ -297,6 +316,12 @@ class CampaignMarketResearchWorkflow
                 if ($targeting = $strategy->targetingConfig()->lockForUpdate()->first()) {
                     $targeting->update(['google_options' => [...($targeting->google_options ?? []), 'keywords' => $keywords]]);
                 }
+            } elseif (str_contains(strtolower($strategy->platform), 'google') && $strategy->campaign_type === 'performance_max') {
+                if (($row['bidding_strategy'] ?? null) !== 'MAXIMIZE_CONVERSIONS'
+                    || empty($row['conversion_goal']['action_resource']) || empty($row['landing_page_url'])) {
+                    throw ValidationException::withMessages(['daily_budget' => 'A reviewed Performance Max goal and landing page are required.']);
+                }
+                $bidding = ['name' => 'MAXIMIZE_CONVERSIONS', 'landing_page_url' => $row['landing_page_url'], 'pmax_conversion_goal' => $row['conversion_goal']];
             }
             $cents = intdiv($micros, 10_000);
             $strategy->update(['daily_budget' => intdiv($cents, 100).'.'.str_pad((string) ($cents % 100), 2, '0', STR_PAD_LEFT), 'bidding_strategy' => $bidding]);
@@ -348,6 +373,21 @@ class CampaignMarketResearchWorkflow
     {
         if (! ($this->status($campaign)['approved'] ?? false)) {
             throw ValidationException::withMessages(['daily_budget' => 'Review and approve the current agent-researched campaign proposal before creating new ads.']);
+        }
+    }
+
+    /** Carry an approved proposal over a verified account-only transition. The caller holds the campaign lock. */
+    public function bindApprovedAccounts(Campaign $campaign, array $approvedAccounts, string $approvedFingerprint): void
+    {
+        $stored = $this->stored($campaign);
+        if (($stored['approved_fingerprint'] ?? null) !== $approvedFingerprint
+            || ! hash_equals($approvedFingerprint, $this->research->approvalFingerprint($campaign, $approvedAccounts))) {
+            throw ValidationException::withMessages(['daily_budget' => 'The researched campaign changed while setting up your ad account. Review the current proposal before launching.']);
+        }
+
+        $current = $this->research->approvalFingerprint($campaign);
+        if ($current !== $approvedFingerprint) {
+            $this->write($campaign, [...$stored, 'approved_fingerprint' => $current]);
         }
     }
 

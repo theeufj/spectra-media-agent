@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\GeminiService;
 use App\Services\XaiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -74,6 +75,23 @@ class XaiRoutingTest extends TestCase
 
         $this->assertSame('Grok answered', $result['text']);
         Http::assertSent(fn ($r) => str_contains($r->url(), 'api.x.ai'));
+    }
+
+    public function test_text_provider_respects_the_copy_review_timeout_before_fallback(): void
+    {
+        config(['ai.text_provider' => 'xai']);
+        $timeouts = [];
+        Http::fake(function (Request $request, array $options) use (&$timeouts) {
+            $timeouts[] = $options['timeout'];
+
+            return Http::response(['choices' => [['message' => ['content' => 'Reviewed']]]]);
+        });
+        foreach ([45, 900, 0] as $budget) {
+            app(GeminiService::class)->generateContent(config('ai.models.default'), 'Review this asset.', context: ['text_timeout_seconds' => $budget]);
+        }
+        app(GeminiService::class)->generateContent(config('ai.models.default'), 'Write copy.');
+
+        $this->assertEquals([45, 120, 1, 120], $timeouts);
     }
 
     public function test_it_uses_xais_own_model_names_not_openrouters(): void
@@ -159,6 +177,41 @@ class XaiRoutingTest extends TestCase
         // that took the other provider down, not the single failure.
         $this->assertNull($service->generateText('Write more copy.'));
         Http::assertSentCount(1);
+    }
+
+    public function test_text_capacity_error_switches_models_and_preserves_the_response_schema(): void
+    {
+        $primary = (string) config('ai.models.text_xai');
+        $fallback = (string) config('ai.models.text_xai_fallback');
+        Cache::forget("xai:unavailable:model:{$primary}");
+        Cache::forget("xai:unavailable:model:{$fallback}");
+        $schema = \App\Prompts\AdCopyResponseSchema::forRules(config('platform_rules.facebook'));
+
+        Http::fake(['api.x.ai/*' => function (Request $request) use ($primary) {
+            if ($request['model'] === $primary) {
+                return Http::response(['code' => 'resource-exhausted'], 429);
+            }
+
+            return Http::response(['choices' => [['message' => ['content' => '{"headlines":[],"descriptions":[]}']]]]);
+        }]);
+
+        $service = app(XaiService::class);
+        $config = ['responseMimeType' => 'application/json', 'responseJsonSchema' => $schema];
+
+        try {
+            $this->assertNotNull($service->generateText('Write copy.', $config));
+            $this->assertTrue(XaiService::isUnavailable($primary));
+            $this->assertFalse(XaiService::isUnavailable());
+            $this->assertFalse(XaiService::isUnavailable((string) config('ai.models.image_xai')));
+            $this->assertNotNull($service->generateText('Write more copy.', $config));
+
+            $requests = Http::recorded()->pluck(0);
+            $this->assertSame([$primary, $fallback, $fallback], $requests->map(fn (Request $request) => $request['model'])->all());
+            $this->assertSame($schema, $requests->last()['response_format']['json_schema']['schema']);
+        } finally {
+            Cache::forget("xai:unavailable:model:{$primary}");
+            Cache::forget("xai:unavailable:model:{$fallback}");
+        }
     }
 
     public function test_every_call_records_what_it_cost(): void

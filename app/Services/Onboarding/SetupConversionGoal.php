@@ -131,6 +131,9 @@ class SetupConversionGoal
     {
         $customer = $this->customer($campaign);
         $this->validateDefinition($customer, $goal);
+        if (! $customer->isPaidSetupOnly() && $goal['trigger'] === 'prepare_only') {
+            throw ValidationException::withMessages(['trigger' => 'Connect a successful website action or select an existing conversion action for Performance Max.']);
+        }
 
         try {
             return Cache::lock($this->lockKey($campaign), 300)->block(5, function () use ($campaign, $goal, $strategyUuid) {
@@ -138,7 +141,7 @@ class SetupConversionGoal
                     $current = Campaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
                     $this->customer($current);
                     if (! $strategyUuid && $this->strategies($current)->count() > 1) {
-                        throw ValidationException::withMessages(['strategy' => 'Choose which Google Search strategy to configure.']);
+                        throw ValidationException::withMessages(['strategy' => 'Choose which Google strategy to configure.']);
                     }
                     $strategy = $this->strategy($current, true, $strategyUuid);
                     if (! $strategy) {
@@ -257,6 +260,9 @@ class SetupConversionGoal
                         'action_resource' => $action['resource'], 'message' => $goal['trigger'] === 'prepare_only'
                             ? 'Google action prepared without a website trigger. Create your paused campaign so we can apply its goal; connect website tracking next.'
                             : 'Goal prepared. Create your paused campaign so we can apply and verify its Google goal settings.']);
+                    if (! $customer->isPaidSetupOnly()) {
+                        app(\App\Services\Campaigns\CampaignMarketResearchWorkflow::class)->request($campaign, force: true);
+                    }
 
                     return;
                 }
@@ -289,8 +295,8 @@ class SetupConversionGoal
     private function customer(Campaign $campaign): Customer
     {
         $customer = $campaign->customer()->firstOrFail();
-        if (! $customer->isPaidSetupOnly()) {
-            throw ValidationException::withMessages(['objective' => 'This workflow is for a paid one-time setup account.']);
+        if (! $customer->isPaidSetupOnly() && ! $this->canPrepareManagedGoal($customer)) {
+            throw ValidationException::withMessages(['objective' => 'An eligible Google campaign is required to configure a conversion goal.']);
         }
 
         return $customer;
@@ -298,7 +304,17 @@ class SetupConversionGoal
 
     private function strategies(Campaign $campaign)
     {
-        return $campaign->strategies()->where('campaign_type', 'search')->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->orderBy('id');
+        $query = $campaign->strategies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->orderBy('id');
+        if ($campaign->customer?->isPaidSetupOnly()) {
+            return $query->where('campaign_type', 'search');
+        }
+
+        return $query->where('campaign_type', 'performance_max')->whereNull('google_ads_campaign_id')->whereNull('deployed_at');
+    }
+
+    private function canPrepareManagedGoal(Customer $customer): bool
+    {
+        return $customer->service_type === 'managed' && ! $customer->is_sandbox && $customer->hasPaidDeploymentAccess();
     }
 
     private function strategy(Campaign $campaign, bool $lock = false, ?string $uuid = null): ?Strategy
@@ -341,7 +357,9 @@ class SetupConversionGoal
     {
         $fresh = $strategy->fresh()->load('campaign.customer');
         $current = $fresh->campaign->customer;
-        if (! $current?->isPaidSetupOnly() || $current->id !== $customer->id || $current->cleanGoogleCustomerId() !== $customer->cleanGoogleCustomerId()
+        if (! $current || (! $current->isPaidSetupOnly() && (! $this->canPrepareManagedGoal($current)
+            || $fresh->campaign_type !== 'performance_max' || $fresh->hasDeploymentFootprint() || $fresh->reusableGoogleCampaignId()))
+            || $current->id !== $customer->id || $current->cleanGoogleCustomerId() !== $customer->cleanGoogleCustomerId()
             || in_array($fresh->deployment_status, ['queued', 'deploying'], true)
             || $fresh->campaign->hasPassedEndDate() || in_array($fresh->campaign->status->value, ['ended', 'completed'], true)
             || $fresh->campaign->spend_safety_hold || \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh->campaign)

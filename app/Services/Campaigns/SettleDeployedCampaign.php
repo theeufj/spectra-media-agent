@@ -12,6 +12,7 @@ use App\Models\Strategy;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\CampaignStatusHelper;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
@@ -88,7 +89,7 @@ class SettleDeployedCampaign
         $staged = $campaign->strategies()->where('campaign_type', 'search')->orderBy('id')->get()
             ->filter(fn ($strategy) => ! empty($strategy->execution_result['metadata']['google_search_staging']));
         if ($staged->isNotEmpty()) {
-            if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
+            if (! CampaignSpendGuardrails::hasLaunchFunding($customer) || $campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
                 || $this->aiMaxOwnsCampaign($campaign)) {
                 return false;
             }
@@ -107,7 +108,8 @@ class SettleDeployedCampaign
                 // Restore it if Google rejects activation; a failed request is
                 // never recorded as a successful live campaign.
                 $campaign->refresh();
-                if ($campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
+                if (! CampaignSpendGuardrails::hasLaunchFunding($customer)
+                    || $campaign->status === CampaignStatus::Paused || $campaign->spend_safety_hold || CampaignSpendGuardrails::activeTrial($campaign)
                     || $this->aiMaxOwnsCampaign($campaign)) {
                     return false;
                 }
@@ -115,6 +117,10 @@ class SettleDeployedCampaign
                 $attempted = [];
                 try {
                     foreach ($pending as $strategy) {
+                        if (! CampaignSpendGuardrails::hasLaunchFunding($customer)
+                            || $strategy->launch_intent !== null && ! app(CampaignLaunchIntent::class)->canPublish($strategy)) {
+                            throw new \RuntimeException('Ad spend funding changed during the Google launch.');
+                        }
                         $resource = $strategy->execution_result['metadata']['google_search_staging']['campaign_resource'];
                         $proof = $strategy->fresh()->execution_result['metadata']['search_reach_activation']['preflight'] ?? [];
                         $activationCheck = ExecutionResult::success();
@@ -123,7 +129,8 @@ class SettleDeployedCampaign
                         $this->saveActivation($strategy, ['activation_check' => $activationCheck->metadata['search_reach_activation_check'] ?? null,
                             'issues' => array_map(fn ($issue) => $issue->jsonSerialize(), $activationCheck->errors),
                             'status' => $current ? 'activation_ready' : 'needs_review']);
-                        if (! $current || ! $activationCheck->success) {
+                        if (! $current || ! $activationCheck->success
+                            || $strategy->launch_intent !== null && ! app(CampaignLaunchIntent::class)->canPublish($strategy)) {
                             throw new \RuntimeException('The immediate Search activation check did not pass: '.$activationCheck->errorMessage());
                         }
                         $attempted[] = ['strategy' => $strategy, 'resource' => $resource];
@@ -201,7 +208,12 @@ class SettleDeployedCampaign
         }
 
         $campaign->update(['status' => CampaignStatus::Active]);
-        RecordSiteConversion::dispatch($customer, 'campaign_live');
+        $deployed = $campaign->strategies()->deployed()->get();
+        if ($deployed->isEmpty() || $deployed->contains(fn (Strategy $strategy) => $strategy->deployment_status === 'active'
+            || ! array_key_exists('facebook_activation_pending', $strategy->execution_result['metadata'] ?? [])
+                && ! isset($strategy->execution_result['metadata']['google_pmax_staging']))) {
+            RecordSiteConversion::dispatch($customer, 'campaign_live');
+        }
 
         return true;
     }
@@ -225,6 +237,7 @@ class SettleDeployedCampaign
             if (! $owner || $current->customer_id !== $owner->id || $owner->service_type === 'setup_only'
                 || $owner->cleanGoogleCustomerId() !== $customer->cleanGoogleCustomerId()
                 || $current->status !== CampaignStatus::Active || ! CampaignSpendGuardrails::canEnable($current)
+                || ! CampaignSpendGuardrails::hasLaunchFunding($owner)
                 || CampaignSpendGuardrails::activeTrial($current)) {
                 throw new \RuntimeException('Launch authorization changed during Google activation. The activated stages must be paused.');
             }
@@ -233,6 +246,7 @@ class SettleDeployedCampaign
             foreach ($activated as $stage) {
                 $strategy = $strategies->get($stage['strategy']->id);
                 if (! $strategy || $strategy->reusableGoogleCampaignId() !== $stage['resource']
+                    || $strategy->launch_intent !== null && ! app(CampaignLaunchIntent::class)->canPublish($strategy)
                     || ($strategy->execution_result['metadata']['google_search_staging']['campaign_resource'] ?? null) !== $stage['resource']
                     || ($strategy->execution_result['metadata']['google_search_staging']['enable_after_success'] ?? false) !== true
                     || ($strategy->execution_result['metadata']['search_reach_activation']['enabled_verified'] ?? false) !== true) {

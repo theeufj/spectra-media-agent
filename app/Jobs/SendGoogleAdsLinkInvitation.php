@@ -46,11 +46,11 @@ class SendGoogleAdsLinkInvitation implements ShouldQueue
 
     public function __construct(protected Customer $customer) {}
 
-    public function handle(): void
+    public function handle(bool $retry = false): void
     {
         $customer = $this->customer->fresh();
 
-        if (! $customer) {
+        if (! $customer || $customer->is_sandbox) {
             return;
         }
 
@@ -66,7 +66,7 @@ class SendGoogleAdsLinkInvitation implements ShouldQueue
         }
 
         // Already linked, or already invited and waiting.
-        if (in_array($customer->google_ads_link_status, ['active', 'pending'], true)) {
+        if (in_array($customer->google_ads_link_status, ['active', 'managed', 'pending'], true)) {
             return;
         }
 
@@ -88,6 +88,31 @@ class SendGoogleAdsLinkInvitation implements ShouldQueue
             return;
         }
 
+        // Earlier releases queued invitations for accounts we had just created.
+        // Require a successful creation record for this exact account and MCC.
+        if ($managerId === preg_replace('/\D/', '', (string) $customer->google_ads_manager_customer_id)
+            && AgentActivity::where('customer_id', $customer->id)
+                ->where('agent_type', 'onboarding')
+                ->where('action', 'google_ads_account_created')
+                ->where('status', 'completed')
+                ->where('details->client_account', $clientId)
+                ->where('details->manager_account', $managerId)
+                ->exists()) {
+            $customer->update([
+                'google_ads_link_status' => 'managed',
+                'google_ads_link_confirmed_at' => now(),
+                'google_ads_link_requested_at' => null,
+                'google_ads_link_resource_name' => null,
+            ]);
+            ResumeCampaignLaunches::dispatch($customer->id);
+
+            return;
+        }
+
+        if (! $retry && in_array($customer->google_ads_link_status, ['failed', 'refused', 'cancelled', 'revoked'], true)) {
+            return;
+        }
+
         try {
             $result = (new CreateCustomerClientLink($customer))($managerId, $clientId);
         } catch (\Throwable $e) {
@@ -102,6 +127,7 @@ class SendGoogleAdsLinkInvitation implements ShouldQueue
                     'google_ads_link_confirmed_at' => now(),
                     'google_ads_manager_customer_id' => $managerId,
                 ]);
+                ResumeCampaignLaunches::dispatch($customer->id);
 
                 AgentActivity::record(
                     'onboarding',

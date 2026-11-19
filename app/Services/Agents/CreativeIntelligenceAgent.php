@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\CreativeBrief;
 use App\Models\Customer;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
@@ -420,13 +421,14 @@ PROMPT;
             $dateEnd = now()->format('Y-m-d');
             $dateStart = now()->subDays(30)->format('Y-m-d');
 
-            $accountId = "act_{$customer->facebook_ads_account_id}";
+            $accountId = 'act_'.preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
             $adInsights = $insightService->getAccountInsightsByLevel(
                 $accountId,
                 $dateStart,
                 $dateEnd,
                 'ad',
-                ['ad_id', 'ad_name', 'impressions', 'clicks', 'spend', 'actions', 'ctr', 'cpc']
+                ['campaign_id', 'ad_id', 'ad_name', 'impressions', 'inline_link_clicks', 'spend', 'actions'],
+                campaignId: $campaign->facebook_ads_campaign_id,
             );
 
             if (empty($adInsights)) {
@@ -435,10 +437,15 @@ PROMPT;
 
             // Normalize Facebook ad insights to the same format as Google assets
             $adPerformance = [];
+            $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
             foreach ($adInsights as $insight) {
+                if ((string) ($insight['campaign_id'] ?? '') !== (string) $campaign->facebook_ads_campaign_id || empty($insight['ad_id'])) {
+                    continue;
+                }
+
                 $impressions = (int) ($insight['impressions'] ?? 0);
-                $clicks = (int) ($insight['clicks'] ?? 0);
-                $conversions = $insightService->parseAction($insight['actions'] ?? null, 'purchase');
+                $clicks = (int) ($insight['inline_link_clicks'] ?? 0);
+                $conversions = FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $goal);
                 $ctr = $impressions > 0 ? $clicks / $impressions : 0;
 
                 $adPerformance[] = [

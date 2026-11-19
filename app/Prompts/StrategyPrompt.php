@@ -5,6 +5,7 @@ namespace App\Prompts;
 use App\Models\BrandGuideline;
 use App\Models\Campaign;
 use App\Models\User;
+use App\Services\Campaigns\StrategyDocument;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
@@ -68,6 +69,15 @@ class StrategyPrompt
             : 'No platforms enabled';
 
         Log::info("StrategyPrompt: Building prompt for platforms: {$platformsList}");
+        $defaultsToPmax = StrategyDocument::preferredGoogleType($campaign) === 'performance_max';
+        $googlePlacement = $defaultsToPmax
+            ? 'For the Google strategy, default to Google Ads (Performance Max) and campaign_type performance_max. Start with MAXIMIZE_CONVERSIONS and an explicit primary conversion goal. Use one Google strategy and prepare its approved offer, landing page and creative for placements across Google inventory. Do not select an initial cost or ROAS target.'
+            : 'Keep the Google placement consistent with the requested or existing reviewed campaign type.';
+        $googleExamplePlatform = $defaultsToPmax ? 'Google Ads (Performance Max)' : 'Google Ads (SEM)';
+        $googleExampleType = $defaultsToPmax ? 'performance_max' : 'search';
+        $googleExampleBidding = $defaultsToPmax ? 'MAXIMIZE_CONVERSIONS' : 'ManualCpc';
+        $googleExampleGenerateVideo = $defaultsToPmax ? 'true' : 'false';
+        $googleExampleVideo = $defaultsToPmax ? '"Open on the runner tying the shoe, then follow the same shoe through a first stride on the track. Show the actual sole flexing underfoot and close with a spoken invitation to browse the running shoe range."' : '"N/A: Search serves text ads."';
 
         $recommendationsPrompt = '';
         if (! empty($recommendations)) {
@@ -121,6 +131,7 @@ demand_gen, local_services, or performance_max. Google Ads (SEM) and Search use
 "search", never "display"; YouTube uses "video". For social feed placements use
 "display". Keep the platform label, creative requirements and video applicability
 consistent with this type.
+{$googlePlacement}
 
 **Budget allocation:**
 Return each platform's share as a positive numeric "daily_budget" in the account currency.
@@ -236,10 +247,11 @@ The "targeting" object should have the following keys:
 - "age_max": Integer (e.g., 65).
 - "genders": Array of strings (e.g., ["male", "female"] or ["all"]).
 - "geo_locations": Array of strings (e.g., ["United States", "Canada"]).
+- For Performance Max, include "search_themes" inside "targeting". Suggest up to ten distinct phrases a buyer would search for the offer on the reviewed landing page. Use the customer's actual products, services and audience. Omit unrelated interests, goals and competitors.
 
 **Ad Extensions:**
 You MUST include an "ad_extensions" object to improve ad visibility and CTR.
-- "sitelinks": Up to 4 objects with "text" (max 25 chars), "description1" and "description2" (max 35 chars), and "url". Use only actual page URLs found in the knowledge base. Match each label and claim to that page. Fewer links or [] is valid; never invent URLs, trials, case studies or results to fill a quota.
+- "sitelinks": Aim for six distinct sitelinks for Performance Max, and up to four for other Google campaigns. Each object includes "text" (a complete label, max 25 chars), "description1" and "description2" (max 35 chars each), and "url". Prefer relevant product, service, pricing, or demonstration pages that help a buyer decide. Use only actual page URLs found in the knowledge base. Match each label and claim to that page. Fewer links or [] is valid; never invent URLs, trials, case studies or results to fill a quota.
 - "callouts": Array of strings (max 25 chars each). Provide up to 4 callouts supported by the website. Omit unverified claims. Do not generate pricing or promotion assets: these require verified catalogue offers, not inferred industry prices or discounts.
 
 **Conversion Goals:**
@@ -248,8 +260,9 @@ You MUST include a "conversion_goals" object to guide optimization.
 
 **Video Strategy & Generate Video Flag:**
 You MUST include a boolean "generate_video" field for every platform strategy.
-- Set "generate_video": true ONLY when ALL of the following are true: (1) the platform supports video (Facebook, Instagram, YouTube, LinkedIn Video, Performance Max), (2) the campaign duration is 7+ days, and (3) the daily budget is ≥ $20.
-- Set "generate_video": false for pure Search campaigns, low-budget campaigns (< $20/day), or text-focused verticals (legal, finance, insurance) where compliance risk outweighs video value.
+- For Performance Max, set "generate_video": true and include a complete 10–15 second ad film brief. Request clean square, landscape and 4:5 portrait photography for the image assets.
+- For other platforms, set "generate_video": true only when the placement supports video (Facebook, Instagram, YouTube, LinkedIn Video), the campaign runs at least seven days, and the daily budget is at least $20.
+- For those other placements, set "generate_video": false for low-budget campaigns or text-focused verticals where compliance risk outweighs video value. Pure Search always has "generate_video": false.
 
 If "generate_video" is true, write "video_strategy" as a concrete short advertising film
 brief (about 80–120 words), not "create an engaging video" or a list of production adjectives:
@@ -343,23 +356,15 @@ Match keywords to what this business actually sells and the buyer's intent. Agen
       }
     },
     {
-      "platform": "Google Ads (SEM)",
-      "campaign_type": "search",
+      "platform": "{$googleExamplePlatform}",
+      "campaign_type": "{$googleExampleType}",
       "daily_budget": 20,
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "The actual running shoe in crisp side profile on a track, mesh and sole construction clearly visible in raking morning light. Also suits: a close view of a runner tightening its laces before a run; the same shoe in use as a foot lifts from the track, a tight crop with the product sharp and the background soft.",
-      "video_strategy": "N/A — video is not applicable to this Search strategy.",
-      "generate_video": false,
+      "video_strategy": {$googleExampleVideo},
+      "generate_video": {$googleExampleGenerateVideo},
       "bidding_strategy": {
-        "name": "TargetCpa",
-        "parameters": {
-          "targetCpaMicros": 50000000
-        },
-        "keywords": [
-            {"text": "buy running shoes", "match_type": "BROAD"},
-            {"text": "best running shoes", "match_type": "PHRASE"},
-            {"text": "nike running shoes", "match_type": "EXACT"}
-        ]
+        "name": "{$googleExampleBidding}"
       },
       "revenue_cpa_multiple": 3.0,
       "landing_page_url": "https://example.com/running-shoes",

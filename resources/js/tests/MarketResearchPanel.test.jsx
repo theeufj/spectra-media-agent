@@ -67,6 +67,34 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('campaign market research', () => {
+    it('shows the destination and creative with each reviewed set of keywords', () => {
+        const research = ready();
+        research.result.strategies[0].search_offer_groups = [{
+            key: 'setup', name: 'One-time setup', url: 'https://example.com/setup',
+            headlines: ['Search Ads Setup'], descriptions: ['Get your campaign built.'],
+            keywords: [{ text: 'ads setup service', match_type: 'PHRASE' }],
+        }];
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+
+        fireEvent.click(view.getByText(/^One-time setup/));
+        expect(view.getByRole('link', { name: 'https://example.com/setup' })).toHaveAttribute('href', 'https://example.com/setup');
+        expect(view.getByText('Search Ads Setup')).toBeInTheDocument();
+        expect(view.getByText('ads setup service', { exact: false })).toBeInTheDocument();
+    });
+
+    it('shows a measured lower daily budget alongside the total spend forecast', () => {
+        const research = ready();
+        research.result.strategies[0].lower_budget_comparison = {
+            daily_budget_micros: 5_000_000,
+            forecast: { success: true, clicks: 30.8, cost_micros: 58_000_000 },
+        };
+
+        const view = render(<MarketResearchPanel research={research} currency="AUD" />);
+
+        expect(view.getByText('Similar forecast traffic at a lower daily budget')).toBeInTheDocument();
+        expect(view.getByText('At AUD 5.00 a day, Google estimates 30.8 clicks and AUD 58.00 in total spend for the same dates, keywords and maximum CPC.')).toBeInTheDocument();
+    });
+
     it('automatically requests missing research once when the authoritative status arrives, including StrictMode', () => {
         const props = { marketResearchStatusUrl: '/research/status', marketResearchRefreshUrl: '/research/refresh' };
         const view = render(<React.StrictMode>{budget(null, props)}</React.StrictMode>);

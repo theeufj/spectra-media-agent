@@ -8,8 +8,13 @@ class AdCopyResponseSchema
     public static function forRules(?array $rules): array
     {
         $rules ??= [];
+        $fields = ['headline' => 'headlines'];
+        if (isset($rules['long_headline_count'])) {
+            $fields['long_headline'] = 'long_headlines';
+        }
+        $fields['description'] = 'descriptions';
         $properties = [];
-        foreach (['headline' => 'headlines', 'description' => 'descriptions'] as $singular => $plural) {
+        foreach ($fields as $singular => $plural) {
             $items = ['type' => 'string'];
             foreach (['min_length' => 'minLength', 'max_length' => 'maxLength'] as $key => $constraint) {
                 if (isset($rules[$singular.'_'.$key])) {
@@ -23,7 +28,7 @@ class AdCopyResponseSchema
         }
 
         return ['type' => 'object', 'properties' => $properties,
-            'required' => ['headlines', 'descriptions'], 'additionalProperties' => false];
+            'required' => array_values($fields), 'additionalProperties' => false];
     }
 
     public static function rsa(): array

@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\EnabledPlatform;
 use App\Models\Strategy;
 use App\Services\Ads\CustomerRoutedAdsServiceFactory;
+use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Campaigns\CampaignBudgetService;
 use App\Services\Campaigns\GoogleBudgetPacingHistory;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
@@ -36,7 +37,7 @@ class BudgetChangeReceiptTest extends TestCase
             'daily_budget_micros' => $micros, 'currency_code' => 'AUD', 'account_timezone' => 'Australia/Sydney'];
     }
 
-    public function test_google_same_value_write_has_success_without_a_change_receipt(): void
+    public function test_google_matching_budget_is_confirmed_without_repeating_the_write(): void
     {
         $campaign = $this->campaign();
         $writer = new ReceiptGoogleBudgetWriter($campaign->customer, [$this->snapshot($campaign), $this->snapshot($campaign)]);
@@ -44,7 +45,18 @@ class BudgetChangeReceiptTest extends TestCase
         $result = $writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000);
 
         $this->assertSame(['success' => true, 'changes' => []], $result);
-        $this->assertSame([50_000_000], $writer->writes);
+        $this->assertSame([], $writer->writes);
+    }
+
+    public function test_google_rejects_a_matching_budget_that_changes_before_confirmation(): void
+    {
+        $campaign = $this->campaign();
+        $writer = new ReceiptGoogleBudgetWriter($campaign->customer, [$this->snapshot($campaign), $this->snapshot($campaign, 25_000_000)]);
+
+        $result = $writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000);
+
+        $this->assertSame(['success' => false, 'changes' => []], $result);
+        $this->assertSame([], $writer->writes);
     }
 
     public function test_google_receipt_uses_actual_remote_budget_and_currency_when_local_values_are_different(): void
@@ -58,6 +70,134 @@ class BudgetChangeReceiptTest extends TestCase
         $this->assertSame([['platform' => 'google', 'resource_name' => $campaign->googleAdsResourceName(),
             'old_budget_micros' => 25_000_000, 'new_budget_micros' => 50_000_000, 'currency' => 'AUD']], $result['changes']);
         $this->assertSame('50.00', $campaign->fresh()->daily_budget);
+    }
+
+    public function test_automatic_google_reconciliation_leaves_a_remotely_paused_placement_untouched(): void
+    {
+        $campaign = $this->campaign();
+        $writer = new ReceiptGoogleBudgetWriter($campaign->customer, [$this->snapshot($campaign, 25_000_000) + ['platform_status' => 'PAUSED']]);
+
+        $result = $writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000, automatic: true);
+
+        $this->assertSame(['success' => true, 'changes' => []], $result);
+        $this->assertSame([], $writer->writes);
+    }
+
+    public function test_automatic_google_reconciliation_cannot_adjust_a_budget_shared_with_other_campaigns(): void
+    {
+        $campaign = $this->campaign();
+        $writer = new ReceiptGoogleBudgetWriter($campaign->customer, [$this->snapshot($campaign, 25_000_000) + [
+            'platform_status' => 'ENABLED', 'explicitly_shared' => true,
+        ]]);
+
+        $result = $writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000, automatic: true);
+
+        $this->assertSame(['success' => false, 'changes' => []], $result);
+        $this->assertSame([], $writer->writes);
+    }
+
+    public function test_hourly_budget_respects_a_fresh_pause_even_when_old_serving_status_is_still_eligible(): void
+    {
+        $campaign = $this->campaign(['status' => 'active', 'primary_status' => 'ELIGIBLE']);
+        $stale = $campaign->fresh();
+        $campaign->update(['status' => 'paused']);
+
+        $result = app(BudgetIntelligenceAgent::class)->optimize($stale);
+
+        $this->assertSame([], $result['adjustments']);
+        $this->assertSame([], $result['errors']);
+        $this->assertSame('The campaign is paused or has ended.', $result['read_only_reason']);
+        Http::assertNothingSent();
+    }
+
+    public function test_automatic_reconciliation_reserves_the_paused_google_share_and_only_reads_an_already_matching_meta_budget(): void
+    {
+        config(['services.facebook.system_user_token' => 'receipt-test-token']);
+        $campaign = $this->campaign(
+            ['status' => 'active', 'daily_budget' => '100.00', 'approved_daily_budget' => '100.00', 'facebook_ads_campaign_id' => '789'],
+            ['facebook_ads_account_id' => 'act_123']
+        );
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads (SEM)', 'daily_budget' => '60.00', 'deployment_status' => 'paused']);
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Facebook Ads', 'daily_budget' => '40.00', 'deployment_status' => 'active']);
+        $factory = $this->createMock(CustomerRoutedAdsServiceFactory::class);
+        $factory->expects($this->never())->method('budgets');
+        Http::fake([
+            'graph.facebook.com/*/789*' => Http::response(['id' => '789', 'account_id' => '123', 'status' => 'ACTIVE', 'daily_budget' => '4000']),
+        ]);
+
+        $result = (new BudgetIntelligenceAgent($factory))->optimize($campaign);
+
+        $this->assertSame([], $result['errors']);
+        $this->assertNotContains('budget_updated', array_column($result['adjustments'], 'type'));
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request->method() === 'GET' && str_contains($request->url(), '/789'));
+    }
+
+    public function test_an_actual_meta_write_failure_keeps_google_proof_and_retries_the_meta_share(): void
+    {
+        config(['services.facebook.system_user_token' => 'receipt-test-token']);
+        $campaign = $this->campaign(
+            ['status' => 'active', 'daily_budget' => '100.00', 'approved_daily_budget' => '100.00', 'facebook_ads_campaign_id' => '789'],
+            ['facebook_ads_account_id' => 'act_123']
+        );
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'daily_budget' => '60.00']);
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Facebook Ads', 'daily_budget' => '40.00']);
+        $writer = new class implements ReportsBudgetChanges
+        {
+            private bool $confirmed = false;
+
+            public function updateDailyBudget(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
+            {
+                return $this->updateDailyBudgetWithChanges($customerId, $campaignResourceName, $newDailyBudgetMicros)['success'];
+            }
+
+            public function updateDailyBudgetWithChanges(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): array
+            {
+                $changes = $this->confirmed ? [] : [['platform' => 'google', 'resource_name' => $campaignResourceName,
+                    'old_budget_micros' => 30_000_000, 'new_budget_micros' => (int) $newDailyBudgetMicros, 'currency' => 'AUD']];
+                $this->confirmed = true;
+
+                return ['success' => true, 'changes' => $changes];
+            }
+        };
+        $factory = $this->createMock(CustomerRoutedAdsServiceFactory::class);
+        $factory->method('budgets')->willReturn($writer);
+        $remote = ['id' => '789', 'account_id' => '123', 'status' => 'ACTIVE'];
+        Http::fake([
+            'graph.facebook.com/*/act_123*' => Http::response(['id' => 'act_123', 'currency' => 'AUD']),
+            'graph.facebook.com/*/789*' => Http::sequence()
+                ->push($remote + ['daily_budget' => '2000'])->push(['error' => ['type' => 'OAuthException', 'code' => 200]], 400)
+                ->push($remote + ['daily_budget' => '2000'])->push(['success' => true])->push($remote + ['daily_budget' => '4000']),
+        ]);
+        Exceptions::fake();
+        $agent = new BudgetIntelligenceAgent($factory);
+
+        $first = $agent->optimize($campaign);
+        $this->assertSame(['Budget reconciliation failed for facebook.'], $first['errors']);
+        $this->assertSame('google', $first['adjustments'][1]['platform']);
+        $this->assertSame(60_000_000, $first['adjustments'][1]['new_budget_micros']);
+        Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), 'Budget reconciliation failed for facebook.'));
+
+        $retry = $agent->optimize($campaign);
+        $this->assertSame([], $retry['errors']);
+        $this->assertSame('facebook', $retry['adjustments'][1]['platform']);
+        $this->assertSame(40_000_000, $retry['adjustments'][1]['new_budget_micros']);
+        Http::assertSent(fn ($request) => $request->method() === 'POST' && (int) $request['daily_budget'] === 4000);
+    }
+
+    public function test_automatic_meta_reconciliation_rejects_a_campaign_from_another_ad_account(): void
+    {
+        config(['services.facebook.system_user_token' => 'receipt-test-token']);
+        $campaign = $this->campaign(['status' => 'active', 'google_ads_campaign_id' => null, 'facebook_ads_campaign_id' => '789'], ['facebook_ads_account_id' => '123']);
+        Http::fake([
+            'graph.facebook.com/*/789*' => Http::response(['id' => '789', 'account_id' => '987', 'status' => 'ACTIVE', 'daily_budget' => '2500']),
+        ]);
+
+        $result = app(CampaignBudgetService::class)->applyWithChanges($campaign, 50, automatic: true);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame(['facebook'], $result['errors']);
+        Http::assertSentCount(1);
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('unconfirmedWrites')]
@@ -204,18 +344,47 @@ class BudgetChangeReceiptTest extends TestCase
             'new_budget_micros' => 25_000_000, 'currency' => 'AUD']], $result['changes']);
     }
 
+    public function test_automatic_meta_ad_set_retry_uses_original_shares_after_one_write_fails(): void
+    {
+        config(['services.facebook.system_user_token' => 'receipt-test-token']);
+        $campaign = $this->campaign(['status' => 'active', 'google_ads_campaign_id' => null, 'facebook_ads_campaign_id' => '456'], ['facebook_ads_account_id' => '123']);
+        $rows = fn (int $first, int $second) => ['data' => [
+            ['id' => '111', 'status' => 'ACTIVE', 'daily_budget' => (string) $first],
+            ['id' => '112', 'status' => 'ACTIVE', 'daily_budget' => (string) $second],
+        ]];
+        Http::fake([
+            'graph.facebook.com/*/act_123*' => Http::response(['id' => 'act_123', 'currency' => 'AUD']),
+            'graph.facebook.com/*/456/adsets*' => Http::sequence()
+                ->push($rows(1000, 1000))->push($rows(2500, 1000))
+                ->push($rows(2500, 1000))->push($rows(2500, 2500)),
+            'graph.facebook.com/*/456*' => Http::response(['id' => '456', 'account_id' => '123', 'status' => 'ACTIVE']),
+            'graph.facebook.com/*/111*' => Http::sequence()->push(['success' => true]),
+            'graph.facebook.com/*/112*' => Http::sequence()->push(['success' => false])->push(['success' => true]),
+        ]);
+        $service = app(CampaignBudgetService::class);
+
+        $first = $service->applyWithChanges($campaign, 50, automatic: true);
+        $retry = $service->applyWithChanges($campaign, 50, automatic: true);
+
+        $this->assertFalse($first['success']);
+        $this->assertSame(['111'], array_column($first['changes'], 'resource_name'));
+        $this->assertTrue($retry['success']);
+        $this->assertSame(['112'], array_column($retry['changes'], 'resource_name'));
+        $this->assertSame([25_000_000], array_column($retry['changes'], 'new_budget_micros'));
+    }
+
     public function test_linkedin_decimal_receipt_uses_remote_currency_and_confirmed_amounts(): void
     {
         config(['linkedinads.client_id' => 'test-id', 'linkedinads.client_secret' => 'test-secret', 'linkedinads.refresh_token' => 'test-refresh', 'linkedinads.defaults.currency' => 'AUD']);
         EnabledPlatform::updateOrCreate(['slug' => 'linkedin'], ['name' => 'LinkedIn', 'is_enabled' => true]);
         Cache::forget('enabled_platform_slugs');
-        $campaign = $this->campaign(['google_ads_campaign_id' => null, 'linkedin_campaign_id' => '456'], ['linkedin_ads_account_id' => '123']);
+        $campaign = $this->campaign(['google_ads_campaign_id' => null, 'linkedin_campaign_id' => '456'], ['linkedin_ads_account_id' => '123', 'currency_code' => 'AUD']);
         Http::fake([
             'www.linkedin.com/oauth/*' => Http::response(['access_token' => 'test-token', 'expires_in' => 3600]),
             'api.linkedin.com/rest/adCampaigns/456*' => Http::sequence()
-                ->push(['id' => '456', 'dailyBudget' => ['currencyCode' => 'AUD', 'amount' => '25.50']])
+                ->push(['id' => '456', 'account' => 'urn:li:sponsoredAccount:123', 'dailyBudget' => ['currencyCode' => 'AUD', 'amount' => '25.50']])
                 ->push(['success' => true])
-                ->push(['id' => '456', 'dailyBudget' => ['currencyCode' => 'AUD', 'amount' => '50.00']]),
+                ->push(['id' => '456', 'account' => 'urn:li:sponsoredAccount:123', 'dailyBudget' => ['currencyCode' => 'AUD', 'amount' => '50.00']]),
         ]);
 
         $result = app(CampaignBudgetService::class)->applyWithChanges($campaign, 50);

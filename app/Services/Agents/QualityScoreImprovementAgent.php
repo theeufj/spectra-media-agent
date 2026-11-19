@@ -316,7 +316,7 @@ class QualityScoreImprovementAgent
     private function generateReviewedKeywordCopy(Campaign $campaign, Strategy $strategy, KeywordQualityScore $keyword, array &$actions, array &$flagged): void
     {
         $state = app(\App\Services\GoogleAds\GoogleAdStrengthRepair::class);
-        if ($reason = $state->mutationBlocked($campaign, $strategy)) {
+        if ($reason = $state->mutationBlocked($campaign, $strategy, rewritesSearchCopy: true)) {
             $flagged[] = ['keyword' => $keyword->keyword_text, 'issue' => 'ad_copy_generation_hold', 'recommendation' => $reason];
 
             return;
@@ -346,7 +346,7 @@ class QualityScoreImprovementAgent
             $saved = DB::transaction(function () use ($campaign, $strategy, $keyword, $state, $attempt, $generated): ?AdCopy {
                 $fresh = Campaign::with('customer')->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
                 $currentStrategy = Strategy::whereKey($strategy->id)->lockForUpdate()->firstOrFail();
-                $reason = $state->mutationBlocked($fresh, $currentStrategy);
+                $reason = $state->mutationBlocked($fresh, $currentStrategy, rewritesSearchCopy: true);
                 if ($reason === null && $this->strategyForKeyword($fresh, $keyword)?->id !== $strategy->id) {
                     $reason = 'keyword_strategy_changed_during_review';
                 }
@@ -427,7 +427,7 @@ class QualityScoreImprovementAgent
                 preg_match('#^(customers/\d+)/adGroupAds/(\d+)~#', $ad['resource_name'], $parts);
                 $group = isset($parts[1], $parts[2]) ? $parts[1].'/adGroups/'.$parts[2] : '';
                 $strategy = $campaign->strategies()->where('google_ads_ad_group_id', $group)->first();
-                $writeHold = $strategy ? $state->mutationBlocked($campaign, $strategy) : null;
+                $writeHold = $strategy ? $state->mutationBlocked($campaign, $strategy, rewritesSearchCopy: true) : null;
                 if ($writeHold !== null) {
                     $result['mutation_holds'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $writeHold];
                 }
@@ -511,7 +511,7 @@ class QualityScoreImprovementAgent
                     if ($state->sameCopy($ad, $copy)) {
                         throw new \RuntimeException('Generated RSA copy is unchanged; no repair was submitted.');
                     }
-                    if ($blocked = $state->mutationBlocked($campaign, $strategy)) {
+                    if ($blocked = $state->mutationBlocked($campaign, $strategy, rewritesSearchCopy: true)) {
                         $attempt->update(['status' => 'skipped', 'description' => 'RSA repair skipped because a current management hold applies.',
                             'details' => array_merge($attempt->details ?? [], ['reason' => $blocked])]);
                         $result['mutation_holds'][] = ['ad_resource' => $ad['resource_name'], 'reason' => $blocked];

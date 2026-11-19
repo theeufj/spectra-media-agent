@@ -87,7 +87,9 @@ class CustomerObserver
             $this->ensureConversionTracking($customer);
         }
 
-        $this->ensureGoogleAdsLink($customer);
+        if ($customer->wasChanged('google_ads_customer_id')) {
+            $this->ensureGoogleAdsLink($customer);
+        }
     }
 
     /**
@@ -141,7 +143,7 @@ class CustomerObserver
             return;
         }
 
-        if (in_array($customer->google_ads_link_status, ['active', 'pending'], true)) {
+        if (in_array($customer->google_ads_link_status, ['active', 'managed', 'pending'], true)) {
             return;
         }
 

@@ -3,7 +3,13 @@
 namespace App\Services\FacebookAds;
 
 use App\Models\Customer;
+use App\Models\ImageCollateral;
+use App\Models\Strategy;
+use App\Services\Creative\CreativeRelease;
+use App\Services\StorageHelper;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class CreativeService extends BaseFacebookAdsService
 {
@@ -29,7 +35,8 @@ class CreativeService extends BaseFacebookAdsService
         string $headline,
         string $description,
         string $callToAction = 'LEARN_MORE',
-        ?string $linkUrl = null
+        ?string $linkUrl = null,
+        ?string $reviewedImageHash = null,
     ): ?array {
         $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
         if (! $pageId) {
@@ -38,7 +45,7 @@ class CreativeService extends BaseFacebookAdsService
             return null;
         }
 
-        $imageHash = $this->uploadImage($accountId, $imageUrl);
+        $imageHash = $reviewedImageHash ?? $this->uploadImage($accountId, $imageUrl);
         if (! $imageHash) {
             return null;
         }
@@ -225,6 +232,36 @@ class CreativeService extends BaseFacebookAdsService
         Log::warning("FacebookCreativeService: Could not fetch video thumbnail for video {$videoId}");
 
         return null;
+    }
+
+    /** Resolve the Meta image hash from the exact file the customer reviewed. Preview never uploads. */
+    public function reviewedImageHash(Strategy $strategy, ImageCollateral $image, bool $upload): ?string
+    {
+        if ($this->customer?->id !== $strategy->campaign->customer_id || $image->campaign_id !== $strategy->campaign_id
+            || ($image->strategy_id !== null && $image->strategy_id !== $strategy->id)
+            || ! in_array($image->id, $strategy->creative_approval['image_ids'] ?? [], true)) {
+            throw new RuntimeException("Image {$image->id} is outside the approved selection for this Meta campaign.");
+        }
+        $bytes = $image->s3_path ? StorageHelper::get($image->s3_path, 10 * 1024 * 1024) : null;
+        if (! is_string($bytes) || ! app(CreativeRelease::class)->matchesMedia($strategy, 'image', $image->id, $bytes)) {
+            throw new RuntimeException("Image {$image->id} has changed or cannot be read. Review its current contents before delivery.");
+        }
+
+        $accountId = preg_replace('/^act_/', '', (string) $this->customer->facebook_ads_account_id);
+        $cacheKey = 'meta-reviewed-image:'.$accountId.':'.hash('sha256', $bytes);
+        $hash = Cache::get($cacheKey);
+        if (is_string($hash) || ! $upload) {
+            return $hash;
+        }
+
+        $uploaded = $this->post('/act_'.$accountId.'/adimages', ['bytes' => base64_encode($bytes)]);
+        $hash = collect($uploaded['images'] ?? [])->first()['hash'] ?? null;
+        if (! is_string($hash) || $hash === '') {
+            throw new RuntimeException("Meta did not confirm upload of approved image {$image->id}.");
+        }
+        Cache::put($cacheKey, $hash, now()->addDay());
+
+        return $hash;
     }
 
     /**

@@ -29,6 +29,8 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
 {
     private bool $pausedSetupRequest = false;
 
+    private bool $pausedPerformanceMax = false;
+
     private ?string $aiMaxRequestNonce = null;
 
     private bool $preparingActions = false;
@@ -92,6 +94,16 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             return $this->reconcile($strategy, $resource, allowInactive: true);
         } finally {
             $this->aiMaxRequestNonce = null;
+        }
+    }
+
+    public function reconcileStagedPerformanceMax(Strategy $strategy, string $resource): array
+    {
+        $this->pausedPerformanceMax = true;
+        try {
+            return $this->reconcile($strategy, $resource, allowInactive: true);
+        } finally {
+            $this->pausedPerformanceMax = false;
         }
     }
 
@@ -274,6 +286,25 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
             if (! $this->aiMaxRequestIsCurrent($strategy, $customerId, $resource, $intent)) {
                 return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_ai_max_request_changed',
                     'The AI Max request changed during its Google status check. No goal update was authorized.')]);
+            }
+
+            return null;
+        }
+        if ($this->pausedPerformanceMax) {
+            $rows = $this->readRows($customerId, "SELECT campaign.status, campaign.advertising_channel_type FROM campaign WHERE campaign.resource_name = '{$resource}'");
+            $fresh = $strategy->fresh(['campaign.customer']);
+            $campaign = $fresh?->campaign;
+            $customer = $campaign?->customer;
+            if (($rows[0]['campaign']['status'] ?? null) !== 'PAUSED'
+                || ($rows[0]['campaign']['advertisingChannelType'] ?? null) !== 'PERFORMANCE_MAX'
+                || ! $customer || $customer->id !== $this->customer?->id || $customer->cleanGoogleCustomerId() !== $customerId
+                || $customer->is_sandbox || $fresh->campaign_type !== 'performance_max'
+                || $fresh->reusableGoogleCampaignId() !== $resource || $fresh->signed_off_at === null
+                || ($fresh->bidding_strategy['pmax_conversion_goal']['action_resource'] ?? null) !== $intent['action_resource']
+                || $fresh->conversion_goals !== $strategy->conversion_goals || $campaign->hasPassedEndDate()
+                || \App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($campaign)
+                || ! \App\Services\Campaigns\CampaignSpendGuardrails::hasLaunchFunding($customer)) {
+                return $this->result($strategy, $intent, [new AgentIssue('pmax_paused_goal_required', 'The approved Performance Max campaign must be funded and verified paused before applying its goal.')]);
             }
 
             return null;
@@ -503,6 +534,20 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
         if ($linkedCustom && $linkedCustom !== $customResource && $linkedCustom !== $managedCustom) {
             return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_custom', 'This campaign uses an unrelated custom goal. Review its intended actions before changing it.')]);
         }
+
+        // Google permits only one custom goal per exact conversion action list.
+        // Reuse an exact match without editing the goal or its other campaigns.
+        if (! $customResource) {
+            $candidates = array_values(array_filter(array_column($this->readRows($customerId,
+                "SELECT custom_conversion_goal.resource_name, custom_conversion_goal.status, custom_conversion_goal.conversion_actions FROM custom_conversion_goal WHERE custom_conversion_goal.status = 'ENABLED'"
+            ), 'customConversionGoal'), fn ($candidate) => ($candidate['status'] ?? null) === 'ENABLED'
+                && ($candidate['conversionActions'] ?? []) === [$intent['action_resource']]
+                && preg_match('#^customers/'.preg_quote($customerId, '#').'/customConversionGoals/\d+$#', $candidate['resourceName'] ?? '')));
+            if (count($candidates) > 1) {
+                return $this->result($strategy, $intent, [new AgentIssue('conversion_goal_custom_conflict', 'Several custom goals match this conversion action. Review which goal the campaign should use.')]);
+            }
+            $customResource = $candidates[0]['resourceName'] ?? null;
+        }
         if ($customResource) {
             $intent['custom_goal'] = $customResource;
         }
@@ -642,7 +687,8 @@ class ReconcileCampaignConversionGoals extends BaseGoogleAdsService
                 $persisted['last_ready'] = $previous['last_ready'];
             }
             $execution['metadata']['conversion_goal_readiness'] = $persisted;
-            if ($state['configuration_verified'] && $intent && ($intent['mode'] !== 'custom' || ! empty($intent['custom_goal']))) {
+            if ($locked->campaign_type !== 'performance_max' && $state['configuration_verified'] && $intent
+                && ($intent['mode'] !== 'custom' || ! empty($intent['custom_goal']))) {
                 $execution['metadata']['google_search_baseline']['conversion_goal'] = $intent;
                 $execution['metadata']['google_search_baseline']['conversion_category'] = $intent['category'];
             }

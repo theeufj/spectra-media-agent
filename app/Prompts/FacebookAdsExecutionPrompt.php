@@ -245,7 +245,7 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Fa
   - Audience size should be at least 50,000 for delivery
   - Broader audiences often perform better with Meta's algorithm
   - Use detailed targeting expansion for better reach
-  - **CRITICAL API RULE:** All ad sets use Advantage+ audience (`advantage_audience: 1`). Facebook's API rejects `age_max` below 65 with this setting (error 1870189). Always set `age_max: 65` regardless of the target demographic. Use `age_min` to restrict the lower bound instead.
+  - **CRITICAL API RULE:** For broad prospecting, use Advantage+ audience (`advantage_audience: 1`). Facebook's API rejects `age_max` below 65 with this setting (error 1870189). Use broad ages 18–65+ unless there is an explicit customer age restriction. Use manual targeting for hard age or gender restrictions that Advantage+ would expand.
   
 - **Conversion Window:**
   - Default for conversion/sales objectives: `7d_click_1d_view`
@@ -388,7 +388,7 @@ Provide your response as a valid JSON object with the following structure:
 - Include detailed reasoning for all major decisions
 - Make sure your plan is executable with the available assets and budget
 - `creative_strategy.primary_text` is REQUIRED and must be at least 20 characters — write compelling hook copy
-- `targeting_strategy.geo_locations.countries` is REQUIRED — use at minimum `["US","CA","AU","GB"]`
+- Use only the campaign’s selected markets. Use automatic placements for prospecting unless the customer restricted placements. Treat inferred buyer ages and interests as creative guidance. Apply age, gender and audience restrictions only where the customer explicitly requires them.
 - When `use_dynamic_creative: true`, populate `dynamic_creative_assets` with at least 2 `bodies` and 2 `titles`; omit or leave empty arrays when false
 - `campaign_structure.conversion_window`: use `7d_click_1d_view` for conversion/sales objectives, `1d_click` for retargeting, `7d_click` for awareness/traffic
 - Use `OUTCOME_*` objectives ONLY — never legacy names like LINK_CLICKS, CONVERSIONS, or REACH

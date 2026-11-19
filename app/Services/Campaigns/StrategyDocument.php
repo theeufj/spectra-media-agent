@@ -2,6 +2,8 @@
 
 namespace App\Services\Campaigns;
 
+use App\Models\Campaign;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -10,7 +12,20 @@ final readonly class StrategyDocument
 {
     private function __construct(public array $strategies) {}
 
-    public static function fromArray(array $document, array $enabledPlatforms, float $budget, bool $requireCreativeCandidates = false): self
+    public static function preferredGoogleType(Campaign $campaign): ?string
+    {
+        // Existing placements have their own reviewed objectives and settings.
+        if ($campaign->customer?->service_type !== 'managed'
+            || $campaign->strategies->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'))) {
+            return null;
+        }
+        $brief = $campaign->name.' '.$campaign->reason.' '.implode(' ', Arr::wrap($campaign->goals));
+
+        return preg_match('/\b(?:google search|search[- ]only|search campaign|youtube|shopping[- ]only|display[- ]only|app installs|demand gen|local services ads)\b/i', $brief)
+            ? null : 'performance_max';
+    }
+
+    public static function fromArray(array $document, array $enabledPlatforms, float $budget, bool $requireCreativeCandidates = false, ?string $googleDefault = null): self
     {
         Validator::make($document, [
             'strategies' => 'required|array|min:1|max:12',
@@ -62,6 +77,13 @@ final readonly class StrategyDocument
                 (bool) preg_match('/google|microsoft|bing|search|sem/i', $strategy['platform']) => 'search',
                 default => 'display',
             };
+            if ($googleDefault === 'performance_max' && preg_match('/google|adwords/i', $strategy['platform'])
+                && in_array($type, ['search', 'performance_max'], true)) {
+                $strategies[$index]['platform'] = 'Google Ads (Performance Max)';
+                $strategies[$index]['bidding_strategy'] = ['name' => 'MAXIMIZE_CONVERSIONS'];
+                $type = 'performance_max';
+                $searchLabel = false;
+            }
             if ($searchLabel && $type !== 'search') {
                 throw ValidationException::withMessages(['strategies' => 'A Search strategy must use the search campaign type.']);
             }
@@ -69,9 +91,11 @@ final readonly class StrategyDocument
             if (isset($strategy['creative_candidates'])) {
                 $strategies[$index]['creative_concepts'] = app(\App\Services\Creative\ConceptSelector::class)->select($strategy['creative_candidates'], $type);
             }
-            if ($type === 'search') {
-                $strategies[$index]['generate_video'] = false;
-            }
+            $strategies[$index]['generate_video'] = match ($type) {
+                'search' => false,
+                'performance_max' => true,
+                default => $strategy['generate_video'],
+            };
         }
         $shares = CampaignBudgetService::split((int) round($budget * 100), $weights);
         foreach ($strategies as $index => &$strategy) {

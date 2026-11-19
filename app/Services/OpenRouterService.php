@@ -186,7 +186,7 @@ class OpenRouterService
             $started = hrtime(true);
 
             $response = Http::withToken(config('services.openrouter.api_key'))
-                ->timeout(120)
+                ->timeout(max(1, min(120, (int) ($context['text_timeout_seconds'] ?? 120))))
                 ->post(self::BASE.'/chat/completions', $payload);
 
             if ($response->failed()) {

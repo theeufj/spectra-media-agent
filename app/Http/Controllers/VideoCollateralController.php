@@ -72,7 +72,7 @@ class VideoCollateralController extends Controller
             }
 
             Log::info("Dispatching GenerateVideo job for Strategy ID: {$strategy->id}...");
-            GenerateVideo::dispatch($campaign, $strategy, $validated['platform']);
+            GenerateVideo::dispatch($campaign, $strategy, $validated['platform'], force: true);
             Log::info('GenerateVideo job dispatched successfully.');
 
             $quotaService->recordUsage($user, 'video');

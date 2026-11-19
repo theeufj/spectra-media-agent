@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('ad_copies', function (Blueprint $table) {
+            $table->json('long_headlines')->nullable();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('ad_copies', function (Blueprint $table) {
+            $table->dropColumn('long_headlines');
+        });
+    }
+};

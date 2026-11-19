@@ -15,6 +15,8 @@ use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\GetAndLinkLocationAssets;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
+use App\Services\GoogleAds\CommonServices\SitelinkCoverage;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V26\Enums\PriceExtensionPriceQualifierEnum\PriceExtensionPriceQualifier;
 use Google\Ads\GoogleAds\V26\Enums\PriceExtensionTypeEnum\PriceExtensionType;
@@ -49,7 +51,17 @@ class AdExtensionBuilder
         $evidence = app(AdvertisingEvidence::class);
         $extensions = $strategy->ad_extensions ?? [];
         // Read the same contract written by StrategyPrompt. Legacy data is accepted only as input to validation.
-        $sitelinks = $evidence->sitelinks($this->customer, $extensions['sitelinks'] ?? $strategy->bidding_strategy['sitelinks'] ?? []);
+        if ($strategy->campaign_type === 'performance_max') {
+            $reader = app(ReadCampaignConfiguration::class, ['customer' => $this->customer]);
+            $existing = $reader->sitelinks($customerId, $campaignResourceName);
+            $coverage = app(SitelinkCoverage::class)->plan($this->customer, $strategy, $existing);
+            $sitelinks = $coverage['links'];
+            if (count($sitelinks) < $coverage['needed']) {
+                $result->addWarning('pmax_sitelink_coverage', 'Fewer than six distinct verified sitelink destinations are available for this campaign.');
+            }
+        } else {
+            $sitelinks = $evidence->sitelinks($this->customer, $extensions['sitelinks'] ?? $strategy->bidding_strategy['sitelinks'] ?? []);
+        }
 
         foreach ($sitelinks as $sitelink) {
             try {
@@ -68,12 +80,14 @@ class AdExtensionBuilder
                     $url
                 );
 
-                if ($assetResourceName) {
-                    ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::SITELINK);
+                if ($assetResourceName && ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::SITELINK)) {
                     $result->addPlatformId('sitelink_asset', $assetResourceName);
+                } else {
+                    $result->addWarning('google_sitelink_unconfirmed', 'Google did not confirm the sitelink to '.$url.'.');
                 }
             } catch (\Throwable $e) {
                 report($e);
+                $result->addWarning('google_sitelink_unconfirmed', 'Google did not confirm the sitelink to '.$sitelink['url'].'.');
                 Log::warning('GoogleAdsExecutionAgent: Failed to create/link sitelink: '.$e->getMessage());
             }
         }

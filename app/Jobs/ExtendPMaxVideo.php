@@ -4,13 +4,14 @@ namespace App\Jobs;
 
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Extends a completed Veo clip by ~7s (8s → ~15s) so it satisfies Google Ads PMax's
@@ -28,34 +29,26 @@ class ExtendPMaxVideo implements ShouldQueue
 
     public function __construct(protected VideoCollateral $sourceVideo) {}
 
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping("pmax-video-extension:{$this->sourceVideo->id}"))->releaseAfter(30)->expireAfter(660)];
+    }
+
     public function handle(GeminiService $geminiService): void
     {
-        $source = $this->sourceVideo;
+        $source = $this->sourceVideo->fresh();
 
-        if ($source->status !== 'completed' || ! $source->s3_path) {
-            Log::warning("ExtendPMaxVideo: source video {$source->id} not completed / has no file — skipping");
-
-            return;
-        }
-
-        // Don't extend an already-extended clip (avoids runaway length + cost).
-        if (($source->extension_count ?? 0) >= 1) {
-            Log::info("ExtendPMaxVideo: video {$source->id} already extended — skipping");
+        if (! $source || ! $source->is_active || $source->status !== 'completed' || ! $source->s3_path
+            || ($source->provider ?? 'veo') !== 'veo' || ($source->extension_count ?? 0) >= 1
+            || VideoCollateral::where('parent_video_id', $source->id)->exists()) {
+            Log::info("ExtendPMaxVideo: video {$this->sourceVideo->id} has no pending extension.");
 
             return;
         }
 
-        try {
-            $bytes = Storage::disk('s3')->get($source->s3_path);
-        } catch (\Throwable $e) {
-            Log::error("ExtendPMaxVideo: could not read source video {$source->id}: ".$e->getMessage());
-
-            return;
-        }
+        $bytes = StorageHelper::get($source->s3_path);
         if (! $bytes) {
-            Log::error("ExtendPMaxVideo: empty source video {$source->id}");
-
-            return;
+            throw new \RuntimeException("Could not read Performance Max video {$source->id} for extension.");
         }
 
         $brand = $source->campaign?->customer?->name ?? 'the brand';
@@ -71,28 +64,7 @@ class ExtendPMaxVideo implements ShouldQueue
         );
 
         if (! $operationName) {
-            Log::error("ExtendPMaxVideo: failed to start extension for video {$source->id}");
-
-            return;
-        }
-
-        /*
-         * A retry must not produce a second extension.
-         *
-         * The extension is a child of the source video, and nothing stopped
-         * this running twice: a worker that died after starting the generation
-         * but before writing the row produced two children of the same parent
-         * — two near-identical videos, two charges against an allowance sold
-         * as a fixed number, and two CheckVideoStatus pollers.
-         */
-        $alreadyExtended = VideoCollateral::where('parent_video_id', $source->id)
-            ->where('extension_count', ($source->extension_count ?? 0) + 1)
-            ->exists();
-
-        if ($alreadyExtended) {
-            Log::info("ExtendPMaxVideo: source {$source->id} already has this extension; not creating a second");
-
-            return;
+            throw new \RuntimeException("Could not start extension for Performance Max video {$source->id}.");
         }
 
         // Retire the too-short source; the extended clip supersedes it.
@@ -106,6 +78,10 @@ class ExtendPMaxVideo implements ShouldQueue
             'status' => 'generating',
             'operation_name' => $operationName,
             'is_active' => true,
+            'provider' => 'veo',
+            'should_deploy' => (bool) $source->should_deploy,
+            'variation_index' => $source->variation_index,
+            'generation_metadata' => \Illuminate\Support\Arr::except($source->generation_metadata ?? [], ['duration_seconds']),
             'parent_video_id' => $source->id,
             'extension_count' => ($source->extension_count ?? 0) + 1,
         ]);

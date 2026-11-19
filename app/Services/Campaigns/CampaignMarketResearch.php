@@ -13,16 +13,21 @@ class CampaignMarketResearch
 {
     // Unapproved quotes must be rerun when optimizer semantics change. This
     // version deliberately does not enter durable customer approval hashes.
-    private const RESEARCH_VERSION = 5;
+    private const RESEARCH_VERSION = 10;
+
+    private const MAX_PORTFOLIO_KEYWORDS = 75;
+
+    public const APPROVAL_ACCOUNT_FIELDS = ['google_ads_customer_id', 'google_ads_link_status', 'facebook_ads_account_id',
+        'microsoft_ads_customer_id', 'microsoft_ads_account_id', 'linkedin_ads_account_id'];
 
     public function fingerprint(Campaign $campaign, ?int $requestedDailyBudgetMicros = null): string
     {
         return hash('sha256', json_encode([self::RESEARCH_VERSION, $this->inputFingerprint($campaign, true), $requestedDailyBudgetMicros], JSON_THROW_ON_ERROR));
     }
 
-    public function approvalFingerprint(Campaign $campaign): string
+    public function approvalFingerprint(Campaign $campaign, array $approvedAccounts = []): string
     {
-        return $this->inputFingerprint($campaign, false);
+        return $this->inputFingerprint($campaign, false, $approvedAccounts);
     }
 
     public function research(Campaign $campaign, ?int $requestedDailyBudgetMicros = null): array
@@ -90,6 +95,13 @@ class CampaignMarketResearch
                 'time_zone' => $account['time_zone'] ?? null, 'forecast_period' => null,
                 'caveats' => [], 'reasons' => [], 'evidence' => ['account' => $account], 'activation_ready' => false, 'auto_repair_safe' => false];
             try {
+                if ($strategy->campaign_type === 'performance_max' && preg_match('/google|adwords/i', $strategy->platform)
+                    && ! $this->hasFootprint($campaign, $strategy)) {
+                    $row = $this->performanceMaxProposal($campaign, $strategy, $row, $accountIssue ?: $requestedIssue);
+                    $results[] = $row;
+
+                    continue;
+                }
                 $inputIssue = null;
                 try {
                     $inputs = $this->inputs($campaign, $strategy);
@@ -189,7 +201,11 @@ class CampaignMarketResearch
             return $result;
         }
         $proposal = array_diff_key($result, array_flip(['budget_options', 'budget_comparisons', 'default_budget_option_id', 'selected_budget_option_id', 'requires_explicit_option_selection']));
+        $lowerBudget = $row['lower_budget_comparison'] ?? null;
         $amounts = array_values(array_unique([max(5_000_000, intdiv($reference, 20_000) * 10_000), $reference, min(10_000_000_000, $reference * 2)]));
+        if ($lowerBudget !== null && ! in_array($lowerBudget['daily_budget_micros'], $amounts, true)) {
+            $amounts[] = $lowerBudget['daily_budget_micros'];
+        }
         if (count($amounts) < 3 && $reference * 3 <= 10_000_000_000) {
             $amounts[] = $reference * 3;
         }
@@ -206,7 +222,9 @@ class CampaignMarketResearch
             }
             if (! $baseReady) {
                 try {
-                    $estimate = $this->bidPlanner()->estimate($campaign, $row['proposed_keywords'], $row['evidence']['input_context'], $amount, $row['cpc_ceiling_micros'] ?? null);
+                    $estimate = $amount === ($lowerBudget['daily_budget_micros'] ?? null)
+                        ? ['ready' => true, 'cpc_bid_micros' => $lowerBudget['cpc_bid_micros'], 'evidence' => ['forecast' => $lowerBudget['forecast']]]
+                        : $this->bidPlanner()->estimate($campaign, $row['proposed_keywords'], $row['evidence']['input_context'], $amount, $row['cpc_ceiling_micros'] ?? null);
                 } catch (\Throwable $e) {
                     report($e);
                     $estimate = ['ready' => false, 'reason' => 'This comparison forecast was unavailable. No traffic was assumed.'];
@@ -220,6 +238,7 @@ class CampaignMarketResearch
 
                     continue;
                 }
+                unset($optionRow['lower_budget_comparison']);
                 $optionRow['budget_micros'] = $amount;
                 $optionRow['cpc_bid_micros'] = $estimate['cpc_bid_micros'];
                 $optionRow['bidding_strategy'] = 'MANUAL_CPC';
@@ -325,6 +344,11 @@ class CampaignMarketResearch
                 $setKinds[] = $kind;
             }
         }
+        $portfolio = $this->keywordPortfolio($business['portfolio_candidates'] ?? [], $keywordCap);
+        if (count($portfolio) > max(array_map('count', $sets))) {
+            $sets[] = $portfolio;
+            $setKinds[] = 'keyword_portfolio';
+        }
         $planner = $this->bidPlanner();
         $testedSets = $candidates = [];
         // Compare every relevant set at the existing proposed spend before
@@ -350,7 +374,8 @@ class CampaignMarketResearch
                 'failed_forecasts' => array_map(fn ($tested) => ['kind' => $tested['kind'],
                     'observations' => array_map(fn ($trial) => ['budget_micros' => $trial['budget_micros'],
                         'ready' => $trial['result']['ready'] ?? false,
-                        'forecast' => $trial['result']['evidence']['forecast'] ?? null], $tested['budgets'])], array_values($testedSets))];
+                        'forecast' => array_intersect_key($trial['result']['evidence']['forecast'] ?? [],
+                            array_flip(['clicks', 'cost_micros', 'period_days']))], $tested['budgets'])], array_values($testedSets))];
             try {
                 $recovery = $this->businessResearchRecovery($campaign, $strategy, $recoveryContext, $selected);
             } catch (\Throwable $e) {
@@ -359,8 +384,17 @@ class CampaignMarketResearch
                     'reason' => 'Additional affordable-theme research was unavailable; the original tested choices were retained.'];
             }
             $row['evidence']['business_recovery'] = $recovery;
-            $recoverySets = ['affordable_recovery' => $this->keywords($recovery['keywords'] ?? [], true),
+            $recoveryShortlist = array_slice($recovery['keywords'] ?? [], 0, 12);
+            $recoverySets = ['affordable_recovery' => $this->keywords($recoveryShortlist, true),
                 'affordable_cost_recovery' => $this->keywords(array_slice($recovery['cost_candidates'] ?? [], 0, 6), true)];
+            $recoveryPortfolio = $this->keywordPortfolio([
+                ...($recovery['keywords'] ?? []), ...($recovery['cost_candidates'] ?? []),
+                ...($business['portfolio_candidates'] ?? []),
+            ], $keywordCap);
+            if (count($recoveryPortfolio) > max(array_map('count', $recoverySets))
+                && ! $this->sameKeywordSelection($recoveryPortfolio, $portfolio)) {
+                $recoverySets['affordable_keyword_portfolio'] = $recoveryPortfolio;
+            }
             foreach ($recoverySets as $kind => $recovered) {
                 if ($keywordCap !== null) {
                     $recovered = array_map(fn ($keyword) => array_replace($keyword, ['cpc_bid_micros' => $keywordCap]), $recovered);
@@ -387,8 +421,28 @@ class CampaignMarketResearch
                 array_values(array_filter($candidates, fn ($candidate) => $candidate['budget'] === $minimumBudget)));
             $chosen = InitialSearchBidPlanner::bestForecast($eligible);
             $estimate = $chosen['estimate'];
+            $keywords = $sets[$chosen['set']];
+            if (! $this->hasFootprint($campaign, $strategy)) {
+                try {
+                    $groups = app(SearchOfferGroups::class)->propose($campaign, $keywords);
+                    if ($groups !== []) {
+                        $keywords = SearchOfferGroups::keywords($groups);
+                        $row['search_offer_groups'] = $groups;
+                        $estimate = $planner->estimate($campaign, $keywords, $context, $chosen['budget'], $cap);
+                        if (($estimate['ready'] ?? false) !== true) {
+                            throw new \RuntimeException('The offer-specific Search ad groups need a verified traffic forecast.');
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+                    $row['reasons'][] = 'Review the Search offers and their landing pages, then retry research. The matching ad groups and their forecast could not be verified.';
+                    $row['evidence']['comparison_allowed'] = false;
+
+                    return $row;
+                }
+            }
             $row['status'] = 'ready';
-            $row['proposed_keywords'] = $sets[$chosen['set']];
+            $row['proposed_keywords'] = $keywords;
             $row['budget_micros'] = $chosen['budget'];
             $row['cpc_bid_micros'] = $estimate['cpc_bid_micros'];
             $row['bidding_strategy'] = 'MANUAL_CPC';
@@ -399,6 +453,8 @@ class CampaignMarketResearch
             $row['evidence']['selection_policy'] = $traffic['meets_traffic_threshold'] ? 'cost_efficient_reach' : 'limited_reach_comparison';
             $row['forecast'] = [...$row['forecast'], ...$traffic];
             $row['forecast_period'] = $row['forecast']['forecast_period'] ?? null;
+            $row['lower_budget_comparison'] = $this->hasFootprint($campaign, $strategy)
+                ? null : $this->compareLowerSearchBudget($campaign, $planner, $row, $context);
             $row['caveats'] = [...$estimate['caveats'],
                 'Google’s forecast does not model negative keywords. Retained or subsequently added negatives may reduce delivery; this proposal cannot establish their effect.'];
             $row['reasons'] = [$traffic['traffic_warning'] ?? 'This plan favours lower estimated cost per click among relevant keywords that meet the traffic guideline. Purchase profitability still needs conversion evidence.'];
@@ -410,9 +466,100 @@ class CampaignMarketResearch
         return $row;
     }
 
+    /** Compare spending headroom at the same keyword set, bid and forecast dates. */
+    private function compareLowerSearchBudget(Campaign $campaign, InitialSearchBidPlanner $planner, array $row, array $context): ?array
+    {
+        $reference = $row['budget_micros'];
+        $bid = $row['cpc_bid_micros'];
+        $base = $row['forecast'];
+        $days = $base['period_days'] ?? null;
+        $cost = $base['cost_micros'] ?? null;
+        $clicks = $base['clicks'] ?? null;
+        $period = $base['forecast_period'] ?? null;
+        if (! is_int($bid) || $bid <= 0 || ! is_int($cost) || $cost <= 0 || ! is_int($days) || $days <= 0
+            || ! is_numeric($clicks) || ! is_finite((float) $clicks) || $clicks <= 0
+            || empty($period['from']) || empty($period['through'])) {
+            return null;
+        }
+
+        $lower = max(5_000_000, $bid, intdiv($reference, 40_000) * 10_000);
+        if ($lower * 2 >= $reference || $cost > $lower * $days) {
+            return null;
+        }
+
+        try {
+            $result = $planner->forecastAtBid($campaign, $row['proposed_keywords'], $context, $lower, $bid, $row['cpc_ceiling_micros']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+
+        $forecast = $result['evidence']['forecast'] ?? [];
+        $lowerClicks = $forecast['clicks'] ?? null;
+        $lowerCost = $forecast['cost_micros'] ?? null;
+        if (($result['ready'] ?? false) !== true || ($result['cpc_bid_micros'] ?? null) !== $bid
+            || ($forecast['success'] ?? false) !== true || ($forecast['forecast_period'] ?? null) !== $period || ($forecast['period_days'] ?? null) !== $days
+            || ! is_numeric($lowerClicks) || ! is_finite((float) $lowerClicks) || $lowerClicks < $clicks * 0.95
+            || ! is_int($lowerCost) || $lowerCost <= 0 || $lowerCost > $lower * $days || $lowerCost * 100 > $cost * 105) {
+            return null;
+        }
+
+        return ['daily_budget_micros' => $lower, 'cpc_bid_micros' => $bid, 'forecast' => $forecast];
+    }
+
     protected function inputs(Campaign $campaign, Strategy $strategy): array
     {
         return (new SearchMarketInputs($campaign->customer))->forStrategy($campaign, $strategy);
+    }
+
+    private function performanceMaxProposal(Campaign $campaign, Strategy $strategy, array $row, ?string $issue): array
+    {
+        $row['evidence']['coverage'] = 'conversion_goal_and_destination';
+        $row['bidding_strategy'] = 'MAXIMIZE_CONVERSIONS';
+        $row['caveats'][] = 'This plan uses the approved daily allocation. A Performance Max traffic or revenue forecast is unavailable for this proposal.';
+        $start = $campaign->getAttribute('start_date');
+        $end = $campaign->getAttribute('end_date');
+        if ($start !== null && $end !== null) {
+            $scheduledDays = (int) $start->diffInDays($end) + 1;
+            if ($scheduledDays > 0 && $scheduledDays < 42) {
+                $duration = $scheduledDays === 1 ? '1 day' : "{$scheduledDays} days";
+                $row['caveats'][] = "This campaign is scheduled for {$duration}. Google recommends running a new Performance Max campaign for at least six weeks. Delivery can start slowly and the campaign may end before there is enough data to judge signup or sales costs.";
+            }
+        }
+        if ($issue || $row['budget_micros'] <= 0) {
+            $row['reasons'][] = $issue ?: 'Set a daily allocation for Performance Max.';
+
+            return $row;
+        }
+        $goal = app(\App\Services\GoogleAds\ReconcileCampaignConversionGoals::class, ['customer' => $campaign->customer])->prepare($strategy);
+        if (($goal['ready'] ?? false) !== true) {
+            $row['reasons'][] = 'Verify the Google conversion action before approving the Performance Max plan. '
+                .\App\Services\Agents\AgentIssue::toSentence($goal['issues'] ?? [], '. ');
+            if ($campaign->customer->service_type === 'managed' && $campaign->customer->hasPaidDeploymentAccess()) {
+                $row['conversion_setup_url'] = route('campaigns.conversion-goal.edit', ['campaign' => $campaign, 'strategy' => $strategy], false);
+            }
+
+            return $row;
+        }
+        $evidence = app(AdvertisingEvidence::class);
+        $url = $evidence->url((string) ($campaign->landing_page_url ?: ($strategy->bidding_strategy['landing_page_url'] ?? $campaign->customer->website)));
+        if (! str_starts_with($url, 'https://') || ! $evidence->sameSite($url, (string) $campaign->customer->website)
+            || app(\App\Services\Deployment\AdDestinationCheck::class)->check($url)['status'] !== 'reachable') {
+            $row['reasons'][] = 'Performance Max needs a reachable HTTPS landing page on the customer’s website.';
+
+            return $row;
+        }
+        $row['status'] = 'ready';
+        $row['landing_page_url'] = $url;
+        $row['conversion_goal'] = $goal['intent'];
+        $row['reasons'][] = 'Review the landing page, the selected conversion action and the daily allocation. Creative approval and a Google readback are required at launch.';
+        $themes = \App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals::themes($strategy->targetingConfig?->google_options['search_themes'] ?? []);
+        if ($themes !== []) {
+            $row['reasons'][] = 'Proposed Performance Max search themes include '.implode(', ', $themes).'.';
+        }
+
+        return $row;
     }
 
     protected function accountContext(Customer $customer): array
@@ -511,6 +658,27 @@ class CampaignMarketResearch
         return ! $strategy->requiresInitialMarketResearch();
     }
 
+    /** Use measured, offer-relevant terms for the full forecast, with one match type per phrase. */
+    private function keywordPortfolio(array $candidates, ?int $keywordCap): array
+    {
+        $measured = array_filter($candidates, fn ($keyword) => is_array($keyword) && is_numeric($keyword['avg_monthly_searches'] ?? null)
+            && $keyword['avg_monthly_searches'] > 0);
+        $unique = [];
+        foreach ($this->keywords($measured, true) as $keyword) {
+            $key = mb_strtolower(preg_replace('/\s+/u', ' ', $keyword['text']) ?? $keyword['text']);
+            $unique[$key] ??= $keyword;
+            if (count($unique) === self::MAX_PORTFOLIO_KEYWORDS) {
+                break;
+            }
+        }
+
+        if ($keywordCap !== null) {
+            $unique = array_map(fn (array $keyword) => [...$keyword, 'cpc_bid_micros' => $keywordCap], $unique);
+        }
+
+        return array_values($unique);
+    }
+
     private function keywords(array $keywords, bool $alternatives = false): array
     {
         $result = [];
@@ -540,7 +708,7 @@ class CampaignMarketResearch
         return $campaign->exists ? ($campaign->fresh(['customer.brandGuideline', 'strategies.targetingConfig']) ?? throw new \RuntimeException('The campaign no longer exists.')) : $campaign;
     }
 
-    private function inputFingerprint(Campaign $campaign, bool $operational): string
+    private function inputFingerprint(Campaign $campaign, bool $operational, array $approvedAccounts = []): string
     {
         $campaign = $this->current($campaign);
         $customer = $campaign->customer;
@@ -557,10 +725,12 @@ class CampaignMarketResearch
             }
             $strategies[] = $row;
         }
-        $inputs = [$campaign->id, $campaign->customer_id, $campaign->only($fields),
-            $customer?->only(['id', 'name', 'description', 'website', 'business_type', 'country', 'currency_code', 'timezone',
-                'service_type', 'google_ads_customer_id', 'google_ads_link_status', 'facebook_ads_account_id',
-                'microsoft_ads_customer_id', 'microsoft_ads_account_id', 'linkedin_ads_account_id']),
+        $context = $customer?->only(['id', 'name', 'description', 'website', 'business_type', 'country', 'currency_code', 'timezone',
+            'service_type', ...self::APPROVAL_ACCOUNT_FIELDS]);
+        if ($context && $approvedAccounts) {
+            $context = array_replace($context, array_intersect_key($approvedAccounts, array_flip(self::APPROVAL_ACCOUNT_FIELDS)));
+        }
+        $inputs = [$campaign->id, $campaign->customer_id, $campaign->only($fields), $context,
             $customer?->brandGuideline?->getAttributes(), $strategies];
         if ($operational) {
             $inputs[] = $campaign->only(['status', 'spend_safety_hold', 'spend_guardrails', 'google_ads_campaign_id',

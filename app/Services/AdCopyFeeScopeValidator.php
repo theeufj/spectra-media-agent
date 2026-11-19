@@ -7,12 +7,12 @@ class AdCopyFeeScopeValidator
 {
     private const EXTERNAL_CHARGE = '(?:(?:ad(?:vertising)?|media)\s+(?:spend|budget|costs?|clicks?|charges?|fees?)|(?:hosting|usage|transaction|processing|third-party|platform|provider|vendor)\s+(?:fees?|costs?|charges?|payments?|bills?))';
 
-    public function validate(array $headlines, array $descriptions, array $evidence): array
+    public function validate(array $headlines, array $descriptions, array $evidence, array $longHeadlines = []): array
     {
         $sources = $this->separateCostSources($evidence);
         $issues = [];
         if ($sources !== []) {
-            foreach (['headlines' => $headlines, 'descriptions' => $descriptions] as $field => $assets) {
+            foreach (['headlines' => $headlines, 'long_headlines' => $longHeadlines, 'descriptions' => $descriptions] as $field => $assets) {
                 foreach ($assets as $index => $asset) {
                     if (! is_string($asset)) {
                         continue;

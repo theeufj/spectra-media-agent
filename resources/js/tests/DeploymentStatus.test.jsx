@@ -112,12 +112,13 @@ describe('deployment completion feedback', () => {
 
     it('shows an actual setup failure separately from checks that have not started', () => {
         render(<DeploymentStatus campaign={campaign} setupOnly deployments={[{
-            ...deployment, status: 'failed', error_message: 'Google could not create the ad.',
+            ...deployment, uuid: 'failed-strategy', status: 'failed', error_message: 'Google could not create the ad.',
             deployment_complete: false, delivery_status: { status: 'needs_review' },
         }]} />);
         expect(screen.getByRole('heading', { name: 'Ad setup needs attention' })).toBeVisible();
         expect(screen.getByText('Google could not create the ad.')).toBeVisible();
-        expect(screen.getByRole('button', { name: 'Retry ad creation' })).toBeVisible();
+        expect(screen.getByRole('link', { name: 'Review ads and retry' })).toHaveAttribute('href',
+            route('campaigns.collateral.show', { campaign: campaign.uuid, strategy: 'failed-strategy' }));
         expect(screen.queryByText('Checking your created campaign and ads')).toBeNull();
         expect(screen.queryByRole('heading', { name: 'Your paused ads have been created' })).toBeNull();
     });
@@ -217,6 +218,17 @@ describe('deployment completion feedback', () => {
         expect(screen.getByRole('heading', { name: 'Your campaign is live' })).toBeVisible();
         await act(() => vi.advanceTimersByTimeAsync(60000));
         expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows a verified Performance Max deployment with bidding learning and poor ad strength', () => {
+        render(<DeploymentStatus campaign={{ ...campaign, status: 'active' }} deployments={[{
+            ...liveDeployment, platform: 'Google Ads (Performance Max)',
+            delivery_status: { status: 'learning', ad_strength: 'POOR', reason: 'Google has enabled your campaign and its bidding strategy is learning.' },
+        }]} />);
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        expect(screen.getAllByText('Eligible · bidding learning')).toHaveLength(2);
+        expect(screen.getByText('Poor')).toBeVisible();
+        expect(screen.queryByRole('heading', { name: 'Your campaign is live' })).toBeNull();
     });
 
     it('does not accept contradictory live delivery without completed deployment proof', () => {

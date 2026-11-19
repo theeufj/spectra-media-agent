@@ -1015,6 +1015,7 @@ class CampaignController extends Controller
 
         return $presentation + [
             'id' => $strategy->id,
+            'uuid' => $strategy->uuid,
             'platform' => $strategy->platform,
             'status' => $strategy->deployment_status ?? 'pending',
             'progress' => $this->calculateDeploymentProgress($strategy, $presentation['deployment_complete']),
