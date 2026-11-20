@@ -134,14 +134,18 @@ describe('Google Ads management landing hero', () => {
 });
 
 describe('Homepage ad preview', () => {
-    it('scrolls to the mounted form for a direct ad visit and preserves the query string', () => {
+    it('scrolls the preview instructions and form into view together on a direct ad visit and preserves the query string', () => {
         const scroll = vi.fn();
         const previous = window.Element.prototype.scrollIntoView;
         window.Element.prototype.scrollIntoView = scroll;
         window.history.replaceState({}, '', '/?utm_source=google#build-my-ads');
         try {
             const { container } = render(<Landing publicContent={homeContent} />);
-            expect(scroll.mock.contexts).toContain(screen.getByRole('form', { name: 'Build my ads' }));
+            const card = container.querySelector('#build-my-ads');
+            expect(scroll.mock.contexts).toContain(card);
+            expect(card).toHaveClass('scroll-mt-20');
+            expect(within(card).getByText(/See sample ad copy for your website/)).toBeVisible();
+            expect(within(card).getByRole('form', { name: 'Build my ads' })).toBeVisible();
             expect(window.location.search).toBe('?utm_source=google');
             expect(container.querySelector('a[href^="/register"]')).toBeNull();
         } finally {

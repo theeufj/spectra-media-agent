@@ -13,11 +13,11 @@ export default function WebsiteAdPreview(hero) {
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const demoRequest = useRef(null);
-    const form = useRef(null);
+    const previewCard = useRef(null);
     useEffect(() => {
         // On a direct ad visit the fragment arrives before React mounts its target.
         if (window.location.hash === '#build-my-ads') {
-            form.current?.scrollIntoView({ block: 'start' });
+            previewCard.current?.scrollIntoView({ block: 'start' });
         }
     }, []);
     useEffect(() => () => demoRequest.current?.abort(), []);
@@ -61,9 +61,9 @@ export default function WebsiteAdPreview(hero) {
 
     return (
         <Hero {...hero}>
-            <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
+            <div id="build-my-ads" ref={previewCard} className="scroll-mt-20 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
                 <p className="mb-3 text-sm text-gray-600">See sample ad copy for your website before you create an account. We use your email to follow up about the preview.</p>
-                <form ref={form} id="build-my-ads" aria-label="Build my ads" aria-busy={loading} onSubmit={handleDemoSubmit} className="scroll-mt-20 flex flex-col gap-3">
+                <form aria-label="Build my ads" aria-busy={loading} onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <label htmlFor="demo-first-name" className="sr-only">First name</label>
                         <input
