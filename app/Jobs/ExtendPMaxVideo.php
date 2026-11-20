@@ -31,7 +31,7 @@ class ExtendPMaxVideo implements ShouldQueue
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping("pmax-video-extension:{$this->sourceVideo->id}"))->releaseAfter(30)->expireAfter(660)];
+        return [(new WithoutOverlapping("video-extension:{$this->sourceVideo->id}"))->shared()->releaseAfter(30)->expireAfter(660)];
     }
 
     public function handle(GeminiService $geminiService): void

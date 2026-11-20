@@ -193,6 +193,9 @@ class CampaignController extends Controller
            check on infrastructure we create later anyway.
         */
         $selectablePlatforms = array_values(array_map('strtolower', $enabledPlatforms));
+        if ($customer->resolvePlan()->slug === 'starter') {
+            $selectablePlatforms = array_values(array_intersect($selectablePlatforms, $allowedPlatforms));
+        }
 
         return Inertia::render('Campaigns/CreateWizard', [
             'pages' => $pages,
@@ -210,26 +213,9 @@ class CampaignController extends Controller
                can. The two reasons need telling apart wherever they are shown.
             */
             'enabledPlatforms' => array_map('strtolower', $enabledPlatforms),
-            /*
-               What each possible choice costs, so the page can price a
-               selection as it is made rather than refusing it.
-
-               Keyed by platform count because that is what separates the tiers:
-               one platform is Starter, more than one is Growth. Sent as plain
-               figures so the wizard never has to know the pricing rules.
-            */
-            'planForPlatforms' => collect([1, 2])
-                ->mapWithKeys(function (int $count) {
-                    $sample = array_slice(['google', 'facebook', 'microsoft', 'linkedin'], 0, $count);
-                    $plan = \App\Models\Plan::cheapestFor($sample);
-
-                    return [$count => $plan ? [
-                        'name' => $plan->name,
-                        'price' => $plan->price_cents / 100,
-                        'interval' => $plan->billing_interval,
-                    ] : null];
-                })
-                ->all(),
+            'platformPlans' => \App\Models\Plan::active()->whereNotNull('stripe_price_id')->orderBy('price_cents')->get()
+                ->map(fn ($plan) => ['name' => $plan->name, 'price' => $plan->price_cents / 100, 'interval' => $plan->billing_interval,
+                    'platforms' => \App\Models\Plan::platformsFor($plan->slug)])->values()->all(),
             /*
                Why a platform is unavailable, so the page can say something
                true instead of guessing.
@@ -385,6 +371,9 @@ class CampaignController extends Controller
         }
 
         $validated = $request->validated();
+        if ($customer->resolvePlan()->slug === 'starter' && array_diff($validated['platforms'], $customer->allowedPlatforms())) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['platforms' => 'Starter includes Google Ads. Choose Google or upgrade your plan.']);
+        }
 
         // Extract keywords and files before creating campaign (not campaign columns)
         $keywords = $validated['keywords'] ?? [];

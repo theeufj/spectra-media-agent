@@ -259,18 +259,6 @@ parameters:
 			path: app/Http/Controllers/CreativeBoostController.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between 1\|10 and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Http/Controllers/CustomerController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/CustomerController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\|App\\Models\\LinkedInAdsPerformanceData\|App\\Models\\MicrosoftAdsPerformanceData\:\:\$revenue\.$#'
 			identifier: property.notFound
 			count: 2

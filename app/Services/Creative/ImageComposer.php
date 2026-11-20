@@ -8,6 +8,10 @@ class ImageComposer
 {
     public function layout(string $platform, int $slot, ?string $campaignType = null, ?array $concept = null): string
     {
+        if (str_contains(strtolower($platform), 'google') && in_array($campaignType, ['display', 'performance_max'], true)) {
+            return 'clean';
+        }
+
         // Search image assets ship without graphic or text overlays.
         if ($campaignType === 'search' || ($campaignType === null && preg_match('/search|sem|^google(?: ads)?$/i', trim($platform)))) {
             return 'clean';

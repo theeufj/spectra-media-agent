@@ -31,6 +31,7 @@ class CreativeReleaseReviewer
     {
         $issues = [];
         $imageHashes = [];
+        $bannerHashes = [];
         $videoHashes = [];
         $imageFields = [];
         $logoHashes = [];
@@ -79,6 +80,13 @@ class CreativeReleaseReviewer
                             continue;
                         }
                         $imageHashes[$image->id] = hash('sha256', $bytes);
+                        if ($image->google_display_banners !== null) {
+                            try {
+                                $bannerHashes[$image->id] = app(GoogleDisplayBannerSet::class)->verifiedHashes($image);
+                            } catch (\RuntimeException $e) {
+                                $issues[] = "Image #{$image->id}: ".$e->getMessage();
+                            }
+                        }
                         if ($strategy->campaign_type === 'performance_max') {
                             $field = PerformanceMaxLogo::imageField($image, $strategy, $bytes, duringReview: true);
                             $imageFields[] = $field;
@@ -148,7 +156,7 @@ class CreativeReleaseReviewer
         }
 
         return ['status' => $issues === [] ? 'passed' : 'needs_review', 'issues' => $issues, 'logo_hashes' => $logoHashes,
-            'image_hashes' => $imageHashes, 'video_hashes' => $videoHashes];
+            'image_hashes' => $imageHashes, 'google_display_banner_hashes' => $bannerHashes, 'video_hashes' => $videoHashes];
     }
 
     /** Keep model outages separate from a completed review with missing or negative safety checks. */

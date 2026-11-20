@@ -39,8 +39,8 @@ class DemoController extends Controller
         ]);
 
         $url = $request->input('url');
-        $firstName = $request->input('first_name', '');
-        $userEmail = $request->input('email', '');
+        $firstName = $request->input('first_name') ?? '';
+        $userEmail = $request->input('email') ?? '';
 
         Log::info("DemoController: Starting full extraction demo for {$url}");
 

@@ -90,7 +90,7 @@ const WIZARD_STEPS = [
    Defaulted rather than required: a page rendered without them should show the
    ordinary managed copy, not crash.
 */
-export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], enabledPlatforms = [], planForPlatforms = {}, setupOnly = false, setupFeePaid = false }) {
+export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [], enabledPlatforms = [], platformPlans = [], setupOnly = false, setupFeePaid = false }) {
     const tenant = useTenant();
     const tenantVertical = tenant?.vertical ?? null;
 
@@ -486,7 +486,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                same two facts in the order somebody can act on.
                             */
                             const chosen = data.platforms.length;
-                            const needed = planForPlatforms[chosen] ?? planForPlatforms[Math.min(chosen, 2)];
+                            const needed = platformPlans.find(plan => data.platforms.every(platform => plan.platforms.includes(platform)));
                             const covered = data.platforms.every(p => allowedPlatforms.includes(p));
 
                             if (chosen === 0 || covered || ! needed) return null;

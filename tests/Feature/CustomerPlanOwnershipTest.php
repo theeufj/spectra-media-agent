@@ -79,14 +79,14 @@ class CustomerPlanOwnershipTest extends TestCase
         $this->assertSame(['google'], $customer->allowedPlatforms());
     }
 
-    public function test_a_starter_account_gets_the_single_platform_it_chose(): void
+    public function test_a_starter_account_with_a_legacy_facebook_selection_gets_google(): void
     {
         $customer = Customer::factory()->create([
             'plan_id' => $this->plan('starter')->id,
             'starter_platform' => 'facebook',
         ]);
 
-        $this->assertSame(['facebook'], $customer->allowedPlatforms());
+        $this->assertSame(['google'], $customer->allowedPlatforms());
     }
 
     public function test_an_account_with_nobody_attached_still_has_its_plan(): void

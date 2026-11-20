@@ -9,8 +9,10 @@ use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\CampaignStatusHelper;
+use App\Services\Creative\GoogleCreativeCta;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
+use Google\Ads\GoogleAds\V26\Enums\CallToActionTypeEnum\CallToActionType;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Illuminate\Support\Facades\DB;
 
@@ -110,6 +112,13 @@ class PerformanceMaxLaunchCheck
             && count($groups) === 1
             && ($groups[0]['resourceName'] ?? null) === ($stage['asset_group'] ?? '')
             && ($groups[0]['status'] ?? null) === 'ENABLED'
-            && ($groups[0]['finalUrls'] ?? []) === ($stage['final_urls'] ?? null);
+            && ($groups[0]['finalUrls'] ?? []) === ($stage['final_urls'] ?? null)
+            && (! isset($stage['native_cta']) || self::linkedCtas($snapshot, $stage['asset_group']) === [CallToActionType::name(GoogleCreativeCta::type($stage['native_cta']))]);
+    }
+
+    public static function linkedCtas(array $snapshot, string $group): array
+    {
+        return collect($snapshot['ctas'] ?? [])->where('assetGroup.resourceName', $group)
+            ->pluck('asset.callToActionAsset.callToAction')->values()->all();
     }
 }

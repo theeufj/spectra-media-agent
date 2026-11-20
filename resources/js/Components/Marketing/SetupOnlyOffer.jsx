@@ -22,7 +22,7 @@ import { CtaLink, CTA_PRIMARY, CTA_SIZE_COMPACT, brandTint } from '@/Components/
  *                           is charged against a customer record that does not
  *                           exist until QuickStart creates one.
  */
-export default function SetupOnlyOffer({ priceUsd, href = '/register' }) {
+export default function SetupOnlyOffer({ priceUsd, href = '/register', label = 'Set mine up' }) {
     return (
         <div
             className="flex flex-col gap-5 rounded-xl border-2 p-5 text-left sm:flex-row sm:items-center sm:gap-8 sm:p-8"
@@ -43,7 +43,7 @@ export default function SetupOnlyOffer({ priceUsd, href = '/register' }) {
                 <p className="text-3xl font-extrabold text-gray-900">US${priceUsd}</p>
                 <p className="mb-3 text-xs text-gray-500">once, ever</p>
                 <CtaLink href={href} className={`${CTA_PRIMARY} ${CTA_SIZE_COMPACT} w-full sm:w-auto`}>
-                    Set mine up
+                    {label}
                 </CtaLink>
             </div>
         </div>

@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\Creative\CreativeRelease;
+use App\Services\Creative\GoogleCreativeCta;
 use App\Services\CreativeQuotaService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -63,7 +64,7 @@ class CollateralController extends Controller
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
 
         // Find all active image collaterals for the current strategy
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get()->append('display_banner_preview');
 
         // Find all active video collaterals for the current strategy
         $videoCollaterals = VideoCollateral::forStrategy($strategy)->where('is_active', true)->get();
@@ -86,6 +87,8 @@ class CollateralController extends Controller
                 && ! \App\Services\Deployment\CampaignLaunchIntent::canProvisionGoogle($customer),
             'reviewSummary' => [
                 'business_name' => $customer->name,
+                'google_cta' => str_contains(strtolower((string) $strategy->platform), 'google') && in_array($strategy->campaign_type, ['display', 'performance_max'], true)
+                    ? GoogleCreativeCta::label($strategy) : null,
                 'destination' => $strategy->bidding_strategy['landing_page_url'] ?? $campaign->landing_page_url ?: $customer->website,
                 'audience' => $campaign->target_market,
                 'daily_budget' => $campaign->approved_daily_budget ?? $campaign->daily_budget,
@@ -213,7 +216,7 @@ class CollateralController extends Controller
         $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
 
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
-        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get()->append('display_banner_preview');
         $videoCollaterals = VideoCollateral::forStrategy($strategy)->where('is_active', true)->get();
         $creativeRelease = $this->releaseStates($strategy->campaign->strategies()->get());
 

@@ -71,7 +71,36 @@ class StripeWebhookController extends CashierController
             ]);
         }
 
-        return parent::handleCustomerSubscriptionCreated($payload);
+        return \DB::transaction(function () use ($payload) {
+            $response = parent::handleCustomerSubscriptionCreated($payload);
+            $this->bindStarterWorkspace($payload);
+
+            return $response;
+        });
+    }
+
+    protected function handleCustomerSubscriptionUpdated(array $payload)
+    {
+        return \DB::transaction(function () use ($payload) {
+            $response = parent::handleCustomerSubscriptionUpdated($payload);
+            $this->bindStarterWorkspace($payload);
+
+            return $response;
+        });
+    }
+
+    private function bindStarterWorkspace(array $payload): void
+    {
+        $subscription = $payload['data']['object'];
+        $workspace = $subscription['metadata']['starter_customer_id'] ?? null;
+        if (! is_string($workspace) || ! ctype_digit($workspace)) {
+            return;
+        }
+        $user = User::where('stripe_id', $subscription['customer'])->first();
+        if ($user && $user->customers()->where('customers.id', $workspace)->exists()) {
+            $user->subscriptions()->where('stripe_id', $subscription['id'])->whereNull('starter_customer_id')
+                ->update(['starter_customer_id' => $workspace]);
+        }
     }
 
     /**

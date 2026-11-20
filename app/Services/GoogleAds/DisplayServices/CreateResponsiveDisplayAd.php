@@ -7,6 +7,7 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 use Google\Ads\GoogleAds\V26\Common\AdImageAsset;
 use Google\Ads\GoogleAds\V26\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V26\Common\CustomParameter;
 use Google\Ads\GoogleAds\V26\Common\ResponsiveDisplayAdInfo;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V26\Resources\Ad;
@@ -87,6 +88,9 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
             'square_marketing_images' => $squareMarketingImages,
             'business_name' => $adData['businessName'] ?? null,
         ];
+        if (isset($adData['callToActionText'])) {
+            $rdaFields['call_to_action_text'] = $adData['callToActionText'];
+        }
         if (! empty($logoAssets)) {
             $rdaFields['logo_images'] = $logoAssets; // 4:1 landscape logos
         }
@@ -101,6 +105,28 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
             'responsive_display_ad' => $responsiveDisplayAdInfo,
             'final_urls' => $adData['finalUrls'],
         ]);
+
+        if ($adData['reuseReviewed'] ?? false) {
+            if (! ctype_digit($customerId) || ! preg_match("#^customers/{$customerId}/adGroups/\\d+$#D", $adGroupResourceName)) {
+                throw new \InvalidArgumentException('Invalid Google Display account or ad group.');
+            }
+            // A URL custom parameter is retained by Google and leaves final URLs unchanged.
+            $digest = hash('sha256', $ad->serializeToString());
+            $query = "SELECT ad_group_ad.resource_name, ad_group_ad.status, ad_group_ad.ad.url_custom_parameters, ad_group_ad.ad.final_urls FROM ad_group_ad WHERE ad_group.resource_name = '{$adGroupResourceName}' AND ad_group_ad.ad.type = 'RESPONSIVE_DISPLAY_AD' AND ad_group_ad.status != 'REMOVED'";
+            foreach ($this->searchQuery($customerId, $query)->iterateAllElements() as $row) {
+                $existing = $row->getAdGroupAd();
+                foreach ($existing->getAd()->getUrlCustomParameters() as $parameter) {
+                    if ($parameter->getKey() === 'stcreative' && $parameter->getValue() === $digest) {
+                        if ($existing->getStatus() !== AdGroupAdStatus::ENABLED || iterator_to_array($existing->getAd()->getFinalUrls()) !== $adData['finalUrls']) {
+                            throw new \RuntimeException('The staged responsive Display ad has a different status or destination.');
+                        }
+
+                        return $existing->getResourceName();
+                    }
+                }
+            }
+            $ad->setUrlCustomParameters([new CustomParameter(['key' => 'stcreative', 'value' => $digest])]);
+        }
 
         // Create AdGroupAd
         $adGroupAd = new AdGroupAd([

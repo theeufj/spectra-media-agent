@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\VideoCollateral;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,10 +27,19 @@ class ExtendVideo implements ShouldQueue
         return [300, 900, 1800, 3600];
     }
 
+    protected ?string $quotaWorkId = null;
+
     public function __construct(
         protected VideoCollateral $sourceVideo,
         protected string $extensionPrompt
-    ) {}
+    ) {
+        $this->quotaWorkId = (string) \Illuminate\Support\Str::uuid();
+    }
+
+    public function middleware(): array
+    {
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping('video-extension:'.$this->sourceVideo->id))->shared()->releaseAfter(30)->expireAfter($this->timeout + 60)];
+    }
 
     public function handle(GeminiService $geminiService): void
     {
@@ -71,6 +81,9 @@ class ExtendVideo implements ShouldQueue
             return;
         }
 
+        $reservation = null;
+        $quota = app(StarterCreativeQuota::class);
+        $extendedVideo = null;
         try {
             // Use the original Veo generation URI stored in the DB exactly as returned
             // by Veo at generation time. The extension API requires the full download URL:
@@ -85,6 +98,17 @@ class ExtendVideo implements ShouldQueue
             $enrichedPrompt = $this->buildEnrichedPrompt();
 
             // Start video extension
+            if ($this->quotaWorkId !== null && StarterCreativeQuota::applies($this->sourceVideo->campaign?->customer)) {
+                $customer = $this->sourceVideo->campaign->customer;
+                if ($this->sourceVideo->extensions()->where('status', '!=', 'failed')->exists()
+                    || $extensionCount >= (int) $customer->resolvePlan()->creative_limits['max_extensions_per_video']) {
+                    return;
+                }
+                $reservation = $quota->reserve($customer, 'video', "extend:{$this->sourceVideo->id}:{$this->quotaWorkId}");
+                if ($reservation === false) {
+                    return;
+                }
+            }
             $operationName = $geminiService->extendVideo(
                 $videoUri,
                 $enrichedPrompt
@@ -111,7 +135,7 @@ class ExtendVideo implements ShouldQueue
              */
             $alreadyExtended = VideoCollateral::where('parent_video_id', $this->sourceVideo->id)
                 ->where('extension_count', $extensionCount + 1)
-                ->exists();
+                ->where('status', '!=', 'failed')->exists();
 
             if ($alreadyExtended) {
                 Log::info("Video {$this->sourceVideo->id} already has extension ".($extensionCount + 1).'; not creating a second');
@@ -127,6 +151,7 @@ class ExtendVideo implements ShouldQueue
                 'script' => $this->sourceVideo->script."\n\n[EXTENSION ".($extensionCount + 1).']: '.$this->extensionPrompt,
                 'status' => 'generating',
                 'operation_name' => $operationName,
+                'generation_metadata' => ['starter_quota_key' => $reservation],
                 'is_active' => true,
                 'parent_video_id' => $this->sourceVideo->id,
                 'extension_count' => $extensionCount + 1,
@@ -141,6 +166,10 @@ class ExtendVideo implements ShouldQueue
         } catch (\Throwable $e) {
             Log::error("Error in ExtendVideo job for VideoCollateral ID {$this->sourceVideo->id}: ".$e->getMessage());
             throw $e;
+        } finally {
+            if (is_string($reservation) && ! $extendedVideo) {
+                $quota->release($reservation);
+            }
         }
     }
 
@@ -201,6 +230,13 @@ TEXT;
      */
     public function failed(\Throwable $exception): void
     {
+        $customer = $this->sourceVideo->campaign?->customer;
+        if ($this->quotaWorkId !== null && $customer) {
+            $key = StarterCreativeQuota::key($customer, 'video', "extend:{$this->sourceVideo->id}:{$this->quotaWorkId}");
+            if (! $this->sourceVideo->extensions()->where('generation_metadata->starter_quota_key', $key)->exists()) {
+                app(StarterCreativeQuota::class)->release($key);
+            }
+        }
         Log::error('ExtendVideo failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

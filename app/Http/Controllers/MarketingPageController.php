@@ -48,7 +48,7 @@ class MarketingPageController extends Controller
             $hero = [
                 'headline' => $price ? 'Google Ads management from '.$price : $service['headline'],
                 'intro' => 'Site to Spend researches keywords, prepares Google Ads copy and monitors your campaign on a managed plan. Review your business information and ads before launch.',
-                'primaryCta' => ['href' => '/register', 'label' => 'Review my business'],
+                'primaryCta' => ['href' => '/#build-my-ads', 'label' => 'Build my ads'],
                 'secondaryCta' => ['href' => '/pricing', 'label' => 'Compare plans'],
                 'note' => 'Advertising spend is additional. Subscription prices are in US dollars.',
             ];

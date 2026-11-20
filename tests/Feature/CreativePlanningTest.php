@@ -60,7 +60,8 @@ class CreativePlanningTest extends TestCase
         foreach ([0, 1, 2] as $index) {
             $candidates[$index]['visual_style'] = 'illustration';
         }
-        $this->assertSame('editorial', (new ImageComposer)->layout('Google Ads', 1, 'performance_max', $candidates[3]));
+        $this->assertSame('clean', (new ImageComposer)->layout('Google Ads', 1, 'performance_max', $candidates[3]));
+        $this->assertSame('editorial', (new ImageComposer)->layout('Facebook Ads', 1, null, $candidates[3]));
         $selected = (new ConceptSelector)->select($candidates, 'search');
         foreach ($selected as $slot => $concept) {
             $this->assertNotSame('illustration', $concept['visual_style']);

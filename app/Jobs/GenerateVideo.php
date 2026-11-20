@@ -8,6 +8,7 @@ use App\Models\VideoCollateral;
 use App\Prompts\CreativeVariant;
 use App\Prompts\VideoFromScriptPrompt;
 use App\Prompts\VideoScriptPrompt;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\GeminiService;
 use App\Services\VideoGeneration\VideoGenerationService;
 use Illuminate\Bus\Batchable;
@@ -32,6 +33,8 @@ class GenerateVideo implements ShouldQueue
 
     public $timeout = 900;
 
+    protected ?string $quotaWorkId = null;
+
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
@@ -46,7 +49,9 @@ class GenerateVideo implements ShouldQueue
          */
         protected int $variationIndex = 0,
         protected bool $force = false
-    ) {}
+    ) {
+        $this->quotaWorkId = (string) \Illuminate\Support\Str::uuid();
+    }
 
     /**
      * Extract actionable video content from strategy text.
@@ -134,12 +139,29 @@ class GenerateVideo implements ShouldQueue
         return $content;
     }
 
+    private function quotaSlot(): string
+    {
+        $platform = $this->strategy->campaign_type === 'performance_max' && strtolower($this->platform) === 'google'
+            ? 'Google Ads (Performance Max)' : $this->platform;
+
+        return "video:{$this->campaign->id}:{$platform}:{$this->variationIndex}:{$this->quotaWorkId}";
+    }
+
+    public function middleware(): array
+    {
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping("video-slot:{$this->campaign->id}:{$this->platform}:{$this->variationIndex}"))->releaseAfter(30)->expireAfter($this->timeout + 60)];
+    }
+
     public function handle(VideoGenerationService $videoGenerationService, GeminiService $geminiService): void
     {
         Log::info("Starting video generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
         if ($this->strategy->campaign_type === 'performance_max' && strtolower($this->platform) === 'google') {
             $this->platform = 'Google Ads (Performance Max)';
+        }
+        $customer = $this->campaign->customer;
+        if (StarterCreativeQuota::applies($customer) && ! $customer->allowsAdPlatform($this->platform)) {
+            return;
         }
         $isPerformanceMax = str_contains(strtolower($this->platform), 'performance max');
         $metaOffer = \App\Services\Creative\MetaOfferArt::applies($this->campaign, $this->strategy, $this->platform);
@@ -153,8 +175,14 @@ class GenerateVideo implements ShouldQueue
             ->where('platform', $this->platform)
             ->where('is_active', true)
             ->whereIn('status', ['pending', 'generating', 'completed'])
-            ->exists();
+            ->first();
 
+        // A timed-out worker may have reserved this exact slot before a provider operation existed.
+        if ($alreadyStarted?->status === 'pending' && $this->attempts() > 1 && $this->quotaWorkId !== null
+            && ($alreadyStarted->generation_metadata['starter_quota_key'] ?? null) === StarterCreativeQuota::key($customer, 'video', $this->quotaSlot())) {
+            $alreadyStarted->update(['status' => 'failed']);
+            $alreadyStarted = null;
+        }
         if ($alreadyStarted) {
             Log::info('GenerateVideo: idempotency guard — collateral already exists, skipping', [
                 'campaign_id' => $this->campaign->id,
@@ -170,6 +198,8 @@ class GenerateVideo implements ShouldQueue
         }
 
         $videoCollateral = null;
+        $reservation = null;
+        $quota = app(StarterCreativeQuota::class);
         try {
             // Fetch brand guidelines if available
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
@@ -209,6 +239,14 @@ class GenerateVideo implements ShouldQueue
                 Log::info("GenerateVideo: forced generation with fallback brief for Strategy ID: {$this->strategy->id}");
             }
 
+            if ($this->quotaWorkId !== null) {
+                $reservation = $quota->reserve($customer, 'video', $this->quotaSlot());
+                if ($reservation === false) {
+                    Log::info('Video already delivered or monthly allowance reached', ['campaign_id' => $this->campaign->id]);
+
+                    return;
+                }
+            }
             // Step 1: Generate Video Script using Gemini
             Log::info("Generating video script for Strategy ID: {$this->strategy->id}, variation: {$this->variationIndex}");
             /*
@@ -296,6 +334,7 @@ class GenerateVideo implements ShouldQueue
                     'generation_id' => $this->strategy->generation_id,
                     'strategy_id' => $this->strategy->id,
                     'concept' => $actionableContent,
+                    'starter_quota_key' => $reservation,
                     'script_model' => config('ai.models.default'),
                     'script_prompt_hash' => hash('sha256', $scriptPrompt),
                     'template_hash' => hash_file('sha256', app_path('Prompts/VideoFromScriptPrompt.php')),
@@ -429,6 +468,10 @@ class GenerateVideo implements ShouldQueue
             report($e);
             Log::error("Error in GenerateVideo job for Campaign ID {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
+        } finally {
+            if (is_string($reservation) && ! $videoCollateral) {
+                $quota->release($reservation);
+            }
         }
     }
 
@@ -437,6 +480,17 @@ class GenerateVideo implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        $customer = $this->campaign->customer;
+        if ($this->quotaWorkId !== null && $customer) {
+            $key = StarterCreativeQuota::key($customer, 'video', $this->quotaSlot());
+            $unfinished = VideoCollateral::where('campaign_id', $this->campaign->id)->where('generation_metadata->starter_quota_key', $key)
+                ->whereIn('status', ['pending', 'generating', 'completed'])->first();
+            if (! $unfinished) {
+                app(StarterCreativeQuota::class)->release($key);
+            } elseif ($unfinished->status === 'pending') {
+                $unfinished->update(['status' => 'failed']);
+            }
+        }
         Log::error('GenerateVideo failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

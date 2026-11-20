@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
+/** @property list<string>|null $legacy_stripe_price_ids */
 class Plan extends Model
 {
     protected $fillable = [
@@ -25,6 +27,7 @@ class Plan extends Model
     ];
 
     protected $casts = [
+        'legacy_stripe_price_ids' => 'array',
         'features' => 'array',
         'creative_limits' => 'array',
         'is_active' => 'boolean',
@@ -61,14 +64,12 @@ class Plan extends Model
      *
      * @return list<string>
      */
-    public static function platformsFor(string $slug, ?string $starterPlatform = null): array
+    public static function platformsFor(string $slug): array
     {
         return match ($slug) {
             // The one-time setup is a Google Ads engagement, named as such on
             // the pricing card and in the receipt.
-            'free', 'setup_only' => ['google'],
-            // One platform, whichever they chose.
-            'starter' => [$starterPlatform ?? 'google'],
+            'free', 'setup_only', 'starter' => ['google'],
             default => ['google', 'facebook', 'microsoft', 'linkedin'],
         };
     }
@@ -81,11 +82,6 @@ class Plan extends Model
      * this, a customer had to buy a plan to find out what it let them pick,
      * and saw platforms greyed out with "upgrade to unlock" and no way to know
      * which upgrade.
-     *
-     * Starter is a special case and the reason this is not a simple subset
-     * test: it covers any ONE platform, because starter_platform is the
-     * customer's choice, and that choice is exactly what the wizard is
-     * collecting.
      */
     public static function cheapestFor(array $platforms): ?self
     {
@@ -104,16 +100,25 @@ class Plan extends Model
             ->get();
 
         foreach ($candidates as $plan) {
-            $covers = $plan->slug === 'starter'
-                ? count($wanted) === 1
-                : empty(array_diff($wanted, static::platformsFor($plan->slug)));
-
-            if ($covers) {
+            if (empty(array_diff($wanted, static::platformsFor($plan->slug)))) {
                 return $plan;
             }
         }
 
         return null;
+    }
+
+    /** Recognize past prices on subscriptions without offering them for new checkouts. */
+    public function scopeForStripePrices(Builder $query, array $prices): Builder
+    {
+        $prices = array_values(array_unique(array_filter($prices, 'is_string')));
+
+        return $query->where(function (Builder $match) use ($prices) {
+            $match->whereIn('stripe_price_id', $prices);
+            foreach ($prices as $price) {
+                $match->orWhereJsonContains('legacy_stripe_price_ids', $price);
+            }
+        });
     }
 
     public function scopeActive($query)

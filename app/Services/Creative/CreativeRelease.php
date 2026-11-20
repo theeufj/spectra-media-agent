@@ -42,6 +42,11 @@ class CreativeRelease
             'videos' => $videos->map(fn (VideoCollateral $row) => [$row->id, $row->platform, $row->status, $row->s3_path, $row->cloudfront_url, $row->script])->all(),
         ];
 
+        $bannerSets = $images->filter(fn (ImageCollateral $image) => $image->google_display_banners !== null)
+            ->mapWithKeys(fn (ImageCollateral $image) => [$image->id => $image->google_display_banners]);
+        if ($bannerSets->isNotEmpty()) {
+            $contents['google_display_banners'] = $bannerSets->all();
+        }
         if ($strategy->campaign_type === 'performance_max') {
             $logos = $images->filter(fn (ImageCollateral $image) => PerformanceMaxLogo::designated($image))
                 ->mapWithKeys(fn (ImageCollateral $image) => [$image->id => PerformanceMaxLogo::digest($image, $strategy)]);
@@ -50,12 +55,28 @@ class CreativeRelease
             }
         }
 
+        $nativeCta = null;
+        $fingerprint = hash('sha256', json_encode($contents, JSON_THROW_ON_ERROR));
+        if (str_contains($platform, 'google') && in_array($strategy->campaign_type, ['display', 'performance_max'], true)) {
+            // A release approved before native buttons shipped used Google's automatic selection.
+            // Keep it only while its original copy, media, destination and logo fingerprint still matches.
+            $approval = $strategy->creative_approval;
+            $legacyApproval = $bannerSets->isEmpty() && ! isset($approval['google_native_cta'])
+                && ($approval['fingerprint'] ?? null) === $fingerprint;
+            if (! $legacyApproval) {
+                $nativeCta = GoogleCreativeCta::label($strategy);
+                $contents['google_native_cta'] = $nativeCta;
+                $fingerprint = hash('sha256', json_encode($contents, JSON_THROW_ON_ERROR));
+            }
+        }
+
         return [
-            'fingerprint' => hash('sha256', json_encode($contents, JSON_THROW_ON_ERROR)),
+            'fingerprint' => $fingerprint,
             'copy' => $copy,
             'images' => $images,
             'videos' => $videos,
             'search_offers' => $searchOffers,
+            'google_native_cta' => $nativeCta,
         ];
     }
 
@@ -133,6 +154,8 @@ class CreativeRelease
             'fingerprint' => $selection['fingerprint'],
             'copy_ids' => $selection['copy']->pluck('id')->all(),
             'image_ids' => $selection['images']->pluck('id')->all(),
+            'google_native_cta' => $selection['google_native_cta'],
+            'google_display_banner_hashes' => $strategy->creative_release_review['google_display_banner_hashes'] ?? [],
             'video_ids' => $selection['videos']->pluck('id')->all(),
             'image_hashes' => $strategy->creative_release_review['image_hashes'] ?? [],
             'logo_hashes' => $strategy->creative_release_review['logo_hashes'] ?? [],
@@ -145,10 +168,14 @@ class CreativeRelease
     {
         $approval = $strategy->creative_approval;
 
-        return filled($approval['fingerprint'] ?? null)
-            && ($strategy->creative_release_review['status'] ?? null) === 'passed'
-            && $approval['fingerprint'] === $strategy->creative_release_review['fingerprint']
-            && $approval['fingerprint'] === $this->selection($strategy)['fingerprint'];
+        if (blank($approval['fingerprint'] ?? null) || ($strategy->creative_release_review['status'] ?? null) !== 'passed'
+            || $approval['fingerprint'] !== ($strategy->creative_release_review['fingerprint'] ?? null)) {
+            return false;
+        }
+        $selection = $this->selection($strategy);
+
+        return $approval['fingerprint'] === $selection['fingerprint']
+            && ($approval['google_native_cta'] ?? null) === $selection['google_native_cta'];
     }
 
     /**

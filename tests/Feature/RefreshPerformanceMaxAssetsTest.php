@@ -201,9 +201,11 @@ class RefreshPerformanceMaxAssetsTest extends TestCase
     private function queuedRetirement(Strategy $strategy, string $old, array $logoHashes = []): RetireReviewedPerformanceMaxImages
     {
         $strategy->campaign->customer->update(['google_ads_link_status' => 'active']);
-        $fingerprint = app(CreativeRelease::class)->selection($strategy)['fingerprint'];
+        $selection = app(CreativeRelease::class)->selection($strategy);
+        $fingerprint = $selection['fingerprint'];
         $strategy->update(['creative_release_review' => ['status' => 'passed', 'fingerprint' => $fingerprint],
-            'creative_approval' => ['fingerprint' => $fingerprint, 'copy_ids' => [], 'image_ids' => array_keys($logoHashes),
+            'creative_approval' => ['fingerprint' => $fingerprint, 'google_native_cta' => $selection['google_native_cta'],
+                'copy_ids' => [], 'image_ids' => array_keys($logoHashes),
                 'video_ids' => [], 'image_hashes' => $logoHashes, 'logo_hashes' => $logoHashes]]);
         $service = app(RefreshPerformanceMaxAssets::class, ['customer' => $strategy->campaign->customer]);
         $service->retireAfterReview($strategy, [$old, $old]);

@@ -98,8 +98,20 @@ class WizardPlatformLockTest extends TestCase
         $this->assertNotContains('facebook', $props['allowedPlatforms']);
 
         // And the page is given the figure it needs to say so.
-        $this->assertSame('Growth', $props['planForPlatforms'][2]['name']);
-        $this->assertEquals(249, $props['planForPlatforms'][2]['price']);
+        $metaPlan = collect($props['platformPlans'])->first(fn ($plan) => in_array('facebook', $plan['platforms'], true));
+        $this->assertSame('Growth', $metaPlan['name']);
+        $this->assertEquals(249, $metaPlan['price']);
+    }
+
+    public function test_starter_sees_only_google_even_when_meta_is_enabled_and_saved_as_a_legacy_choice(): void
+    {
+        [$user, $customer] = $this->subscriberWithNoAccountYet();
+        EnabledPlatform::updateOrCreate(['slug' => 'facebook'], ['name' => 'Facebook', 'is_enabled' => true]);
+        $customer->update(['plan_id' => \App\Models\Plan::where('slug', 'starter')->firstOrFail()->id, 'starter_platform' => 'facebook']);
+        $props = $this->wizardProps($user, $customer);
+        $this->assertContains('facebook', $props['enabledPlatforms']);
+        $this->assertSame(['google'], $props['selectablePlatforms']);
+        $this->assertSame(['google'], $props['allowedPlatforms']);
     }
 
     public function test_the_page_is_told_what_the_product_supports_at_all(): void

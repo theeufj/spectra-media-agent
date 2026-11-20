@@ -39,6 +39,8 @@ import { ArrowLongRightIcon } from '@heroicons/react/24/outline';
 export const brandTint = (percent, token = 'primary') =>
     `color-mix(in srgb, var(--color-brand-${token}) ${percent}%, white)`;
 
+export const AD_PREVIEW_CTA = { href: '/#build-my-ads', label: 'Build my ads' };
+
 const CTA_BASE =
     'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-brand-dark focus:ring-offset-2';
 
@@ -77,7 +79,7 @@ export const CTA_SECONDARY = `${CTA_BASE} border-2 border-brand-dark bg-white te
 export function CtaLink({ href, className, onClick, children }) {
     const isExternal = /^(https?:|mailto:|tel:)/i.test(href);
 
-    if (isExternal) {
+    if (isExternal || href.startsWith('#')) {
         return (
             <a href={href} className={className} onClick={onClick}>
                 {children}

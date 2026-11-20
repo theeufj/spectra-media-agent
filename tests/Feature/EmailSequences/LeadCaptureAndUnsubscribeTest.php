@@ -6,6 +6,9 @@ use App\Models\EmailSequenceReply;
 use App\Models\LandingLead;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\BrandGuidelineExtractorService;
+use App\Services\Demo\CampaignForecastPreview;
+use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -26,6 +29,26 @@ class LeadCaptureAndUnsubscribeTest extends TestCase
     }
 
     // ── Unsubscribe ──────────────────────────────────────────────────────────
+
+    public function test_a_preview_request_returns_its_ads_and_keeps_a_single_contact_across_retries(): void
+    {
+        $brand = $this->createStub(BrandGuidelineExtractorService::class);
+        $brand->method('analyzeVisualStyle')->willReturn([]);
+        $this->app->instance(BrandGuidelineExtractorService::class, $brand);
+        $gemini = $this->createStub(GeminiService::class);
+        $gemini->method('generateContent')->willReturn(['text' => '{"headlines":["Example offer"],"descriptions":["See the example offer."]}']);
+        $this->app->instance(GeminiService::class, $gemini);
+        $this->app->instance(CampaignForecastPreview::class, $this->createStub(CampaignForecastPreview::class));
+        $input = ['url' => 'https://93.184.216.34/', 'first_name' => 'Jordan', 'email' => 'Jordan@example.test'];
+        foreach ([$input, $input, ['url' => $input['url'], 'first_name' => null, 'email' => null]] as $request) {
+            $this->postJson(route('demo.generate-full'), $request)->assertOk()
+                ->assertJsonPath('ad_copy.headlines.0', 'Example offer');
+        }
+        $lead = LandingLead::sole();
+        $this->assertSame('jordan@example.test', $lead->email);
+        $this->assertSame('Jordan', $lead->first_name);
+        $this->assertSame($input['url'], $lead->url);
+    }
 
     public function test_a_lead_can_unsubscribe_without_logging_in(): void
     {

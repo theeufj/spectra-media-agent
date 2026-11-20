@@ -7,6 +7,7 @@ use App\Jobs\GenerateVideo;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\CreativeQuotaService;
 use App\Services\StorageHelper;
 use App\Support\SafeError;
@@ -62,9 +63,12 @@ class VideoCollateralController extends Controller
             ]);
             Log::info("Request payload validated successfully for platform: {$validated['platform']}.");
 
+            if (StarterCreativeQuota::applies($campaign->customer) && ! $campaign->customer->allowsAdPlatform($validated['platform'])) {
+                return back()->with('flash', ['type' => 'error', 'message' => 'Starter includes Google Ads video generation.']);
+            }
             // Check creative quota
             $quotaService = app(CreativeQuotaService::class);
-            if (! $quotaService->canGenerate($user, 'video')) {
+            if (! $quotaService->canGenerate($user, 'video', $campaign->customer)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
                     'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
@@ -75,7 +79,9 @@ class VideoCollateralController extends Controller
             GenerateVideo::dispatch($campaign, $strategy, $validated['platform'], force: true);
             Log::info('GenerateVideo job dispatched successfully.');
 
-            $quotaService->recordUsage($user, 'video');
+            if (! StarterCreativeQuota::applies($campaign->customer)) {
+                $quotaService->recordUsage($user, 'video', customer: $campaign->customer);
+            }
 
             return redirect()->back()->with('flash', [
                 'type' => 'success',
@@ -141,7 +147,7 @@ class VideoCollateralController extends Controller
 
             // Check creative quota (extensions count against video budget)
             $quotaService = app(CreativeQuotaService::class);
-            if (! $quotaService->canGenerate($user, 'video')) {
+            if (! $quotaService->canGenerate($user, 'video', $campaign->customer)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
                     'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
@@ -151,7 +157,7 @@ class VideoCollateralController extends Controller
             if (! $quotaService->canExtendVideo($video, $user)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'This video has reached its maximum extension limit (3 extensions).',
+                    'message' => 'This video has reached its plan’s extension limit.',
                 ]);
             }
 
@@ -163,7 +169,9 @@ class VideoCollateralController extends Controller
             Log::info("Dispatching ExtendVideo job for VideoCollateral ID: {$video->id}");
             ExtendVideo::dispatch($video, $validated['prompt'] ?? '');
 
-            $quotaService->recordUsage($user, 'video');
+            if (! StarterCreativeQuota::applies($campaign->customer)) {
+                $quotaService->recordUsage($user, 'video', customer: $campaign->customer);
+            }
 
             return redirect()->back()->with('flash', [
                 'type' => 'success',

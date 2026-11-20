@@ -72,6 +72,7 @@ class PublicContentHtmlTest extends TestCase
         $response = $this->get('https://sitetospend.com/google-ads-management')->assertOk();
         $props = $response->viewData('page')['props'];
         $hero = $props['publicContent']['hero'];
+        $this->assertSame(['href' => '/#build-my-ads', 'label' => 'Build my ads'], $hero['primaryCta']);
         $this->assertSame('Google Ads management from US$198.75/month', $hero['headline']);
         $this->assertSame('Advertising spend is additional. Subscription prices are in US dollars.', $hero['note']);
         $this->assertStringContainsString('researches keywords, prepares Google Ads copy and monitors your campaign', $hero['intro']);
@@ -115,6 +116,7 @@ class PublicContentHtmlTest extends TestCase
             $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
             $props = $response->viewData('page')['props'];
             $service = MarketingPages::find($slug, '1,475.50');
+            $response->assertSee('href="/#build-my-ads"', false);
             $this->assertNull($props['publicContent']['hero']);
             $this->assertSame($service['headline'], $props['service']['headline']);
             $this->assertSame($service['intro'], $props['service']['intro']);
@@ -123,6 +125,20 @@ class PublicContentHtmlTest extends TestCase
                 $this->assertStringNotContainsString('Current management plans', $response->getContent());
             }
         }
+    }
+
+    public function test_every_service_fallback_links_to_the_homepage_preview_before_registration(): void
+    {
+        foreach (['google-ads-management', 'ai-ads-management', 'google-ads-setup'] as $slug) {
+            $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
+            $document = new \DOMDocument;
+            @$document->loadHTML($response->getContent());
+            $xpath = new \DOMXPath($document);
+            $this->assertGreaterThan(0, $xpath->query('//*[@id="app"]//main//a[@href="/#build-my-ads" and normalize-space(.)="Build my ads" and following::article]')->length);
+            $this->assertSame(0, $xpath->query('//*[@id="app"]//a[starts-with(@href, "/register")] | //*[@id="app"]//form')->length);
+        }
+
+        $this->get('https://sitetospend.com/')->assertOk()->assertSee('id="build-my-ads"', false);
     }
 
     private function heroPlan(string $slug, int $priceCents, array $overrides = []): Plan

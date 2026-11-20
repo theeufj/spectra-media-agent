@@ -70,7 +70,7 @@ class LandingController extends Controller
                         'description' => 'Autonomous AI agents that create, manage, and optimize digital ad campaigns across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn Ads.',
                         'offers' => [
                             '@type' => 'AggregateOffer',
-                            'lowPrice' => $paidPrices->min() ?? 149,
+                            'lowPrice' => $paidPrices->min() ?? 99,
                             // The one-time setup sits above every monthly plan,
                             // so it sets the ceiling of the range rather than
                             // being left out of it.

@@ -2,25 +2,26 @@ import { Link } from '@inertiajs/react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
-import Hero from '@/Components/Marketing/Hero';
+import Hero, { AD_PREVIEW_CTA } from '@/Components/Marketing/Hero';
 import CtaBand from '@/Components/Marketing/CtaBand';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
 
 export default function MarketingService({ auth, service, publicContent = {}, plans = [] }) {
     const setupOnly = service.slug === 'google-ads-setup';
     const managementHero = service.slug === 'google-ads-management' ? publicContent.hero : null;
+    const previewCta = managementHero?.primaryCta ?? AD_PREVIEW_CTA;
 
     return (
         <>
             <PageTitle />
             <div className="min-h-screen bg-gray-50 flex flex-col">
-                <Header auth={auth} />
+                <Header auth={auth} guestCta={previewCta} />
                 <main className="flex-1">
                     <Hero
                         eyebrow={service.eyebrow}
                         headline={managementHero?.headline ?? service.headline}
                         sub={managementHero?.intro ?? service.intro}
-                        primaryCta={managementHero?.primaryCta}
+                        primaryCta={previewCta}
                         secondaryCta={managementHero?.secondaryCta}
                         note={managementHero?.note}
                     />
@@ -51,19 +52,18 @@ export default function MarketingService({ auth, service, publicContent = {}, pl
                                 ...plan,
                                 price: <PlanPrice plan={plan} />,
                                 features: plan.features ?? [],
-                                cta: { href: '/register', label: 'Review my business' },
                             }))}
                             footnote={<Link href="/pricing" className="text-brand-darker font-semibold hover:underline">Compare all plans and the one-time option</Link>}
                         />
                     )}
                     <CtaBand
                         title={setupOnly ? 'Prepare your business for a one-time build' : 'Start with your business, offer and goal'}
-                        body="Create your account and review the business information before choosing a paid plan."
-                        primaryCta={{ href: '/register', label: 'Get started' }}
+                        body="Enter your website to see sample ad copy before you choose a plan."
+                        primaryCta={previewCta}
                         secondaryCta={{ href: '/pricing', label: 'Compare pricing' }}
                     />
                 </main>
-                <Footer />
+                <Footer guestCta={previewCta} />
             </div>
         </>
     );

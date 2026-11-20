@@ -197,6 +197,10 @@ class CheckVideoStatus implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
+        $video = $this->videoCollateral->fresh();
+        if (is_string($video?->generation_metadata['starter_quota_key'] ?? null) && in_array($video->status, ['pending', 'generating'], true)) {
+            $video->update(['status' => 'failed']);
+        }
         Log::error('CheckVideoStatus failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

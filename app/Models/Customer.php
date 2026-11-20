@@ -397,8 +397,9 @@ class Customer extends Model
             return null;
         }
 
-        $prices = \DB::table('subscriptions')
-            ->whereIn('user_id', $userIds)
+        $subscriptions = \DB::table('subscriptions')
+            ->leftJoin('subscription_items', 'subscription_items.subscription_id', '=', 'subscriptions.id')
+            ->whereIn('subscriptions.user_id', $userIds)
             ->whereIn('stripe_status', ['active', 'trialing'])
             /*
                A cancellation is not an ending.
@@ -414,18 +415,26 @@ class Customer extends Model
             ->where(function ($q) {
                 $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
             })
-            ->pluck('stripe_price')
-            ->filter()
-            ->unique();
-
-        if ($prices->isEmpty()) {
-            return null;
+            ->select('subscriptions.user_id', 'subscriptions.starter_customer_id')
+            ->selectRaw('COALESCE(subscriptions.stripe_price, subscription_items.stripe_price) AS plan_price')
+            ->get();
+        foreach (Plan::forStripePrices($subscriptions->pluck('plan_price')->all())->orderByDesc('price_cents')->get() as $plan) {
+            if ($plan->slug !== 'starter') {
+                return $plan;
+            }
+            $prices = array_merge([$plan->stripe_price_id], $plan->legacy_stripe_price_ids ?? []);
+            foreach ($subscriptions->whereIn('plan_price', $prices) as $subscription) {
+                // Legacy checkouts and purchases before onboarding have no pinned
+                // workspace. The first attached business receives that subscription.
+                $workspace = $subscription->starter_customer_id ?? \DB::table('customer_user')
+                    ->where('user_id', $subscription->user_id)->orderBy('id')->value('customer_id');
+                if ((int) $workspace === $this->id) {
+                    return $plan;
+                }
+            }
         }
 
-        return Plan::whereNotNull('stripe_price_id')
-            ->whereIn('stripe_price_id', $prices->all())
-            ->orderByDesc('price_cents')
-            ->first();
+        return null;
     }
 
     /**
@@ -445,7 +454,7 @@ class Customer extends Model
         // Plan::platformsFor is the single copy of this mapping — the wizard
         // needs the same answer from the other direction, given a set of
         // platforms which plan covers them.
-        return Plan::platformsFor($this->resolvePlan()->slug, $this->starter_platform);
+        return Plan::platformsFor($this->resolvePlan()->slug);
     }
 
     public function allowsAdPlatform(string $platform): bool
@@ -481,7 +490,8 @@ class Customer extends Model
         }
 
         return $this->isOnPaidPlan()
-            || $this->users()->where('subscription_status', 'active')->exists();
+            || $this->users()->where('subscription_status', 'active')->get()
+                ->contains(fn (User $user) => $user->resolveCurrentPlan()?->slug !== 'starter');
     }
 
     /**

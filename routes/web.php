@@ -519,6 +519,10 @@ Route::middleware(['auth'])->group(function () {
     // POST /image-collaterals/{image_collateral}
     Route::post('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'update'])->name('image-collaterals.update');
 
+    Route::get('/image-collaterals/{image_collateral}/display-banners/{size}/{hash}', [App\Http\Controllers\ImageCollateralController::class, 'displayBanner'])
+        ->where(['size' => '[0-9]+x[0-9]+', 'hash' => '[a-f0-9]{64}'])
+        ->name('image-collaterals.display-banner');
+
     // Route to upload user-provided images for a specific campaign and strategy.
     Route::post('/campaigns/{campaign}/strategies/{strategy}/image/upload', [App\Http\Controllers\ImageCollateralController::class, 'upload'])
         ->middleware('throttle:20,1')

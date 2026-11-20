@@ -9,6 +9,7 @@ use App\Prompts\CreativeVariant;
 use App\Prompts\ImagePrompt;
 use App\Prompts\ImagePromptSplitterPrompt;
 use App\Services\AdminMonitorService;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Batchable;
@@ -87,6 +88,8 @@ class GenerateImage implements ShouldQueue
 
     protected ?string $onlyFormat = null;
 
+    protected ?string $quotaWorkId = null;
+
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
@@ -96,19 +99,32 @@ class GenerateImage implements ShouldQueue
         protected ?string $reviewFeedback = null,
         ?string $onlyFormat = null,
     ) {
+        $this->quotaWorkId = $creativeRunId ?? $strategy->generation_id ?? (string) \Illuminate\Support\Str::uuid();
+
         $this->onlyFormat = $onlyFormat;
     }
 
-    /**
-     * Execute the job.
-     */
+    private function quotaSlot(): string
+    {
+        return "image:{$this->strategy->id}:{$this->quotaWorkId}:{$this->slot}:{$this->onlyFormat}";
+    }
+
+    public function middleware(): array
+    {
+
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping($this->quotaSlot()))->releaseAfter(30)->expireAfter($this->timeout + 60)];
+    }
+
     public function handle(GeminiService $geminiService, AdminMonitorService $adminMonitorService): void
     {
         Log::info("Starting image generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
+        $quota = app(StarterCreativeQuota::class);
+        $reservation = null;
         try {
             $this->strategy->refresh();
             $metaOffer = \App\Services\Creative\MetaOfferArt::applies($this->campaign, $this->strategy, $this->strategy->platform);
+            $googleCreative = str_contains(strtolower($this->strategy->platform), 'google');
             $isPerformanceMax = $this->strategy->campaign_type === 'performance_max'
                 && str_contains(strtolower($this->strategy->platform), 'google');
             if ($this->onlyFormat !== null && ($this->onlyFormat !== 'portrait' || ! $isPerformanceMax || ! $this->strategy->signed_off_at)) {
@@ -194,6 +210,15 @@ class GenerateImage implements ShouldQueue
                 Log::warning("Generating images without ad copy for strategy {$this->strategy->id} after {$this->attempts()} attempts");
             }
 
+            // Corrections to an existing concept and its exported banner sizes share its original unit.
+            if (! $replacement && $this->quotaWorkId !== null) {
+                $reservation = $quota->reserve($this->campaign->customer, 'image', $this->quotaSlot());
+                if ($reservation === false) {
+                    Log::info('Image concept already delivered or monthly allowance reached', ['strategy_id' => $this->strategy->id]);
+
+                    return;
+                }
+            }
             if (! $metaOffer) {
                 $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
                 if (! $review['is_valid']) {
@@ -323,6 +348,10 @@ class GenerateImage implements ShouldQueue
                  */
                 $lens = $this->slot + ($metaOffer && $this->reviewFeedback ? 1 : 0);
                 $layout = app(\App\Services\Creative\ImageComposer::class)->layout($this->strategy->platform, $lens, $this->strategy->campaign_type, isset($concept['visual_style']) ? $concept : null);
+                $isMeta = (bool) preg_match('/facebook|instagram|meta/i', $this->strategy->platform);
+                if ($isMeta && ! $metaOffer && ! in_array($layout, ['statement', 'editorial'], true)) {
+                    $layout = $lens % 2 === 0 ? 'statement' : 'editorial';
+                }
                 $scene = $concept ? $prompt : CreativeVariant::apply($prompt, $lens);
                 if (isset($concept['visual_style'])) {
                     $scene .= "\nVisual medium: {$concept['visual_style']}. Composition: {$concept['composition']}. Dominant subject: {$concept['subject']}.";
@@ -550,6 +579,7 @@ class GenerateImage implements ShouldQueue
                 // Collected, not written: the rows go in together under one
                 // lock once every format has been uploaded.
                 $pendingRows = [];
+                $bannerSource = null;
 
                 foreach ($adFormats as $format => $spec) {
                     [$targetW, $targetH] = $spec['size'];
@@ -630,6 +660,9 @@ class GenerateImage implements ShouldQueue
                     $storagePath = "collateral/images/{$this->campaign->id}/{$filename}";
                     [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $encoded, $imageData['mimeType']);
 
+                    if ($googleCreative && $this->onlyFormat === null && $bannerSource === null) {
+                        $bannerSource = $decodedImage;
+                    }
                     $pendingRows[] = [
                         'campaign_id' => $this->campaign->id,
                         'strategy_id' => $this->strategy->id,
@@ -659,10 +692,18 @@ class GenerateImage implements ShouldQueue
                 // where reading the count and writing the rows happen together.
                 $conceptKey = null;
                 try {
-                    $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows, $replacement ? $this->replaceConceptKey : null, $this->strategy->id, $this->creativeRunId);
+                    if ($bannerSource !== null && $pendingRows !== []) {
+                        $primaryColour = $brandGuidelines?->color_palette['primary_colors'][0] ?? null;
+                        $pendingRows[0]['google_display_banners'] = app(\App\Services\Creative\GoogleDisplayBannerSet::class)->generate(
+                            $bannerSource, $pendingRows[0]['s3_path'], $brandName, (string) $headline,
+                            \App\Services\Creative\GoogleCreativeCta::label($this->strategy),
+                            is_string($primaryColour) ? $primaryColour : null,
+                        );
+                    }
+                    $conceptKey = ImageCollateral::createConcept($this->campaign, $pendingRows, $replacement ? $this->replaceConceptKey : null, $this->strategy->id, $this->creativeRunId, $reservation);
                 } finally {
                     if ($conceptKey === null) {
-                        DeleteCollateralFiles::dispatch(array_column($pendingRows, 's3_path'));
+                        DeleteCollateralFiles::dispatch([...array_column($pendingRows, 's3_path'), ...array_values($pendingRows[0]['google_display_banners']['sizes'] ?? [])]);
                     }
                 }
 
@@ -732,6 +773,8 @@ class GenerateImage implements ShouldQueue
         } catch (\Throwable $e) {
             Log::error("Error in GenerateImage job for Strategy ID {$this->strategy->id}: ".$e->getMessage());
             $this->fail($e);
+        } finally {
+            $quota->release(is_string($reservation) ? $reservation : null);
         }
     }
 
@@ -1157,6 +1200,10 @@ class GenerateImage implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        if ($this->quotaWorkId !== null && ! $this->replaceConceptKey && $this->campaign->customer) {
+            app(StarterCreativeQuota::class)->release(StarterCreativeQuota::key($this->campaign->customer, 'image', $this->quotaSlot()));
+        }
+
         Log::error('GenerateImage failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

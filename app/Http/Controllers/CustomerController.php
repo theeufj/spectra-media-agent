@@ -56,22 +56,6 @@ class CustomerController extends Controller
 
         $user = $request->user();
 
-        // Enforce sub-account limits based on plan
-        $plan = $user->resolveCurrentPlan();
-        $slug = $plan?->slug ?? 'free';
-        $currentCount = $user->customers()->count();
-
-        $limits = ['free' => 1, 'starter' => 1, 'growth' => 1, 'agency' => 10];
-        $maxAllowed = $limits[$slug] ?? 1;
-
-        if ($maxAllowed !== null && $currentCount >= $maxAllowed) {
-            $planLabel = ucfirst($slug);
-
-            return redirect()->back()->withErrors([
-                'name' => "{$planLabel} plan is limited to {$maxAllowed} customer account".($maxAllowed > 1 ? 's' : '').'. Upgrade your plan to add more.',
-            ])->withInput();
-        }
-
         $tenant = $request->attributes->get('tenant');
         if ($tenant && ($tenant['locked_vertical'] ?? false) && ! empty($tenant['vertical'])) {
             $validated['industry'] = $tenant['vertical'];
@@ -82,9 +66,7 @@ class CustomerController extends Controller
         // provider callback lands on the canonical domain).
         $validated['tenant_key'] = $tenant['key'] ?? $user->tenant_key;
 
-        $customer = Customer::create($validated);
-
-        $user->customers()->attach($customer->id, ['role' => 'owner']);
+        $customer = app(\App\Services\Customers\CreateBusinessWorkspace::class)->create($user, $validated);
 
         session(['active_customer_id' => $customer->id]);
 

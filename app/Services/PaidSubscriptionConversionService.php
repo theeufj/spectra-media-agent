@@ -32,7 +32,7 @@ class PaidSubscriptionConversionService
         $prices = collect(data_get($invoice, 'lines.data', []))
             ->map(fn ($line) => data_get($line, 'pricing.price_details.price') ?? data_get($line, 'price.id'))
             ->filter()->all();
-        if (! Plan::whereIn('stripe_price_id', $prices)->where('is_free', false)->exists()) {
+        if (! Plan::forStripePrices($prices)->where('is_free', false)->exists()) {
             return;
         }
 

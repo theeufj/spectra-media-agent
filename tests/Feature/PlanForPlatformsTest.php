@@ -16,9 +16,7 @@ use Tests\TestCase;
  * Asking where they want to advertise and then pricing it is the same two facts
  * in the order a buyer can act on.
  *
- * Starter is why this is not a subset test. It covers any ONE platform, because
- * starter_platform is the customer's choice — and that choice is exactly what
- * the wizard is collecting.
+ * Starter covers Google. A customer choosing another platform needs Growth.
  */
 class PlanForPlatformsTest extends TestCase
 {
@@ -29,7 +27,7 @@ class PlanForPlatformsTest extends TestCase
         parent::setUp();
 
         Plan::updateOrCreate(['slug' => 'starter'], [
-            'name' => 'Starter', 'price_cents' => 14900, 'billing_interval' => 'month',
+            'name' => 'Starter', 'price_cents' => 9900, 'billing_interval' => 'month',
             'is_active' => true, 'stripe_price_id' => 'price_starter_test',
         ]);
         Plan::updateOrCreate(['slug' => 'growth'], [
@@ -42,12 +40,10 @@ class PlanForPlatformsTest extends TestCase
         ]);
     }
 
-    public function test_one_platform_is_starter_whichever_one_it_is(): void
+    public function test_starter_is_the_google_only_offer(): void
     {
-        // starter_platform is the customer's choice, so Starter covers Facebook
-        // just as it covers Google.
         $this->assertSame('starter', Plan::cheapestFor(['google'])?->slug);
-        $this->assertSame('starter', Plan::cheapestFor(['facebook'])?->slug);
+        $this->assertSame('growth', Plan::cheapestFor(['facebook'])?->slug);
     }
 
     public function test_two_platforms_is_growth(): void
@@ -58,7 +54,7 @@ class PlanForPlatformsTest extends TestCase
     public function test_the_cheapest_that_covers_it_wins(): void
     {
         // Not merely "a plan that works" — the one they should be asked to buy.
-        $this->assertSame(14900, Plan::cheapestFor(['google'])?->price_cents);
+        $this->assertSame(9900, Plan::cheapestFor(['google'])?->price_cents);
     }
 
     public function test_a_plan_nobody_can_buy_is_never_the_answer(): void
@@ -88,7 +84,7 @@ class PlanForPlatformsTest extends TestCase
             'starter_platform' => 'facebook',
         ]);
 
-        $this->assertSame(['facebook'], $customer->fresh()->allowedPlatforms());
+        $this->assertSame(['google'], $customer->fresh()->allowedPlatforms());
         $this->assertSame(['google'], Plan::platformsFor('setup_only'));
         $this->assertContains('linkedin', Plan::platformsFor('growth'));
     }

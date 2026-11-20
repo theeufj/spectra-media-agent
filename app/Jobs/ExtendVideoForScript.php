@@ -82,7 +82,12 @@ class ExtendVideoForScript implements ShouldQueue
             return false;
         }
 
-        $covered = ($video->extension_count ?? 0) + 1;
+        $extensionCount = $video->extension_count ?? 0;
+        if ($extensionCount > 0 && $video->exists && \App\Services\Creative\StarterCreativeQuota::applies($video->campaign?->customer)
+            && $extensionCount >= (int) $video->campaign->customer->resolvePlan()->creative_limits['max_extensions_per_video']) {
+            return false;
+        }
+        $covered = $extensionCount + 1;
         $needed = count(self::scriptSegments($video->script));
 
         if ($needed > $covered && ($video->extension_count ?? 0) >= self::MAX_EXTENSIONS) {
@@ -94,11 +99,16 @@ class ExtendVideoForScript implements ShouldQueue
         return $needed > $covered;
     }
 
+    public function middleware(): array
+    {
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping('video-extension:'.$this->sourceVideo->id))->shared()->releaseAfter(30)->expireAfter($this->timeout + 60)];
+    }
+
     public function handle(GeminiService $geminiService): void
     {
         $source = $this->sourceVideo->fresh();
 
-        if (! $source || ! self::needsExtension($source) || ! $source->s3_path) {
+        if (! $source || ! $source->is_active || ! self::needsExtension($source) || ! $source->s3_path || $source->extensions()->where('status', '!=', 'failed')->exists()) {
             return;
         }
 

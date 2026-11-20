@@ -187,7 +187,8 @@ class CreativeQuotaService
 
         $maxPerItem = (int) ($limits['max_refinements_per_item'] ?? 0);
 
-        return $maxPerItem > 0 && ($image->refinement_depth ?? 0) < $maxPerItem;
+        return $maxPerItem > 0 && ($image->refinement_depth ?? 0) < $maxPerItem
+            && (! \App\Services\Creative\StarterCreativeQuota::applies($image->campaign?->customer) || ! $image->children()->exists());
     }
 
     /**
@@ -204,7 +205,12 @@ class CreativeQuotaService
 
         $maxPerVideo = (int) ($limits['max_extensions_per_video'] ?? 0);
 
-        return $maxPerVideo > 0 && ($video->refinement_depth ?? 0) < $maxPerVideo;
+        $depth = $video->refinement_depth ?? 0;
+        if (\App\Services\Creative\StarterCreativeQuota::applies($video->campaign?->customer)) {
+            $depth = max($depth, $video->extension_count ?? 0);
+        }
+
+        return $maxPerVideo > 0 && $depth < $maxPerVideo;
     }
 
     /**

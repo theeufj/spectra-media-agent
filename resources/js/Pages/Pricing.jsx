@@ -64,7 +64,7 @@ export default function Pricing({ auth, publicContent, plans = [], faqs = [], se
                                     <tbody className="divide-y divide-gray-200 bg-white">
                                         {[
                                             /*
-                                                US$149 is Starter, the cheapest paid plan, read
+                                                The lowest available subscription price is read
                                                 from production. I briefly changed this to US$99
                                                 on the strength of the local dev seed, which has
                                                 a stale Starter price — and the plan cards below
@@ -104,7 +104,7 @@ export default function Pricing({ auth, publicContent, plans = [], faqs = [], se
                             price: <PlanPrice plan={plan} />,
                             features: plan.features || [],
                             note: plan.slug === 'starter'
-                                ? 'You pick your platform (Google or Facebook) when you sign up.'
+                                ? 'Google Ads for one business workspace. Ad spend is billed separately.'
                                 : null,
                             cta: {
                                 href: plan.cta_text === 'Contact Sales'

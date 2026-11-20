@@ -13,6 +13,7 @@ import AdSpendSetupModal from '@/Components/AdSpendSetupModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
 import CreativeSizesModal from '@/Components/CreativeSizesModal';
+import GoogleDisplayBanners from '@/Components/GoogleDisplayBanners';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 import { fetchJson } from '@/utils/http';
@@ -576,6 +577,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                 <div><dt className="text-gray-500">Audience</dt><dd className="mt-1 text-gray-900">{reviewSummary.audience || campaign.target_market || 'See campaign targeting'}</dd></div>
                                 <div><dt className="text-gray-500">{searchOffers.length ? 'Destinations' : 'Destination'}</dt><dd className="mt-1 break-all text-gray-900">{searchOffers.length ? searchOffers.map(group => <div key={group.key}>{group.url}</div>) : reviewSummary.destination || campaign.landing_page_url}</dd></div>
                                 <div><dt className="text-gray-500">Placement</dt><dd className="mt-1 text-gray-900">{currentStrategy.platform} · {currentStrategy.campaign_type}</dd></div>
+                                {reviewSummary.google_cta && <div><dt className="text-gray-500">Google call to action</dt><dd className="mt-1 text-gray-900">{reviewSummary.google_cta}</dd></div>}
                             </dl>
                             <Link href={route('campaigns.show', { campaign: campaign.uuid })} className="mt-5 inline-block text-sm text-brand-dark underline">Review campaign details and creative direction</Link>
                             {setupOnly && ['deployed', 'verified'].includes(currentStrategy.deployment_status) && <Link href={route('dashboard')} className="mt-4 block text-sm font-semibold text-brand-dark underline">View your handover checklist</Link>}
@@ -1080,8 +1082,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                        whole card is still the approve target, so
                                                        clicking the image works as it always did.
                                                     */
+                                                    <div key={concept.key}>
                                                     <div
-                                                        key={concept.key}
                                                         className={`border-2 ${concept.deployed ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2`}
                                                         {...approvalToggle({
                                                             checked: concept.deployed,
@@ -1223,6 +1225,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             </button>
                                                         )}
                                                     </div>
+                                                    </div>
+                                                    {concept.images.filter(source => source.display_banner_preview).map(source =>
+                                                        <GoogleDisplayBanners key={source.id} image={source} canDownload={isSubscribed} />
+                                                    )}
                                                     </div>
                                                 );
                                                 })}

@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents\Google\Executors;
 
+use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\ImageCollateral;
@@ -17,13 +18,18 @@ use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Creative\CreativeRelease;
+use App\Services\Creative\GoogleCreativeCta;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
 use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
 use App\Services\GoogleAds\DisplayServices\DisplayBiddingConfiguration;
+use App\Services\GoogleAds\DisplayServices\StageDisplayBanners;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxAssetSpec;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\StorageHelper;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -146,8 +152,9 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 3. Upload Image Assets
-        $imageCollaterals = ImageCollateral::forDeployment($strategy)->get();
-        $imageAssetResourceNames = [];
+        $imageCollaterals = ImageCollateral::forDeployment($strategy)->where('campaign_id', $campaign->id)->get();
+        $landscapeAssets = [];
+        $squareAssets = [];
 
         if ($imageCollaterals->isNotEmpty()) {
             $uploadImageAssetService = new UploadImageAsset($this->customer);
@@ -162,9 +169,20 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
                         continue;
                     }
 
-                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
+                    $field = PerformanceMaxAssetSpec::imageField($imageData);
+                    if (! in_array($field, [AssetFieldType::MARKETING_IMAGE, AssetFieldType::SQUARE_MARKETING_IMAGE], true)) {
+                        continue;
+                    }
+                    if ($strategy->creative_approval !== null && ! app(CreativeRelease::class)->matchesMedia($strategy, 'image', $image->id, $imageData)) {
+                        throw new \RuntimeException('The responsive Display image has changed since approval.');
+                    }
+                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, 'display-'.hash('sha256', $imageData));
                     if ($assetResourceName) {
-                        $imageAssetResourceNames[] = $assetResourceName;
+                        if ($field === AssetFieldType::MARKETING_IMAGE) {
+                            $landscapeAssets[] = $assetResourceName;
+                        } else {
+                            $squareAssets[] = $assetResourceName;
+                        }
                         $result->addPlatformId('image_asset', $assetResourceName);
                     }
                 } catch (\Throwable $e) {
@@ -176,26 +194,52 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
 
         // 4. Create Responsive Display Ad
         $adCopy = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-        if ($adCopy && ! empty($imageAssetResourceNames)) {
+        if ($adCopy instanceof AdCopy && $landscapeAssets && $squareAssets) {
             $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
 
             if (! $finalUrl) {
                 $result->addWarning('No landing page URL found for display ad creation. Skipping ad creation.');
             } else {
                 $createAdService = new CreateResponsiveDisplayAd($this->customer);
+                // Google accepts 15 marketing images total, including at least one of each shape.
+                $landscapeSlots = max(8, 15 - count($squareAssets));
+                $selectedLandscapes = array_slice($landscapeAssets, 0, $landscapeSlots);
                 $adData = [
                     'finalUrls' => [$finalUrl],
-                    'headlines' => $adCopy->headlines ?? [],
-                    'longHeadlines' => [$adCopy->headlines[0] ?? 'Get Started Today'],
-                    'descriptions' => $adCopy->descriptions ?? [],
-                    'imageAssets' => $imageAssetResourceNames,
+                    'headlines' => array_slice($adCopy->headlines ?? [], 0, 5),
+                    'longHeadlines' => $adCopy->long_headlines ?: [$adCopy->headlines[0] ?? ''],
+                    'descriptions' => array_slice($adCopy->descriptions ?? [], 0, 5),
+                    'imageAssets' => $selectedLandscapes,
+                    'squareImageAssets' => array_slice($squareAssets, 0, 15 - count($selectedLandscapes)),
+                    'reuseReviewed' => true,
+                    'businessName' => mb_substr(trim((string) $this->customer->name), 0, 25),
                 ];
 
+                $nativeCta = GoogleCreativeCta::approvedLabel($strategy);
+                if ($nativeCta !== null) {
+                    $adData['callToActionText'] = $nativeCta;
+                }
                 $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
                 if ($adResourceName) {
                     $result->addPlatformId('ad', $adResourceName);
                 }
             }
+        }
+
+        if (! empty($strategy->creative_approval['google_display_banner_hashes'])) {
+            if (! $this->confirmConfiguration($customerId, $campaignResourceName, $campaign, $strategy, $desired, $result)) {
+                return;
+            }
+            $banners = app(StageDisplayBanners::class, ['customer' => $this->customer]);
+            foreach ($banners->stage($strategy, $customerId, $campaignResourceName, $adGroupResourceName) as $bannerAd) {
+                $result->addPlatformId('ad', $bannerAd);
+            }
+        }
+
+        if ($adCopy && ! $result->getPlatformId('ad')) {
+            $result->addError('display_ads_unavailable', 'Google could not stage a reviewed Display ad. Check the selected square and landscape images or the approved uploaded banners.');
+
+            return;
         }
 
         // 5. Add Ad Extensions

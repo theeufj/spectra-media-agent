@@ -190,7 +190,7 @@ class ReportController extends Controller
         if ($user->subscribed('default')) {
             $subscription = $user->subscription('default');
             if ($subscription && $subscription->stripe_price) {
-                $plan = \App\Models\Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+                $plan = \App\Models\Plan::forStripePrices([$subscription->stripe_price])->first();
 
                 return $plan && strtolower($plan->slug ?? '') === 'agency';
             }

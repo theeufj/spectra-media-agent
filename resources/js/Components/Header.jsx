@@ -3,7 +3,7 @@ import { Link } from '@inertiajs/react';
 import { useTenant } from '@/hooks/useTenant';
 import TenantTheme from '@/Components/TenantTheme';
 
-export default function Header({ auth }) {
+export default function Header({ auth, guestCta }) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const tenant = useTenant();
 
@@ -56,10 +56,10 @@ export default function Header({ auth }) {
                                         Log in
                                     </a>
                                     <a
-                                        href="/register"
+                                        href={guestCta?.href ?? '/register'}
                                         className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-dark hover:bg-brand-darker transition-colors"
                                     >
-                                        Start Free
+                                        {guestCta?.label ?? 'Start Free'}
                                     </a>
                                 </>
                             )}
@@ -111,8 +111,8 @@ export default function Header({ auth }) {
                                         <a href="/login" className="block rounded-md px-3 py-3 text-base font-medium text-gray-700 hover:bg-gray-50">
                                             Log in
                                         </a>
-                                        <a href="/register" className="block rounded-md bg-brand-dark px-3 py-3 text-center text-base font-medium text-white hover:bg-brand-darker">
-                                            Start Free
+                                        <a href={guestCta?.href ?? '/register'} onClick={() => setMobileOpen(false)} className="block rounded-md bg-brand-dark px-3 py-3 text-center text-base font-medium text-white hover:bg-brand-darker">
+                                            {guestCta?.label ?? 'Start Free'}
                                         </a>
                                     </>
                                 )}

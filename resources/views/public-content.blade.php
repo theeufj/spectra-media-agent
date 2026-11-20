@@ -3,6 +3,8 @@
     $publicType = data_get($publicProps, 'publicContent.type');
     $publicTenant = data_get($publicProps, 'tenant', []);
     $publicBrand = data_get($publicTenant, 'logo_text', 'sitetospend');
+    $previewHomepage = data_get($page, 'component') === 'Landing';
+    $previewEntry = $previewHomepage || $publicType === 'service';
 @endphp
 <div class="min-h-screen bg-gray-50 text-gray-900">
     <header class="border-b border-gray-200 bg-white">
@@ -13,7 +15,7 @@
                 <a href="/features">Features</a>
                 <a href="/pricing">Pricing</a>
                 <a href="/blog">Blog</a>
-                <a href="/register">Get started</a>
+                @if($previewEntry)<a href="{{ $previewHomepage ? '#build-my-ads' : '/#build-my-ads' }}">Build my ads</a>@else<a href="/register">Get started</a>@endif
             </div>
         </nav>
     </header>
@@ -71,6 +73,7 @@
             @if(!empty($marketing['eyebrow']))<p class="mb-4 text-sm font-semibold uppercase tracking-wider">{{ $marketing['eyebrow'] }}</p>@endif
             <h1 class="text-3xl font-extrabold sm:text-4xl">{{ $marketing['headline'] }}</h1>
             <p class="mt-5 text-lg leading-relaxed text-gray-600">{{ $marketing['intro'] }}</p>
+            @if($previewHomepage)<noscript><p id="build-my-ads" class="mt-5">Enable JavaScript to enter your website and generate your ad preview.</p></noscript>@endif
             @foreach($marketing['sections'] ?? [] as $section)
                 <section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
                     <h2 class="text-2xl font-bold">{{ $section['title'] }}</h2>
@@ -112,6 +115,8 @@
                     <a href="{{ $hero['secondaryCta']['href'] }}" class="inline-block rounded-lg border border-gray-300 bg-white px-6 py-3 font-semibold">{{ $hero['secondaryCta']['label'] }}</a>
                 </div>
                 <p class="mt-4 text-sm text-gray-600">{{ $hero['note'] }}</p>
+            @else
+                <p class="mt-5"><a href="/#build-my-ads" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">Build my ads</a></p>
             @endif
             <article class="prose-article mt-8 rounded-2xl border border-gray-200 bg-white p-6 sm:p-10">{!! $service['content'] !!}</article>
             <section class="mt-10" aria-labelledby="service-questions">
@@ -132,13 +137,12 @@
                                 <h3 class="text-xl font-bold">{{ data_get($plan, 'name') }}</h3>
                                 <p class="mt-3 text-xl font-semibold">@if(data_get($plan, 'price_cents') > 0) US${{ number_format(data_get($plan, 'price_cents') / 100, 0) }}/{{ data_get($plan, 'billing_interval') === 'year' ? 'year' : 'mo' }} @else Contact us @endif</p>
                                 <ul class="mt-4 space-y-2">@foreach((data_get($plan, 'features') ?? []) as $feature)<li>{{ $feature }}</li>@endforeach</ul>
-                                <a href="/register" class="mt-5 inline-block font-semibold underline">Review my business</a>
                             </div>
                         @endforeach
                     </div>
                 </section>
             @endif
-            <p class="mt-10"><a href="/register" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">Get started</a> <a href="/pricing" class="ml-5 font-semibold underline">Compare pricing</a></p>
+            <p class="mt-10"><a href="/#build-my-ads" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">Build my ads</a> <a href="/pricing" class="ml-5 font-semibold underline">Compare pricing</a></p>
         @endif
     </main>
     <footer class="border-t border-gray-200 bg-white px-6 py-8">

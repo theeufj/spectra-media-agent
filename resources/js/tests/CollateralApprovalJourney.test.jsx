@@ -31,6 +31,35 @@ const props = { campaign: { id: 8, uuid: 'campaign-a', name: 'Repair campaign', 
 beforeEach(() => { polling.data = null; vi.clearAllMocks(); });
 
 describe('saved creative selections', () => {
+    it('reviews and downloads a display banner without selecting it as a responsive image or changing consent', () => {
+        const display = { ...strategy, platform: 'Google Ads', campaign_type: 'display' };
+        const image = {
+            id: 45, format: 'square', should_deploy: false, is_active: true, cloudfront_url: 'https://assets.example/photo.jpg',
+            display_banner_preview: { brand: 'Example', headline: 'Reserve your place', cta: 'Sign Up',
+                sizes: { '300x250': 'a'.repeat(64), '930x180': 'b'.repeat(64) }, regions: { '930x180': 'DK' } },
+        };
+        const originalRoute = globalThis.route;
+        globalThis.route = (name, params) => name === 'image-collaterals.display-banner'
+            ? `/images/${params.image_collateral}/${params.size}/${params.hash}${params.download ? '?download=1' : ''}` : originalRoute(name, params);
+        try {
+            const view = render(<Collateral {...props} currentStrategy={display} allStrategies={[display]} imageCollaterals={[image]}
+                reviewSummary={{ google_cta: 'Sign Up' }} />);
+            expect(view.getByText('Google call to action').nextElementSibling).toHaveTextContent('Sign Up');
+            fireEvent.click(view.getByRole('button', { name: 'Review Google Display banners (2)' }));
+            expect(view.getByRole('img', { name: '300 × 250 display banner' })).toHaveAttribute('src', `/images/45/300x250/${'a'.repeat(64)}`);
+            expect(view.getByText('Call to action · Sign Up')).toBeVisible();
+            fireEvent.change(view.getByRole('combobox', { name: 'Banner size' }), { target: { value: '930x180' } });
+            expect(view.getByRole('link', { name: 'Download 930 × 180 JPG' })).toHaveAttribute('href', `/images/45/930x180/${'b'.repeat(64)}?download=1`);
+            expect(view.getByText('Regional format for Denmark.')).toBeVisible();
+            expect(view.getAllByRole('checkbox', { name: 'Include this image in deployment' })).toHaveLength(1);
+            expect(view.getByRole('checkbox', { name: 'Include this image in deployment' })).toHaveAttribute('aria-checked', 'false');
+            expect(router.post).not.toHaveBeenCalled();
+            expect(fetchJson).not.toHaveBeenCalled();
+        } finally {
+            globalThis.route = originalRoute;
+        }
+    });
+
     it('sends the business logo file with its explicit Performance Max role', () => {
         const pmax = { ...strategy, platform: 'Google Ads', campaign_type: 'performance_max' };
         const view = render(<Collateral {...props} currentStrategy={pmax} allStrategies={[pmax]} />);

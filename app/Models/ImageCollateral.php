@@ -2,15 +2,45 @@
 
 namespace App\Models;
 
+use App\Services\Creative\GoogleDisplayBannerRenderer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+/** @property array{sizes: array<string, string>, hashes: array<string, string>, brand?: string, headline?: string, cta?: string, brand_colour?: string|null, source_hash?: string}|null $google_display_banners */
 class ImageCollateral extends Model
 {
     use HasFactory;
+
+    protected $hidden = ['google_display_banners'];
+
+    /** @return array{sizes: array<string, string>, regions: array<string, string>, brand: ?string, headline: ?string, cta: ?string}|null */
+    public function getDisplayBannerPreviewAttribute(): ?array
+    {
+        $manifest = $this->google_display_banners;
+        if (! is_array($manifest)) {
+            return null;
+        }
+
+        $sizes = [];
+        foreach (array_keys(GoogleDisplayBannerRenderer::SIZES) as $size) {
+            $path = $manifest['sizes'][$size] ?? null;
+            $hash = $manifest['hashes'][$size] ?? null;
+            if (is_string($path) && $path !== '' && is_string($hash) && preg_match('/^[a-f0-9]{64}$/D', $hash)) {
+                $sizes[$size] = $hash;
+            }
+        }
+
+        return $sizes ? [
+            'sizes' => $sizes,
+            'regions' => array_intersect_key(GoogleDisplayBannerRenderer::REGIONAL_SIZES, $sizes),
+            'brand' => $manifest['brand'] ?? null,
+            'headline' => $manifest['headline'] ?? null,
+            'cta' => $manifest['cta'] ?? null,
+        ] : null;
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -20,6 +50,7 @@ class ImageCollateral extends Model
     protected $fillable = [
         'campaign_id',
         'generation_metadata',
+        'google_display_banners',
         'layout',
         'strategy_id',
         'platform',
@@ -40,6 +71,7 @@ class ImageCollateral extends Model
      */
     protected $casts = [
         'generation_metadata' => 'array',
+        'google_display_banners' => 'array',
         'is_active' => 'boolean',
         'is_seed' => 'boolean',
         'should_deploy' => 'boolean',
@@ -96,7 +128,8 @@ class ImageCollateral extends Model
     /**
      * Get the strategy that this image collateral belongs to.
      */
-    public function strategy()
+    /** @return BelongsTo<Strategy, $this> */
+    public function strategy(): BelongsTo
     {
         return $this->belongsTo(Strategy::class);
     }
@@ -183,13 +216,13 @@ class ImageCollateral extends Model
      *
      * @param  list<array<string, mixed>>  $rows  one per ad format
      */
-    public static function createConcept(Campaign $campaign, array $rows, ?string $replaceKey = null, ?int $strategyId = null, ?string $runId = null): ?string
+    public static function createConcept(Campaign $campaign, array $rows, ?string $replaceKey = null, ?int $strategyId = null, ?string $runId = null, ?string $quotaReservation = null): ?string
     {
         if ($rows === []) {
             return null;
         }
 
-        return DB::transaction(function () use ($campaign, $rows, $replaceKey, $strategyId, $runId) {
+        return DB::transaction(function () use ($campaign, $rows, $replaceKey, $strategyId, $runId, $quotaReservation) {
             // Serialises the decision between concurrent jobs for this campaign.
             Campaign::withoutGlobalScopes()
                 ->whereKey($campaign->id)
@@ -214,6 +247,10 @@ class ImageCollateral extends Model
                 return null;
             }
 
+            if (! app(\App\Services\Creative\StarterCreativeQuota::class)->canFinish($quotaReservation)) {
+                return null;
+            }
+
             // Generated here rather than by the caller, so deciding there is
             // room and naming the picture cannot come apart.
             $key = (string) Str::uuid();
@@ -230,8 +267,10 @@ class ImageCollateral extends Model
 
             if ($old->isNotEmpty()) {
                 static::whereIn('id', $old->pluck('id')->all())->delete();
-                \App\Jobs\DeleteCollateralFiles::dispatch($old->pluck('s3_path')->all())->afterCommit();
+                \App\Jobs\DeleteCollateralFiles::dispatch($old->flatMap(fn (self $image) => [$image->s3_path, ...array_values($image->google_display_banners['sizes'] ?? [])])->all())->afterCommit();
             }
+
+            app(\App\Services\Creative\StarterCreativeQuota::class)->finish($quotaReservation);
 
             return $key;
         });

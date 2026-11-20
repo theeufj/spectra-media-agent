@@ -22,7 +22,7 @@ const SubscriptionTierSelector = ({ plans = [] }) => {
                 {plans.map(plan => (
                     <Card key={plan.id} className="flex flex-col">
                         <h3 className="text-xl font-semibold">{plan.name}</h3>
-                        <p className="text-3xl font-bold my-4">{plan.formatted_price}</p>
+                        <p className="text-3xl font-bold my-4">{plan.price_cents > 0 ? 'US' : ''}{plan.formatted_price}</p>
                         <p className="text-gray-600 h-16">{plan.description}</p>
                         <ul className="space-y-2 my-6">
                             {(plan.features || []).map((feature, index) => (

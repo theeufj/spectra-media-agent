@@ -244,7 +244,9 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                never sold has no quota left is the platform charging twice and
                delivering once.
             */
-            if ($customer->service_type !== 'setup_only' && ! $customer->hasMediaCreditsRemaining()) {
+            $approvedStarterAds = \App\Services\Creative\StarterCreativeQuota::applies($customer)
+                && $selected->every(fn ($strategy) => app(\App\Services\Creative\CreativeRelease::class)->isApproved($strategy));
+            if ($customer->service_type !== 'setup_only' && ! $approvedStarterAds && ! $customer->hasMediaCreditsRemaining()) {
                 Log::warning('DeployCampaign: self-funded customer has no media allowance left', [
                     'customer_id' => $customer->id,
                 ]);

@@ -127,8 +127,13 @@ class MetaOfferArt
         if ($detail && $detail !== $headline && $width >= 500) {
             $write($detail, $after + $size(.024), $size(.033), 3, $copyWidth, (int) ($height * .83));
         }
-        if ($domain = parse_url((string) $customer->website, PHP_URL_HOST)) {
-            $write($domain, (int) ($height * .86), $size(.029), 1, $lineWidth, (int) ($height * .94));
+        $domain = parse_url((string) $customer->website, PHP_URL_HOST);
+        $footer = $domain ? 'Learn more · '.$domain : 'Learn more';
+        $ctaY = (int) ($height * .86);
+        $bottom = (int) ($height * .96);
+        if ($write($footer, $ctaY, $size(.035), 1, $lineWidth, $bottom) === null
+            && $write('Learn more', $ctaY, $size(.035), 1, $lineWidth, $bottom) === null) {
+            throw new \RuntimeException('The call to action does not fit the Meta offer image.');
         }
 
         return (string) $canvas->toPng();

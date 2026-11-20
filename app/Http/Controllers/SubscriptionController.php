@@ -89,9 +89,15 @@ class SubscriptionController extends Controller
                 ];
             }
 
-            $checkout = $user->newSubscription('default', $priceId)
-                ->allowPromotionCodes()
-                ->checkout($checkoutOptions);
+            $builder = $user->newSubscription('default', $priceId)->allowPromotionCodes();
+            if ($plan->slug === 'starter') {
+                $workspace = $user->customers()->find(session('active_customer_id'))
+                    ?? $user->customers()->orderBy('customer_user.id')->first();
+                if ($workspace) {
+                    $builder->withMetadata(['starter_customer_id' => (string) $workspace->id]);
+                }
+            }
+            $checkout = $builder->checkout($checkoutOptions);
         } else {
             // Testing mode - only collect payment method without charging
             // Use Stripe Checkout in setup mode

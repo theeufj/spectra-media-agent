@@ -225,25 +225,11 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getSubscriptionPlanAttribute(): string
     {
-        // Admin-assigned plan takes priority
         if ($this->assigned_plan_id && $this->assignedPlan) {
             return $this->assignedPlan->name;
         }
 
-        // Then check Cashier subscription
-        if ($this->subscribed('default')) {
-            $subscription = $this->subscription('default');
-            if ($subscription) {
-                $plan = Plan::where('stripe_price_id', $subscription->stripe_price)->first();
-                if ($plan) {
-                    return $plan->name;
-                }
-            }
-
-            return 'Subscribed';
-        }
-
-        return 'Free';
+        return $this->subscribed('default') ? ($this->resolveCurrentPlan()->name ?? 'Subscribed') : 'Free';
     }
 
     /**
@@ -292,11 +278,7 @@ class User extends Authenticatable implements MustVerifyEmail
         $plan = $this->resolveCurrentPlan();
         $slug = $plan?->slug ?? 'free';
 
-        return match ($slug) {
-            'free' => ['google'],
-            'starter' => [$this->starter_platform ?? 'google'],
-            default => ['google', 'facebook', 'microsoft', 'linkedin'],
-        };
+        return Plan::platformsFor($slug);
     }
 
     /**
@@ -311,7 +293,9 @@ class User extends Authenticatable implements MustVerifyEmail
         if ($this->subscribed('default')) {
             $subscription = $this->subscription('default');
             if ($subscription) {
-                return Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+                $prices = $subscription->stripe_price ? [$subscription->stripe_price] : $subscription->items()->pluck('stripe_price')->all();
+
+                return Plan::forStripePrices($prices)->orderByDesc('price_cents')->first();
             }
         }
 

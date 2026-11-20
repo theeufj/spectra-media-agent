@@ -7,9 +7,12 @@ use App\Jobs\RefineImage;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Services\Creative\GoogleDisplayBannerRenderer;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\CreativeQuotaService;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -37,7 +40,7 @@ class ImageCollateralController extends Controller
 
         // Check creative quota
         $quotaService = app(CreativeQuotaService::class);
-        if (! $quotaService->canGenerate($user, 'image')) {
+        if (! $quotaService->canGenerate($user, 'image', $campaign->customer)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Monthly image generation limit reached. Purchase a Creative Boost pack for more.',
@@ -66,8 +69,7 @@ class ImageCollateralController extends Controller
 
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'This campaign has reached its limit of '.ImageCollateral::FREE_TIER_LIMIT_PER_CAMPAIGN
-                    .' images on the free plan. Subscribe to generate more, or start a new campaign.',
+                'message' => 'This campaign has reached its limit of '.ImageCollateral::capForCampaign($campaign).' image concepts.',
             ]);
         }
 
@@ -92,7 +94,9 @@ class ImageCollateralController extends Controller
         }
         GenerateImage::dispatch($campaign, $strategy, $slot, $runId);
 
-        $quotaService->recordUsage($user, 'image');
+        if (! StarterCreativeQuota::applies($campaign->customer)) {
+            $quotaService->recordUsage($user, 'image', customer: $campaign->customer);
+        }
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
@@ -118,7 +122,7 @@ class ImageCollateralController extends Controller
 
         // Check creative quota for refinements
         $quotaService = app(CreativeQuotaService::class);
-        if (! $quotaService->canGenerate($user, 'refinement')) {
+        if (! $quotaService->canGenerate($user, 'refinement', $imageCollateral->campaign->customer)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Monthly refinement limit reached. Purchase a Creative Boost pack for more.',
@@ -128,7 +132,7 @@ class ImageCollateralController extends Controller
         if (! $quotaService->canRefineImage($imageCollateral, $user)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'This image has reached its maximum refinement limit (3 edits).',
+                'message' => 'This image has reached its plan’s refinement limit.',
             ]);
         }
 
@@ -147,7 +151,9 @@ class ImageCollateralController extends Controller
         // Dispatch the job to handle the refinement.
         RefineImage::dispatch($imageCollateral, $request->prompt, $contextImagePath, $contextImageDisk);
 
-        $quotaService->recordUsage($user, 'refinement');
+        if (! StarterCreativeQuota::applies($imageCollateral->campaign->customer)) {
+            $quotaService->recordUsage($user, 'refinement', customer: $imageCollateral->campaign->customer);
+        }
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
@@ -263,6 +269,27 @@ class ImageCollateralController extends Controller
         ]);
     }
 
+    public function displayBanner(Request $request, ImageCollateral $imageCollateral, string $size, string $hash): Response
+    {
+        abort_unless($request->user()->can('view', $imageCollateral) && $imageCollateral->is_active, 404);
+        abort_unless(($imageCollateral->display_banner_preview['sizes'][$size] ?? null) === $hash, 404);
+
+        $download = $request->boolean('download');
+        if ($download) {
+            abort_unless($request->user()->hasSubscriptionAccess($imageCollateral->campaign?->customer), 403);
+        }
+
+        $bytes = StorageHelper::get($imageCollateral->google_display_banners['sizes'][$size], GoogleDisplayBannerRenderer::MAX_BYTES);
+        abort_unless(is_string($bytes) && hash('sha256', $bytes) === $hash, 404);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/jpeg',
+            'Content-Disposition' => ($download ? 'attachment' : 'inline').'; filename="google-display-'.$imageCollateral->getKey().'-'.$size.'.jpg"',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     /**
      * Delete an image collateral (any source — AI, harvested, or uploaded).
      */
@@ -273,7 +300,11 @@ class ImageCollateralController extends Controller
         if ($imageCollateral->s3_path) {
             StorageHelper::delete($imageCollateral->s3_path);
         }
+        $paths = array_values($imageCollateral->google_display_banners['sizes'] ?? []);
         $imageCollateral->delete();
+        if ($paths !== []) {
+            \App\Jobs\DeleteCollateralFiles::dispatch($paths)->afterCommit();
+        }
 
         return redirect()->back()->with('flash', [
             'type' => 'success',

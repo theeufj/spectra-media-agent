@@ -42,6 +42,8 @@ class CollateralPlan
         }
         $runId = null;
         $imageCount = min(self::IMAGE_CONCEPTS_PER_STRATEGY, max(0, ImageCollateral::capForCampaign($campaign) - ImageCollateral::conceptsForCampaign($campaign)));
+        $allowance = app(\App\Services\Creative\StarterCreativeQuota::class);
+        $imageCount = min($imageCount, $allowance->remaining($campaign->customer, 'image') ?? $imageCount);
         if ($strategy->creative_candidates) {
             $runId = (string) \Illuminate\Support\Str::uuid();
             $strategy->update(['creative_review' => ['run_id' => $runId, 'status' => 'pending', 'started_at' => now()->toIso8601String(), 'retried_slots' => [], 'expected_images' => $imageCount]]);
@@ -60,8 +62,12 @@ class CollateralPlan
         $owner = $performanceMax ?? $eligible->first();
         if ($includeVideo && $owner?->id === $strategy->id) {
             $remaining = VideoCollateral::remainingForCampaign($campaign);
+            $remaining = min($remaining, $allowance->remaining($campaign->customer, 'video') ?? $remaining);
             $platforms = $performanceMax && ! $eligible->contains(fn (Strategy $candidate) => preg_match('/facebook|instagram|meta/i', $candidate->platform))
                 ? ['Google Ads (Performance Max)'] : ['Google Ads (Performance Max)', 'Facebook Ads'];
+            if (\App\Services\Creative\StarterCreativeQuota::applies($campaign->customer)) {
+                $platforms = array_values(array_filter($platforms, $campaign->customer->allowsAdPlatform(...)));
+            }
             $availableConcepts = $performanceMax
                 ? (int) ceil($remaining / count($platforms))
                 : intdiv($remaining, count($platforms));

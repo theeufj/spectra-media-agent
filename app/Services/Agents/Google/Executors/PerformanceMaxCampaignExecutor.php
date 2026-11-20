@@ -16,6 +16,7 @@ use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Creative\CreativeRelease;
+use App\Services\Creative\GoogleCreativeCta;
 use App\Services\GoogleAds\CommonServices\CreateTextAsset;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
@@ -25,11 +26,13 @@ use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxAssetSpec;
 use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxCopy;
+use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxLaunchCheck;
 use App\Services\GoogleAds\PerformanceMaxServices\PerformanceMaxLogo;
 use App\Services\GoogleAds\ReconcileCampaignConversionGoals;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\StorageHelper;
 use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\CallToActionTypeEnum\CallToActionType;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -264,7 +267,16 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         if ($reader->campaignStatus($customerId, $campaignResourceName) !== 'PAUSED') {
             throw new \RuntimeException('Google no longer confirms paused staging for the Performance Max assets.');
         }
-        $assetGroupResourceName = $assetGroup['resourceName'] ?? ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets);
+        $nativeCta = GoogleCreativeCta::approvedLabel($strategy);
+        if ($assetGroup && $nativeCta !== null) {
+            $existingCtas = PerformanceMaxLaunchCheck::linkedCtas($stage, $assetGroup['resourceName']);
+            if ($existingCtas === []) {
+                $createAssetGroupService->attachCallToAction($customerId, $assetGroup['resourceName'], $nativeCta);
+            } elseif ($existingCtas !== [CallToActionType::name(GoogleCreativeCta::type($nativeCta))]) {
+                throw new \RuntimeException('The staged Performance Max call to action differs from the customer approval.');
+            }
+        }
+        $assetGroupResourceName = $assetGroup['resourceName'] ?? ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets, $nativeCta);
         if (! $assetGroupResourceName) {
             throw new \Exception('Failed to create Asset Group');
         }
@@ -310,7 +322,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
 
         $result->addMetadata('google_pmax_staging', ['campaign_resource' => $campaignResourceName,
-            'asset_group' => $assetGroupResourceName, 'final_urls' => [$finalUrl],
+            'asset_group' => $assetGroupResourceName, 'final_urls' => [$finalUrl], 'native_cta' => $nativeCta,
             'goal_action' => $intent['action_resource'], 'budget_micros' => \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget)]);
     }
 

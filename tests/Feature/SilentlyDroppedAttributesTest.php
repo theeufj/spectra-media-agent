@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Strategy;
 use App\Models\User;
@@ -66,21 +67,25 @@ class SilentlyDroppedAttributesTest extends TestCase
         $this->assertNull($user->fresh()->banned_at);
     }
 
-    public function test_the_profile_platform_choice_reaches_the_column_allowed_platforms_reads(): void
+    public function test_the_profile_cannot_change_the_google_only_starter_entitlement_or_its_legacy_platform_value(): void
     {
-        $user = User::factory()->create();
-        // profile.update sits behind ensureUserHasCustomer; without one the
-        // middleware redirects and the controller never runs, which would make
-        // this pass or fail for the wrong reason.
-        $user->customers()->attach(Customer::factory()->create()->id, ['role' => 'owner']);
-
-        $this->actingAs($user)->patch(route('profile.update'), [
-            'name' => $user->name,
-            'email' => $user->email,
+        $user = User::factory()->create([
+            'assigned_plan_id' => Plan::where('slug', 'starter')->firstOrFail()->id,
             'starter_platform' => 'facebook',
-        ])->assertRedirect(route('profile.edit'));
+        ]);
+        $user->customers()->attach(Customer::factory()->create()->id, ['role' => 'owner']);
+        $profile = ['name' => 'Updated profile', 'email' => $user->email];
+        foreach (['google', 'facebook', null] as $submitted) {
+            $this->actingAs($user)->from(route('profile.edit'))->patch(route('profile.update'), $profile + [
+                'starter_platform' => $submitted,
+            ])->assertRedirect(route('profile.edit'))->assertSessionHasErrors('starter_platform');
+        }
+        $this->actingAs($user)->patch(route('profile.update'), $profile)
+            ->assertRedirect(route('profile.edit'))->assertSessionHasNoErrors();
 
+        $this->assertSame('Updated profile', $user->fresh()->name);
         $this->assertSame('facebook', $user->fresh()->starter_platform);
+        $this->assertSame(['google'], $user->fresh()->allowedPlatforms());
     }
 
     public function test_excluding_ad_copy_from_a_deployment_sticks(): void

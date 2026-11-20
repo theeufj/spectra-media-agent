@@ -63,6 +63,51 @@ class CreativeReleaseTest extends TestCase
         $release->approve($strategy, $fingerprint);
     }
 
+    public function test_historical_google_approval_keeps_its_automatic_button_until_the_creative_changes(): void
+    {
+        $strategy = Strategy::factory()->create(['platform' => 'Google Ads', 'campaign_type' => 'performance_max',
+            'signed_off_at' => now(), 'bidding_strategy' => ['landing_page_url' => 'https://example.test/old'],
+            'conversion_goals' => ['primary_goal' => 'signup']]);
+        $headline = ['View Our Plans'];
+        $description = ['Explore plans for your team.'];
+        $copy = $strategy->adCopies()->create(['platform' => 'Google Ads', 'headlines' => $headline,
+            'long_headlines' => [], 'descriptions' => $description, 'should_deploy' => true]);
+        $digest = hash('sha256', 'earlier approved logo');
+        $logo = ImageCollateral::create(['campaign_id' => $strategy->campaign_id, 'strategy_id' => $strategy->id, 'platform' => 'Google Ads',
+            's3_path' => 'brand.png', 'cloudfront_url' => '/brand.png', 'format' => 'square', 'layout' => 'logo', 'source' => 'uploaded',
+            'generation_metadata' => ['provider' => 'customer_upload', 'role' => 'LOGO', 'sha256' => $digest], 'is_active' => true, 'should_deploy' => true]);
+        // This is the exact pre-button snapshot contract, independent of the current selection code.
+        $historicalHash = hash('sha256', json_encode([
+            'strategy' => [$strategy->id, 'Google Ads', 'performance_max'], 'destination' => 'https://example.test/old', 'search_offers' => [],
+            'copy' => [[$copy->id, 'Google Ads', $headline, [], $description]],
+            'images' => [[$logo->id, 'brand.png', '/brand.png', 'square']], 'videos' => [], 'business_logos' => [$logo->id => $digest],
+        ], JSON_THROW_ON_ERROR));
+        $approval = ['fingerprint' => $historicalHash, 'copy_ids' => [$copy->id], 'image_ids' => [$logo->id], 'video_ids' => [],
+            'image_hashes' => [$logo->id => $digest], 'logo_hashes' => [$logo->id => $digest]];
+        $strategy->update(['creative_approval' => $approval, 'creative_release_review' => ['status' => 'passed', 'fingerprint' => $historicalHash, 'issues' => []]]);
+        $release = app(CreativeRelease::class);
+        $this->assertTrue($release->isApproved($strategy));
+        $this->assertSame($historicalHash, $release->selection($strategy)['fingerprint']);
+        $this->assertNull($release->selection($strategy)['google_native_cta']);
+        $this->assertNull(\App\Services\Creative\GoogleCreativeCta::approvedLabel($strategy));
+
+        $copy->update(['headlines' => ['Find Your Plan']]);
+        $this->assertFalse($release->isApproved($strategy));
+        $replacement = $release->selection($strategy);
+        $this->assertNotSame($historicalHash, $replacement['fingerprint']);
+        $this->assertSame('Sign Up', $replacement['google_native_cta']);
+        $strategy->update(['creative_release_review' => ['status' => 'passed', 'fingerprint' => $replacement['fingerprint'], 'issues' => []]]);
+        $release->approve($strategy, $replacement['fingerprint']);
+        $this->assertTrue($release->isApproved($strategy));
+        $this->assertSame('Sign Up', \App\Services\Creative\GoogleCreativeCta::approvedLabel($strategy));
+        $approval = $strategy->creative_approval;
+        $strategy->update(['creative_approval' => [...$approval, 'google_native_cta' => 'Shop Now']]);
+        $this->assertFalse($release->isApproved($strategy));
+        unset($approval['google_native_cta']);
+        $strategy->update(['creative_approval' => $approval]);
+        $this->assertFalse($release->isApproved($strategy));
+    }
+
     public function test_reviewer_reads_the_rendered_image_and_video_and_blocks_an_unsupported_spoken_claim(): void
     {
         $strategy = $this->strategy();

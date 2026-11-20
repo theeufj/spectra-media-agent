@@ -10,7 +10,7 @@ import DangerButton from '@/Components/DangerButton';
 import { startTour } from '@/Components/OnboardingTour';
 import FormErrorSummary from '@/Components/FormErrorSummary';
 
-export default function Edit({ auth, mustVerifyEmail, status, googleApiConnection, facebookApiConnection, planSlug, starterPlatform }) {
+export default function Edit({ auth, mustVerifyEmail, status, googleApiConnection, facebookApiConnection, planSlug }) {
     const { customers } = usePage().props;
     const { data: formData, setData: setFormData, post: createCustomer, processing: isCreating, errors } = useForm({
         name: '',
@@ -108,35 +108,8 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
 
                     {planSlug === 'starter' && (
                         <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
-                            <section className="max-w-xl">
-                                <header>
-                                    <h2 className="text-lg font-medium text-gray-900">Your Ad Platform</h2>
-                                    <p className="mt-1 text-sm text-gray-600">
-                                        Your Starter plan includes one ad platform. Upgrade to Growth to run on all platforms.
-                                    </p>
-                                </header>
-                                <form
-                                    className="mt-6 space-y-4"
-                                    onSubmit={e => {
-                                        e.preventDefault();
-                                        router.patch(route('profile.update'), { starter_platform: e.target.starter_platform.value });
-                                    }}
-                                >
-                                    <div>
-                                        <InputLabel htmlFor="starter_platform" value="Ad Platform" />
-                                        <select
-                                            id="starter_platform"
-                                            name="starter_platform"
-                                            defaultValue={starterPlatform}
-                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
-                                        >
-                                            <option value="google">Google Ads</option>
-                                            <option value="facebook">Facebook Ads</option>
-                                        </select>
-                                    </div>
-                                    <PrimaryButton type="submit">Save Platform</PrimaryButton>
-                                </form>
-                            </section>
+                            <h2 className="text-lg font-medium text-gray-900">Your ad platform</h2>
+                            <p className="mt-1 text-sm text-gray-600">Your Starter plan includes Google Ads.</p>
                         </div>
                     )}
 

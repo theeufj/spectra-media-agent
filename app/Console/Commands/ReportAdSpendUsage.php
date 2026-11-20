@@ -69,7 +69,7 @@ class ReportAdSpendUsage extends Command
                 }
 
                 // Resolve the ad spend price ID from the user's plan
-                $plan = Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+                $plan = Plan::forStripePrices([$subscription->stripe_price])->first();
                 $adSpendPriceId = $plan?->stripe_ad_spend_price_id;
 
                 if (! $adSpendPriceId) {

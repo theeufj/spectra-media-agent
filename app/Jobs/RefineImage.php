@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ImageCollateral;
+use App\Services\Creative\StarterCreativeQuota;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
@@ -23,13 +24,22 @@ class RefineImage implements ShouldQueue
 
     protected ?string $contextImageDisk = null;
 
+    protected ?string $quotaWorkId = null;
+
     public function __construct(
         protected ImageCollateral $originalImage,
         protected string $prompt,
         protected ?string $contextImagePath = null,
         ?string $contextImageDisk = null,
     ) {
+        $this->quotaWorkId = (string) \Illuminate\Support\Str::uuid();
+
         $this->contextImageDisk = $contextImageDisk;
+    }
+
+    public function middleware(): array
+    {
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping('refine-image:'.$this->originalImage->id))->releaseAfter(30)->expireAfter($this->timeout + 60)];
     }
 
     public function handle(GeminiService $geminiService): void
@@ -37,11 +47,15 @@ class RefineImage implements ShouldQueue
         Log::info("Starting image refinement job for ImageCollateral ID: {$this->originalImage->id}");
 
         $contextDisk = null;
+        $reservation = null;
+        $uncommittedFiles = [];
+        $quota = app(StarterCreativeQuota::class);
 
         try {
             // Check free-tier image limit (refinement creates a new record)
             $campaign = $this->originalImage->campaign;
-            if ($campaign && ! ImageCollateral::canGenerateForCampaign($campaign)) {
+            $reusesStarterConcept = $this->originalImage->concept_key && StarterCreativeQuota::applies($campaign?->customer);
+            if ($campaign && ! $reusesStarterConcept && ! ImageCollateral::canGenerateForCampaign($campaign)) {
                 Log::info("Image limit reached for Campaign ID: {$campaign->id}, skipping refinement");
 
                 return;
@@ -72,6 +86,16 @@ class RefineImage implements ShouldQueue
                 ];
             }
 
+            if ($this->quotaWorkId !== null && StarterCreativeQuota::applies($campaign?->customer)) {
+                if ($this->originalImage->children()->exists()
+                    || ($this->originalImage->refinement_depth ?? 0) >= (int) $campaign->customer->resolvePlan()->creative_limits['max_refinements_per_item']) {
+                    return;
+                }
+                $reservation = $quota->reserve($campaign->customer, 'refinement', "refine:{$this->originalImage->id}:{$this->quotaWorkId}");
+                if ($reservation === false) {
+                    return;
+                }
+            }
             // Generate a single new image based on the prompt and context
             $imageData = $geminiService->refineImage($this->prompt, $contextImages);
 
@@ -92,6 +116,7 @@ class RefineImage implements ShouldQueue
 
             [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $decodedImage, $imageData['mimeType']);
 
+            $uncommittedFiles[] = $s3Path;
             Log::info("Refined image uploaded at path: {$s3Path}");
 
             /*
@@ -121,30 +146,53 @@ class RefineImage implements ShouldQueue
             // produces a new deployable image while the seed keeps informing
             // future generations. Deactivating it here silently destroyed the
             // seed on first refine.
-            if (! $this->originalImage->is_seed) {
-                $this->originalImage->update(['is_active' => false]);
+            $set = $this->originalImage->google_display_banners;
+            $refinedBanners = null;
+            if ($set !== null) {
+                $refinedBanners = app(\App\Services\Creative\GoogleDisplayBannerSet::class)->generate(
+                    $decodedImage, $s3Path, $set['brand'], $set['headline'], $set['cta'], $set['brand_colour'] ?? null,
+                );
+                array_push($uncommittedFiles, ...array_values($refinedBanners['sizes']));
             }
+            $newImage = \Illuminate\Support\Facades\DB::transaction(function () use ($s3Path, $cloudFrontUrl, $quota, $reservation, $refinedBanners) {
+                if (! $this->originalImage->is_seed) {
+                    $this->originalImage->update(['is_active' => false]);
+                }
 
-            $newImage = ImageCollateral::create([
-                'campaign_id' => $this->originalImage->campaign_id,
-                'strategy_id' => $this->originalImage->strategy_id,
-                'platform' => $this->originalImage->platform,
-                's3_path' => $s3Path,
-                'cloudfront_url' => $cloudFrontUrl,
-                'parent_id' => $this->originalImage->id,
-                'refinement_depth' => ($this->originalImage->refinement_depth ?? 0) + 1,
-                'is_active' => true,
-                // The refinement is a normal deployable image, not a seed —
-                // but it should keep where it came from.
-                'source' => $this->originalImage->source ?? 'ai',
-            ]);
+                $newImage = ImageCollateral::create([
+                    'campaign_id' => $this->originalImage->campaign_id,
+                    'strategy_id' => $this->originalImage->strategy_id,
+                    'platform' => $this->originalImage->platform,
+                    's3_path' => $s3Path,
+                    'cloudfront_url' => $cloudFrontUrl,
+                    'parent_id' => $this->originalImage->id,
+                    'google_display_banners' => $refinedBanners,
+                    'format' => $this->originalImage->format,
+                    'layout' => $this->originalImage->layout,
+                    'concept_key' => $this->originalImage->concept_key,
+                    'refinement_depth' => ($this->originalImage->refinement_depth ?? 0) + 1,
+                    'is_active' => true,
+                    // The refinement is a normal deployable image, not a seed —
+                    // but it should keep where it came from.
+                    'source' => $this->originalImage->source ?? 'ai',
+                ]);
 
+                $quota->finish($reservation);
+
+                return $newImage;
+            });
+
+            $uncommittedFiles = [];
             Log::info("Successfully refined image. New ImageCollateral ID: {$newImage->id}, Parent ID: {$this->originalImage->id}");
 
         } catch (\Throwable $e) {
             Log::error("Error in RefineImage job for ImageCollateral ID {$this->originalImage->id}: ".$e->getMessage());
             $this->fail($e);
         } finally {
+            $quota->release(is_string($reservation) ? $reservation : null);
+            if ($uncommittedFiles !== []) {
+                DeleteCollateralFiles::dispatch($uncommittedFiles);
+            }
             if ($contextDisk !== null && $this->contextImagePath !== null) {
                 try {
                     $contextDisk->delete($this->contextImagePath);
@@ -167,6 +215,10 @@ class RefineImage implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        $customer = $this->originalImage->campaign?->customer;
+        if ($this->quotaWorkId !== null && $customer) {
+            app(StarterCreativeQuota::class)->release(StarterCreativeQuota::key($customer, 'refinement', "refine:{$this->originalImage->id}:{$this->quotaWorkId}"));
+        }
         Log::error('RefineImage failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

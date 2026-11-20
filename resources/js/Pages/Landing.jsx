@@ -1,10 +1,10 @@
 import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
-import DemoResultsPanel from '@/Components/DemoResultsPanel';
-import Hero, { brandTint, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE, CTA_SIZE_COMPACT } from '@/Components/Marketing/Hero';
+import WebsiteAdPreview from '@/Components/Marketing/WebsiteAdPreview';
+import { AD_PREVIEW_CTA, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE } from '@/Components/Marketing/Hero';
 import StatsStrip from '@/Components/Marketing/StatsStrip';
 import FeatureGrid from '@/Components/Marketing/FeatureGrid';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
@@ -21,18 +21,18 @@ import {
     UserGroupIcon,
     WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
-import { trackConversion } from '@/utils/conversions';
 
 /*
  * Line icons, not emoji. The flagship used 👁️ 🧠 🚀 🔍 📊 🩹 💰 🎨 👥 where the
  * real-estate skin used heroicons; emoji render as whatever the visitor's OS
  * ships and are read out literally ("eye", "brain") by screen readers.
  */
+const previewCta = { ...AD_PREVIEW_CTA, href: '#build-my-ads' };
 const steps = [
     {
         icon: EyeIcon,
         title: 'We read your website',
-        body: 'Just enter your URL. We pick up your colours, fonts, and brand voice automatically — no forms to fill in.',
+        body: 'Enter your website to preview ad copy based on your business. You can review the wording before creating an account.',
     },
     {
         icon: MagnifyingGlassIcon,
@@ -41,8 +41,8 @@ const steps = [
     },
     {
         icon: RocketLaunchIcon,
-        title: 'Your ads run themselves',
-        body: 'We fix disapproved ads, shift budget to what\'s working, and keep testing new ideas — every day, on autopilot.',
+        title: 'Review your ads before launch',
+        body: 'Approve your ads and budget when you are ready. With a managed plan, agents monitor delivery and flag issues that need your input.',
     },
 ];
 
@@ -81,12 +81,9 @@ const agents = [
     },
 ];
 
-// Every figure here is stated elsewhere on this page: six agents, four
-// platforms in the FAQ, and "live within minutes" against the 2–4 weeks the
-// pricing page attributes to an agency.
 const stats = [
     { value: 'Six', label: 'AI specialists per account', detail: 'working daily, not weekly' },
-    { value: 'Four', label: 'ad platforms, one dashboard', detail: 'Google, Meta, Microsoft, LinkedIn' },
+    { value: 'Google & Meta', label: 'managed advertising', detail: 'platform access depends on your plan' },
     { value: 'Review first', label: 'you approve before launch', detail: 'check your profile, budget and ads' },
 ];
 
@@ -97,155 +94,22 @@ const stats = [
  */
 export default function Landing({ auth, publicContent, plans = [], faqs = [], setupFeeUsd = 999 }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
-    const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
-
-    const [url, setUrl] = useState('');
-    const [firstName, setFirstName] = useState('');
-    const [email, setEmail] = useState('');
-    const [loadingStage, setLoadingStage] = useState(0);
-    const [demoResult, setDemoResult] = useState(null);
-    const [error, setError] = useState(null);
-    const demoRequest = useRef(null);
-
-    const normaliseUrl = (raw) => {
-        const trimmed = raw.trim();
-        if (!trimmed) return trimmed;
-        if (/^https?:\/\//i.test(trimmed)) return trimmed;
-        return 'https://' + trimmed;
-    };
-
-    const handleDemoSubmit = async (e) => {
-        e.preventDefault();
-        if (!url) return;
-        const normalisedUrl = normaliseUrl(url);
-
-        setError(null);
-        setDemoResult(null);
-        setLoadingStage(1);
-
-        demoRequest.current?.abort();
-        demoRequest.current = new AbortController();
-        const timeout = setTimeout(() => demoRequest.current?.abort(), 180000);
-
-        try {
-            const response = await fetch('/api/demo/generate-full', {
-                method: 'POST',
-                signal: demoRequest.current.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ url: normalisedUrl, first_name: firstName, email })
-            });
-            const data = await response.json();
-
-            if (response.ok) {
-                setDemoResult(data);
-                trackConversion('try_now');
-            } else {
-                setError(data.message || 'Something went wrong.');
-            }
-        } catch (err) {
-            setError(err.name === 'AbortError' ? 'We did not receive a finished preview. Your details are kept here; you can retry.' : 'We could not reach the server. Your details are kept here; please retry.');
-        } finally {
-            clearTimeout(timeout);
-            setLoadingStage(0);
-        }
-    };
-
-    const demoForm = (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
-            <p className="mb-3 text-sm text-gray-600">Preview the brand and ads we can build from your site. We use your email to follow up about the preview; creating an account is a separate step.</p>
-            <form onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
-                <div className="flex flex-col gap-3 sm:flex-row">
-                    <label htmlFor="demo-first-name" className="sr-only">First name</label>
-                    <input
-                        id="demo-first-name"
-                        type="text"
-                        required
-                        value={firstName}
-                        onChange={e => setFirstName(e.target.value)}
-                        placeholder="First name"
-                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
-                        disabled={loadingStage > 0}
-                    />
-                    <label htmlFor="demo-email" className="sr-only">Your email address</label>
-                    <input
-                        id="demo-email"
-                        type="email"
-                        required
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="Your email address"
-                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
-                        disabled={loadingStage > 0}
-                    />
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                    <label htmlFor="demo-url" className="sr-only">Your website URL</label>
-                    <input
-                        id="demo-url"
-                        type="text"
-                        required
-                        value={url}
-                        onChange={e => setUrl(e.target.value)}
-                        placeholder="Enter your website URL..."
-                        className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
-                        disabled={loadingStage > 0}
-                    />
-                    {/*
-                        This submit is the hero's primary action, so it carries the
-                        shared CTA treatment rather than a locally written orange that
-                        drifts from it. Disabled is a grey fill at 6.10:1 rather than
-                        the old opacity-50, which faded the whole button to 2.2:1 —
-                        and "Analyzing..." is the visitor's only signal that the
-                        20-second demo request is actually running.
-                    */}
-                    <button
-                        type="submit"
-                        disabled={loadingStage > 0}
-                        className={`${CTA_PRIMARY} ${CTA_SIZE_COMPACT} w-full whitespace-nowrap disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600 sm:w-auto`}
-                    >
-                        {loadingStage > 0 ? 'Analyzing...' : 'Build my ads'}
-                    </button>
-                </div>
-            </form>
-            {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
-            {loadingStage > 0 && (
-                <div className="mt-4">
-                    <p role="status" className="text-center text-sm font-medium text-brand-darker">Reading your site and preparing an ad preview. This can take a few minutes.</p>
-                </div>
-            )}
-        </div>
-    );
+    const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
 
     return (
         <>
             <PageTitle />
             <div className="min-h-screen bg-white">
-                <Header auth={auth} />
+                <Header auth={auth} guestCta={previewCta} />
 
                 <main>
-                    {demoResult ? (
-                        <div
-                            className="bg-white px-4 py-10 sm:px-6 lg:px-8"
-                            style={{ backgroundImage: `linear-gradient(to bottom, ${brandTint(10)}, #fff)` }}
-                        >
-                            <div className="mx-auto max-w-7xl">
-                                <DemoResultsPanel result={demoResult} />
-                            </div>
-                        </div>
-                    ) : (
-                        <Hero
-                            eyebrow={publicContent.eyebrow}
-                            headline={publicContent.headline}
+                    <WebsiteAdPreview
+                        eyebrow={publicContent.eyebrow}
+                        headline={publicContent.headline}
                         sub={publicContent.intro}
-                            secondaryCta={{ href: '/how-it-works', label: 'See how it works' }}
-                            note="No credit card required · Free to explore · Cancel anytime"
-                        >
-                            {demoForm}
-                        </Hero>
-                    )}
+                        secondaryCta={{ href: '/how-it-works', label: 'See how it works' }}
+                        note="Free preview · No credit card required"
+                    />
 
                     <StatsStrip items={stats} />
 
@@ -268,7 +132,7 @@ export default function Landing({ auth, publicContent, plans = [], faqs = [], se
                         items={agents}
                         footer={
                             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                                <CtaLink href="/register" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>Put these agents to work</CtaLink>
+                                <CtaLink href={previewCta.href} className={`${CTA_PRIMARY} ${CTA_SIZE}`}>{previewCta.label}</CtaLink>
                                 <CtaLink href="/features" className={`${CTA_SECONDARY} ${CTA_SIZE}`}>See all features</CtaLink>
                             </div>
                         }
@@ -296,7 +160,7 @@ export default function Landing({ auth, publicContent, plans = [], faqs = [], se
                                     "US$999 once" only means anything next to the
                                     figure it is an alternative to.
                                 */}
-                                <SetupOnlyOffer priceUsd={setupFeeUsd} />
+                                <SetupOnlyOffer priceUsd={setupFeeUsd} href="/google-ads-setup" label="See the one-time setup" />
                             </div>
                         }
                     />
@@ -348,16 +212,15 @@ export default function Landing({ auth, publicContent, plans = [], faqs = [], se
                     </div>
 
                     <CtaBand
-                        title="Ready to stop doing this the hard way?"
-                        body="Join hundreds of businesses who handed the heavy lifting to their AI team."
-                        primaryCta={{ href: '/register', label: 'Get started free' }}
+                        title="Preview ads for your business"
+                        body="See sample copy based on your website, then decide whether to create an account."
+                        primaryCta={previewCta}
                         secondaryCta={{ href: '/login', label: 'Sign in' }}
-                        note="Free to explore · No credit card required · Live in minutes"
                     />
                 <PublicMarketingResources content={publicContent} />
                 </main>
 
-                <Footer />
+                <Footer guestCta={previewCta} />
             </div>
         </>
     );

@@ -37,6 +37,7 @@ class ReadCampaignConfiguration extends BaseGoogleAdsService
         return [
             'campaign' => $this->rows($customerId, "SELECT campaign.resource_name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.maximize_conversions.target_cpa_micros, campaign.asset_automation_settings, campaign_budget.amount_micros FROM campaign WHERE campaign.resource_name = '{$campaign}'")[0] ?? [],
             'groups' => $this->performanceMaxGroups($customerId, $campaign),
+            'ctas' => $this->rows($customerId, "SELECT asset_group.resource_name, asset.call_to_action_asset.call_to_action FROM asset_group_asset WHERE campaign.resource_name = '{$campaign}' AND asset_group_asset.field_type = 'CALL_TO_ACTION_SELECTION' AND asset_group_asset.status = 'ENABLED'"),
         ];
     }
 

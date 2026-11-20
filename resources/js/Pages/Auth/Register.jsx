@@ -7,6 +7,7 @@ import { Field, OrDivider, OAUTH_BUTTON, SUBMIT } from '@/Components/Forms';
 import { brandTint } from '@/Components/Marketing/Hero';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { trackConversion } from '@/utils/conversions';
+import { previewContactFor } from '@/utils/previewContact';
 
 function getDemoUrl() {
     try {
@@ -34,6 +35,7 @@ export default function Register({ enabledPlatforms = [] }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
+        ...previewContactFor(demoDomain ? demoUrl : ''),
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',

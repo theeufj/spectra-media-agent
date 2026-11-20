@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from '@inertiajs/react';
 import { useTenant } from '@/hooks/useTenant';
 
-export default function Footer() {
+export default function Footer({ guestCta }) {
     const tenant = useTenant();
 
     return (
@@ -57,7 +57,7 @@ export default function Footer() {
                     <div>
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-white">Get Started</h3>
                         <ul className="mt-2 sm:mt-3">
-                            <li><a href="/register" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Sign Up Free</a></li>
+                            <li><a href={guestCta?.href ?? '/register'} className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">{guestCta?.label ?? 'Sign Up Free'}</a></li>
                             <li><a href="/login" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Log In</a></li>
                         </ul>
                     </div>

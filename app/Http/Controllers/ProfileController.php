@@ -38,7 +38,6 @@ class ProfileController extends Controller
             'customers' => $customers,
             'facebookAppId' => config('services.facebook.client_id'),
             'planSlug' => $plan?->slug ?? 'free',
-            'starterPlatform' => $user->starter_platform ?? 'google',
             'googleApiConnection' => $googleApiConnection ? [
                 'connected' => true,
                 'account_name' => $googleApiConnection->account_name,

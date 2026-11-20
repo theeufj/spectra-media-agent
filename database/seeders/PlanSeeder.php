@@ -47,38 +47,7 @@ class PlanSeeder extends Seeder
             ]
         );
 
-        Plan::updateOrCreate(
-            ['slug' => 'starter'],
-            [
-                'name' => 'Starter',
-                'description' => 'For local businesses and early-stage startups.',
-                'price_cents' => 14900,
-                'billing_interval' => 'month',
-                'stripe_price_id' => 'price_1Tfzd0ClfeR0n0yLuYUEUg6D',
-                'features' => [
-                    '1 Ad Platform — your choice of Google or Facebook',
-                    'Unlimited Campaigns',
-                    '3 Brand Identities',
-                    'AI Ad Copy & Image Generation',
-                    'Automatic Ad Fixing & Budget Shifting',
-                    'Analytics Dashboard',
-                    'Basic Email Support',
-                ],
-                'is_active' => true,
-                'is_free' => false,
-                'is_popular' => false,
-                'cta_text' => 'Start Free Trial',
-                'badge_text' => null,
-                'sort_order' => 1,
-                'creative_limits' => [
-                    'image_generations' => 50,
-                    'video_generations' => 10,
-                    'refinements' => 50,
-                    'max_refinements_per_item' => 3,
-                    'max_extensions_per_video' => 3,
-                ],
-            ]
-        );
+        $this->call(StarterPlanSeeder::class);
 
         Plan::updateOrCreate(
             ['slug' => 'growth'],

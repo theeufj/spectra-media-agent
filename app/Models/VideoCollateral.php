@@ -24,6 +24,22 @@ class VideoCollateral extends Model
         });
     }
 
+    protected static function booted(): void
+    {
+        static::saved(function (self $video) {
+            $key = $video->generation_metadata['starter_quota_key'] ?? null;
+            if (! is_string($key) || ! $video->wasChanged('status')) {
+                return;
+            }
+            $quota = app(\App\Services\Creative\StarterCreativeQuota::class);
+            if ($video->status === 'completed') {
+                $quota->finish($key);
+            } elseif ($video->status === 'failed') {
+                $quota->release($key);
+            }
+        });
+    }
+
     protected $fillable = [
         'campaign_id',
         'generation_metadata',
