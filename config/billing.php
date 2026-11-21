@@ -30,6 +30,12 @@ return [
      * shape of silence that hid a deleted config block. Declared here so the
      * setting is a decision on the page rather than an omission.
      */
+    // Only these provider-confirmed funding sources may draw on the managed wallet.
+    'agency_funding_sources' => [
+        'google' => array_values(array_filter(array_map(static fn ($id) => str_replace('-', '', trim($id)), explode(',', (string) env('GOOGLE_ADS_AGENCY_PAYMENTS_ACCOUNTS', ''))))),
+        'facebook' => array_filter(array_map('trim', explode(',', (string) env('FACEBOOK_AGENCY_FUNDING_SOURCES', '')))),
+    ],
+
     'metered_ad_spend_enabled' => (bool) env('BILLING_METERED_AD_SPEND_ENABLED', false),
 
     // Stripe meter event name. Required only when the flag above is on.

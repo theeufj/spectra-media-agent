@@ -3,9 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Strategy;
-use App\Models\VideoCollateral;
+use App\Services\Creative\CreativePublication;
 use App\Services\Creative\CreativeRelease;
-use App\Services\GoogleAds\PerformanceMaxServices\RefreshPerformanceMaxAssets;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -34,40 +33,14 @@ class RefreshApprovedPerformanceMaxCreative implements ShouldBeUnique, ShouldQue
         if (! $strategy || ($strategy->creative_approval['fingerprint'] ?? null) !== $this->fingerprint || ! $release->isApproved($strategy)) {
             return;
         }
-        $customer = $strategy->campaign->customer;
-        $account = $customer->cleanGoogleCustomerId();
-        if (! $account) {
-            return;
-        }
-        $approval = $strategy->creative_approval;
-        $missingVideoIds = VideoCollateral::forDeployment($strategy)->whereNull('youtube_video_id')->pluck('id')->all();
-        if ($missingVideoIds !== []) {
-            (new UploadPMaxVideoAssets($strategy->id, $account, videoIds: $missingVideoIds, prepareOnly: true))->handle();
-            if (VideoCollateral::forDeployment($strategy)->whereNull('youtube_video_id')->exists()) {
-                $this->release(45);
-
-                return;
-            }
-        }
-
-        $result = app(RefreshPerformanceMaxAssets::class, ['customer' => $customer])->refresh(
-            $strategy, $approval['copy_ids'][0] ?? null, $approval['image_ids'], $approval['video_ids'], apply: true, replaceMedia: true,
-        );
-        if (! $result['links_confirmed']) {
-            throw new \RuntimeException('Google has not yet confirmed the approved creative update.');
-        }
-
+        // Redis may still contain jobs serialized by the former single-mutation publisher.
         DB::transaction(function () {
             $current = Strategy::lockForUpdate()->find($this->strategyId);
             if (($current?->creative_approval['fingerprint'] ?? null) !== $this->fingerprint) {
                 return;
             }
-            $current->forceFill([
-                'creative_approval' => [...$current->creative_approval, 'published_at' => now()->toIso8601String()],
-                'launch_intent' => $current->launch_intent === null ? null : [
-                    ...$current->launch_intent, 'creative_fingerprint' => $this->fingerprint,
-                ],
-            ])->save();
+            CreativePublication::begin($current, $this->fingerprint, []);
+            PublishApprovedCreative::dispatch($current->id, $this->fingerprint)->afterCommit();
         });
     }
 }

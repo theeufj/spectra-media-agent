@@ -56,6 +56,9 @@ class PaidSubscriptionConversionService
         $event = SpectraConversionEvent::firstOrCreate([
             'deduplication_key' => 'paid_subscription:'.$subscriptionId,
         ], [
+            'verified_source' => ['kind' => 'stripe_invoice', 'id' => $invoice['id'] ?? null, 'transaction' => $subscriptionId,
+                'user_id' => $user->id, 'consent' => $user->ad_measurement_consent === true, 'livemode' => ($payload['livemode'] ?? null) === true,
+                'paid_cents' => $amount, 'currency' => $currency, 'paid_at' => $paidAt],
             'event' => 'paid_subscription',
             'user_id' => $user->id,
             'mode' => 'server_google',
@@ -64,9 +67,13 @@ class PaidSubscriptionConversionService
             'occurred_at' => Carbon::createFromTimestampUTC($paidAt),
             'ad_identifiers' => $identifiers,
             'gclid' => $user->googleClickId(),
+            'google_conversion_resource' => \App\Models\Setting::get('conversion_resource_name.paid_subscription'),
             'uploaded_to_google' => false,
         ]);
 
+        if ($user->tenant_key === 'sitetospend' && $user->fbclid && $user->ad_measurement_consent === true && ($event->meta_delivery['status'] ?? null) !== 'accepted') {
+            \App\Jobs\RecordSiteFacebookConversion::dispatch($user, $event->event, receiptId: $event->id)->afterCommit();
+        }
         if ($event->ad_identifiers && ! $event->uploaded_to_google) {
             RecordSiteGoogleConversion::dispatch($user, 'paid_subscription', $event->occurred_at, $event->id)->afterCommit();
         }

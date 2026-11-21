@@ -5,6 +5,7 @@ return [
      * The Google Ads account ID (numeric, no dashes) that owns the Spectra conversion actions.
      * This is sitetospend.com's own advertising account, separate from customer accounts.
      */
+    'advertiser_customer_uuid' => env('SPECTRA_ADVERTISER_CUSTOMER_UUID'),
     'google_ads_customer_id' => env('SPECTRA_GOOGLE_ADS_CUSTOMER_ID'),
 
     /*

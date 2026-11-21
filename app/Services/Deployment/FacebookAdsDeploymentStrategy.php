@@ -90,11 +90,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
             throw new \Exception('Failed to create Facebook campaign');
         }
 
-        $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
-        $campaign->save();
-
-        $strategy->facebook_campaign_id = $fbCampaign['id'];
-        $strategy->save();
+        $strategy->recordFacebookCampaignId((string) $fbCampaign['id']);
 
         Log::info("Created Facebook campaign: {$fbCampaign['id']}");
 
@@ -184,11 +180,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
             throw new \Exception('Failed to create Facebook video campaign');
         }
 
-        $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
-        $campaign->save();
-
-        $strategy->facebook_campaign_id = $fbCampaign['id'];
-        $strategy->save();
+        $strategy->recordFacebookCampaignId((string) $fbCampaign['id']);
 
         // 2. Create Ad Set
         $targeting = $this->buildTargeting($strategy);

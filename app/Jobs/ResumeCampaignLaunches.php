@@ -25,11 +25,22 @@ class ResumeCampaignLaunches implements ShouldBeUnique, ShouldQueue
 
     public function handle(CampaignLaunchIntent $launch): void
     {
+        app(\App\Services\Billing\LaunchFunding::class)->releaseClosed($this->customerId);
+
         // Recover a worker or web process that died after marking the intent queued
         // but before the job was dispatched and claimed. Started jobs have platform
         // reconciliation; replaying one here could create a second campaign.
         $waiting = Strategy::whereNotNull('launch_intent')
             ->whereHas('campaign', fn ($query) => $query->when($this->customerId !== null, fn ($q) => $q->where('customer_id', $this->customerId)));
+        (clone $waiting)->whereNotNull('launch_intent->campaign_create')->where('launch_intent->version', 2)
+            ->whereIn('deployment_status', ['queued', 'deploying', 'failed'])->where('updated_at', '<', now()->subMinutes(35))
+            ->eachById(function (Strategy $strategy) {
+                try {
+                    app(\App\Services\Deployment\SubmittedCampaign::class)->reconcile($strategy);
+                } catch (\Throwable $failure) {
+                    report($failure);
+                }
+            });
         $stale = (clone $waiting)->where('deployment_status', 'queued')
             ->whereNull('launch_intent->started_at')->where('updated_at', '<', now()->subMinutes(35));
         $stale->update(['deployment_status' => CampaignLaunchIntent::WAITING]);

@@ -10,12 +10,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
+ * @property string|null $conversion_webhook_secret
  * @property string $campaign_type
  * @property array<int, array<string, mixed>>|null $creative_concepts
  * @property array<int, array<string, mixed>>|null $creative_candidates
  * @property array<string, mixed>|null $creative_review
  * @property array<string, mixed>|null $creative_release_review
  * @property array<string, mixed>|null $creative_approval
+ * @property array<string, mixed>|null $creative_revision
+ * @property array<string, mixed>|null $creative_publication
  * @property array<string, mixed>|null $launch_intent
  */
 class Strategy extends Model
@@ -35,7 +38,7 @@ class Strategy extends Model
     /** Live states that still need an ENABLED transition on the platform. */
     public const ACTIVATABLE_STATUSES = ['deployed', 'verified'];
 
-    protected $hidden = ['launch_intent'];
+    protected $hidden = ['launch_intent', 'conversion_webhook_secret'];
 
     public function supportsVideo(): bool
     {
@@ -120,6 +123,7 @@ class Strategy extends Model
      * The attributes that should be cast.
      */
     protected $casts = [
+        'conversion_webhook_secret' => 'encrypted',
         'signed_off_at' => 'datetime',
         'deployed_at' => 'datetime',
         'bidding_strategy' => 'array',
@@ -129,6 +133,8 @@ class Strategy extends Model
         'creative_release_review' => 'array',
         'creative_approval' => 'array',
         'launch_intent' => 'array',
+        'creative_revision' => 'array',
+        'creative_publication' => 'array',
         'ad_extensions' => 'array',
         'conversion_goals' => 'array',
         'execution_plan' => 'array',
@@ -177,7 +183,12 @@ class Strategy extends Model
             ->orderBy('id')
             ->value('id');
 
-        return $firstGoogleStrategyId === $this->id ? $campaign->google_ads_campaign_id : null;
+        if ($firstGoogleStrategyId !== $this->id || $campaign->strategies()->whereKeyNot($this->id)
+            ->whereNotNull('google_ads_campaign_id')->get()->contains(fn (Strategy $other) => basename($other->google_ads_campaign_id) === basename($campaign->google_ads_campaign_id))) {
+            return null;
+        }
+
+        return $campaign->google_ads_campaign_id;
     }
 
     /**
@@ -189,10 +200,31 @@ class Strategy extends Model
     {
         $this->forceFill(['google_ads_campaign_id' => $resourceName])->save();
 
-        $campaign = $this->campaign;
-        if ($campaign instanceof Campaign && empty($campaign->google_ads_campaign_id)) {
-            $campaign->forceFill(['google_ads_campaign_id' => $resourceName])->save();
+        Campaign::whereKey($this->campaign_id)->whereNull('google_ads_campaign_id')
+            ->update(['google_ads_campaign_id' => $resourceName]);
+        $this->unsetRelation('campaign');
+    }
+
+    public function reusableFacebookCampaignId(): ?string
+    {
+        if ($this->facebook_campaign_id) {
+            return $this->facebook_campaign_id;
         }
+        foreach (\App\Services\Campaigns\CampaignResourceInventory::entries($this->campaign) as $entry) {
+            if ($entry['platform'] === 'facebook' && $entry['strategy_id'] === $this->id) {
+                return $entry['resource_id'];
+            }
+        }
+
+        return null;
+    }
+
+    public function recordFacebookCampaignId(string $resourceId): void
+    {
+        $this->forceFill(['facebook_campaign_id' => $resourceId])->save();
+        Campaign::whereKey($this->campaign_id)->whereNull('facebook_ads_campaign_id')
+            ->update(['facebook_ads_campaign_id' => $resourceId]);
+        $this->unsetRelation('campaign');
     }
 
     /**

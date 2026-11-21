@@ -36,6 +36,7 @@ export default function Register({ enabledPlatforms = [] }) {
         name: '',
         email: '',
         ...previewContactFor(demoDomain ? demoUrl : ''),
+        ad_measurement_consent: false,
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',
@@ -139,6 +140,11 @@ export default function Register({ enabledPlatforms = [] }) {
                         onToken={(token) => setData('cf_turnstile_response', token)}
                         error={errors.cf_turnstile_response}
                     />
+
+                    <label className="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={data.ad_measurement_consent} onChange={e => setData('ad_measurement_consent', e.target.checked)} />
+                        Allow Google and Meta to match this signup and future paid conversions to ads using my advertising identifiers. Optional.
+                    </label>
 
                     <button type="submit" disabled={processing} className={SUBMIT}>
                         {processing ? 'Creating account…' : 'Create account'}

@@ -19,16 +19,48 @@ class FacebookCampaignMetrics
             ->orderByDesc('id')->first();
     }
 
-    public static function actionType(?Strategy $strategy): string
+    public static function declaredGoal(?Strategy $strategy): ?string
     {
         $goal = $strategy?->conversion_goals['primary_goal'] ?? '';
         $goal = is_string($goal) ? preg_replace('/[^a-z]/', '', strtolower($goal)) : '';
 
         return match ($goal) {
-            'signup', 'signups', 'websitesignup', 'completeregistration' => 'complete_registration',
-            'lead', 'leads', 'leadgeneration', 'generateleads' => 'lead',
-            default => 'purchase',
+            'signup', 'signups', 'websitesignup', 'completeregistration', 'registration', 'signupsregistrations' => 'signup',
+            'lead', 'leads', 'leadgeneration', 'generateleads', 'submitleadform' => 'lead',
+            'purchase', 'purchases', 'sale', 'sales', 'paidsubscription', 'paidsubscriptions' => 'purchase',
+            default => null,
         };
+    }
+
+    public static function actionType(?Strategy $strategy): string
+    {
+        return self::pixelEvent(self::declaredGoal($strategy)) ?? 'purchase';
+    }
+
+    public static function pixelEvent(?string $goal): ?string
+    {
+        return match ($goal) {
+            'signup' => 'complete_registration',
+            'lead' => 'lead',
+            'purchase' => 'purchase',
+            default => null,
+        };
+    }
+
+    /** Keep provider decimals intact. Duplicate or invalid exact actions cannot establish a count. */
+    public static function pixelAmount(?array $actions, string $goal): ?string
+    {
+        $event = self::pixelEvent($goal);
+        if ($event === null) {
+            return null;
+        }
+        $matching = array_values(array_filter($actions ?? [], fn ($row) => ($row['action_type'] ?? '') === 'offsite_conversion.fb_pixel_'.$event));
+        if ($matching === []) {
+            return '0';
+        }
+        $amount = (string) ($matching[0]['value'] ?? '');
+
+        return count($matching) === 1 && preg_match('/^\d+(?:\.\d+)?$/D', $amount) ? $amount : null;
     }
 
     public static function conversions(?array $actions, string $actionType): float

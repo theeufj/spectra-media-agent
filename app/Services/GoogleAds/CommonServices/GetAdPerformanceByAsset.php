@@ -14,6 +14,35 @@ use Illuminate\Support\Facades\Log;
  */
 class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerformanceSource
 {
+    public function treatmentMetrics(string $account, string $campaign, string $action, string $from, string $to, bool $pmax): array
+    {
+        if (! ctype_digit($account) || ! preg_match("~^customers/{$account}/campaigns/\d+$~D", $campaign)
+            || ! preg_match("~^customers/{$account}/conversionActions/\d+$~D", $action)
+            || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $from) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $to)) {
+            return [];
+        }
+        $view = $pmax ? 'asset_group_asset' : 'ad_group_ad_asset_view';
+        $enabled = $pmax ? "asset_group_asset.status = 'ENABLED' AND asset_group.status = 'ENABLED'" : "ad_group_ad_asset_view.enabled = TRUE AND ad_group_ad.status = 'ENABLED'";
+        $filter = " FROM {$view} WHERE campaign.resource_name = '{$campaign}' AND {$view}.field_type = 'HEADLINE' AND {$enabled} AND segments.date BETWEEN '{$from}' AND '{$to}'";
+        $results = [];
+        $traffic = $this->searchQuery($account, "SELECT {$view}.resource_name, asset.text_asset.text, metrics.impressions, metrics.cost_micros, metrics.clicks".$filter);
+        foreach ($traffic->iterateAllElements() as $row) {
+            $id = ($pmax ? $row->getAssetGroupAsset() : $row->getAdGroupAdAssetView())->getResourceName();
+            $results[$id] = ['treatment_id' => $id, 'content' => $row->getAsset()->getTextAsset()->getText(),
+                'cost' => $row->getMetrics()->getCostMicros() / 1000000, 'impressions' => $row->getMetrics()->getImpressions(),
+                'clicks' => $row->getMetrics()->getClicks(), 'conversions' => 0];
+        }
+        $outcomes = $this->searchQuery($account, "SELECT {$view}.resource_name, segments.conversion_action, metrics.conversions".$filter." AND segments.conversion_action = '{$action}'");
+        foreach ($outcomes->iterateAllElements() as $row) {
+            $id = ($pmax ? $row->getAssetGroupAsset() : $row->getAdGroupAdAssetView())->getResourceName();
+            if (isset($results[$id])) {
+                $results[$id]['conversions'] = $row->getMetrics()->getConversions();
+            }
+        }
+
+        return $results;
+    }
+
     /**
      * Get performance metrics for Responsive Search Ad assets.
      *

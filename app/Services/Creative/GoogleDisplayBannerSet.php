@@ -33,7 +33,7 @@ final class GoogleDisplayBannerSet
     }
 
     /** Verify the actual finished files before their hashes enter a release approval. */
-    public function verifiedHashes(ImageCollateral $image): array
+    public function verifiedHashes(ImageCollateral $image, ?string $source = null): array
     {
         $set = $image->google_display_banners;
         if ($set === null) {
@@ -42,6 +42,9 @@ final class GoogleDisplayBannerSet
         if (blank($set['cta'] ?? null) || blank($set['brand'] ?? null) || blank($set['headline'] ?? null)
             || count($set['sizes']) !== count(GoogleDisplayBannerRenderer::SIZES)) {
             throw new RuntimeException('The display banner set is incomplete.');
+        }
+        if ($source !== null && (! is_string($set['source_hash'] ?? null) || ! hash_equals($set['source_hash'], hash('sha256', $source)))) {
+            throw new RuntimeException('The display banner source image changed or is unavailable.');
         }
         $verified = [];
         foreach (GoogleDisplayBannerRenderer::SIZES as $size => [$width, $height]) {

@@ -206,6 +206,10 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
             'google_ads_customer_id' => $result['customer_id'],
         ]);
 
+        if ($customer->service_type !== 'setup_only' && config('billing.agency_funding_sources.google', []) !== []) {
+            app(\App\Services\GoogleAds\BillingSetupService::class, ['customer' => $customer])->setupBillingForSubAccount($result['customer_id']);
+        }
+
         // The $999 buyer can accept access while we build their paused campaign.
         InvitePaidSetupCustomer::dispatchIfReady($customer->fresh());
 

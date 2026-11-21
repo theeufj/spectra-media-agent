@@ -60,9 +60,9 @@ function PlatformCard({ name, color, data, pct, currency }) {
                 <span className={`text-xs px-2 py-0.5 rounded ${color}`}>{pctLabel(pct)}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-gray-500">Spend</p><p className="text-sm font-semibold">{money(data.spend ?? 0, currency)}</p></div>
+                <div><p className="text-xs text-gray-500">Spend</p><p className="text-sm font-semibold">{data.spend == null ? '—' : money(data.spend, currency)}</p></div>
                 <div><p className="text-xs text-gray-500">Return on ad spend</p><p className={`text-sm font-semibold ${roasColor}`}>{hasRoas ? `${roas}x` : '—'}</p></div>
-                <div><p className="text-xs text-gray-500">Conversions</p><p className="text-sm font-semibold">{count(data.conversions ?? 0)}</p></div>
+                <div><p className="text-xs text-gray-500">Conversions</p><p className="text-sm font-semibold">{data.conversions == null ? '—' : count(data.conversions)}</p></div>
                 <div><p className="text-xs text-gray-500">Cost per conversion</p><p className="text-sm font-semibold">{data.cpa ? money(data.cpa, currency) : '—'}</p></div>
             </div>
             <div className="mt-3"><p className="text-xs text-gray-500">{data.campaigns} campaign{data.campaigns !== 1 ? 's' : ''} · {count(data.clicks ?? 0)} clicks</p></div>
@@ -78,7 +78,6 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
      */
     const currency = useCurrency();
     const [showManual, setShowManual] = useState(false);
-    const [suggestionApplied, setSuggestionApplied] = useState(false);
     const [confirmRebalance, setConfirmRebalance] = useState(false);
     const [rebalancing, setRebalancing] = useState(false);
 
@@ -106,27 +105,14 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
 
     const handleSave = (e) => {
         e.preventDefault();
-        transform(values => ({ ...values, ...Object.fromEntries(PLATFORMS.filter(platform => !platforms.includes(platform)).map(platform => [platform.field, 0])) })).put(route('budget.update'), { preserveScroll: true, onSuccess: () => setSuggestionApplied(false) });
+        transform(values => ({ ...values, ...Object.fromEntries(PLATFORMS.filter(platform => !platforms.includes(platform)).map(platform => [platform.field, 0])) })).put(route('budget.update'), { preserveScroll: true });
     };
 
-    const handleRebalance = () => setConfirmRebalance(true);
+    const handleRebalance = () => { if (recommendations?.approval_fingerprint) setConfirmRebalance(true); };
     const rebalance = () => new Promise((resolve, reject) => {
         setRebalancing(true);
-        router.post(route('budget.rebalance'), {}, { preserveScroll: true, onSuccess: () => resolve(), onError: () => reject(new Error('We could not rebalance. Check the errors on this page.')), onFinish: () => setRebalancing(false) });
+        router.post(route('budget.rebalance'), { approval_fingerprint: recommendations?.approval_fingerprint }, { preserveScroll: true, onSuccess: () => resolve(), onError: () => reject(new Error('We could not rebalance. Check the errors on this page.')), onFinish: () => setRebalancing(false) });
     });
-
-    const handleApplySuggested = () => {
-        if (recommendations?.suggested_splits) {
-            setSuggestionApplied(true);
-            setData(prev => ({
-                ...prev,
-                google_ads_pct: recommendations.suggested_splits.google_ads_pct,
-                facebook_ads_pct: recommendations.suggested_splits.facebook_ads_pct,
-                microsoft_ads_pct: recommendations.suggested_splits.microsoft_ads_pct,
-                linkedin_ads_pct: recommendations.suggested_splits.linkedin_ads_pct || 0,
-            }));
-        }
-    };
 
     const totalPct = platforms.reduce((sum, p) => sum + parseFloat(data[p.field] || 0), 0);
     const reasoning = recommendations?.ai_reasoning;
@@ -134,7 +120,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
     return (
         <AuthenticatedLayout>
             <Head title="Budget split" />
-            <ConfirmationModal show={confirmRebalance} onClose={() => setConfirmRebalance(false)} onConfirm={rebalance} title="Adjust platform budgets now?" message={`Agents will use your saved ${money(allocation?.total_monthly_budget ?? 0, currency)} monthly budget and recent performance to adjust the budgets on your active platforms. Review and save your settings first if they have changed.`} confirmText="Rebalance budgets" processing={rebalancing} isDestructive={false} />
+            <ConfirmationModal show={confirmRebalance} onClose={() => setConfirmRebalance(false)} onConfirm={rebalance} title="Approve this budget split?" message={`Save these percentages for future campaign allocations: ${platforms.map(p => p.label + ' ' + (recommendations?.suggested_splits?.[p.field] ?? 0) + '%').join(', ')}. Existing campaign budgets keep their approved allocation.`} confirmText="Approve budget split" processing={rebalancing} isDestructive={false} />
             <div className="py-8">
                 <div className="mx-auto max-w-5xl">
                     <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -147,7 +133,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                         </div>
                         <div className="flex gap-2">
                             <a href={route('budget.history')} className="inline-flex min-h-[44px] items-center px-4 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">History</a>
-                            <button type="button" onClick={handleRebalance} disabled={rebalancing || !allocation} className="inline-flex min-h-[44px] items-center px-4 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">Rebalance now</button>
+                            <button type="button" onClick={handleRebalance} disabled={rebalancing || !recommendations?.approval_fingerprint} className="inline-flex min-h-[44px] items-center px-4 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">Review suggested split</button>
                         </div>
                     </div>
 
@@ -159,6 +145,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                         same subject across two colours. One panel, in the
                         position the decision is actually made.
                     */}
+                    {recommendations?.status === 'insufficient_evidence' && <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-700">{recommendations.message}</p>}
                     {(recommendations?.suggested_splits || reasoning) && (
                         <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -215,7 +202,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                             {recommendations?.suggested_splits && (
                                 <button
                                     type="button"
-                                    onClick={handleApplySuggested}
+                                    onClick={handleRebalance}
                                     className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-dark px-4 text-sm font-medium text-white transition-colors hover:bg-brand-darker"
                                 >
                                     Use this split
@@ -241,8 +228,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
 
                     <form onSubmit={handleSave} className="bg-white rounded-lg border border-gray-200 p-6">
                         <FormErrorSummary errors={errors} className="mb-4" />
-                        {suggestionApplied && <p role="status" className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">The suggested percentages are ready for review below. Save to keep this split.</p>}
-                        <p className="mb-4 text-sm text-gray-600">Save sets your allocation preferences. Rebalance now applies an adjustment to platform budgets; scheduled adjustments follow the frequency below.</p>
+                        <p className="mb-4 text-sm text-gray-600">Save sets the budget split for future campaign allocations. Scheduled reviews can propose a new split for your approval.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label htmlFor="total_monthly_budget" className="block text-sm font-medium text-gray-700 mb-1">Total monthly budget</label>
@@ -373,7 +359,7 @@ export default function Allocator({ allocation, snapshot, recommendations, confi
                                     onChange={e => setData('auto_rebalance', e.target.checked)}
                                     className="rounded border-gray-300 text-brand-dark"
                                 />
-                                <span className="text-sm text-gray-700">Let the agents adjust this for me</span>
+                                <span className="text-sm text-gray-700">Send me suggested budget splits</span>
                             </label>
                             {data.auto_rebalance && (
                                 <select

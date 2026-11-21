@@ -65,7 +65,7 @@ class SetupConversionTracking implements ShouldQueue
         // they have not accepted yet. Neither is something an admin can act on,
         // and treating it as an error meant three retries and a page for every
         // signup while the MCC could not create accounts at all.
-        if (! $this->customer->google_ads_customer_id) {
+        if (! $this->customer->google_ads_customer_id && ! $this->customer->facebook_ads_account_id && ! $this->customer->microsoft_ads_account_id) {
             Log::info('SetupConversionTracking: no Google Ads account yet, will run once there is one', [
                 'customer_id' => $this->customer->id,
                 'link_status' => $this->customer->google_ads_link_status,

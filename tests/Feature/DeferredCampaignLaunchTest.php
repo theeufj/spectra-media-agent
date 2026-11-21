@@ -35,6 +35,19 @@ class DeferredCampaignLaunchTest extends TestCase
     {
         parent::setUp();
 
+        $evidence = $this->createMock(\App\Services\Conversions\CampaignOutcomeEvidence::class);
+        $evidence->method('forStrategy')->willReturn(['requires_verification' => true, 'verified_for_launch' => true]);
+        $this->app->instance(\App\Services\Conversions\CampaignOutcomeEvidence::class, $evidence);
+        $funding = $this->createMock(\App\Services\Billing\PlatformFunding::class);
+        $funding->method('assess')->willReturnCallback(function ($customer, $platform) {
+            $account = $platform === 'google' ? $customer->cleanGoogleCustomerId() : (string) preg_replace('/^act_/', '', (string) $customer->facebook_ads_account_id);
+            $ready = $platform === 'google' ? CampaignLaunchIntent::googleReady($customer) : $platform === 'facebook' && $account !== '' && $customer->facebook_page_id;
+
+            return ['ready' => (bool) $ready, 'account' => $account, 'currency' => $customer->billingCurrency(),
+                'payer' => $ready && $customer->google_ads_link_status === 'active' && $platform === 'google' ? 'customer' : 'agency',
+                'code' => $ready ? 'ready' : 'account_pending', 'message' => $ready ? 'Ready' : 'Awaiting provider account'];
+        });
+        $this->app->instance(\App\Services\Billing\PlatformFunding::class, $funding);
         Setting::set('deployment_enabled', true, 'boolean');
         Setting::set('managed_billing_enabled', true, 'boolean');
         MccAccount::query()->update(['is_active' => false]);
@@ -49,6 +62,7 @@ class DeferredCampaignLaunchTest extends TestCase
             'platform' => 'Facebook Ads', 'signed_off_at' => now(), 'daily_budget' => 20, 'campaign_type' => 'display',
         ]);
         $strategy->update(['daily_budget' => 30]);
+        $fingerprint = $this->reviewSelection($strategy->fresh());
         $this->approveResearch($campaign);
         $customer = $campaign->customer;
         $create = $this->createMock(CreateAndLinkManagedAccount::class);
@@ -162,7 +176,7 @@ class DeferredCampaignLaunchTest extends TestCase
         $this->assertFalse(CampaignSpendGuardrails::canEnable($campaign->fresh()));
     }
 
-    public function test_reviewed_four_platform_launch_waits_for_each_scoped_account(): void
+    public function test_one_approval_lets_a_funded_google_leg_launch_while_unready_siblings_wait(): void
     {
         [$user, $campaign, $google, $fingerprint] = $this->reviewedCampaign([
             'google_ads_customer_id' => '4445556666', 'google_ads_manager_customer_id' => '1112223333',
@@ -171,7 +185,7 @@ class DeferredCampaignLaunchTest extends TestCase
         ]);
         $google->update(['daily_budget' => 20]);
         $campaign->update(['daily_budget' => 65, 'approved_daily_budget' => 65]);
-        $fingerprints = [$google->id => $fingerprint];
+        $fingerprints = [$google->id => $this->reviewSelection($google->fresh())];
         foreach (['Facebook Ads' => 'display', 'Microsoft Ads (Bing)' => 'search', 'LinkedIn Ads' => 'display'] as $platform => $type) {
             $strategy = Strategy::factory()->for($campaign)->create(['platform' => $platform, 'campaign_type' => $type,
                 'signed_off_at' => now(), 'daily_budget' => 15]);
@@ -185,14 +199,13 @@ class DeferredCampaignLaunchTest extends TestCase
         ])->assertRedirect();
         $strategies = $campaign->strategies()->orderBy('id')->get();
         $this->assertCount(4, $strategies);
-        $this->assertSame([CampaignLaunchIntent::WAITING], $strategies->pluck('deployment_status')->unique()->all());
-        Queue::assertNotPushed(DeployCampaign::class);
-
-        $campaign->customer->update(['linkedin_ads_account_id' => '12345']);
-        $launch = app(CampaignLaunchIntent::class);
-        (new ResumeCampaignLaunches($campaign->customer_id))->handle($launch);
+        $this->assertSame('queued', $strategies->first()->deployment_status);
+        $this->assertSame([CampaignLaunchIntent::WAITING], $strategies->skip(1)->pluck('deployment_status')->unique()->values()->all());
+        $this->assertCount(1, $strategies->map(fn ($s) => $s->launch_intent['approval_id'])->unique());
+        $this->assertCount(4, $strategies->map(fn ($s) => $s->launch_intent['id'])->unique());
         Queue::assertPushed(DeployCampaign::class, 1);
-        $this->assertSame(array_keys($fingerprints), $launch->claim($campaign, $strategies->first()->launch_intent['id'])->modelKeys());
+        $launch = app(CampaignLaunchIntent::class);
+        $this->assertSame([$google->id], $launch->claim($campaign, $strategies->first()->launch_intent['id'])->modelKeys());
     }
 
     public function test_existing_approval_resumes_after_meta_billing_recovers(): void
@@ -210,15 +223,18 @@ class DeferredCampaignLaunchTest extends TestCase
         $id = $meta->fresh()->launch_intent['id'];
         $issue = ['code' => 'facebook_account_unsettled', 'message' => 'Meta billing needs attention.'];
         $business = $this->createMock(BusinessManagerService::class);
-        $business->expects($this->exactly(3))->method('launchAccountIssue')->with('111244')->willReturn($issue, $issue, null);
+        $business->expects($this->once())->method('launchAccountIssue')->with('111244')->willReturn($issue);
         $this->app->instance(BusinessManagerService::class, $business);
 
-        $job = new DeployCampaign($campaign, launchId: $id);
+        $job = new DeployCampaign($campaign, strategyId: $meta->id, launchId: $id);
         $job->handle(app(\App\Services\AdSpendBillingService::class));
         (new \Illuminate\Bus\UniqueLock(app('cache')->store()))->release($job);
         $launch = app(CampaignLaunchIntent::class);
         $this->assertSame(CampaignLaunchIntent::WAITING, $meta->fresh()->deployment_status);
         $this->assertSame($issue['message'], $meta->fresh()->deployment_error);
+        $ready = ['ready' => true, 'account' => '111244', 'currency' => $campaign->customer->billingCurrency(), 'payer' => 'agency', 'code' => 'ready', 'message' => 'Ready'];
+        $this->mock(\App\Services\Billing\PlatformFunding::class)->shouldReceive('assess')
+            ->andReturn([...$ready, ...$issue, 'ready' => false], $ready);
         $this->assertFalse($launch->resume($campaign->id, $id));
         Queue::assertPushed(DeployCampaign::class, 1);
 
@@ -242,7 +258,7 @@ class DeferredCampaignLaunchTest extends TestCase
         auth()->forgetGuards();
         $user = User::factory()->create(['email_verified_at' => now(), 'subscription_status' => 'active']);
         $plan = Plan::firstOrCreate(['slug' => 'growth'], ['name' => 'Growth', 'price_cents' => 10000, 'billing_interval' => 'month']);
-        $customer = Customer::factory()->create(['plan_id' => $plan->id, ...$attributes]);
+        $customer = Customer::factory()->create(['plan_id' => $plan->id, 'currency_code' => 'USD', ...$attributes]);
         $user->customers()->attach($customer->id, ['role' => 'owner']);
         session(['active_customer_id' => $customer->id]);
         $brand = new BrandGuideline(['customer_id' => $customer->id, 'extracted_at' => now(),

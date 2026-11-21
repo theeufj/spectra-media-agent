@@ -102,7 +102,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 'status' => 'PAUSED',
                 ...GoogleCampaignSchedule::for($campaign),

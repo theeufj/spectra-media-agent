@@ -84,9 +84,11 @@ class FacebookCampaignRepairTest extends TestCase
             ['action_type' => 'purchase', 'value' => '17'],
         ];
         $this->assertSame('complete_registration', FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($strategy->campaign)));
+        $report = ['account_id' => '123', 'campaign_id' => '456', 'account_currency' => 'AUD'];
+        $today = today()->toDateString();
         Http::fake(['graph.facebook.com/*/456/insights*' => Http::response(['data' => [
-            ['date_start' => $date, 'impressions' => 600, 'clicks' => 11, 'inline_link_clicks' => 2, 'spend' => '30.00', 'cpc' => '2.72', 'actions' => $actions],
-            ['date_start' => today()->toDateString(), 'impressions' => 200, 'clicks' => 4, 'spend' => '8.00'],
+            $report + ['date_start' => $date, 'date_stop' => $date, 'impressions' => 600, 'clicks' => 11, 'inline_link_clicks' => 2, 'spend' => '30.00', 'cpc' => '2.72', 'actions' => $actions],
+            $report + ['date_start' => $today, 'date_stop' => $today, 'impressions' => 200, 'clicks' => 4, 'spend' => '8.00'],
         ]])]);
         (new FetchFacebookAdsPerformanceData($strategy->campaign))->handle();
         $first = FacebookAdsPerformanceData::where('campaign_id', $strategy->campaign_id)->whereDate('date', $date)->sole();

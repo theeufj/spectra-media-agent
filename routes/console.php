@@ -143,6 +143,7 @@ Schedule::job(new RunPerformanceAnomalyCheck)->everyFourHours()->withoutOverlapp
 
 // Automation health monitor — alerts admins when an optimization job goes stale or
 // starts failing (reads the agent_runs trace). Backstop against silent failures.
+Schedule::job(new \App\Jobs\MonitorLaunchEvidence)->hourly()->withoutOverlapping();
 Schedule::job(new \App\Jobs\MonitorAgentHealth)->everySixHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('MonitorAgentHealth'));
 
 // Auto-start A/B tests — create headline split tests for live strategies with no active test

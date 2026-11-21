@@ -39,9 +39,7 @@ class EvaluateABTests implements ShouldQueue
                 $result = $agent->evaluateTest($test);
 
                 if ($result['action'] === 'significant') {
-                    // Auto-apply results
-                    $applyResult = $agent->applyResults($test);
-                    $applied++;
+                    // Site to Spend records an observed candidate for the normal creative review.
 
                     // Notify the campaign owner
                     $user = $this->campaignOwner($test);
@@ -53,9 +51,9 @@ class EvaluateABTests implements ShouldQueue
                         $notifications->notify(
                             $user,
                             Notification::TYPE_AB_TEST_COMPLETE,
-                            'A/B Test Winner Found',
+                            'Creative comparison ready',
                             "Your {$test->test_type} test reached {$confidence}% confidence. ".
-                            "\"{$winner['label']}\" won with a {$lift}% lift in CTR.",
+                            "\"{$winner['label']}\" had a {$lift}% higher observed primary outcome rate. Review this treatment before promotion.",
                             route('campaigns.show', $test->campaign_id),
                             'View Results',
                             $test->campaign->customer,
@@ -65,7 +63,7 @@ class EvaluateABTests implements ShouldQueue
                                 'winner' => $winner['label'],
                                 'confidence' => $confidence,
                                 'lift_pct' => $lift,
-                                'replacements' => $applyResult['replacements'] ?? [],
+                                'state' => 'suggested',
                             ]
                         );
                     }

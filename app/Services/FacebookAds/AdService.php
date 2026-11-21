@@ -22,7 +22,7 @@ class AdService extends BaseFacebookAdsService
     {
         try {
             $ads = $this->getAllPages("/{$adSetId}/ads", [
-                'fields' => 'id,name,status,creative,adset_id,created_time,updated_time',
+                'fields' => 'id,name,status,effective_status,creative,adset_id,campaign_id,account_id,created_time,updated_time',
                 'limit' => 100,
             ]);
 
@@ -218,7 +218,13 @@ class AdService extends BaseFacebookAdsService
      */
     public function pauseAd(string $adId): bool
     {
-        return $this->updateAd($adId, ['status' => 'PAUSED']);
+        if (! $this->updateAd($adId, ['status' => 'PAUSED'])) {
+            return false;
+        }
+
+        $ad = $this->get('/'.$adId, ['fields' => 'id,status']);
+
+        return ($ad['id'] ?? null) === $adId && ($ad['status'] ?? null) === 'PAUSED';
     }
 
     /**

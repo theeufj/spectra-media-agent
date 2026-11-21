@@ -29,10 +29,10 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
         return $this->brandedMail()
             ->subject('Action required: install your conversion tracking snippet')
             ->greeting('Hi '.$notifiable->name.',')
-            ->line("We've set up conversion tracking for **{$this->customer->name}**. Your Google Tag Manager container is provisioned and all ad conversion tags are configured.")
-            ->line('The final step is adding a small snippet to your website — it takes about two minutes.')
+            ->line("Your site measurement container for **{$this->customer->name}** is ready to install.")
+            ->line('Add the snippet to your website and choose the successful signup, enquiry or purchase that each campaign should measure.')
             ->action('Install snippet →', $setupUrl)
-            ->line('Once installed, every lead and sale from your campaigns will be tracked automatically. You can verify installation directly from the setup page.')
+            ->line('After installation, run the exact-event test from the campaign and check that the selected advertising destination saw it.')
             ->salutation($this->teamSalutation());
     }
 

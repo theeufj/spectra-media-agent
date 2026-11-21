@@ -73,6 +73,26 @@ class RecommendationApplier
             return ['applied' => false, 'message' => 'Recommendation type is missing', 'recommendation' => $recommendation];
         }
 
+        $parent = $campaign->fresh(['customer', 'strategies']) ?? $campaign;
+        $entries = \App\Services\Campaigns\CampaignResourceInventory::entries($parent);
+        $target = $recommendation['target_entity'] ?? $recommendation['target'] ?? [];
+        $target = is_array($target) ? $target : [];
+        $multi = count($entries) + (int) (bool) $parent->microsoft_ads_campaign_id + (int) (bool) $parent->linkedin_campaign_id > 1;
+        if ($multi && ($type === 'BUDGET' || empty($target['account_id']) || empty($target['external_campaign_id']))) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'Review the allocation and select the exact platform account and campaign.', 'recommendation' => $recommendation];
+        }
+        if (isset($target['external_campaign_id']) || isset($target['account_id'])) {
+            $matches = array_filter($entries, fn ($entry) => (string) $entry['account_id'] === (string) ($target['account_id'] ?? '')
+                && (string) $entry['resource_id'] === (string) ($target['external_campaign_id'] ?? '')
+                && (! isset($target['strategy_id']) || $entry['strategy_id'] === (int) $target['strategy_id']));
+            if (count($matches) !== 1) {
+                return ['applied' => false, 'requires_review' => true, 'message' => 'The recommendation target no longer matches the managed account and campaign.', 'recommendation' => $recommendation];
+            }
+            $campaign = \App\Services\Campaigns\CampaignResourceInventory::view($parent, reset($matches));
+        } elseif (count($entries) === 1 && ! $multi) {
+            $campaign = \App\Services\Campaigns\CampaignResourceInventory::view($parent, $entries[0]);
+        }
+
         if ($campaign->google_ads_campaign_id && ($type === 'BIDDING' || BiddingRecommendationGuard::keywordBidChange($recommendation))) {
             try {
                 // An analysis can be stale by the time it is applied. Always
@@ -105,6 +125,10 @@ class RecommendationApplier
             ];
         }
 
+        if (! $approvedByUser && in_array($type, ['TARGETING', 'AUDIENCE', 'NETWORK_SETTINGS', 'AD_EXTENSIONS'], true)) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'Approve the proposed audience, placement, geography or customer-facing extension before applying it.', 'recommendation' => $recommendation];
+        }
+
         if ($campaign->google_ads_campaign_id && ($type === 'KEYWORDS' || BiddingRecommendationGuard::keywordBidChange($recommendation))) {
             $action = BiddingRecommendationGuard::keywordBidChange($recommendation) ? 'bid'
                 : strtolower((string) ($recommendation['direction'] ?? $recommendation['action'] ?? ''));
@@ -121,7 +145,7 @@ class RecommendationApplier
         }
 
         try {
-            return match ($type) {
+            $result = match ($type) {
                 'BUDGET' => $this->applyBudget($campaign, $recommendation),
                 'KEYWORDS' => $this->applyKeyword($campaign, $recommendation),
                 'NEGATIVE_KEYWORDS' => $this->applyNegativeKeywords($campaign, $recommendation, $approvedByUser),
@@ -133,6 +157,29 @@ class RecommendationApplier
                 'NETWORK_SETTINGS' => $this->applyNetworkSettings($campaign, $recommendation),
                 default => ['applied' => false, 'message' => "Auto-apply not yet supported for type: {$type}", 'recommendation' => $recommendation],
             };
+            if (! ($result['applied'] ?? false) || ($result['scope'] ?? null) === 'local_plan') {
+                return $result;
+            }
+            $receipt = $result['receipt'] ?? [];
+            try {
+                $confirmed = $receipt !== [] && app(RecommendationReadback::class, ['customer' => $campaign->customer])->confirmed($campaign, $type, $receipt);
+            } catch (\Throwable $failure) {
+                report($failure);
+                $confirmed = false;
+            }
+            if (! $confirmed) {
+                return ['applied' => false, 'submitted' => true, 'pending_verification' => true, 'receipt' => $receipt,
+                    'message' => 'Submitted to the platform. The requested state has not yet been confirmed.', 'recommendation' => $recommendation];
+            }
+            if ($type === 'AUDIENCE' && isset($receipt['audience'])) {
+                Audience::where('customer_id', $campaign->customer_id)->where('campaign_id', $campaign->id)
+                    ->where('platform_resource_name', $receipt['audience'])->update(['status' => 'active']);
+            }
+            if ($type === 'BUDGET') {
+                $parent->update(['daily_budget' => $receipt['budget_cents'] / 100]);
+            }
+
+            return $result + ['verified_at' => now()->toIso8601String()];
         } catch (\Throwable $e) {
             report($e);
             Log::error('RecommendationApplier: Failed to apply recommendation', [
@@ -178,12 +225,21 @@ class RecommendationApplier
         if (! CampaignSpendGuardrails::permitsBudget($campaign, $newBudget)) {
             return ['applied' => false, 'requires_review' => true, 'message' => 'The requested budget exceeds the campaign’s approved restart limits.', 'recommendation' => $rec];
         }
-        // Persist the desired budget; hourly reconciliation retries partial API failures.
-        $campaign->update(['daily_budget' => $newBudget]);
         $deployed = $campaign->google_ads_campaign_id || $campaign->facebook_ads_campaign_id
             || $campaign->microsoft_ads_campaign_id || $campaign->linkedin_campaign_id;
-        if ($deployed && ! app(\App\Services\Campaigns\CampaignBudgetService::class)->apply($campaign, $newBudget)) {
-            return ['applied' => false, 'message' => 'Budget saved; a platform update failed and will be retried.', 'recommendation' => $rec];
+        if (! $deployed) {
+            $campaign->update(['daily_budget' => $newBudget]);
+
+            return ['applied' => true, 'scope' => 'local_plan', 'message' => "Budget adjusted from {$oldBudget} to {$newBudget} in the campaign plan.", 'recommendation' => $rec];
+        }
+        if ($campaign->google_ads_campaign_id) {
+            $remote = app(CompetitivePlatformGateway::class)->state($campaign);
+            if (($remote['campaign_resource'] ?? '') !== $campaign->googleAdsResourceName() || ($remote['shared_budget'] ?? true) !== false) {
+                return ['applied' => false, 'requires_review' => true, 'message' => 'Verify an unshared budget on this exact Google campaign before changing its allocation.', 'recommendation' => $rec];
+            }
+        }
+        if (! app(\App\Services\Campaigns\CampaignBudgetService::class)->apply($campaign, $newBudget)) {
+            return ['applied' => false, 'pending_verification' => true, 'receipt' => ['budget_cents' => (int) round($newBudget * 100)], 'message' => 'The platform did not confirm the budget update.', 'recommendation' => $rec];
         }
 
         $message = "Budget adjusted from {$oldBudget} to {$newBudget}";
@@ -192,7 +248,7 @@ class RecommendationApplier
             $message .= " (requested {$requested}, clamped to the allowed range)";
         }
 
-        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
+        return ['applied' => true, 'receipt' => ['budget_cents' => (int) round($newBudget * 100)], 'message' => $message, 'recommendation' => $rec];
     }
 
     /**
@@ -241,14 +297,14 @@ class RecommendationApplier
 
         AgentActivity::record(
             'optimization',
-            'network_settings_updated',
-            "{$message} on \"{$campaign->name}\"",
+            'network_settings_submitted',
+            "Submitted network settings for \"{$campaign->name}\"",
             $campaign->customer_id,
             $campaign->id,
             ['network_settings' => $settings]
         );
 
-        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
+        return ['applied' => true, 'receipt' => ['network' => $settings], 'message' => $message, 'recommendation' => $rec];
     }
 
     /**
@@ -323,14 +379,14 @@ class RecommendationApplier
 
         AgentActivity::record(
             'optimization',
-            'negative_keywords_added',
-            "Added {$n} negative keyword".($n === 1 ? '' : 's')." to \"{$campaign->name}\"",
+            'negative_keywords_submitted',
+            "Submitted {$n} negative keyword".($n === 1 ? '' : 's')." to \"{$campaign->name}\"",
             $campaign->customer_id,
             $campaign->id,
             ['keywords' => $added]
         );
 
-        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
+        return ['applied' => true, 'receipt' => ['keywords' => $keywords, 'match_type' => KeywordMatchType::name($matchType)], 'message' => $message, 'recommendation' => $rec];
     }
 
     private function applyKeyword(Campaign $campaign, array $rec): array
@@ -374,28 +430,28 @@ class RecommendationApplier
         }
         $ok = app(UpdateKeywordBid::class, ['customer' => $customer])($customerId, $resource, (int) $bid);
 
-        return ['applied' => $ok, 'message' => $ok ? "Bid adjusted to {$bid} micros" : 'Failed to adjust bid'];
+        return ['applied' => $ok, 'receipt' => ['criterion' => $resource, 'cpc' => (int) $bid], 'message' => $ok ? "Bid adjusted to {$bid} micros" : 'Failed to adjust bid'];
     }
 
     private function pauseKeyword($customer, string $customerId, string $resource): array
     {
         $ok = (new UpdateKeywordStatus($customer))->pause($customerId, $resource);
 
-        return ['applied' => $ok, 'message' => $ok ? 'Keyword paused' : 'Failed to pause keyword'];
+        return ['applied' => $ok, 'receipt' => ['criterion' => $resource, 'status' => 'PAUSED'], 'message' => $ok ? 'Keyword paused' : 'Failed to pause keyword'];
     }
 
     private function enableKeyword($customer, string $customerId, string $resource): array
     {
         $ok = (new UpdateKeywordStatus($customer))->enable($customerId, $resource);
 
-        return ['applied' => $ok, 'message' => $ok ? 'Keyword enabled' : 'Failed to enable keyword'];
+        return ['applied' => $ok, 'receipt' => ['criterion' => $resource, 'status' => 'ENABLED'], 'message' => $ok ? 'Keyword enabled' : 'Failed to enable keyword'];
     }
 
     private function removeKeyword($customer, string $customerId, string $resource): array
     {
         $ok = (new RemoveKeyword($customer))($customerId, $resource);
 
-        return ['applied' => $ok, 'message' => $ok ? 'Keyword removed' : 'Failed to remove keyword'];
+        return ['applied' => $ok, 'receipt' => ['criterion' => $resource, 'status' => 'REMOVED'], 'message' => $ok ? 'Keyword removed' : 'Failed to remove keyword'];
     }
 
     private function applyBidding(Campaign $campaign, array $rec, bool $approvedByUser = false): array
@@ -420,13 +476,13 @@ class RecommendationApplier
 
                 if ($ok) {
                     AgentActivity::record(
-                        'optimization', 'bid_adjusted',
-                        'Adjusted keyword bid to $'.round($newBidMicros / 1_000_000, 2),
+                        'optimization', 'bid_adjustment_submitted',
+                        'Submitted keyword bid of $'.round($newBidMicros / 1_000_000, 2),
                         $customer->id, $campaign->id,
                         ['keyword' => $kwResource, 'new_bid_micros' => $newBidMicros, 'confidence' => $confidence]
                     );
 
-                    return ['applied' => true, 'message' => 'Keyword bid adjusted to $'.round($newBidMicros / 1_000_000, 2), 'recommendation' => $rec];
+                    return ['applied' => true, 'receipt' => ['criterion' => $kwResource, 'cpc' => (int) $newBidMicros], 'message' => 'Keyword bid adjusted to $'.round($newBidMicros / 1_000_000, 2), 'recommendation' => $rec];
                 }
             }
         }
@@ -466,7 +522,7 @@ class RecommendationApplier
         }
         $result = (new SetDeviceBidAdjustment($customer))($customerId, $resource, (int) $device, (float) $modifier);
 
-        return ['applied' => $result !== null, 'message' => $result ? "Device bid set to {$modifier}x" : 'Failed to set device bid'];
+        return ['applied' => $result !== null, 'receipt' => ['criterion' => $result, 'modifier' => (float) $modifier], 'message' => $result ? "Device bid set to {$modifier}x" : 'Failed to set device bid'];
     }
 
     private function locationBid($customer, string $customerId, string $resource, array $rec): array
@@ -478,7 +534,7 @@ class RecommendationApplier
         }
         $result = (new SetLocationBidAdjustment($customer))($customerId, $resource, $geo, (float) $modifier);
 
-        return ['applied' => $result !== null, 'message' => $result ? "Location bid set to {$modifier}x for {$geo}" : 'Failed to set location bid'];
+        return ['applied' => $result !== null, 'receipt' => ['criterion' => $result, 'modifier' => (float) $modifier], 'message' => $result ? "Location bid set to {$modifier}x for {$geo}" : 'Failed to set location bid'];
     }
 
     private function applySchedule(Campaign $campaign, array $rec): array
@@ -491,26 +547,16 @@ class RecommendationApplier
 
         $customerId = $customer->cleanGoogleCustomerId();
         $resource = $campaign->googleAdsResourceName();
-        $service = new SetAdSchedule($customer);
-        $scheduleType = $rec['sub_type'] ?? 'business_hours';
-
-        if ($scheduleType === 'business_hours') {
-            $modifier = (float) ($rec['suggested_value'] ?? 1.2);
-            $results = $service->setBusinessHours($customerId, $resource, $modifier);
-            $applied = count(array_filter($results)) > 0;
-
-            return ['applied' => $applied, 'message' => $applied ? "Business hours schedule set ({$modifier}x)" : 'Failed to set business hours', 'recommendation' => $rec];
+        $service = app(SetAdSchedule::class, ['customer' => $customer]);
+        $criterion = $rec['criterion_resource_name'] ?? null;
+        $modifier = $rec['suggested_value'] ?? null;
+        if (! $criterion || ! is_numeric($modifier) || ! isset($service->enabledIntervals($customerId, $resource)[$criterion])) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'The current delivery schedule is preserved. Choose an existing eligible interval for a bid adjustment.', 'recommendation' => $rec];
         }
+        $ok = $service->updateExistingModifier($customerId, $resource, $criterion, (float) $modifier);
 
-        $result = ($service)(
-            $customerId, $resource,
-            (int) ($rec['day_of_week'] ?? 2),
-            (int) ($rec['start_hour'] ?? 9), 2,
-            (int) ($rec['end_hour'] ?? 17), 2,
-            (float) ($rec['suggested_value'] ?? 1.0)
-        );
-
-        return ['applied' => $result !== null, 'message' => $result ? 'Ad schedule set' : 'Failed to set ad schedule', 'recommendation' => $rec];
+        return ['applied' => $ok, 'receipt' => ['criterion' => $criterion, 'modifier' => (float) $modifier],
+            'message' => $ok ? 'Verified bid adjustment on the existing interval.' : 'The schedule adjustment could not be verified.', 'recommendation' => $rec];
     }
 
     private function applyExtension(Campaign $campaign, array $rec): array
@@ -544,7 +590,7 @@ class RecommendationApplier
 
             $linkResult = (new LinkCampaignAsset($customer))($customerId, $resource, $assetResource, $fieldType);
 
-            return ['applied' => $linkResult !== null, 'message' => $linkResult ? "{$label} created and linked" : "{$label} created but link failed", 'recommendation' => $rec];
+            return ['applied' => $linkResult !== null, 'receipt' => ['asset' => $assetResource, 'role' => AssetFieldType::name($fieldType)], 'message' => $linkResult ? "{$label} created and linked" : "{$label} created but link failed", 'recommendation' => $rec];
         } catch (\Throwable $e) {
             report($e);
 
@@ -691,18 +737,18 @@ class RecommendationApplier
                 'platform' => 'facebook',
                 'type' => $subType,
                 'platform_resource_name' => $result['id'],
-                'status' => 'active',
+                'status' => 'creating',
                 'source_data' => ['recommendation' => $rec, 'created_by' => 'optimization_agent'],
             ]);
 
             AgentActivity::record(
-                'optimization', 'audience_created',
-                "Created Facebook {$subType} audience '{$audienceName}'",
+                'optimization', 'audience_submitted',
+                "Submitted Facebook {$subType} audience '{$audienceName}'",
                 $customer->id, $campaign->id,
                 ['audience_id' => $result['id'], 'sub_type' => $subType]
             );
 
-            return ['applied' => true, 'message' => "Facebook {$subType} audience '{$audienceName}' created", 'recommendation' => $rec];
+            return ['applied' => true, 'receipt' => ['audience' => (string) $result['id'], 'name' => $audienceName], 'message' => "Facebook {$subType} audience '{$audienceName}' created", 'recommendation' => $rec];
         } catch (\Throwable $e) {
             report($e);
 
@@ -754,11 +800,11 @@ class RecommendationApplier
                 'platform' => 'google',
                 'type' => $subType,
                 'platform_resource_name' => $resourceName,
-                'status' => 'active',
+                'status' => 'creating',
                 'source_data' => ['recommendation' => $rec, 'created_by' => 'optimization_agent'],
             ]);
 
-            return ['applied' => true, 'message' => "{$subType} audience '{$listName}' created", 'recommendation' => $rec];
+            return ['applied' => true, 'receipt' => ['audience' => $resourceName, 'name' => $listName], 'message' => "{$subType} audience '{$listName}' created", 'recommendation' => $rec];
         } catch (\Throwable $e) {
             report($e);
 

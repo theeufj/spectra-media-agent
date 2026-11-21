@@ -62,15 +62,13 @@ class PreLaunchComplianceAgent
 
         // Collect all ad copy text from strategies
         $adTexts = [];
-        foreach ($campaign->strategies ?? [] as $strategy) {
-            if (! empty($strategy->headlines)) {
-                $adTexts = array_merge($adTexts, (array) $strategy->headlines);
+        foreach ($campaign->strategies as $strategy) {
+            $selection = app(\App\Services\Creative\CreativeRelease::class)->selection($strategy);
+            foreach ($selection['copy'] as $copy) {
+                array_push($adTexts, ...($copy->headlines ?? []), ...($copy->long_headlines ?? []), ...($copy->descriptions ?? []));
             }
-            if (! empty($strategy->descriptions)) {
-                $adTexts = array_merge($adTexts, (array) $strategy->descriptions);
-            }
-            if (! empty($strategy->ad_copy)) {
-                $adTexts[] = is_array($strategy->ad_copy) ? implode(' ', $strategy->ad_copy) : $strategy->ad_copy;
+            foreach ($selection['search_offers'] as $offer) {
+                array_push($adTexts, ...($offer['headlines'] ?? []), ...($offer['descriptions'] ?? []));
             }
         }
 

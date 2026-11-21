@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, fireEvent, waitFor } from '@testing-library/react';
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
-const stripe = vi.hoisted(() => ({ createPaymentMethod: vi.fn() }));
+const stripe = vi.hoisted(() => ({ createPaymentMethod: vi.fn(), publishableKey: 'pk_test_fixture', load: vi.fn() }));
 
 vi.mock('@inertiajs/react', () => ({
     Head: () => null,
     router: { reload: vi.fn() },
     // The billing panels read the active customer's currency from shared
     // props now, rather than printing a hardcoded dollar sign.
-    usePage: () => ({ props: { auth: { user: { active_customer: { currency_code: 'AUD' } } } } }),
+    usePage: () => ({ props: { stripePublishableKey: stripe.publishableKey, auth: { user: { active_customer: { currency_code: 'AUD' } } } } }),
 }));
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({
     default: ({ children }) => <div>{children}</div>,
@@ -18,7 +18,7 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 vi.mock('@/Components/Toast', () => ({
     useToast: () => toast,
 }));
-vi.mock('@stripe/stripe-js', () => ({ loadStripe: () => null }));
+vi.mock('@stripe/stripe-js/pure', () => ({ loadStripe: key => stripe.load(key) }));
 vi.mock('@stripe/react-stripe-js', () => ({
     Elements: ({ children }) => <div>{children}</div>,
     CardElement: () => null,
@@ -213,18 +213,19 @@ describe('ad spend setup modal', () => {
 
     const campaign = { id: 9, name: 'Spring Sale', total_budget: 900, start_date: '2026-09-01', end_date: '2026-09-30' };
 
-    it('sends the CSRF header without reading the meta tag by hand', async () => {
+    it('saves the payment method for launch review without charging before approval', async () => {
+        const onSuccess = vi.fn();
         global.fetch.mockResolvedValue({
             ok: true,
             status: 200,
-            text: async () => JSON.stringify({ success: true }),
+            text: async () => JSON.stringify({ success: true, deferred: true, credit_amount: 0 }),
         });
 
         const { getByText } = render(
             <AdSpendSetupModal
                 show
                 onClose={() => {}}
-                onSuccess={() => {}}
+                onSuccess={onSuccess}
                 campaign={campaign}
                 campaignName="Spring Sale"
                 existingCredit={null}
@@ -232,7 +233,7 @@ describe('ad spend setup modal', () => {
             />
         );
 
-        fireEvent.click(getByText(/Pay .* & review launch$/));
+        fireEvent.click(getByText('Continue to launch review'));
 
         await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
@@ -240,6 +241,7 @@ describe('ad spend setup modal', () => {
         expect(url).toBe('/billing/ad-spend/setup-for-deployment');
         expect(init.headers['X-CSRF-TOKEN']).toBeDefined();
         expect(init.headers.Accept).toBe('application/json');
+        expect(onSuccess).toHaveBeenCalledWith({ success: true, deferred: true, credit_amount: 0 });
         expect(JSON.parse(init.body)).toMatchObject({ campaign_id: 9, daily_budget: 30, days_to_charge: 7 });
     });
 
@@ -265,8 +267,25 @@ describe('ad spend setup modal', () => {
             />
         );
 
-        fireEvent.click(getByText(/Pay .* & review launch$/));
+        fireEvent.click(getByText('Continue to launch review'));
 
         expect(await findByText('Please confirm this campaign’s daily budget before funding it.')).toBeInTheDocument();
+    });
+});
+
+describe('card configuration', () => {
+    it('explains unavailable card entry and never invokes Stripe with an absent publishable key', () => {
+        const old = stripe.publishableKey;
+        stripe.publishableKey = '';
+        vi.stubEnv('VITE_STRIPE_KEY', '');
+        stripe.load.mockClear();
+        try {
+            const view = render(<AdSpendSetupModal show campaign={{ daily_budget: 10 }} campaignName="QA" />);
+            expect(view.getByText(/Card entry is currently unavailable/)).toBeTruthy();
+            expect(stripe.load).not.toHaveBeenCalled();
+        } finally {
+            stripe.publishableKey = old;
+            vi.unstubAllEnvs();
+        }
     });
 });

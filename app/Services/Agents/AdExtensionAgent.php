@@ -71,13 +71,18 @@ class AdExtensionAgent
                 $result['errors'] = $links['errors'];
                 $result['unresolved'] = $links['unresolved'];
             }
+            $approved = collect($strategy->ad_extensions['callouts'] ?? $strategy->bidding_strategy['callouts'] ?? [])
+                ->filter(fn ($text) => is_string($text) && trim($text) !== '' && mb_strlen($text) <= 25)->unique()->values();
+            $linker = app(LinkCampaignAsset::class, ['customer' => $customer]);
+            $links = $approved->isEmpty() ? [] : $linker->calloutLinks($customerId, $resource);
+            $unused = $approved->diff(array_column($links, 'text'))->values();
             if ($counts[AssetFieldType::CALLOUT] < self::MIN_CALLOUTS) {
-                $this->requireMutationAllowed($campaign, $strategy, $reader);
-                $callouts = $this->generateCallouts($customer, $campaign, $context, self::MIN_CALLOUTS - $counts[AssetFieldType::CALLOUT]);
-                foreach ($callouts as $text) {
-                    $creator = app(CreateCalloutAsset::class, ['customer' => $customer]);
-                    $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $text), AssetFieldType::CALLOUT);
-                    $result['created'][] = ['type' => 'callout', 'text' => $text];
+                $creator = app(CreateCalloutAsset::class, ['customer' => $customer]);
+                foreach ($unused->take(self::MIN_CALLOUTS - $counts[AssetFieldType::CALLOUT]) as $text) {
+                    $link = $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $text), AssetFieldType::CALLOUT);
+                    AgentActivity::record('extensions', 'managed_callout', 'Attached reviewed callout.', $customer->id, $campaign->id, ['link' => $link]);
+                    $result['created'][] = ['type' => 'callout', 'text' => $text, 'link' => $link];
+                    $unused = $unused->reject(fn ($item) => $item === $text);
                 }
             }
             if ($counts[AssetFieldType::STRUCTURED_SNIPPET] < self::MIN_SNIPPETS) {
@@ -100,12 +105,28 @@ class AdExtensionAgent
             foreach ($assets as $asset) {
                 if ($asset['impressions'] >= self::ROTATION_IMPRESSIONS_THRESHOLD && $asset['ctr'] < $threshold && $asset['field_type'] === AssetFieldType::CALLOUT) {
                     $this->requireMutationAllowed($campaign, $strategy, $reader);
-                    $replacements = $this->generateCallouts($customer, $campaign, $context, 1);
-                    if ($replacements) {
-                        $creator = app(CreateCalloutAsset::class, ['customer' => $customer]);
-                        $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $replacements[0]), AssetFieldType::CALLOUT);
-                        $result['rotated'][] = ['type' => 'callout', 'replaced' => $asset['asset_name']];
+                    $old = $asset['link'] ?? null;
+                    if (! $old || ($asset['source'] ?? '') !== 'ADVERTISER' || ! AgentActivity::where('campaign_id', $campaign->id)
+                        ->where('action', 'managed_callout')->where('details->link', $old)->exists()) {
+                        continue;
                     }
+                    $pending = AgentActivity::where('campaign_id', $campaign->id)->where('action', 'callout_replacement')
+                        ->where('details->old', $old)->latest('id')->first();
+                    if ($pending && $pending->status === 'completed') {
+                        continue;
+                    }
+                    if (! $pending && ($text = $unused->shift())) {
+                        $creator = app(CreateCalloutAsset::class, ['customer' => $customer]);
+                        $new = $this->attachAsset($campaign, $strategy, $reader, fn () => $creator($customerId, $text), AssetFieldType::CALLOUT);
+                        $pending = AgentActivity::record('extensions', 'callout_replacement', 'Awaiting replacement eligibility.',
+                            $customer->id, $campaign->id, ['old' => $old, 'new' => $new], 'pending');
+                        AgentActivity::record('extensions', 'managed_callout', 'Attached reviewed callout.', $customer->id, $campaign->id, ['link' => $new]);
+                    }
+                    if ($pending && $linker->retireCallout($customerId, $resource, $old, $pending->details['new'])) {
+                        $pending->update(['status' => 'completed']);
+                        $result['rotated'][] = $pending->details;
+                    }
+
                 }
             }
         } catch (\DomainException $e) {
@@ -132,15 +153,18 @@ class AdExtensionAgent
     }
 
     /** Never count an asset as attached without an acknowledged link. */
-    private function attachAsset(Campaign $campaign, \App\Models\Strategy $strategy, \App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration $reader, callable $create, int $field): void
+    private function attachAsset(Campaign $campaign, \App\Models\Strategy $strategy, \App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration $reader, callable $create, int $field): string
     {
         $this->requireMutationAllowed($campaign, $strategy, $reader);
         $asset = $create();
         $this->requireMutationAllowed($campaign, $strategy, $reader);
         $linker = app(LinkCampaignAsset::class, ['customer' => $campaign->customer]);
-        if (! $asset || ! $linker($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName(), $asset, $field)) {
+        $link = $asset ? $linker($campaign->customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName(), $asset, $field) : null;
+        if (! $link) {
             throw new \RuntimeException('Google did not confirm the extension link.');
         }
+
+        return $link;
     }
 
     /** Address Google's explicit sitelink action item using distinct verified pages. */
@@ -216,38 +240,6 @@ class AdExtensionAgent
             'Website: '.$customer->website,
             $pageContent ? "Website content:\n".$pageContent : null,
         ]));
-    }
-
-    private function generateCallouts(object $customer, Campaign $campaign, string $context, int $count): array
-    {
-        $prompt = <<<PROMPT
-You are an expert Google Ads copywriter. Generate {$count} callout extension text(s) for the following business.
-
-{$context}
-
-Requirements:
-- Each callout max 25 characters
-- Highlight unique selling points, features, or benefits
-- No punctuation at the end
-
-Return ONLY a valid JSON array of strings: ["...", "..."]
-PROMPT;
-
-        try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
-            $text = $response['text'] ?? '';
-            $text = preg_replace('/```json\s*|\s*```/', '', $text);
-            $data = json_decode(trim($text), true);
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                return array_values(array_filter(array_slice($data, 0, $count), 'is_string'));
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('AdExtensionAgent: Callout generation failed: '.$e->getMessage());
-        }
-
-        return [];
     }
 
     private function generateStructuredSnippet(object $customer, Campaign $campaign, string $context): ?array

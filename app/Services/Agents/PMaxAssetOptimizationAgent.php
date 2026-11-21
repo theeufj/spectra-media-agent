@@ -90,6 +90,9 @@ class PMaxAssetOptimizationAgent
 
         foreach ($lowAssets as $asset) {
             $fieldType = $asset['field_type'];
+            if (in_array($fieldType, ['HEADLINE', 'LONG_HEADLINE', 'DESCRIPTION', 'MARKETING_IMAGE', 'SQUARE_MARKETING_IMAGE', 'PORTRAIT_MARKETING_IMAGE', 'YOUTUBE_VIDEO'], true)) {
+                $this->propose($campaign, $campaignResourceName, $asset);
+            }
 
             if (in_array($fieldType, ['HEADLINE', 'LONG_HEADLINE', 'DESCRIPTION'], true)) {
                 $result['text_flagged']++;
@@ -127,5 +130,31 @@ class PMaxAssetOptimizationAgent
         }
 
         return $result;
+    }
+
+    private function propose(Campaign $campaign, string $campaignResource, array $asset): void
+    {
+        $group = $asset['asset_group'] ?? null;
+        $resource = $asset['asset_resource'] ?? null;
+        if (! $group || ! $resource) {
+            return;
+        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($campaign, $campaignResource, $group, $resource, $asset) {
+            $strategy = $campaign->strategies()->where('campaign_type', 'performance_max')->where('deployment_status', 'active')
+                ->where('execution_result->metadata->google_pmax_staging->asset_group', $group)->lockForUpdate()->first();
+            if (! $strategy || $strategy->reusableGoogleCampaignId() !== $campaignResource
+                || \App\Models\CreativeBrief::where('campaign_id', $campaign->id)->where('brief_type', 'pmax_replacement')
+                    ->where('context->asset_resource', $resource)->where('context->asset_group', $group)
+                    ->where('context->release', $strategy->creative_approval['fingerprint'] ?? 'legacy')->exists()) {
+                return;
+            }
+            $bindings = $strategy->execution_result['metadata']['google_pmax_staging']['media_bindings'] ?? [];
+            $rotating = isset($bindings[$resource]) && app(\App\Services\Creative\ApprovedVariantRotation::class)->propose($strategy, $bindings[$resource], $bindings);
+            \App\Models\CreativeBrief::create(['customer_id' => $campaign->customer_id, 'campaign_id' => $campaign->id, 'platform' => 'google',
+                'brief_type' => 'pmax_replacement', 'status' => $rotating ? 'actioned' : 'pending', 'actioned_at' => $rotating ? now() : null, 'created_by_agent' => 'pmax_asset_optimization',
+                'ai_brief' => 'Prepare a different '.strtolower(str_replace('_', ' ', $asset['field_type'])).' for the approved offer. Preserve the audience, destination and daily budget.',
+                'context' => ['strategy_id' => $strategy->id, 'asset_group' => $group, 'asset_resource' => $resource, 'field_type' => $asset['field_type'],
+                    'release' => $strategy->creative_approval['fingerprint'] ?? 'legacy', 'impressions' => $asset['impressions'] ?? 0, 'clicks' => $asset['clicks'] ?? 0]]);
+        });
     }
 }

@@ -28,24 +28,28 @@ class PixelService extends BaseFacebookAdsService
         }
 
         $accountId = preg_replace('/^act_/', '', $this->customer->facebook_ads_account_id);
-        $response = $this->get("/act_{$accountId}/adspixels", [
+        $pixels = $this->getAllPages("/act_{$accountId}/adspixels", [
             'fields' => 'id,name,creation_time',
             'limit' => 100,
-        ]);
+        ], complete: $complete);
 
-        if (! is_array($response['data'] ?? null)) {
+        if (! $complete) {
             return null;
         }
 
-        $pixel = collect($response['data'])->first(
+        $candidates = collect($pixels)->filter(
             fn ($item) => ctype_digit((string) ($item['id'] ?? '')) && ! str_starts_with($item['name'] ?? '', BusinessManagerService::REVIEW_PIXEL_PREFIX),
         );
+        if ($candidates->count() > 1) {
+            return null;
+        }
+        $pixel = $candidates->first();
         if (! $pixel) {
             Log::info('PixelService: No existing pixel found, will create one', [
                 'customer_id' => $this->customer->id,
             ]);
 
-            return isset($response['paging']['next']) ? null : $this->createPixel();
+            return $this->createPixel();
         }
 
         $pixelId = $pixel['id'];
@@ -119,6 +123,21 @@ class PixelService extends BaseFacebookAdsService
         return ! empty($response['success']) && $this->isLinked($pixelId, $accountId);
     }
 
+    public function canAdvertisePage(string $id): bool
+    {
+        if (! ctype_digit($id)) {
+            return false;
+        }
+        $pages = $this->getAllPages('/me/accounts', ['fields' => 'id,tasks', 'limit' => 100]);
+        foreach ($pages as $page) {
+            if ((string) ($page['id'] ?? '') === $id && array_intersect($page['tasks'] ?? [], ['ADVERTISE', 'MANAGE', 'PROFILE_PLUS_ADVERTISE', 'PROFILE_PLUS_FULL_CONTROL'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isLinked(string $pixelId, string $accountId): bool
     {
         $accountId = preg_replace('/^act_/', '', $accountId);
@@ -126,8 +145,8 @@ class PixelService extends BaseFacebookAdsService
             return false;
         }
 
-        $response = $this->get("/act_{$accountId}/adspixels", ['fields' => 'id', 'limit' => 100]);
+        $pixels = $this->getAllPages("/act_{$accountId}/adspixels", ['fields' => 'id', 'limit' => 100]);
 
-        return collect($response['data'] ?? [])->contains(fn ($row) => (string) ($row['id'] ?? '') === $pixelId);
+        return collect($pixels)->contains(fn ($row) => (string) ($row['id'] ?? '') === $pixelId);
     }
 }

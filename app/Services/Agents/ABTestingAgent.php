@@ -3,17 +3,11 @@
 namespace App\Services\Agents;
 
 use App\Models\ABTest;
-use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Strategy;
-use App\Services\FacebookAds\FacebookCampaignMetrics;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CreateCampaignExperiment;
-use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
-use App\Services\GoogleAds\CommonServices\GetCampaignExperimentResults;
-use App\Services\GoogleAds\CommonServices\PromoteCampaignExperiment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -53,6 +47,7 @@ class ABTestingAgent
                 'id' => $variant['id'] ?? Str::uuid()->toString(),
                 'label' => $variant['label'] ?? 'Variant '.chr(65 + $index), // A, B, C...
                 'content' => $variant['content'],
+                'treatment_id' => $variant['treatment_id'] ?? null,
                 'impressions' => 0,
                 'clicks' => 0,
                 'conversions' => 0,
@@ -66,6 +61,7 @@ class ABTestingAgent
             'test_type' => $testType,
             'status' => ABTest::STATUS_RUNNING,
             'variants' => $formattedVariants,
+            'results' => ['binding' => app(\App\Services\Conversions\CampaignOutcomeEvidence::class)->binding($strategy)['fingerprint']],
             'started_at' => now(),
         ]);
     }
@@ -86,12 +82,23 @@ class ABTestingAgent
             return ['action' => 'stopped', 'reason' => 'Maximum test duration exceeded'];
         }
 
-        // Refresh variant metrics from the ad platform
-        $variants = $this->refreshVariantMetrics($test);
-        if (! $variants) {
-            return ['action' => 'skip', 'reason' => 'Could not refresh metrics'];
+        if (! $test->strategy) {
+            return ['action' => 'skip', 'reason' => 'The original strategy is unavailable.'];
         }
-
+        $binding = app(\App\Services\Conversions\CampaignOutcomeEvidence::class)->binding($test->strategy);
+        if (($test->results['binding'] ?? null) !== $binding['fingerprint'] || ! $binding['destination']) {
+            return ['action' => 'skip', 'reason' => 'The approved outcome or platform treatments need a new comparison.'];
+        }
+        $variants = $test->variants;
+        $current = app(CreativeTreatmentMetrics::class)->read($test->strategy, $test->started_at->toDateString(), now()->toDateString());
+        foreach ($variants as &$variant) {
+            $id = $variant['treatment_id'] ?? null;
+            if (! $id || ! isset($current[$id])) {
+                return ['action' => 'skip', 'reason' => 'Waiting for both original platform treatment IDs.'];
+            }
+            $variant = array_replace($variant, $current[$id]);
+        }
+        unset($variant);
         // Update stored variants with fresh data
         $test->update(['variants' => $variants]);
 
@@ -104,18 +111,24 @@ class ABTestingAgent
             ];
         }
 
-        // Run chi-squared test on CTR
-        $significance = $this->chiSquaredTest($variants);
+        // Asset delivery is observational. Compare primary outcomes per impression and
+        // require both arms to have observed outcomes before surfacing a candidate.
+        $outcomes = [];
+        foreach ($variants as $variant) {
+            if ($variant['conversions'] < 5 || $variant['conversions'] >= $variant['impressions']) {
+                return ['action' => 'learning', 'reason' => 'More primary outcomes are needed for both treatments.'];
+            }
+            $outcomes[] = array_replace($variant, ['clicks' => $variant['conversions']]);
+        }
+        $significance = $this->chiSquaredTest($outcomes);
 
         if ($significance['is_significant']) {
-            $winner = $this->identifyWinner($variants);
-
-            $results = [
-                'chi_squared' => $significance['chi_squared'],
-                'p_value' => $significance['p_value'],
-                'lift_pct' => $this->calculateLift($variants, $winner['id']),
-                'metrics_snapshot' => $variants,
-            ];
+            $selected = $this->identifyWinner($outcomes);
+            $winner = collect($variants)->firstWhere('id', $selected['id']);
+            $results = ['binding' => $binding['fingerprint'], 'primary_outcome' => $binding['goal'],
+                'state' => 'suggested', 'comparison' => 'observational', 'chi_squared' => $significance['chi_squared'],
+                'p_value' => $significance['p_value'], 'lift_pct' => $this->calculateLift($outcomes, $winner['id']),
+                'metrics_snapshot' => $variants];
 
             $test->markSignificant($winner['id'], $significance['confidence'], $results);
 
@@ -152,236 +165,11 @@ class ABTestingAgent
             return ['success' => false, 'reason' => 'Test has not reached significance'];
         }
 
-        $variants = $test->variants;
-        $winnerId = $test->winning_variant_id;
-        $winner = collect($variants)->firstWhere('id', $winnerId);
-        $losers = collect($variants)->where('id', '!=', $winnerId)->all();
-
-        // Generate replacement creatives based on the winner
-        $replacements = $this->generateReplacements($test, $winner, $losers);
-
-        // Persist winner + replacements back to the strategy's AdCopy model
-        $this->persistWinnerToAdCopy($test, $winner, $replacements);
-
-        $test->markApplied();
-
-        Log::info('ABTestingAgent: Results applied', [
-            'test_id' => $test->id,
-            'winner' => $winner['label'],
-            'losers_replaced' => count($losers),
-            'new_variations' => count($replacements),
-        ]);
-
-        return [
-            'success' => true,
-            'winner' => $winner,
-            'replacements' => $replacements,
-        ];
+        // Publishing belongs to the creative approval and readback workflow.
+        return ['success' => false, 'status' => 'suggested', 'reason' => 'The measured winner is available for creative review.',
+            'winner' => collect($test->variants)->firstWhere('id', $test->winning_variant_id)];
     }
 
-    /**
-     * Save the winning variant's headlines (plus AI-generated replacements) back to the
-     * strategy's AdCopy record so the next test cycle and any future re-deployments use
-     * the confirmed winner copy.
-     */
-    protected function persistWinnerToAdCopy(ABTest $test, array $winner, array $replacements): void
-    {
-        if ($test->test_type !== ABTest::TYPE_HEADLINE && $test->test_type !== ABTest::TYPE_DESCRIPTION) {
-            return;
-        }
-
-        $strategy = $test->strategy;
-        if (! $strategy) {
-            return;
-        }
-
-        $adCopy = AdCopy::where('strategy_id', $strategy->id)->first();
-        if (! $adCopy) {
-            return;
-        }
-
-        $winnerHeadlines = $winner['meta']['headlines'] ?? explode(' | ', $winner['content'] ?? '');
-        $winnerDescriptions = $winner['meta']['descriptions'] ?? $adCopy->descriptions ?? [];
-
-        if ($test->test_type === ABTest::TYPE_HEADLINE) {
-            // Replace full headline set: winner headlines first, then AI-generated replacements
-            $updatedHeadlines = array_values(array_unique(array_merge(
-                $winnerHeadlines,
-                array_filter($replacements),
-            )));
-            // Cap at Google's RSA limit of 15 headlines
-            $updatedHeadlines = array_slice($updatedHeadlines, 0, 15);
-            $adCopy->update(['headlines' => $updatedHeadlines]);
-        } elseif ($test->test_type === ABTest::TYPE_DESCRIPTION) {
-            $winnerDescriptions = $winner['meta']['descriptions'] ?? explode(' | ', $winner['content'] ?? '');
-            $updatedDescriptions = array_values(array_unique(array_merge(
-                $winnerDescriptions,
-                array_filter($replacements),
-            )));
-            $updatedDescriptions = array_slice($updatedDescriptions, 0, 4);
-            $adCopy->update(['descriptions' => $updatedDescriptions]);
-        }
-
-        Log::info('ABTestingAgent: AdCopy updated with winner', [
-            'test_id' => $test->id,
-            'strategy_id' => $strategy->id,
-            'ad_copy_id' => $adCopy->id,
-            'test_type' => $test->test_type,
-        ]);
-    }
-
-    /**
-     * Refresh variant metrics from the ad platform.
-     * Supports Google Ads (asset-level) and Facebook Ads (ad-level).
-     */
-    protected function refreshVariantMetrics(ABTest $test): ?array
-    {
-        $campaign = $test->campaign;
-        if (! $campaign || ! $campaign->customer) {
-            return null;
-        }
-
-        $customer = $campaign->customer;
-
-        // Try Google Ads first
-        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
-            return $this->refreshGoogleVariantMetrics($test, $campaign, $customer);
-        }
-
-        // Try Facebook Ads
-        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
-            return $this->refreshFacebookVariantMetrics($test, $campaign, $customer);
-        }
-
-        return $test->variants;
-    }
-
-    /**
-     * Refresh variant metrics from Google Ads asset-level data.
-     */
-    protected function refreshGoogleVariantMetrics(ABTest $test, Campaign $campaign, $customer): ?array
-    {
-        try {
-            $customerId = $customer->google_ads_customer_id;
-            $campaignResourceName = $campaign->googleAdsResourceName();
-            $assetService = new GetAdPerformanceByAsset($customer);
-
-            $fieldKey = match ($test->test_type) {
-                ABTest::TYPE_HEADLINE, ABTest::TYPE_DESCRIPTION => 'text',
-                ABTest::TYPE_IMAGE => 'image',
-                default => 'text',
-            };
-
-            if ($fieldKey === 'text') {
-                $platformAssets = $assetService->getResponsiveSearchAdAssets($customerId, $campaignResourceName);
-                $assetPool = $test->test_type === ABTest::TYPE_HEADLINE
-                    ? ($platformAssets['headlines'] ?? [])
-                    : ($platformAssets['descriptions'] ?? []);
-            } else {
-                $assetPool = $assetService->getImageAssetPerformance($customerId, $campaignResourceName);
-            }
-
-            $variants = $test->variants;
-            foreach ($variants as &$variant) {
-                foreach ($assetPool as $asset) {
-                    $assetContent = $asset['text'] ?? $asset['asset_name'] ?? '';
-                    if ($assetContent === $variant['content']) {
-                        $variant['impressions'] = $asset['impressions'] ?? $variant['impressions'];
-                        $variant['clicks'] = $asset['clicks'] ?? $variant['clicks'];
-                        $variant['conversions'] = $asset['conversions'] ?? $variant['conversions'];
-                        $variant['cost'] = $asset['cost'] ?? $variant['cost'];
-                        break;
-                    }
-                }
-            }
-
-            return $variants;
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('ABTestingAgent: Failed to refresh Google metrics', [
-                'test_id' => $test->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return $test->variants;
-        }
-    }
-
-    /**
-     * Refresh variant metrics from Facebook Ads ad-level insights.
-     * Facebook A/B tests compare at the ad level rather than asset level.
-     */
-    protected function refreshFacebookVariantMetrics(ABTest $test, Campaign $campaign, $customer): ?array
-    {
-        try {
-            $insightService = new FacebookInsightService($customer);
-            $accountId = 'act_'.preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
-            $dateEnd = now()->format('Y-m-d');
-            $dateStart = $test->started_at->format('Y-m-d');
-
-            $adInsights = $insightService->getAccountInsightsByLevel(
-                $accountId,
-                $dateStart,
-                $dateEnd,
-                'ad',
-                ['campaign_id', 'ad_id', 'ad_name', 'impressions', 'inline_link_clicks', 'spend', 'actions'],
-                campaignId: $campaign->facebook_ads_campaign_id,
-            );
-
-            if (empty($adInsights)) {
-                return $test->variants;
-            }
-
-            // Build lookup by ad name/id
-            $insightLookup = [];
-            $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
-            foreach ($adInsights as $insight) {
-                if ((string) ($insight['campaign_id'] ?? '') !== (string) $campaign->facebook_ads_campaign_id || empty($insight['ad_id'])) {
-                    continue;
-                }
-
-                $key = $insight['ad_name'] ?? $insight['ad_id'] ?? '';
-                if (! isset($insightLookup[$key])) {
-                    $insightLookup[$key] = [
-                        'impressions' => 0,
-                        'clicks' => 0,
-                        'conversions' => 0,
-                        'cost' => 0,
-                    ];
-                }
-                $insightLookup[$key]['impressions'] += (int) ($insight['impressions'] ?? 0);
-                $insightLookup[$key]['clicks'] += (int) ($insight['inline_link_clicks'] ?? 0);
-                $insightLookup[$key]['conversions'] += FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $goal);
-                $insightLookup[$key]['cost'] += (float) ($insight['spend'] ?? 0);
-            }
-
-            // Match insights back to variants
-            $variants = $test->variants;
-            foreach ($variants as &$variant) {
-                $content = $variant['content'] ?? '';
-                if (isset($insightLookup[$content])) {
-                    $variant['impressions'] = $insightLookup[$content]['impressions'];
-                    $variant['clicks'] = $insightLookup[$content]['clicks'];
-                    $variant['conversions'] = $insightLookup[$content]['conversions'];
-                    $variant['cost'] = $insightLookup[$content]['cost'];
-                }
-            }
-
-            return $variants;
-        } catch (\Throwable $e) {
-            report($e);
-            Log::warning('ABTestingAgent: Failed to refresh Facebook metrics', [
-                'test_id' => $test->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return $test->variants;
-        }
-    }
-
-    /**
-     * Check if all variants have minimum sample size.
-     */
     protected function hasMinimumSampleSize(array $variants): bool
     {
         $totalClicks = 0;
@@ -654,95 +442,6 @@ class ABTestingAgent
             report($e);
             Log::error('ABTestingAgent: Failed to create Google native experiment', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
-    /**
-     * Check the status of a running Google Ads experiment and promote it if conditions are met.
-     *
-     * Promotes when:
-     *  - Status is GRADUATED, OR
-     *  - Treatment arm shows >10% conversion rate improvement with >100 conversions
-     *
-     * @return string|null 'promoted' | 'running' | 'insufficient_data' | null on error
-     */
-    public function checkAndPromoteExperiment(Campaign $campaign): ?string
-    {
-        $customer = $campaign->customer;
-        $customerId = $customer?->google_ads_customer_id;
-
-        // Reading an absent attribute yields null rather than throwing, so this
-        // needs no guard — the try/catch around it was dead code.
-        $experimentResource = $campaign->google_ads_experiment_id ?? null;
-
-        if (! $experimentResource || ! $customerId) {
-            Log::warning('ABTestingAgent: checkAndPromoteExperiment — missing experiment resource or customer ID', [
-                'campaign_id' => $campaign->id,
-                'experiment_resource' => $experimentResource,
-            ]);
-
-            return null;
-        }
-
-        try {
-            $getResults = new GetCampaignExperimentResults($customer);
-            $results = ($getResults)($customerId, $experimentResource);
-
-            $status = $results['experiment_status'] ?? 'UNKNOWN';
-
-            // Auto-promote if Google already graduated the experiment
-            if ($status === 'GRADUATED') {
-                $promote = new PromoteCampaignExperiment($customer);
-                $promoted = ($promote)($customerId, $experimentResource);
-
-                return $promoted ? 'promoted' : 'running';
-            }
-
-            // Check if treatment arm outperforms control by >10% with >100 conversions
-            $arms = $results['arms'] ?? [];
-            if (count($arms) >= 2) {
-                // Arms are returned in operation order: index 0 = control, index 1 = treatment
-                $controlArm = $arms[0] ?? null;
-                $treatmentArm = $arms[count($arms) - 1] ?? null;
-
-                if ($controlArm && $treatmentArm) {
-                    $treatmentConversions = (float) ($treatmentArm['conversions'] ?? 0);
-                    $controlConversions = (float) ($controlArm['conversions'] ?? 0);
-
-                    if ($treatmentConversions > 100 && $controlConversions > 0) {
-                        $lift = ($treatmentConversions - $controlConversions) / $controlConversions;
-
-                        if ($lift > 0.10) {
-                            $promote = new PromoteCampaignExperiment($customer);
-                            $promoted = ($promote)($customerId, $experimentResource);
-
-                            Log::info('ABTestingAgent: Promoting experiment due to >10% conversion lift', [
-                                'campaign_id' => $campaign->id,
-                                'experiment_resource' => $experimentResource,
-                                'lift_pct' => round($lift * 100, 1),
-                                'treatment_conversions' => $treatmentConversions,
-                            ]);
-
-                            return $promoted ? 'promoted' : 'running';
-                        }
-                    }
-
-                    if ($treatmentConversions <= 100) {
-                        return 'insufficient_data';
-                    }
-                }
-            }
-
-            return 'running';
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('ABTestingAgent: checkAndPromoteExperiment failed', [
-                'campaign_id' => $campaign->id,
-                'experiment_resource' => $experimentResource,
                 'error' => $e->getMessage(),
             ]);
 

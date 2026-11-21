@@ -50,7 +50,7 @@ function IntegrationCard({ integration, onRepair, onDisconnect }) {
 }
 
 function ConnectForm({ provider, onClose }) {
-    const { data: form, setData: setForm, post, processing: saving, errors } = useForm({ provider: provider.id, access_token: '', instance_url: '' });
+    const { data: form, setData: setForm, post, processing: saving, errors } = useForm({ provider: provider.id, access_token: '', instance_url: '', consent_field: '', default_currency: '' });
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -74,6 +74,14 @@ function ConnectForm({ provider, onClose }) {
                         <input id="instance_url" aria-invalid={Boolean(errors.instance_url)} type="url" value={form.instance_url} onChange={e => setForm({...form, instance_url: e.target.value})} required placeholder="https://yourorg.salesforce.com" className="w-full rounded-lg border-gray-300 text-sm" />
                     </div>
                 )}
+                <label className="block text-sm">Advertising consent field
+                    <input className="mt-1 block rounded border-gray-300" value={form.consent_field} onChange={event => setForm('consent_field', event.target.value)} />
+                    <span>Enter the CRM field with a true or granted value for customers who consent to advertising measurement. Unconfirmed deals stay in your CRM report.</span>
+                </label>
+                <label className="block text-sm">Default deal currency
+                    <input className="mt-1 block rounded border-gray-300" maxLength={3} placeholder="AUD" value={form.default_currency} onChange={event => setForm('default_currency', event.target.value.toUpperCase())} />
+                    <span>Use for a single-currency CRM when the deal has no currency field.</span>
+                </label>
                 <div className="flex justify-end gap-2">
                     <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancel</button>
                     <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">

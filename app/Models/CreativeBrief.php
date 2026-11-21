@@ -27,6 +27,7 @@ class CreativeBrief extends Model
         'actioned_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<Campaign, $this> */
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);

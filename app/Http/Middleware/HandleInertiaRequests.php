@@ -38,8 +38,11 @@ class HandleInertiaRequests extends Middleware
         $activeCustomerId = $request->session()->get('active_customer_id');
         $activeCustomer = $user ? $user->customers()->find($activeCustomerId) : null;
 
+        $stripeKey = config('services.stripe.key');
+
         return [
             ...parent::share($request),
+            'stripePublishableKey' => $user && is_string($stripeKey) && preg_match('/^pk_(?:live|test)_/', $stripeKey) ? $stripeKey : null,
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,

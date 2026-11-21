@@ -51,9 +51,21 @@ class SetDeviceBidAdjustment extends BaseGoogleAdsService
             );
 
             $resourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Set device bid adjustment ({$bidModifier}x) for device type {$deviceType}: {$resourceName}");
+            if ($this->dryRun || ! preg_match('~^customers/\d+/campaignCriteria/\d+~', $resourceName)) {
+                return null;
+            }
+            $readback = $this->client->getGoogleAdsServiceClient()->search(new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => "SELECT campaign_criterion.resource_name, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.resource_name = '{$resourceName}' AND campaign_criterion.status = 'ENABLED'",
+            ]));
+            foreach ($readback->iterateAllElements() as $row) {
+                $criterion = $row->getCampaignCriterion();
+                if ($criterion->getResourceName() === $resourceName && abs($criterion->getBidModifier() - $bidModifier) < 0.0001) {
+                    return $resourceName;
+                }
+            }
 
-            return $resourceName;
+            return null;
         } catch (GoogleAdsException|ApiException $e) {
             $this->logError('Failed to set device bid adjustment: '.$e->getMessage());
 

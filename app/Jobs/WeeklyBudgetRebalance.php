@@ -32,7 +32,8 @@ class WeeklyBudgetRebalance implements ShouldQueue
                 }
 
                 $frequency = $allocation->rebalance_frequency;
-                $last = $allocation->last_rebalanced_at;
+                $proposal = \App\Models\CrossChannelRebalanceLog::where('customer_id', $allocation->customer_id)->where('trigger', 'scheduled')->latest('created_at')->first();
+                $last = collect([$allocation->last_rebalanced_at, $proposal?->created_at])->filter()->sortDesc()->first();
 
                 // Check if it's time to rebalance
                 $shouldRun = match ($frequency) {
@@ -48,7 +49,9 @@ class WeeklyBudgetRebalance implements ShouldQueue
 
                 $allocator = new CrossChannelBudgetAllocator;
                 $result = $allocator->rebalance($customer, 'scheduled');
-                $rebalanced++;
+                if (($result['status'] ?? '') === 'rebalanced') {
+                    $rebalanced++;
+                }
 
                 Log::info('WeeklyBudgetRebalance: Processed', [
                     'customer_id' => $customer->id,

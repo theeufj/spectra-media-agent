@@ -48,7 +48,8 @@ class GenerateAdCopy implements ShouldQueue
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected string $platform,
-        protected ?int $personaId = null
+        protected ?int $personaId = null,
+        protected ?string $revisionId = null
     ) {}
 
     /**
@@ -58,6 +59,9 @@ class GenerateAdCopy implements ShouldQueue
     {
         try {
             Log::info("GenerateAdCopy job started for Campaign {$this->campaign->id}.");
+            if ($this->revisionId !== null && ($this->strategy->fresh()?->creative_revision['id'] ?? null) !== $this->revisionId) {
+                return;
+            }
             // Initialize services
             $geminiService = new GeminiService;
             $adminMonitorService = new AdminMonitorService($geminiService);
@@ -97,6 +101,13 @@ class GenerateAdCopy implements ShouldQueue
             }
 
             $strategyContent = $this->strategy->ad_copy_strategy;
+            $briefId = $this->revisionId ? ($this->strategy->creative_revision['brief_id'] ?? null) : null;
+            if ($briefId) {
+                $brief = \App\Models\CreativeBrief::where('customer_id', $this->campaign->customer_id)->where('campaign_id', $this->campaign->id)->find($briefId);
+                if ($brief) {
+                    $strategyContent .= "\nCustomer-approved direction for a new variation (verify all claims against the campaign evidence): ".mb_substr($brief->ai_brief, 0, 3000);
+                }
+            }
             $rules = AdminMonitorService::getRulesForPlatform($this->platform, $this->strategy->campaign_type);
             $isPerformanceMax = isset($rules['long_headline_count']);
             $visualThemes = [];
@@ -323,15 +334,18 @@ class GenerateAdCopy implements ShouldQueue
                 );
             }
 
-            $uniqueKeys = ['strategy_id' => $this->strategy->id, 'platform' => $this->platform];
-            if ($persona) {
-                $uniqueKeys['persona_id'] = $persona->id;
-            }
-
-            AdCopy::updateOrCreate(
-                $uniqueKeys,
-                [...$approvedAdCopyData, 'persona_id' => $persona?->id]
-            );
+            \Illuminate\Support\Facades\DB::transaction(function () use ($persona, $approvedAdCopyData) {
+                $current = Strategy::lockForUpdate()->findOrFail($this->strategy->id);
+                if ($this->revisionId !== null && ($current->creative_revision['id'] ?? null) !== $this->revisionId) {
+                    return;
+                }
+                if ($this->revisionId === null && $current->creative_approval !== null) {
+                    return;
+                }
+                $keys = ['strategy_id' => $current->id, 'platform' => $this->platform,
+                    'persona_id' => $persona?->id, 'creative_revision_id' => $this->revisionId];
+                AdCopy::updateOrCreate($keys, $this->revisionId === null ? $approvedAdCopyData : [...$approvedAdCopyData, 'should_deploy' => false]);
+            });
 
             Log::info("Successfully generated and stored approved ad copy for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");
 

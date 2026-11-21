@@ -105,17 +105,18 @@ class SiteConversionFanOutTest extends TestCase
         // gbraid only — the sweep's own `whereNotNull('gclid')` excluded this
         // customer before the fan-out could see them.
         $customer = Customer::factory()->create();
-        $this->userOn($customer, [
+        $user = $this->userOn($customer, [
             'gclid' => null,
             'gbraid' => 'demo-gbraid',
-            'created_at' => now()->subDays(7)->setTime(11, 0),
+            'created_at' => now()->subDays(7)->subHour(),
         ]);
 
+        \App\Services\FeatureUsage\FeatureRecorder::record(\App\Enums\ProductFeature::cases()[0], 'viewed', $customer->id, $user->id);
         (new RecordSevenDayReturnConversions)->handle();
 
         Queue::assertPushed(
-            RecordSiteConversion::class,
-            fn ($job) => (fn () => $this->customer->id)->call($job) === $customer->id
+            RecordSiteGoogleConversion::class,
+            fn ($job) => (fn () => $this->user->id)->call($job) === $user->id
         );
     }
 }

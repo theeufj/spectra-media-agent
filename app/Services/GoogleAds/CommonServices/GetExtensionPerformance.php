@@ -18,6 +18,8 @@ class GetExtensionPerformance extends BaseGoogleAdsService
         $this->ensureClient();
 
         $query = "SELECT
+                    campaign_asset.resource_name,
+                    campaign_asset.source,
                     campaign_asset.campaign,
                     campaign_asset.asset,
                     campaign_asset.field_type,
@@ -42,6 +44,8 @@ class GetExtensionPerformance extends BaseGoogleAdsService
                 $assetResource = $row->getCampaignAsset()->getAsset();
                 $results[$assetResource] = [
                     'asset_resource' => $assetResource,
+                    'link' => $row->getCampaignAsset()->getResourceName(),
+                    'source' => \Google\Ads\GoogleAds\V26\Enums\AssetSourceEnum\AssetSource::name($row->getCampaignAsset()->getSource()),
                     'field_type' => $row->getCampaignAsset()->getFieldType(),
                     'asset_type' => $row->getAsset()->getType(),
                     'asset_name' => $row->getAsset()->getName(),

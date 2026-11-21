@@ -5,6 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property array<string,mixed>|null $meta_delivery
+ * @property array<string,mixed>|null $verified_source
+ */
 class SpectraConversionEvent extends Model
 {
     // Preserve Stripe's UTC instant when writing the timestamptz event time.
@@ -34,6 +38,8 @@ class SpectraConversionEvent extends Model
         'browser_invoked_at',
         'browser_target_resource',
         'browser_binding_fingerprint',
+        'meta_delivery',
+        'verified_source',
     ];
 
     protected $casts = [
@@ -46,8 +52,11 @@ class SpectraConversionEvent extends Model
         'google_processing_attempts' => 'integer',
         'google_processing_details' => 'array',
         'browser_invoked_at' => 'immutable_datetime',
+        'meta_delivery' => 'array',
+        'verified_source' => 'array',
     ];
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

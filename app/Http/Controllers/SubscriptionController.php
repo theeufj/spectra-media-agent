@@ -2,7 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProvisionGoogleAdsAccount;
+use App\Models\EnabledPlatform;
 use App\Models\Plan;
+use App\Services\Billing\ManagedSubscriptionCheckout;
+use App\Services\Billing\PlatformFunding;
+use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -24,8 +29,13 @@ class SubscriptionController extends Controller
 
         $customer = $request->user()?->customers()->find(session('active_customer_id'));
 
+        $latest = $customer ? \Illuminate\Support\Facades\DB::table('channel_checkout_readiness')->where('customer_id', $customer->id)
+            ->where('user_id', $request->user()->id)->latest('updated_at')->first() : null;
+
         return Inertia::render('Subscription/Pricing', [
             'plans' => $plans,
+            'availableChannels' => array_values(array_filter(['google', 'facebook'], fn ($channel) => EnabledPlatform::isEnabled($channel))),
+            'prequalification' => $latest ? ['ready' => (bool) $latest->ready, 'channels' => json_decode($latest->channels, true), 'checked_at' => $latest->updated_at] : null,
             'journey' => $customer ? app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($customer) : null,
             // The one-and-done alternative: a single USD fee instead of a plan.
             'setupFee' => [
@@ -41,7 +51,7 @@ class SubscriptionController extends Controller
      * It creates a Stripe Checkout session and redirects the user to Stripe's hosted payment page.
      *
      * @param  Request  $request  The incoming HTTP request.
-     * @return \Inertia\Response A response that instructs Inertia to redirect to Stripe.
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function checkout(Request $request)
     {
@@ -68,37 +78,64 @@ class SubscriptionController extends Controller
         // Check if deployment is enabled to determine checkout mode
         $deploymentEnabled = \App\Models\Setting::get('deployment_enabled', true);
 
-        // Ensure user is a Stripe customer
-        if (! $user->hasStripeId()) {
-            $user->createAsStripeCustomer();
+        $workspace = $user->customers()->find(session('active_customer_id'));
+        if ($deploymentEnabled) {
+            $request->validate(['platforms' => 'sometimes|array|min:1|max:2', 'platforms.*' => 'required|string|distinct|in:google,facebook']);
+            if (! $workspace || $workspace->is_sandbox || $workspace->service_type === 'setup_only') {
+                return back()->with('flash', ['type' => 'error', 'message' => 'Choose a managed workspace before starting a monthly subscription.']);
+            }
+            if ($workspace->adSpendPayer(allowWithoutPaymentMethod: true)?->id !== $user->id) {
+                return back()->with('flash', ['type' => 'error', 'message' => 'The workspace billing contact must start its monthly subscription.']);
+            }
+            $managed = app(ManagedSubscriptionCheckout::class);
+            if ($managed->hasSubscription($user)) {
+                return redirect()->route('subscription.portal');
+            }
+            if ($workspace->subscribedPlan()) {
+                return back()->with('flash', ['type' => 'info', 'message' => 'This workspace already has a subscription. Its subscriber can manage it in the billing portal.']);
+            }
+            $wanted = $request->input('platforms', $plan->slug === 'starter' ? ['google'] : []);
+            if ($wanted === [] || array_diff($wanted, Plan::platformsFor($plan->slug)) !== []) {
+                return back()->with('flash', ['type' => 'error', 'message' => 'Choose at least one advertising channel included in this plan.']);
+            }
+            // Checking a specific paid plan is the provisioning intent. No subscription or ads are created here.
+            if (in_array('google', $wanted, true) && EnabledPlatform::isEnabled('google')) {
+                ProvisionGoogleAdsAccount::dispatchIfNeeded($workspace);
+            }
+            if (in_array('facebook', $wanted, true) && EnabledPlatform::isEnabled('facebook') && ! $workspace->facebook_ads_account_id) {
+                app(CreateFacebookAdsAccount::class, ['customer' => $workspace])->provision(prequalifying: true);
+                $workspace->refresh();
+            }
+            $qualified = app(PlatformFunding::class)->forPlan($workspace, $plan, $wanted);
+            \Illuminate\Support\Facades\DB::table('channel_checkout_readiness')->upsert([[
+                'customer_id' => $workspace->id, 'plan_id' => $plan->id, 'user_id' => $user->id,
+                'ready' => $qualified['ready'], 'channels' => json_encode($qualified['channels'], JSON_THROW_ON_ERROR),
+                'created_at' => now(), 'updated_at' => now(),
+            ]], ['customer_id', 'user_id', 'plan_id'], ['ready', 'channels', 'updated_at']);
+            if (! $qualified['ready']) {
+                return redirect()->route('subscription.pricing')->with('subscription_prequalification', $qualified)
+                    ->with('flash', ['type' => 'info', 'message' => 'Your plan has not started. Check account setup below before continuing to payment.']);
+            }
         }
 
         if ($deploymentEnabled) {
-            // Full subscription flow - charge immediately
-            $checkoutOptions = [
-                'success_url' => route('dashboard', ['purchase' => 'success']),
-                'cancel_url' => route('subscription.pricing'),
-            ];
+            try {
+                $purchase = $managed->start($user, $workspace, $plan);
+            } catch (\Stripe\Exception\ApiErrorException|\UnexpectedValueException $exception) {
+                report($exception);
 
-            // Only include ad spend metered billing if price ID is configured
-            if ($adSpendPriceId) {
-                $checkoutOptions['line_items'] = [
-                    [
-                        'price' => $adSpendPriceId,
-                    ],
-                ];
+                return redirect()->route('subscription.pricing')->with('flash', ['type' => 'error', 'message' => 'We could not confirm checkout with Stripe. Please retry to resume your existing purchase.']);
             }
 
-            $builder = $user->newSubscription('default', $priceId)->allowPromotionCodes();
-            if ($plan->slug === 'starter') {
-                $workspace = $user->customers()->find(session('active_customer_id'))
-                    ?? $user->customers()->orderBy('customer_user.id')->first();
-                if ($workspace) {
-                    $builder->withMetadata(['starter_customer_id' => (string) $workspace->id]);
-                }
-            }
-            $checkout = $builder->checkout($checkoutOptions);
+            return match ($purchase['state']) {
+                'open' => Inertia::location($purchase['url']),
+                'portal' => redirect()->route('subscription.portal'),
+                default => redirect()->route('subscription.pricing')->with('flash', ['type' => 'info', 'message' => $purchase['message']]),
+            };
         } else {
+            if (! $user->hasStripeId()) {
+                $user->createAsStripeCustomer();
+            }
             // Testing mode - only collect payment method without charging
             // Use Stripe Checkout in setup mode
             //
@@ -126,6 +163,19 @@ class SubscriptionController extends Controller
         return Inertia::location($checkout->url);
     }
 
+    public function cancelCheckout(Request $request, string $attempt, ManagedSubscriptionCheckout $checkout)
+    {
+        try {
+            $checkout->cancel($request->user(), $attempt);
+        } catch (\Stripe\Exception\ApiErrorException|\UnexpectedValueException $exception) {
+            report($exception);
+
+            return redirect()->route('subscription.pricing')->with('flash', ['type' => 'info', 'message' => 'Stripe is confirming your checkout. Return to pricing to check again.']);
+        }
+
+        return redirect()->route('subscription.pricing');
+    }
+
     /**
      * portal is our handler for redirecting the user to their Stripe Billing Portal.
      * This is a secure, Stripe-hosted page where users can manage their subscription,
@@ -140,7 +190,7 @@ class SubscriptionController extends Controller
             $user = Auth::user();
 
             // Check if the user has an active subscription.
-            if (! $user->subscribed('default')) {
+            if (! app(ManagedSubscriptionCheckout::class)->hasSubscription($user)) {
                 return redirect()->route('subscription.pricing')->with('flash', [
                     'type' => 'info',
                     'message' => 'You do not have an active subscription. Please select a plan to continue.',

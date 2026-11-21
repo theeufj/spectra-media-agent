@@ -4,10 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AddAdSpendCreditRequest;
 use App\Http\Requests\SetupAdSpendBillingRequest;
-use App\Models\ActivityLog;
 use App\Models\AdSpendCredit;
 use App\Models\Customer;
-use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Creative\CreativeRelease;
@@ -25,6 +23,15 @@ class AdSpendBillingController extends Controller
     public function __construct(AdSpendBillingService $billingService)
     {
         $this->billingService = $billingService;
+    }
+
+    public function confirmReservation(Request $request, int $reservation)
+    {
+        $customer = $this->getActiveCustomer($request);
+        $payment = $customer ? app(\App\Services\Billing\LaunchFunding::class)->confirmationPayment($customer, $request->user(), $reservation) : null;
+        abort_if($payment === null, 404);
+
+        return redirect()->route('cashier.payment', ['id' => $payment, 'redirect' => route('billing.ad-spend')]);
     }
 
     /**
@@ -53,6 +60,8 @@ class AdSpendBillingController extends Controller
         $topUpDailyBudget = $dailyBudget > 0 ? $dailyBudget : $dailyEstimate;
 
         return Inertia::render('Billing/AdSpend', [
+            'reservations' => \Illuminate\Support\Facades\DB::table('launch_funding_reservations')->where('customer_id', $customer->id)
+                ->whereIn('status', ['collecting', 'held'])->get(['id', 'platform', 'account_id', 'payer', 'currency', 'target_cents', 'held_cents', 'charge_cents', 'status']),
             'credit' => $credit ? [
                 'id' => $credit->id,
                 'initial_credit_amount' => $credit->initial_credit_amount,
@@ -369,7 +378,7 @@ class AdSpendBillingController extends Controller
         // Self-funded accounts are billed by the ad platform directly — the
         // deploy job refuses to draw down credit for them, so charging here
         // billed those customers twice for the same clicks.
-        if ($customer->isSelfFundedAds()) {
+        if ($customer->service_type === 'setup_only' || (! $request->campaign_id && $customer->isSelfFundedAds())) {
             return response()->json([
                 'success' => false,
                 'error' => 'Your ad spend is billed directly through your own ad account — no prepayment is needed. You can deploy right away.',
@@ -384,61 +393,62 @@ class AdSpendBillingController extends Controller
             return response()->json(['success' => false, 'error' => 'Choose a paid campaign plan before funding ads.'], 422);
         }
 
-        // Never take money for a deploy the deploy endpoint will refuse. The
-        // budget-confirmation gate used to live only there, after the charge.
-        if ($request->campaign_id) {
-            $campaign = \App\Models\Campaign::find($request->campaign_id);
-            if (! $campaign || $campaign->customer_id !== $customer->id) {
-                return response()->json(['success' => false, 'error' => 'Campaign not found'], 404);
-            }
-            if ($campaign->auto_generated_at && ! $campaign->budget_confirmed_at) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Please confirm this campaign\'s daily budget before funding it — open the campaign page and approve the proposed budget.',
-                    'requires_budget_confirmation' => true,
-                ], 422);
-            }
-            $this->authorize('view', $campaign);
-            $brand = $customer->brandGuideline;
-            if (! $brand?->user_verified || ($brand->approved_version !== null && $brand->approved_version !== $brand->profile_version)) {
-                return response()->json(['success' => false, 'error' => 'Review and confirm your current brand profile before funding this campaign.', 'requires_brand_confirmation' => true], 422);
-            }
-            $strategies = $campaign->strategies()->when($request->strategy_id, fn ($query) => $query->whereKey($request->strategy_id))->get();
-            if ($request->strategy_id && $strategies->isEmpty()) {
-                abort(404);
-            }
-            $approved = $strategies->whereNotNull('signed_off_at');
-            if ($approved->isEmpty() || $approved->contains(fn ($strategy) => in_array($strategy->creative_review['status'] ?? null, ['pending', 'reviewing', 'revising'], true))) {
-                return response()->json(['success' => false, 'error' => 'Finish the creative review and approve a strategy before funding this campaign.'], 422);
-            }
-            if (abs((float) $request->daily_budget - (float) $campaign->daily_budget) > 0.005) {
-                return response()->json(['success' => false, 'error' => 'This campaign budget has changed. Reload the campaign and review the current daily budget before funding.'], 422);
-            }
-            if ($approved->contains(fn ($strategy) => ! $customer->allowsAdPlatform($strategy->platform))) {
-                return response()->json(['success' => false, 'error' => 'Choose platforms covered by your plan before funding this campaign.'], 422);
-            }
-            $newStrategies = $approved->filter(function ($strategy) use ($campaign) {
-                $strategy->setRelation('campaign', $campaign);
+        if (! $request->campaign_id) {
+            return response()->json(['success' => false, 'error' => 'Choose the campaign and approved channel allocations before setting up its advertising payment.'], 422);
+        }
 
-                return $strategy->requiresInitialMarketResearch();
-            });
-            if ($newStrategies->isNotEmpty()) {
-                try {
-                    app(CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
-                } catch (ValidationException $e) {
-                    return response()->json(['success' => false, 'error' => $e->validator->errors()->first(), 'requires_market_research' => true], 422);
-                }
+        // Validate the same signed campaign before saving the intended payer's method.
+        $campaign = \App\Models\Campaign::find($request->campaign_id);
+        if (! $campaign || $campaign->customer_id !== $customer->id) {
+            return response()->json(['success' => false, 'error' => 'Campaign not found'], 404);
+        }
+        if ($campaign->auto_generated_at && ! $campaign->budget_confirmed_at) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Please confirm this campaign\'s daily budget before funding it — open the campaign page and approve the proposed budget.',
+                'requires_budget_confirmation' => true,
+            ], 422);
+        }
+        $this->authorize('view', $campaign);
+        $brand = $customer->brandGuideline;
+        if (! $brand?->user_verified || ($brand->approved_version !== null && $brand->approved_version !== $brand->profile_version)) {
+            return response()->json(['success' => false, 'error' => 'Review and confirm your current brand profile before funding this campaign.', 'requires_brand_confirmation' => true], 422);
+        }
+        $strategies = $campaign->strategies()->when($request->strategy_id, fn ($query) => $query->whereKey($request->strategy_id))->get();
+        if ($request->strategy_id && $strategies->isEmpty()) {
+            abort(404);
+        }
+        $approved = $strategies->whereNotNull('signed_off_at');
+        if ($approved->isEmpty() || $approved->contains(fn ($strategy) => in_array($strategy->creative_review['status'] ?? null, ['pending', 'reviewing', 'revising'], true))) {
+            return response()->json(['success' => false, 'error' => 'Finish the creative review and approve a strategy before funding this campaign.'], 422);
+        }
+        if (abs((float) $request->daily_budget - (float) $campaign->daily_budget) > 0.005) {
+            return response()->json(['success' => false, 'error' => 'This campaign budget has changed. Reload the campaign and review the current daily budget before funding.'], 422);
+        }
+        if ($approved->contains(fn ($strategy) => ! $customer->allowsAdPlatform($strategy->platform))) {
+            return response()->json(['success' => false, 'error' => 'Choose platforms covered by your plan before funding this campaign.'], 422);
+        }
+        $newStrategies = $approved->filter(function ($strategy) use ($campaign) {
+            $strategy->setRelation('campaign', $campaign);
+
+            return $strategy->requiresInitialMarketResearch();
+        });
+        if ($newStrategies->isNotEmpty()) {
+            try {
+                app(CampaignMarketResearchWorkflow::class)->assertApproved($campaign);
+            } catch (ValidationException $e) {
+                return response()->json(['success' => false, 'error' => $e->validator->errors()->first(), 'requires_market_research' => true], 422);
             }
-            $needsGoogle = $approved->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'));
-            if ($needsGoogle && ! CampaignLaunchIntent::googleReady($customer) && ! CampaignLaunchIntent::canProvisionGoogle($customer)) {
-                return response()->json(['success' => false, 'error' => 'Your Google Ads account needs setup. Submit the campaign for account setup first; no prepayment is collected yet.', 'requires_account_setup' => true], 422);
-            }
-            foreach ($approved->reject(fn ($strategy) => $strategy->isDeployed()) as $strategy) {
-                try {
-                    app(CreativeRelease::class)->assertReady($strategy, $request->input('creative_fingerprints.'.$strategy->id));
-                } catch (ValidationException $e) {
-                    return response()->json(['success' => false, 'error' => $e->validator->errors()->first()], 422);
-                }
+        }
+        $needsGoogle = $approved->count() === 1 && $approved->contains(fn ($strategy) => str_contains(strtolower($strategy->platform), 'google'));
+        if ($needsGoogle && ! CampaignLaunchIntent::googleReady($customer) && ! CampaignLaunchIntent::canProvisionGoogle($customer)) {
+            return response()->json(['success' => false, 'error' => 'Your Google Ads account needs setup. Submit the campaign for account setup first; no prepayment is collected yet.', 'requires_account_setup' => true], 422);
+        }
+        foreach ($approved->reject(fn ($strategy) => $strategy->isDeployed()) as $strategy) {
+            try {
+                app(CreativeRelease::class)->assertReady($strategy, $request->input('creative_fingerprints.'.$strategy->id));
+            } catch (ValidationException $e) {
+                return response()->json(['success' => false, 'error' => $e->validator->errors()->first()], 422);
             }
         }
 
@@ -462,99 +472,10 @@ class AdSpendBillingController extends Controller
                 ], 400);
             }
 
-            Log::info('AdSpendBilling: Payment method set during deployment setup', [
-                'user_id' => $user->id,
-                'billing_user_id' => $billingUser->id,
-                'customer_id' => $customer->id,
-            ]);
-
-            $dailyBudget = $request->daily_budget;
-            $daysToCharge = (int) ($request->days_to_charge ?? 7);
-            $topUpAmount = round($dailyBudget * $daysToCharge, 2);
-
-            // Serialize the read-compute-charge sequence per customer. The
-            // init branch is already locked inside initializeCreditAccount
-            // (different key, no deadlock); the top-up branch was not, so two
-            // concurrent deploys could both see the same balance, both
-            // compute the same shortfall, and both charge it.
-            $setupLock = \Illuminate\Support\Facades\Cache::lock("adspend_setup:{$customer->id}", 60);
-            $setupLock->block(20);
-
-            try {
-                $existingCredit = $customer->adSpendCredit()->first();
-
-                if ($existingCredit) {
-                    // Account already exists — only charge the SHORTFALL needed to reach
-                    // this campaign's target runway. If the current balance already covers
-                    // it, charge nothing. Prevents stacking a full top-up on top of unused
-                    // credit on every deploy.
-                    $currentBalance = (float) $existingCredit->current_balance;
-                    $shortfall = round(max(0, $topUpAmount - $currentBalance), 2);
-
-                    if ($shortfall <= 0) {
-                        $credit = $existingCredit;
-                        $chargedAmount = 0.0;
-                        $logMessage = "Ad spend for customer '{$customer->name}' — existing credit \${$currentBalance} already covers {$daysToCharge} days @ \${$dailyBudget}/day; no charge";
-                    } else {
-                        $result = $this->billingService->addCredit(
-                            $customer,
-                            $shortfall,
-                            "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day — shortfall)"
-                        );
-
-                        if (! $result['success']) {
-                            throw new \Exception($result['error'] ?? 'Payment failed');
-                        }
-
-                        $credit = $customer->fresh()->adSpendCredit;
-                        $chargedAmount = $shortfall;
-                        $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged (shortfall to {$daysToCharge}-day runway)";
-                    }
-                } else {
-                    // First campaign — initialize the account for the same
-                    // number of days the modal quoted. Passing only the daily
-                    // budget took the method's 7-day default, so a 3-day
-                    // campaign shown "Initial Charge (3 days) $150" was charged
-                    // $350 and told so in the success payload.
-                    $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget, $daysToCharge);
-
-                    ActivityLogger::adSpendBillingSetup($customer, (float) $dailyBudget);
-                    $chargedAmount = $credit->initial_credit_amount;
-                    $logMessage = "Ad spend billing set up for customer '{$customer->name}' — \${$chargedAmount} charged";
-                }
-            } finally {
-                $setupLock->release();
-            }
-
-            Log::info('AdSpendBilling: Campaign funding collected', [
-                'customer_id' => $customer->id,
-                'daily_budget' => $dailyBudget,
-                'charged_amount' => $chargedAmount,
-                'new_balance' => $credit->current_balance,
-                'is_top_up' => (bool) $existingCredit,
-            ]);
-
-            ActivityLog::log('ad_spend_billing_setup', $logMessage, $customer, [
-                'customer_id' => $customer->id,
-                'daily_budget' => $dailyBudget,
-                'credit_amount' => $chargedAmount,
-            ]);
-            try {
-                \App\Jobs\ResumeCampaignLaunches::dispatch($customer->id);
-            } catch (\Throwable $e) {
-                // The scheduled sweep can resume this intent. A queue failure
-                // must not tell a payer that their completed payment failed.
-                report($e);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => $chargedAmount <= 0
-                    ? 'Existing ad spend credit covers this campaign — no charge needed'
-                    : ($existingCredit ? 'Campaign funded successfully' : 'Ad spend billing set up successfully'),
-                'credit_amount' => $chargedAmount,
-                'new_balance' => $credit->current_balance,
-            ]);
+            // Final creative/budget approval is the only action that may collect a channel prepayment.
+            return response()->json(['success' => true, 'deferred' => true, 'credit_amount' => 0,
+                'new_balance' => $customer->adSpendCredit()->value('current_balance') ?? '0.00',
+                'message' => 'Payment method saved. Each channel reserves up to seven days after approval and verification.']);
         } catch (\Throwable $e) {
             report($e);
             Log::error('AdSpendBilling: Failed to setup for deployment', [

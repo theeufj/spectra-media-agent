@@ -636,7 +636,7 @@ PROMPT;
         $accountId = $customer->facebook_ads_account_id;
 
         try {
-            $audiences = $audienceService->listAudiences($accountId) ?? [];
+            $audiences = $audienceService->listAudiences($accountId) ?? throw new \RuntimeException('Meta did not return the audience list.');
         } catch (\Throwable $e) {
             report($e);
             $results['errors'][] = 'Could not list audiences: '.$e->getMessage();
@@ -646,7 +646,7 @@ PROMPT;
 
         foreach ($audiences as $audience) {
             $audienceId = $audience['id'] ?? null;
-            $count = (int) ($audience['approximate_count'] ?? 0);
+            $count = (int) ($audience['approximate_count_lower_bound'] ?? $audience['approximate_count'] ?? 0);
             $subtype = $audience['subtype'] ?? '';
             $createdTime = $audience['time_created'] ?? null;
             $name = $audience['name'] ?? $audienceId;
@@ -662,16 +662,21 @@ PROMPT;
 
             // Refresh stale lookalike audiences (>60 days old)
             if ($subtype === 'LOOKALIKE' && $createdTime) {
-                $ageInDays = now()->diffInDays(\Carbon\Carbon::createFromTimestamp($createdTime));
+                $ageInDays = \Carbon\Carbon::createFromTimestamp($createdTime)->diffInDays(now());
                 if ($ageInDays > 60) {
                     try {
-                        // Derive source audience from lookalike name convention (e.g. "Lookalike of X")
-                        $sourceName = preg_replace('/^Lookalike \(.*?\) of /i', '', $name);
-                        $source = collect($audiences)->firstWhere('name', $sourceName);
-
-                        if ($source && isset($source['id'])) {
-                            $newName = $name.' (Refreshed '.now()->format('M Y').')';
-                            $audienceService->createLookalikeAudience($accountId, $source['id'], $newName, 'US', 0.01);
+                        $spec = $audience['lookalike_spec'] ?? [];
+                        $sourceId = $spec['origin'][0]['id'] ?? null;
+                        $country = strtoupper((string) ($spec['country'] ?? ''));
+                        $ratio = $spec['ratio'] ?? null;
+                        $newName = $name.' (Refreshed '.now()->format('M Y').')';
+                        if ($sourceId && count($spec['origin']) === 1 && preg_match('/^[A-Z]{2}$/D', $country)
+                            && is_numeric($ratio) && $ratio > 0 && $ratio <= 1 && empty($spec['starting_ratio'])
+                            && ! str_contains($name, ' (Refreshed ') && ! collect($audiences)->contains('name', $newName)) {
+                            $replacement = $audienceService->createLookalikeAudience($accountId, $sourceId, $newName, $country, (float) $ratio);
+                            if (empty($replacement['id'])) {
+                                throw new \RuntimeException('Meta did not confirm the replacement audience.');
+                            }
                             $results['lookalikes_queued'][] = [
                                 'original_id' => $audienceId,
                                 'original_name' => $name,
@@ -711,42 +716,24 @@ PROMPT;
             // Find the best seed audience for this customer
             $seedAudience = collect($audiences)
                 ->where('subtype', 'CUSTOM')
-                ->sortByDesc('approximate_count')
+                ->sortByDesc('approximate_count_lower_bound')
                 ->first();
 
             if (! $seedAudience) {
                 continue;
             }
 
-            try {
-                $broadName = "Broad Lookalike 2-5% — {$campaign->name} (".now()->format('M Y').')';
-                $audienceService->createLookalikeAudience($accountId, $seedAudience['id'], $broadName, 'US', 0.05);
-
-                $results['frequency_expansions'][] = [
-                    'campaign_id' => $campaign->id,
-                    'campaign_name' => $campaign->name,
-                    'avg_frequency' => round($avgFrequency, 1),
-                    'new_audience' => $broadName,
-                ];
-
-                Log::info('AudienceIntelligenceAgent: Created broad lookalike for frequency-fatigued campaign', [
-                    'campaign_id' => $campaign->id,
-                    'frequency' => round($avgFrequency, 1),
-                ]);
-            } catch (\Throwable $e) {
-                report($e);
-                $results['errors'][] = "Frequency expansion failed for campaign {$campaign->id}: ".$e->getMessage();
-            }
+            $results['frequency_expansions'][] = [
+                'campaign_id' => $campaign->id,
+                'avg_frequency' => round($avgFrequency, 1),
+                'status' => 'requires_approval',
+                'reason' => 'A broader audience changes the approved targeting scope.',
+            ];
         }
 
-        if (! empty($results['lookalikes_queued']) || ! empty($results['frequency_expansions'])) {
-            AgentActivity::create([
-                'campaign_id' => null,
-                'agent' => 'AudienceIntelligenceAgent',
-                'action' => 'facebook_audience_refresh',
-                'details' => $results,
-                'status' => 'completed',
-            ]);
+        if ($results['lookalikes_queued'] || $results['frequency_expansions']) {
+            AgentActivity::record('audience', 'facebook_audience_refresh', 'Meta audience refresh and expansion review.',
+                $customer->id, details: $results);
         }
 
         return $results;

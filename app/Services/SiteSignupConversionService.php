@@ -23,10 +23,11 @@ class SiteSignupConversionService
         $event = DB::transaction(fn () => SpectraConversionEvent::firstOrCreate([
             'deduplication_key' => "signup:{$user->id}:{$occurredAt->timestamp}",
         ], [
+            'verified_source' => ['kind' => 'registration', 'user_id' => $user->id, 'consent' => $user->ad_measurement_consent === true],
             'event' => 'signup', 'user_id' => $user->id, 'mode' => 'server_google',
             'value' => $config['value'] ?? 0, 'currency' => $config['currency'] ?? 'USD',
             'occurred_at' => $occurredAt, 'ad_identifiers' => $identifiers,
-            'gclid' => $user->gclid, 'uploaded_to_google' => false,
+            'gclid' => $user->gclid, 'google_conversion_resource' => \App\Models\Setting::get('conversion_resource_name.signup_import'), 'uploaded_to_google' => false,
         ]));
 
         if (($event->wasRecentlyCreated || $event->upload_error) && $event->ad_identifiers && ! $event->uploaded_to_google) {

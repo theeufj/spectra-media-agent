@@ -41,45 +41,43 @@ class SyncCrmConversions implements ShouldBeUnique, ShouldQueue
         try {
             $integration->update(['status' => 'syncing']);
 
+            $syncStarted = now();
             $connector = CrmConnectorFactory::make($integration);
             $since = $integration->last_synced_at ?? now()->subDays(30);
             $leads = $connector->fetchClosedLeads($since);
 
             $created = 0;
+            $destinations = $this->destinations($integration);
             foreach ($leads as $lead) {
-                // Skip if already synced (by crm_lead_id)
-                $exists = OfflineConversion::where('customer_id', $integration->customer_id)
-                    ->where('crm_lead_id', $lead['crm_lead_id'])
-                    ->exists();
-
-                if ($exists) {
+                $externalId = trim((string) ($lead['crm_lead_id'] ?? ''));
+                if ($externalId === '') {
                     continue;
                 }
-
-                // Only create if we have a click ID for attribution
-                if (! $lead['gclid'] && ! $lead['fbclid'] && ! $lead['msclid']) {
+                $key = hash('sha256', $integration->customer_id.':'.$integration->provider.':'.$externalId);
+                $legacy = OfflineConversion::where('crm_integration_id', $integration->id)->where('crm_lead_id', $externalId)
+                    ->whereNull('source_key')->exists();
+                if ($legacy) {
                     continue;
                 }
-
-                OfflineConversion::create([
-                    'customer_id' => $integration->customer_id,
-                    'crm_integration_id' => $integration->id,
-                    'gclid' => $lead['gclid'],
-                    'fbclid' => $lead['fbclid'],
-                    'msclid' => $lead['msclid'],
-                    'crm_lead_id' => $lead['crm_lead_id'],
-                    'conversion_name' => $lead['conversion_name'],
-                    'conversion_value' => $lead['conversion_value'],
-                    'conversion_time' => $lead['conversion_time'],
-                    'upload_status' => 'pending',
-                    'crm_data' => $lead['crm_data'],
+                $googleClick = isset($destinations['google']) ? ($lead['gclid'] ?? null) : null;
+                $metaClick = isset($destinations['facebook']) ? ($lead['fbclid'] ?? null) : null;
+                $currency = $lead['currency_code'] ?? null;
+                $eligible = ($googleClick || $metaClick) && ($lead['precise_event_time'] ?? true) && ($lead['conversion_value'] ?? 0) > 0 && ($lead['ad_measurement_consent'] ?? false) === true && is_string($currency) && preg_match('/^[A-Z]{3}$/D', $currency);
+                $record = OfflineConversion::firstOrCreate(['source_key' => $key], [
+                    'customer_id' => $integration->customer_id, 'crm_integration_id' => $integration->id,
+                    'gclid' => $eligible ? $googleClick : null, 'fbclid' => $eligible ? $metaClick : null,
+                    'crm_lead_id' => $externalId, 'conversion_name' => $lead['conversion_name'],
+                    'conversion_value' => $currency ? $lead['conversion_value'] : null, 'conversion_time' => $lead['conversion_time'],
+                    'currency_code' => $currency ?: $integration->customer->billingCurrency(),
+                    'upload_status' => $eligible ? 'pending' : 'first_party_only', 'crm_data' => $lead['crm_data'],
+                    'delivery_bindings' => $eligible ? $destinations + ['ad_user_data' => 'granted'] : [],
                 ]);
-                $created++;
+                $created += (int) $record->wasRecentlyCreated;
             }
 
             $integration->update([
                 'status' => 'connected',
-                'last_synced_at' => now(),
+                'last_synced_at' => $syncStarted,
                 'total_leads_synced' => $integration->total_leads_synced + $created,
                 'last_error' => null,
             ]);
@@ -91,7 +89,7 @@ class SyncCrmConversions implements ShouldBeUnique, ShouldQueue
             ]);
 
             // Dispatch upload job for pending conversions
-            if ($created > 0) {
+            if ($integration->offlineConversions()->where('upload_status', 'pending')->exists()) {
                 UploadOfflineConversions::dispatch($integration->customer_id);
             }
         } catch (\Throwable $e) {
@@ -99,16 +97,27 @@ class SyncCrmConversions implements ShouldBeUnique, ShouldQueue
                 'status' => 'error',
                 'last_error' => SafeError::message($e, 'The CRM sync could not be completed.'),
             ]);
-            Log::error('SyncCrmConversions: Failed', [
-                'integration_id' => $integration->id,
-                'error' => $e->getMessage(),
-            ]);
+            report($e);
+            Log::error('SyncCrmConversions: Failed', ['integration_id' => $integration->id]);
         }
     }
 
-    /**
-     * Handle a job failure.
-     */
+    /** Freeze only unambiguous, explicitly selected purchase destinations for CRM deals. */
+    private function destinations(\App\Models\CrmIntegration $integration): array
+    {
+        $options = [];
+        foreach ($integration->customer->campaigns()->with('strategies')->get()->pluck('strategies')->flatten() as $strategy) {
+            $binding = app(\App\Services\Conversions\CampaignOutcomeEvidence::class)->binding($strategy);
+            if ($binding['goal'] !== 'purchase' || ! $binding['destination']) {
+                continue;
+            }
+            $options[$binding['channel']][$binding['destination']] = ['account' => $binding['account'],
+                'destination' => $binding['destination'], 'event' => 'Purchase'];
+        }
+
+        return array_map(fn ($items) => reset($items), array_filter($options, fn ($items) => count($items) === 1));
+    }
+
     public function failed(\Throwable $exception): void
     {
         // A hard failure (outside the handle() try/catch) can strand the integration

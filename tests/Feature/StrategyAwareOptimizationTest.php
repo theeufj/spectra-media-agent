@@ -104,6 +104,12 @@ class StrategyAwareOptimizationTest extends TestCase
         $writer->expects($this->once())->method('__invoke')->with('1234567890', 'customers/1234567890/adGroupCriteria/12~45', 1500000)->willReturn(true);
         $this->app->bind(UpdateKeywordBid::class, fn () => $writer);
 
+        $readback = $this->createMock(\App\Services\Agents\Optimization\RecommendationReadback::class);
+        $readback->expects($this->once())->method('confirmed')->with(
+            $this->isInstanceOf(Campaign::class), 'BIDDING', ['criterion' => 'customers/1234567890/adGroupCriteria/12~45', 'cpc' => 1500000]
+        )->willReturn(true);
+        $this->app->bind(\App\Services\Agents\Optimization\RecommendationReadback::class, fn () => $readback);
+
         $result = app(RecommendationApplier::class)->apply($this->campaign(), $this->recommendation());
 
         $this->assertTrue($result['applied']);

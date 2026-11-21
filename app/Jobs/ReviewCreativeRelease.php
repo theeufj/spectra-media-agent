@@ -45,6 +45,17 @@ class ReviewCreativeRelease implements ShouldBeUnique, ShouldQueue
         }
         $selection = $release->selection($strategy);
         if ($selection['fingerprint'] !== $this->fingerprint) {
+            DB::transaction(function () {
+                $current = Strategy::lockForUpdate()->find($this->strategyId);
+                if (! $current) {
+                    return;
+                }
+                $rotation = $current->creative_revision ?? [];
+                if (($rotation['status'] ?? null) === 'checking_rotation' && ($rotation['fingerprint'] ?? null) === $this->fingerprint) {
+                    $current->forceFill(['creative_revision' => [...$rotation, 'status' => 'needs_approval']])->save();
+                }
+            });
+
             return;
         }
         $this->store($release, $reviewer->review($strategy, $selection));
@@ -66,6 +77,7 @@ class ReviewCreativeRelease implements ShouldBeUnique, ShouldQueue
             $strategy = Strategy::lockForUpdate()->find($this->strategyId);
             if ($strategy && $release->selection($strategy)['fingerprint'] === $this->fingerprint) {
                 $strategy->update(['creative_release_review' => ['fingerprint' => $this->fingerprint, ...$result, 'copy_review_version' => 2]]);
+                app(\App\Services\Creative\ApprovedVariantRotation::class)->complete($strategy, $result);
             }
         });
     }

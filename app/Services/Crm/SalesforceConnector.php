@@ -11,8 +11,15 @@ class SalesforceConnector implements CrmConnectorInterface
 
     protected string $instanceUrl;
 
+    private ?string $consentField;
+
+    private ?string $currency;
+
     public function __construct(array $credentials)
     {
+        $field = $credentials['consent_field'] ?? '';
+        $this->consentField = is_string($field) && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,79}$/D', $field) ? $field : null;
+        $this->currency = $credentials['default_currency'] ?? null;
         $this->accessToken = $credentials['access_token'] ?? '';
         $this->instanceUrl = rtrim($credentials['instance_url'] ?? '', '/');
     }
@@ -39,34 +46,46 @@ class SalesforceConnector implements CrmConnectorInterface
 
     public function fetchClosedLeads(\DateTimeInterface $since): array
     {
-        $sinceStr = $since->format('Y-m-d\TH:i:s\Z');
-        $soql = 'SELECT Id, Name, Amount, CloseDate, StageName, LeadSource, '
-            .'GCLID__c, Description '
-            .'FROM Opportunity '
-            ."WHERE StageName = 'Closed Won' AND CloseDate >= {$sinceStr} "
-            .'ORDER BY CloseDate DESC LIMIT 200';
-
-        $response = Http::withToken($this->accessToken)
-            ->get("{$this->instanceUrl}/services/data/v59.0/query", ['q' => $soql]);
-
-        if (! $response->successful()) {
-            Log::warning('Salesforce fetchClosedLeads failed', ['status' => $response->status()]);
-
-            throw new \RuntimeException('Salesforce sales sync was refused (HTTP '.$response->status().').');
+        $api = $this->instanceUrl.'/services/data/v59.0';
+        $client = Http::withToken($this->accessToken);
+        $fields = $client->get($api.'/sobjects/Opportunity/describe')->throw()->json('fields');
+        if (! is_array($fields)) {
+            throw new \RuntimeException('Salesforce did not return the available opportunity fields.');
         }
-
+        $optional = array_filter(['GCLID__c', 'FBCLID__c', 'CurrencyIsoCode', 'LastStageChangeDate', $this->consentField]);
+        $columns = implode(', ', array_merge(['Id', 'IsWon', 'Amount', 'CloseDate'], array_intersect($optional, array_column($fields, 'name'))));
+        $sinceUtc = \DateTimeImmutable::createFromInterface($since)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+        $response = $client->get($api.'/query', ['q' => "SELECT {$columns} FROM Opportunity WHERE IsWon = TRUE AND LastModifiedDate >= {$sinceUtc} ORDER BY LastModifiedDate, Id"]);
         $leads = [];
-        foreach ($response->json()['records'] ?? [] as $opp) {
-            $leads[] = [
-                'crm_lead_id' => $opp['Id'],
-                'conversion_name' => 'CRM Opportunity Won',
-                'conversion_value' => (float) ($opp['Amount'] ?? 0),
-                'conversion_time' => $opp['CloseDate'] ? date('Y-m-d H:i:s', strtotime($opp['CloseDate'])) : now()->toDateTimeString(),
-                'gclid' => $opp['GCLID__c'] ?? null,
-                'fbclid' => null,
-                'msclid' => null,
-                'crm_data' => $opp,
-            ];
+        $visited = [];
+        while (true) {
+            $page = $response->throw()->json();
+            if (! is_array($page['records'] ?? null) || ! is_bool($page['done'] ?? null)) {
+                throw new \RuntimeException('Salesforce returned an incomplete opportunity page.');
+            }
+            foreach ($page['records'] as $opportunity) {
+                if (($opportunity['IsWon'] ?? false) !== true || empty($opportunity['Id']) || empty($opportunity['CloseDate'])) {
+                    continue;
+                }
+                $timestamp = $opportunity['LastStageChangeDate'] ?? null;
+                $leads[] = [
+                    'crm_lead_id' => (string) $opportunity['Id'], 'conversion_name' => 'CRM Opportunity Won',
+                    'conversion_value' => $opportunity['Amount'] ?? null, 'currency_code' => $opportunity['CurrencyIsoCode'] ?? $this->currency,
+                    'conversion_time' => $timestamp ?: $opportunity['CloseDate'], 'precise_event_time' => (bool) $timestamp,
+                    'gclid' => $opportunity['GCLID__c'] ?? null, 'fbclid' => $opportunity['FBCLID__c'] ?? null,
+                    'msclid' => null, 'ad_measurement_consent' => in_array($opportunity[$this->consentField ?? ''] ?? null, [true, 'true', 'granted'], true),
+                    'crm_data' => ['close_date' => $opportunity['CloseDate']],
+                ];
+            }
+            if ($page['done']) {
+                break;
+            }
+            $next = $page['nextRecordsUrl'] ?? '';
+            if (! is_string($next) || ! preg_match('~^/services/data/v59\.0/query/[A-Za-z0-9_-]+$~D', $next) || isset($visited[$next])) {
+                throw new \RuntimeException('Salesforce did not return a valid next opportunity page.');
+            }
+            $visited[$next] = true;
+            $response = $client->get($this->instanceUrl.$next);
         }
 
         return $leads;

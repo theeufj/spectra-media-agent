@@ -11,7 +11,13 @@ class FacebookAdsPerformanceData extends Model
 
     protected $fillable = [
         'campaign_id',
+        'strategy_id',
         'facebook_campaign_id',
+        'facebook_account_id',
+        'currency',
+        'attribution_window',
+        'attributed_conversions',
+        'attributed_value',
         'date',
         'impressions',
         'clicks',

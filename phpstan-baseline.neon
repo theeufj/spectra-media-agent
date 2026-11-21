@@ -51,7 +51,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 5
 			path: app/Http/Controllers/AdSpendBillingController.php
 
 		-
@@ -427,17 +427,7 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/StripeWebhookController.php
 
-		-
-			message: '#^Method App\\Http\\Controllers\\SubscriptionController\:\:checkout\(\) should return Inertia\\Response but returns Illuminate\\Http\\RedirectResponse\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Http/Controllers/SubscriptionController.php
 
-		-
-			message: '#^Method App\\Http\\Controllers\\SubscriptionController\:\:checkout\(\) should return Inertia\\Response but returns Symfony\\Component\\HttpFoundation\\Response\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Http/Controllers/SubscriptionController.php
 
 		-
 			message: '#^Method App\\Http\\Controllers\\SubscriptionController\:\:portal\(\) should return Illuminate\\Http\\RedirectResponse but returns Symfony\\Component\\HttpFoundation\\Response\.$#'
@@ -701,18 +691,6 @@ parameters:
 			path: app/Jobs/SyncProductFeed.php
 
 		-
-			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Jobs/UploadOfflineConversions.php
-
-		-
-			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withRefreshToken\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Jobs/UploadOfflineConversions.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -928,11 +906,6 @@ parameters:
 			count: 1
 			path: app/Services/Agents/AdaptiveThresholds.php
 
-		-
-			message: '#^Using nullsafe property access on non\-nullable type object\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Agents/BidAdjustmentAgent.php
 
 		-
 			message: '#^Method App\\Services\\Agents\\CampaignRemediationAgent\:\:selectBestLandingPage\(\) never returns null so it can be removed from the return type\.$#'
@@ -1211,17 +1184,7 @@ parameters:
 			count: 1
 			path: app/Services/GoogleAds/BaseGoogleAdsService.php
 
-		-
-			message: '#^Ternary operator condition is always true\.$#'
-			identifier: ternary.alwaysTrue
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaignBudget.php
 
-		-
-			message: '#^Variable \$campaignBudgetServiceClient in PHPDoc tag @var does not exist\.$#'
-			identifier: varTag.variableNotFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaignBudget.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
@@ -1258,18 +1221,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Services/PersonaGeneratorService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\:\:\$spend\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Reporting/YesterdayPerformanceSummary.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\GoogleAdsPerformanceData\:\:\$spend\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Reporting/YesterdayPerformanceSummary.php
 
 		-
 			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:getAttribute\(\)\.$#'
@@ -1604,19 +1555,13 @@ parameters:
 		-
 			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:once\(\)\.$#'
 			identifier: method.notFound
-			count: 3
+			count: 1
 			path: tests/Unit/Agents/ABTestingAgentTest.php
 
 		-
 			message: '#^Call to an undefined method Mockery\\LegacyMockInterface\:\:createTest\(\)\.$#'
 			identifier: method.notFound
 			count: 1
-			path: tests/Unit/Agents/ABTestingAgentTest.php
-
-		-
-			message: '#^Call to an undefined method Mockery\\LegacyMockInterface\:\:evaluateTest\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: tests/Unit/Agents/ABTestingAgentTest.php
 
 		-

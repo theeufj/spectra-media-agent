@@ -98,7 +98,13 @@ class PerformanceMaxLaunchCheck
     public function matches(array $stage, array $snapshot, string $status = 'PAUSED'): bool
     {
         $campaign = $snapshot['campaign']['campaign'] ?? [];
-        $groups = array_column($snapshot['groups'] ?? [], 'assetGroup');
+        $groups = array_values(array_filter(array_column($snapshot['groups'] ?? [], 'assetGroup'), fn ($group) => ($group['status'] ?? null) !== 'PAUSED' || ! in_array($group['resourceName'] ?? null, $stage['retired_groups'] ?? [], true)));
+        $links = collect($snapshot['assets'] ?? [])->where('assetGroup.resourceName', $stage['asset_group'] ?? '')->pluck('assetGroupAsset');
+        foreach ($stage['required_assets'] ?? [] as $required) {
+            if (! $links->contains(fn ($link) => ($link['asset'] ?? null) === $required['asset'] && ($link['fieldType'] ?? null) === $required['field_type'])) {
+                return false;
+            }
+        }
         $automations = array_column($campaign['assetAutomationSettings'] ?? [], 'assetAutomationStatus', 'assetAutomationType');
 
         return ($campaign['resourceName'] ?? null) === ($stage['campaign_resource'] ?? '')

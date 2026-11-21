@@ -146,4 +146,19 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
             $this->ownerApprovedRestart = $previous;
         }
     }
+
+    public function confirmedStatus(string $account, string $resource, string $status): bool
+    {
+        if (! ctype_digit($account) || ! preg_match("~^customers/{$account}/campaigns/\d+$~D", $resource)) {
+            return false;
+        }
+        $rows = $this->searchQuery($account, "SELECT campaign.resource_name, campaign.status FROM campaign WHERE campaign.resource_name = '{$resource}'");
+        foreach ($rows->iterateAllElements() as $row) {
+            $remote = $row->getCampaign();
+
+            return $remote->getResourceName() === $resource && \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::name($remote->getStatus()) === $status;
+        }
+
+        return false;
+    }
 }

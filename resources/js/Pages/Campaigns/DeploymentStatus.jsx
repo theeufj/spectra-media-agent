@@ -24,7 +24,42 @@ const isTerminal = d => {
 /**
  * DeploymentStatus - Shows real-time deployment progress and status
  */
-export default function DeploymentStatus({ campaign, deployments: initialDeployments, setupOnly = false }) {
+function ChannelEvidence({ channel }) {
+    if (!channel) return null;
+    const money = (amount) => new Intl.NumberFormat(undefined, {style: 'currency', currency: channel.currency || 'USD'}).format(amount);
+    const label = (value) => String(value || 'Awaiting evidence').replaceAll('_', ' ');
+    const rows = [
+        ['Approved daily budget', channel.daily_budget == null ? 'Awaiting approval' : money(channel.daily_budget)],
+        ['Reserved media funds', money(channel.reserved_cents / 100)],
+        ['Payer', label(channel.payer)], ['Funding', label(channel.funding_status)],
+        ['Ad account', channel.account_id || 'Awaiting verification'],
+        ['Platform campaigns', channel.resources.join(', ') || 'Awaiting submission'],
+        ['Submission', channel.submitted ? 'Submitted' : 'Awaiting submission'],
+        ...(channel.checked_at ? [['Account permissions', label(channel.permissions)]] : []),
+        ['First reported campaign impressions', channel.first_impression_date || 'Awaiting impressions'],
+        ...(channel.creative_version ? [['Creative version', channel.creative_version], ['Publication', label(channel.creative_phase)],
+            ...(channel.has_replacement ? [['Replacement eligibility', channel.replacement_eligible ? 'Eligible' : 'Awaiting provider review']] : []),
+            ...(channel.platform === 'google' ? [['Google ad strength', label(channel.ad_strength || 'Pending')]] : [])] : []),
+        ...(channel.event?.goal ? [
+            ['Selected event', label(channel.event.goal)],
+            ['Destination', label(channel.event.binding_status)],
+            ['Website installation', label(channel.event.installation_status || 'awaiting_verification')],
+            ['Website event', label(channel.event.source_status)],
+            ['Provider receipt', label(channel.event.delivery_status)],
+            ['Ad attribution', label(channel.event.provider_attribution)],
+        ] : []),
+    ];
+    return <div className="mt-4 border-t border-gray-200 pt-3">
+        <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            {rows.map(([title, value]) => <div key={title}><dt className="text-gray-500">{title}</dt><dd className="break-words text-gray-900">{value}</dd></div>)}
+        </dl>
+        {channel.next_action && <p className="mt-3 font-medium">{channel.owner} · {channel.next_action}
+            {channel.setup_url && <Link className="ml-2 underline" href={channel.setup_url}>{channel.blocker_code === 'conversion_test_required' ? 'Verify website event' : 'Resolve payment'}</Link>}
+        </p>}
+    </div>;
+}
+
+export default function DeploymentStatus({ campaign, deployments: initialDeployments, setupOnly = false, unassignedResources = [], historicalRowsForReview = 0 }) {
     const { auth } = usePage().props;
     const toast = useToast();
     const [deployments, setDeployments] = useState(initialDeployments || []);
@@ -377,6 +412,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     
                     {/* Platform Status Cards */}
                     <div className="grid grid-cols-1 gap-4 mb-6">
+                        {historicalRowsForReview > 0 && <p className="mb-4 text-sm text-amber-800">Site to Spend is checking which approved strategy owns {historicalRowsForReview} historical daily {historicalRowsForReview === 1 ? 'report' : 'reports'}.</p>}
+                        {unassignedResources.length > 0 && <p className="mb-4 text-sm text-amber-800">Site to Spend is verifying strategy ownership for {unassignedResources.map(row => row.platform + ' ' + row.id).join(', ')}.</p>}
                         {deployments.map((deployment) => (
                             <div 
                                 key={deployment.id}
@@ -407,7 +444,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                     </span>
                                 </div>
                                 
-                                {deployment.error_message && (
+                                <ChannelEvidence channel={deployment.channel} />
+                                {deployment.error_message && !deployment.channel?.next_action && (
                                     <div className="mt-3 p-3 bg-red-50 rounded-lg">
                                         <p className="text-sm text-red-700">{deployment.error_message}</p>
                                     </div>

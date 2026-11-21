@@ -415,7 +415,6 @@ PROMPT;
 
         try {
             $insightService = $this->ads()->facebookInsights($customer);
-            $adService = $this->ads()->facebookAds($customer);
 
             // Get ad-level insights for the last 30 days
             $dateEnd = now()->format('Y-m-d');
@@ -504,30 +503,25 @@ PROMPT;
                 );
             }
 
-            // Auto-pause losing Facebook ads with statistical confidence
+            // Stage an approved alternative only when measured results justify rotation.
             // Only pause ads with 2000+ impressions, 0 conversions, and CTR below threshold
-            $autoPaused = [];
+            $replacements = [];
             foreach ($results['ads']['losers'] as $loser) {
                 if (
                     ($loser['impressions'] ?? 0) >= $this->thresholds['auto_pause_min_impressions'] &&
-                    ($loser['conversions'] ?? 0) === 0 &&
+                    isset($loser['conversions']) && (float) $loser['conversions'] === 0.0 &&
                     ($loser['ctr'] ?? 0) < $this->thresholds['auto_pause_max_ctr'] &&
                     ! empty($loser['ad_id'])
                 ) {
                     try {
-                        $adService->pauseAd($loser['ad_id']);
-                        $autoPaused[] = [
-                            'action' => 'paused',
-                            'platform' => 'facebook_ads',
-                            'ad_id' => $loser['ad_id'],
-                            'ad_name' => $loser['text'],
-                            'impressions' => $loser['impressions'],
-                            'ctr' => round($loser['ctr'] * 100, 2).'%',
-                            'reason' => 'Auto-paused: 2000+ impressions with 0 conversions and CTR below 0.5%',
-                        ];
+                        $staged = app(\App\Services\Creative\ApprovedVariantRotation::class)->proposeMeta($campaign, (string) $loser['ad_id']);
+                        $replacements[] = ['action' => $staged ? 'replacement_staged' : 'replacement_suggested',
+                            'platform' => 'facebook_ads', 'ad_id' => $loser['ad_id'], 'ad_name' => $loser['text'],
+                            'impressions' => $loser['impressions'], 'ctr' => round($loser['ctr'] * 100, 2).'%',
+                            'reason' => 'Low click rate and zero observed primary conversions. Keep the current ad until its replacement passes review.'];
                     } catch (\Throwable $e) {
                         report($e);
-                        Log::warning('CreativeIntelligenceAgent: Failed to auto-pause Facebook ad', [
+                        Log::warning('CreativeIntelligenceAgent: Failed to stage a Facebook replacement', [
                             'ad_id' => $loser['ad_id'],
                             'error' => $e->getMessage(),
                         ]);
@@ -535,11 +529,11 @@ PROMPT;
                 }
             }
 
-            if (! empty($autoPaused)) {
-                $results['auto_actions'] = array_merge($results['auto_actions'], $autoPaused);
-                Log::info('CreativeIntelligenceAgent: Auto-paused Facebook ads', [
+            if (! empty($replacements)) {
+                $results['auto_actions'] = array_merge($results['auto_actions'], $replacements);
+                Log::info('CreativeIntelligenceAgent: Reviewed Facebook replacement candidates', [
                     'campaign_id' => $campaign->id,
-                    'count' => count($autoPaused),
+                    'count' => count($replacements),
                 ]);
             }
 

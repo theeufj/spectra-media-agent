@@ -42,6 +42,9 @@ use Stripe\Exception\CardException;
  */
 class AdSpendBillingService
 {
+    /** @var list<array{strategy:int,resource:string,cents:int}> */
+    private array $channelSpend = [];
+
     private ?string $spendDateOverride = null;
 
     public function processBillingForDate(Customer $customer, string $spendDate): array
@@ -192,6 +195,7 @@ class AdSpendBillingService
             }
 
             // Get actual ad spend from yesterday
+            $this->channelSpend = [];
             $actualSpend = $this->getActualAdSpend($customer);
             $result['actual_spend'] = $actualSpend;
 
@@ -218,6 +222,7 @@ class AdSpendBillingService
             }
 
             if ($actualSpend <= 0) {
+                $this->consumeChannelHolds($customer);
                 $result['success'] = true;
                 $result['action_taken'] = 'No spend to bill';
 
@@ -237,7 +242,14 @@ class AdSpendBillingService
             // `current_balance >= $actualSpend` pre-check, which was reading a
             // stale in-memory balance to decide whether the locked write would
             // succeed.
-            if ($credit->deduct($actualSpend, 'Daily ad spend - '.$billingDate, $billingDate)) {
+            if (DB::transaction(function () use ($credit, $actualSpend, $billingDate, $customer) {
+                if (! $credit->deduct($actualSpend, 'Daily ad spend - '.$billingDate, $billingDate)) {
+                    return false;
+                }
+                $this->consumeChannelHolds($customer);
+
+                return true;
+            })) {
                 $result['success'] = true;
                 $result['action_taken'] = 'Deducted from credit balance';
 
@@ -258,10 +270,7 @@ class AdSpendBillingService
                 $shortfall = round($actualSpend - $deductedNow, 2);
 
                 // Try to charge the shortfall plus replenishment
-                $replenishAmount = AdSpendCredit::calculateInitialCredit(
-                    $this->getAverageDailyBudget($customer),
-                    7
-                );
+                $replenishAmount = $this->fundingWindow($customer, $credit)['top_up'];
                 $totalToCharge = round($shortfall + $replenishAmount, 2);
 
                 $chargeResult = $this->chargeCustomer(
@@ -288,6 +297,7 @@ class AdSpendBillingService
                         return $result;
                     }
 
+                    $this->consumeChannelHolds($customer);
                     $credit->restoreAccount();
                     $result['success'] = true;
                     $result['action_taken'] = 'Charged card and replenished credit';
@@ -447,10 +457,11 @@ class AdSpendBillingService
         ];
 
         // Calculate what we need to charge to get back to healthy state
-        $replenishAmount = AdSpendCredit::calculateInitialCredit(
-            $this->getAverageDailyBudget($customer),
-            7
-        );
+        $window = $this->fundingWindow($customer, $credit);
+        $replenishAmount = $window['top_up'];
+        if ($window['scoped'] && $replenishAmount <= 0) {
+            return [...$result, 'success' => true, 'action_taken' => 'No additional approved media allocation to prepay'];
+        }
 
         $chargeResult = $this->chargeCustomer(
             $customer,
@@ -514,35 +525,14 @@ class AdSpendBillingService
      */
     protected function checkAndReplenish(Customer $customer, AdSpendCredit $credit): void
     {
-        // Use the sum of daily budgets across active campaigns — this is the authoritative
-        // number of what Google is authorised to spend per day, not a rolling average which
-        // gets skewed by partial days and campaign ramp-up periods.
-        $dailyBudget = $customer->campaigns()
-            ->where('status', 'active')
-            ->where(function ($q) {
-                // whereNotIn alone is NULL-not-true, and primary_status is
-                // nullable: MonitorCampaignStatus is its only writer and it
-                // returns early when the platform lookup yields nothing. A
-                // campaign the monitor has not reached yet dropped out of the
-                // sum entirely, so an account whose campaigns are all NULL
-                // summed to 0 and fell through to the rolling average the
-                // comment above says must not be used.
-                $q->whereNull('primary_status')
-                    ->orWhereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED']);
-            })
-            ->sum('daily_budget');
-
-        // Fall back to rolling average if no budgets are set
-        if ($dailyBudget <= 0) {
+        $window = $this->fundingWindow($customer, $credit);
+        $dailyBudget = $window['daily'];
+        if (! $window['scoped'] && $dailyBudget <= 0) {
             $dailyBudget = $credit->getAverageDailySpend();
         }
-
-        $daysRemaining = $dailyBudget > 0 ? $credit->current_balance / $dailyBudget : 999;
-
-        // If less than 3 days remaining, auto-replenish
-        if ($daysRemaining < 3 && $daysRemaining > 0) {
-            $replenishAmount = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
-
+        $daysRemaining = $dailyBudget > 0 ? $window['available'] / $dailyBudget : 999;
+        $replenishAmount = $window['scoped'] ? $window['top_up'] : AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
+        if ($daysRemaining < 3 && $daysRemaining > 0 && $replenishAmount > 0) {
             $chargeResult = $this->chargeCustomer(
                 $customer,
                 $replenishAmount,
@@ -749,19 +739,86 @@ class AdSpendBillingService
             // candidate; getXAdsSpend returns 0 for days with no recorded spend. (BILL-8)
             $billableCampaigns = $customer->campaigns()
                 ->where(function ($q) {
-                    $q->whereNotNull('google_ads_campaign_id')
+                    $q->whereHas('strategies', fn ($s) => $s->whereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_campaign_id'))
+                        ->orWhereNotNull('google_ads_campaign_id')
                         ->orWhereNotNull('facebook_ads_campaign_id')
                         ->orWhereNotNull('microsoft_ads_campaign_id')
                         ->orWhereNotNull('linkedin_campaign_id');
                 })
                 ->get();
 
+            $seenResources = [];
             foreach ($billableCampaigns as $campaign) {
-                if (! empty($campaign->google_ads_campaign_id)) {
-                    $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
+                if ($customer->service_type === 'setup_only') {
+                    continue;
                 }
-                if (! empty($campaign->facebook_ads_campaign_id)) {
-                    $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
+                $inventory = \App\Services\Campaigns\CampaignResourceInventory::entries($campaign);
+                foreach (['google', 'facebook'] as $platform) {
+                    $entries = array_values(array_filter($inventory, fn ($entry) => $entry['platform'] === $platform));
+                    $scoped = $campaign->strategies->contains(fn ($s) => ($s->launch_intent['version'] ?? 1) === 2
+                        && \App\Services\Campaigns\CampaignResourceInventory::platform($s) === $platform);
+                    if (! $entries) {
+                        if ($scoped) {
+                            continue;
+                        }
+                        // Some pre-inventory records used noncanonical platform IDs.
+                        if ($platform === 'google' && $campaign->google_ads_campaign_id && ! $customer->isSelfFundedAds()) {
+                            $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
+                        } elseif ($platform === 'facebook' && $campaign->facebook_ads_campaign_id) {
+                            $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
+                        }
+
+                        continue;
+                    }
+                    foreach ($entries as $entry) {
+                        $identity = implode(':', [$platform, $entry['account_id'], $entry['resource_id']]);
+                        if (isset($seenResources[$identity])) {
+                            throw new \RuntimeException('An ad platform resource belongs to multiple campaigns. Resolve its identity before billing.');
+                        }
+                        $seenResources[$identity] = true;
+                        $strategy = $campaign->strategies->firstWhere('id', $entry['strategy_id']);
+                        if (! $strategy && $scoped) {
+                            throw new \RuntimeException('An ad platform resource has an ambiguous billing allocation. Reconcile its exact owner before billing.');
+                        }
+                        $binding = $strategy?->launch_intent['funding'] ?? [];
+                        $requiresProof = ($strategy?->launch_intent['version'] ?? 1) === 2;
+                        if ($requiresProof) {
+                            if (($binding['payer'] ?? null) === 'customer') {
+                                continue;
+                            }
+                            if (($binding['account'] ?? null) !== $entry['account_id'] || ($binding['payer'] ?? null) !== 'agency'
+                                || ($binding['currency'] ?? null) !== $customer->billingCurrency() || strtoupper((string) $customer->adSpendCredit()->value('currency')) !== $binding['currency']) {
+                                throw new \RuntimeException('Ad spend needs reconciliation: provider resource has no matching payer and currency.');
+                            }
+                        } elseif ($platform === 'google' && $customer->isSelfFundedAds()) {
+                            continue;
+                        }
+                        if ($platform === 'google') {
+                            $query = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)->where('date', $this->billingDate($customer));
+                            $query->where(fn ($q) => $q->where('google_campaign_id', $entry['resource_id'])
+                                ->when(! $requiresProof && count($entries) === 1, fn ($fallback) => $fallback->orWhereNull('google_campaign_id')));
+                            if ($requiresProof) {
+                                $unverified = (clone $query)->where('cost', '>', 0)->where(fn ($q) => $q->whereNull('google_account_id')->orWhere('google_account_id', '!=', $entry['account_id'])
+                                    ->orWhereNull('currency')->orWhere('currency', '!=', $customer->billingCurrency()));
+                                if ($unverified->exists()) {
+                                    throw new \RuntimeException('Google daily spend needs a verified reporting account and matching currency before settlement.');
+                                }
+                                $query->where('google_account_id', $entry['account_id'])->where('currency', $customer->billingCurrency());
+                            } else {
+                                $query->where(fn ($q) => $q->whereNull('google_account_id')->orWhere('google_account_id', $entry['account_id']))
+                                    ->where(fn ($q) => $q->whereNull('currency')->orWhere('currency', $customer->billingCurrency()));
+                            }
+                            $spend = (float) $query->sum('cost');
+                        } else {
+                            $resourceCampaign = clone $campaign;
+                            $resourceCampaign->facebook_ads_campaign_id = $entry['resource_id'];
+                            $spend = $this->getFacebookAdsSpend($customer, $resourceCampaign);
+                        }
+                        $totalSpend += $spend;
+                        if ($strategy && ($strategy->launch_intent['version'] ?? 1) === 2) {
+                            $this->channelSpend[] = ['strategy' => $strategy->id, 'resource' => $entry['resource_id'], 'cents' => (int) round($spend * 100)];
+                        }
+                    }
                 }
                 if (! empty($campaign->microsoft_ads_campaign_id)) {
                     $totalSpend += $this->getMicrosoftAdsSpend($customer, $campaign);
@@ -787,6 +844,13 @@ class AdSpendBillingService
         return $totalSpend;
     }
 
+    private function consumeChannelHolds(Customer $customer): void
+    {
+        foreach ($this->channelSpend as $spend) {
+            app(\App\Services\Billing\LaunchFunding::class)->settle($spend['strategy'], $spend['resource'], $this->billingDate($customer), $spend['cents']);
+        }
+    }
+
     /**
      * Get spend from Google Ads for yesterday.
      * Reads from the local GoogleAdsPerformanceData table which is synced by the agents —
@@ -797,6 +861,8 @@ class AdSpendBillingService
         try {
             return (float) \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $this->billingDate($customer))
+                ->where(fn ($q) => $q->whereNull('google_account_id')->orWhere('google_account_id', $customer->cleanGoogleCustomerId()))
+                ->where(fn ($q) => $q->whereNull('currency')->orWhere('currency', $customer->billingCurrency()))
                 ->sum('cost');
         } catch (\Throwable $e) {
             // Never resolve a failed lookup to zero. A zero here is
@@ -829,7 +895,13 @@ class AdSpendBillingService
         }
 
         try {
-            $insightService = new \App\Services\FacebookAds\InsightService($customer);
+            $insightService = app(\App\Services\FacebookAds\InsightService::class, ['customer' => $customer]);
+            $strict = collect(\App\Services\Campaigns\CampaignResourceInventory::entries($campaign))->contains(function ($entry) use ($campaign) {
+                $strategy = $campaign->strategies->firstWhere('id', $entry['strategy_id']);
+
+                return $entry['platform'] === 'facebook' && $entry['resource_id'] === $campaign->facebook_ads_campaign_id
+                    && ($strategy?->launch_intent['version'] ?? 1) === 2;
+            });
 
             // Get yesterday's spend
             $yesterday = $this->billingDate($customer);
@@ -838,9 +910,21 @@ class AdSpendBillingService
                 $campaign->facebook_ads_campaign_id,
                 $yesterday,
                 $yesterday,
-                ['spend']
+                $strict ? ['spend', 'account_id', 'account_currency', 'campaign_id', 'date_start', 'date_stop'] : ['spend']
             );
 
+            if ($insights === null) {
+                throw new \RuntimeException('Meta spend lookup failed before the billing day could be settled.');
+            }
+            if ($strict && $insights !== []) {
+                $row = $insights[0] ?? [];
+                if (count($insights) !== 1 || ! isset($row['spend']) || ! preg_match('/^\d+(?:\.\d{1,2})?$/D', (string) $row['spend'])
+                    || ($row['account_id'] ?? null) !== preg_replace('/^act_/', '', (string) $customer->facebook_ads_account_id)
+                    || ($row['account_currency'] ?? null) !== $customer->billingCurrency() || ($row['campaign_id'] ?? null) !== $campaign->facebook_ads_campaign_id
+                    || ($row['date_start'] ?? null) !== $yesterday || ($row['date_stop'] ?? null) !== $yesterday) {
+                    throw new \RuntimeException('Meta daily spend did not verify the exact funded account, campaign, currency and date.');
+                }
+            }
             if (! empty($insights) && isset($insights[0]['spend'])) {
                 $spend = (float) $insights[0]['spend'];
 
@@ -933,14 +1017,48 @@ class AdSpendBillingService
         }
     }
 
-    /**
-     * Get total daily budget across all customer campaigns.
-     */
-    protected function getAverageDailyBudget(Customer $customer): float
+    /** Refill only the currently serviceable allocation, after preserving other channels' wallet commitments. */
+    private function fundingWindow(Customer $customer, AdSpendCredit $credit): array
     {
-        return $customer->campaigns()
-            ->where('status', 'active')
-            ->sum('daily_budget') ?: 50;
+        $scoped = $customer->campaigns()->whereHas('strategies', fn ($q) => $q->where('launch_intent->version', 2))->exists();
+        $daily = $target = 0;
+        $fundedIds = [];
+        $payerId = $scoped ? $customer->adSpendPayer(allowWithoutPaymentMethod: true)?->id : null;
+        foreach ($customer->campaigns()->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('primary_status')->orWhereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED']))
+            ->with('strategies')->get() as $campaign) {
+            $campaign->setRelation('customer', $customer);
+            $new = $campaign->strategies->filter(fn ($strategy) => ($strategy->launch_intent['version'] ?? 1) === 2);
+            if ($new->isEmpty()) {
+                if (! $customer->isSelfFundedAds()) {
+                    $amount = \App\Services\Billing\LaunchFunding::cents($campaign->daily_budget);
+                    $daily += $amount;
+                    $target += 7 * $amount;
+                }
+
+                continue;
+            }
+            $days = \App\Services\Billing\LaunchFunding::runwayDays($campaign);
+            $entries = collect(\App\Services\Campaigns\CampaignResourceInventory::entries($campaign));
+            foreach ($new as $strategy) {
+                $binding = $strategy->launch_intent['funding'] ?? [];
+                if (! $days || ! $strategy->isDeployed() || ($binding['payer'] ?? null) !== 'agency'
+                    || ($binding['currency'] ?? null) !== $customer->billingCurrency() || ($strategy->launch_intent['payer_user_id'] ?? null) !== $payerId
+                    || ! $entries->contains(fn ($e) => $e['strategy_id'] === $strategy->id && $e['account_id'] === ($binding['account'] ?? null))) {
+                    continue;
+                }
+                $amount = min(\App\Services\Billing\LaunchFunding::cents($strategy->daily_budget), (int) ($strategy->launch_intent['daily_cents'] ?? 0));
+                $daily += $amount;
+                $target += $days * $amount;
+                $fundedIds[] = $strategy->id;
+            }
+        }
+        $unavailable = $scoped ? (int) DB::table('launch_funding_reservations')->where('customer_id', $customer->id)->whereIn('status', ['held', 'collecting'])
+            ->whereNotIn('strategy_id', $fundedIds)->sum('held_cents') : 0;
+        $available = max(0, \App\Services\Billing\LaunchFunding::cents($credit->fresh()->current_balance) - $unavailable);
+
+        return ['daily' => $daily / 100, 'available' => $available / 100, 'scoped' => $scoped,
+            'top_up' => ($scoped ? max(0, $target - $available) : $target) / 100];
     }
 
     /**
@@ -954,6 +1072,15 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
+                $control = app(\App\Services\Billing\ChannelSpendControl::class);
+                if ($control->applies($campaign)) {
+                    // A campaign-wide reduction would move a directly billed or unready sibling's allocation.
+                    if ($multiplier < 1) {
+                        $control->apply($campaign, resume: false);
+                    }
+
+                    continue;
+                }
                 if (! $campaign->google_ads_campaign_id && ! $campaign->facebook_ads_campaign_id
                     && ! $campaign->microsoft_ads_campaign_id && ! $campaign->linkedin_campaign_id) {
                     continue;
@@ -1005,6 +1132,12 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
+                $control = app(\App\Services\Billing\ChannelSpendControl::class);
+                if ($control->applies($campaign)) {
+                    $control->apply($campaign, resume: false);
+
+                    continue;
+                }
                 $result = $deactivator->pauseCampaign($customer, $campaign);
 
                 if (is_string($result)) {
@@ -1057,7 +1190,8 @@ class AdSpendBillingService
      */
     protected function resumeAllCampaigns(Customer $customer): array
     {
-        $summary = ['resumed' => 0, 'failed' => 0, 'skipped' => 0];
+        $summary = $this->resumeBillingPausedResources($customer);
+        $control = app(\App\Services\Billing\ChannelSpendControl::class);
         $campaigns = $customer->campaigns()
             ->where('status', 'paused')
             ->whereIn('platform_status', ['PAUSED', 'UNKNOWN'])
@@ -1076,7 +1210,7 @@ class AdSpendBillingService
             $attemptedPlatforms = [];
             $acceptedPlatforms = [];
             try {
-                if ($campaign->platform_status === 'UNKNOWN'
+                if ($control->applies($campaign) || $campaign->platform_status === 'UNKNOWN'
                     || \App\Services\Campaigns\CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
                     $summary['skipped']++;
                     Log::info('AdSpendBilling: Leaving the campaign unchanged for explicit review', ['campaign_id' => $campaign->id]);
@@ -1188,6 +1322,20 @@ class AdSpendBillingService
         return $summary;
     }
 
+    private function resumeBillingPausedResources(Customer $customer): array
+    {
+        $summary = ['resumed' => 0, 'failed' => 0, 'skipped' => 0];
+        $control = app(\App\Services\Billing\ChannelSpendControl::class);
+        foreach ($customer->campaigns()->whereNotNull('search_delivery_state->billing_resource_pauses')->get() as $scoped) {
+            $result = $control->apply($scoped, resume: true);
+            foreach ($result as $key => $count) {
+                $summary[$key] += $count;
+            }
+        }
+
+        return $summary;
+    }
+
     /**
      * Resume payment-paused campaigns and restore their budgets to 100%.
      *
@@ -1210,7 +1358,7 @@ class AdSpendBillingService
     {
         $summary = $campaignsWerePaused
             ? $this->resumeAllCampaigns($customer)
-            : ['resumed' => 0, 'failed' => 0, 'skipped' => 0];
+            : $this->resumeBillingPausedResources($customer);
 
         $this->reduceCampaignBudgets($customer, 1.0);
 

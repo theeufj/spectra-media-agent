@@ -57,7 +57,7 @@ class ReconcileAdSpend implements ShouldQueue
                             continue;
                         }
 
-                        $platformSpend = $this->platformSpend($campaignIds, $spendStart, $spendEnd);
+                        $platformSpend = $this->platformSpend($customer, $spendStart, $spendEnd);
                         $deductions = $this->deductions($customer->adSpendCredit, $spendStart, $spendEnd);
 
                         // Nothing happened either side — not a discrepancy worth flagging.
@@ -110,12 +110,12 @@ class ReconcileAdSpend implements ShouldQueue
      * two-platform copy and therefore disagreed with this job about what the
      * same customer owed.
      */
-    private function platformSpend($campaignIds, string $start, string $end): float
+    private function platformSpend(Customer $customer, string $start, string $end): float
     {
         $total = 0.0;
 
-        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $model) {
-            $total += (float) $model::whereIn('campaign_id', $campaignIds)
+        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $label => $model) {
+            $total += (float) app(\App\Services\Billing\BillablePerformance::class)->query($customer, $label)
                 ->whereBetween('date', [$start, $end])
                 ->sum('cost');
         }

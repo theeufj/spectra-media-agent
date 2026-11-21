@@ -26,11 +26,11 @@ class AdCopyController extends Controller
 
         // Ensure the campaign belongs to a customer that the authenticated user is part of.
         $user = Auth::user();
-        $this->authorize('view', $campaign);
+        $this->authorize('update', $campaign);
 
         // Ensure the strategy belongs to the campaign.
         if ($strategy->campaign_id !== $campaign->id) {
-            abort(403, 'Strategy does not belong to this campaign.');
+            abort(404);
         }
 
         // Ensure the strategy has been signed off.
@@ -45,7 +45,11 @@ class AdCopyController extends Controller
         }
 
         // Dispatch the job to handle the generation in the background.
-        GenerateAdCopy::dispatch($campaign, $strategy, $platform);
+        if ($strategy->creative_approval !== null || $strategy->hasDeploymentFootprint()) {
+            app(\App\Services\Creative\CreativeRevisions::class)->draft($strategy, ['ad_copy_strategy']);
+        } else {
+            GenerateAdCopy::dispatch($campaign, $strategy, $platform);
+        }
 
         return redirect()->back()->with('flash', [
             'type' => 'success',

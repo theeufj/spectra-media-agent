@@ -52,6 +52,27 @@ class Campaign extends Model
         return $query->whereIn('primary_status', self::SERVING_PRIMARY_STATUSES);
     }
 
+    /** Scheduled resource-aware jobs must also see a serving sibling when the legacy parent status reflects Google only. */
+    public function scopeWithServingChannel(Builder $query): Builder
+    {
+        return $query->where(function ($scope) {
+            $scope->whereIn('primary_status', self::SERVING_PRIMARY_STATUSES)
+                ->orWhere(function ($active) {
+                    $active->where('status', CampaignStatus::Active)->whereHas('strategies', function ($strategies) {
+                        $strategies->where('deployment_status', 'active')->where(function ($scope) {
+                            foreach (['google', 'facebook'] as $platform) {
+                                $scope->orWhereExists(function ($rows) use ($platform) {
+                                    $rows->selectRaw('1')->from($platform.'_ads_performance_data as daily')
+                                        ->whereColumn('daily.strategy_id', 'strategies.id')->where('daily.impressions', '>', 0)
+                                        ->where('daily.date', '>=', now()->subDays(2)->toDateString());
+                                });
+                            }
+                        });
+                    });
+                });
+        });
+    }
+
     /**
      * May collateral generation render video for this campaign unprompted?
      *
@@ -380,7 +401,8 @@ class Campaign extends Model
                 ->orWhereNotNull('microsoft_ads_campaign_id')
                 ->orWhereNotNull('linkedin_campaign_id')
                 ->orWhereHas('strategies', function ($strategyQuery) {
-                    $strategyQuery->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES);
+                    $strategyQuery->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
+                        ->orWhereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_campaign_id');
                 });
         });
     }

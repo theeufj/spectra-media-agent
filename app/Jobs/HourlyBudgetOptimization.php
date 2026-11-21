@@ -59,7 +59,7 @@ class HourlyBudgetOptimization implements ShouldQueue
         $alertService = new CampaignAlertService;
 
         $campaigns = Campaign::with('customer')
-            ->serving()
+            ->withServingChannel()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
                 ->orWhereNotNull('microsoft_ads_campaign_id')
@@ -130,16 +130,40 @@ class HourlyBudgetOptimization implements ShouldQueue
             return;
         }
 
+        $entries = \App\Services\Campaigns\CampaignResourceInventory::entries($campaign);
+        if (empty($entries)) {
+            $metrics = $this->getHourlyMetrics($campaign, $customer);
+            if ($metrics) {
+                $this->writeHourlySnapshot($campaign, $metrics);
+            }
+
+            return;
+        }
+
+        foreach (collect($entries)->groupBy('platform') as $group) {
+            $totals = [];
+            foreach ($group as $entry) {
+                $view = \App\Services\Campaigns\CampaignResourceInventory::view($campaign, $entry);
+                $metrics = $this->getHourlyMetrics($view, $customer);
+                if (! $metrics) {
+                    // A partial cumulative total would corrupt later hourly deltas.
+                    continue 2;
+                }
+                $totals['platform'] = $metrics['platform'];
+                foreach (['impressions', 'clicks', 'spend', 'conversions', 'conversion_value'] as $field) {
+                    $totals[$field] = ($totals[$field] ?? 0) + ($metrics[$field] ?? 0);
+                }
+            }
+            $this->writeHourlySnapshot($campaign, $totals);
+        }
+    }
+
+    private function writeHourlySnapshot(Campaign $campaign, array $metrics): void
+    {
         $now = now()->utc();
         $hour = (int) $now->format('H');
         $date = $now->toDateString();
         $dayOfWeek = (int) $now->format('w'); // 0=Sunday
-
-        // Today's cumulative performance from the platform
-        $metrics = $this->getHourlyMetrics($campaign, $customer);
-        if (! $metrics) {
-            return;
-        }
 
         // What today's earlier hours already account for. Summing the stored
         // deltas (rather than reading the previous hour alone) keeps the maths
@@ -173,7 +197,7 @@ class HourlyBudgetOptimization implements ShouldQueue
                 'platform' => $metrics['platform'],
             ],
             [
-                'customer_id' => $customer->id,
+                'customer_id' => $campaign->customer_id,
                 'day_of_week' => $dayOfWeek,
                 'impressions' => $impressions,
                 'clicks' => $clicks,

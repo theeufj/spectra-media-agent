@@ -5,11 +5,9 @@ import { brandTint } from '@/Components/Marketing/Hero';
 import { fetchJson } from '@/utils/http';
 import { money } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import StripeCardElements from '@/Components/StripeCardElements';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-// Initialize Stripe
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_KEY);
 
 // Card styling
 const CARD_ELEMENT_OPTIONS = {
@@ -44,8 +42,8 @@ const useBudgetCalcs = (campaign, existingCredit) => {
     };
 
     const calculateDailyBudget = () => {
-        if (campaign?.daily_budget) {
-            try { return budgetCents(campaign.daily_budget) / 100; } catch { /* Fall back to the campaign total. */ }
+        if (campaign?.funding_daily_budget || campaign?.daily_budget) {
+            try { return budgetCents(campaign.funding_daily_budget || campaign.daily_budget) / 100; } catch { /* Fall back to the campaign total. */ }
         }
         const totalBudget = Number(campaign?.total_budget);
         const durationDays = getCampaignDurationDays();
@@ -57,12 +55,12 @@ const useBudgetCalcs = (campaign, existingCredit) => {
 
     const campaignDurationDays = getCampaignDurationDays();
     const estimatedDailySpend = calculateDailyBudget();
-    const daysToCharge = Math.min(7, campaignDurationDays);
+    const daysToCharge = campaign?.funding_days ?? Math.min(7, campaignDurationDays);
     // Show exactly what the server charges: daily × days. Substituting
     // total_budget for short campaigns showed one number on the button and
     // put a different one on the card.
     const runway = Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
-    const upfrontCharge = Math.round(Math.max(0, runway - Number(existingCredit?.current_balance || 0)) * 100) / 100;
+    const upfrontCharge = Math.round(Math.max(0, runway - (existingCredit?.available_cents != null ? existingCredit.available_cents / 100 : Number(existingCredit?.current_balance || 0))) * 100) / 100;
 
     return { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge };
 };
@@ -102,9 +100,7 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
         <div className="rounded-lg border p-4" style={{ backgroundColor: brandTint(10), borderColor: brandTint(30) }}>
             <h4 className="font-medium text-brand-darker mb-2">How Ad Spend Billing Works</h4>
             <ul className="text-sm text-brand-darker space-y-1">
-                <li>• We charge <strong>{daysToCharge} days of estimated ad spend</strong> upfront as credit
-                    {daysToCharge < 7 && <span className="text-brand-darker font-semibold"> (your campaign is only {campaignDurationDays} days)</span>}
-                </li>
+                <li>• After approval, each ready channel reserves up to <strong>{daysToCharge} days of its allocation</strong>. Your card covers only the shortfall after available credit.</li>
                 <li>• Your actual daily spend is deducted each morning at 6 AM</li>
                 <li>• Balance is automatically topped up when low</li>
                 <li>• Full transparency – view all transactions in your dashboard</li>
@@ -118,7 +114,7 @@ const BudgetSummary = ({ campaign, campaignDurationDays, estimatedDailySpend, da
                     <p className="text-lg font-semibold text-gray-900">{money(estimatedDailySpend, currency)}/day</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-sm text-gray-500">Charge today (credit shortfall)</p>
+                    <p className="text-sm text-gray-500">Maximum seven-day shortfall</p>
                     <p className="text-2xl font-bold text-brand-dark">{money(upfrontCharge, currency)}</p>
                 </div>
             </div>
@@ -146,7 +142,7 @@ const SavedCardForm = ({ campaign, strategy, creativeFingerprints, existingCredi
                     campaign_id: campaign?.id,
                     strategy_id: strategy?.id,
                     creative_fingerprints: creativeFingerprints,
-                    daily_budget: estimatedDailySpend,
+                    daily_budget: campaign?.daily_budget ?? estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
             });
@@ -181,7 +177,7 @@ const SavedCardForm = ({ campaign, strategy, creativeFingerprints, existingCredi
                 <svg className="w-5 h-5 flex-shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>Card on file from your subscription will be charged.</span>
+                <span>Your saved card can fund each channel after launch approval and verification.</span>
             </div>
 
             {error && (
@@ -205,12 +201,12 @@ const SavedCardForm = ({ campaign, strategy, creativeFingerprints, existingCredi
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & review launch`}
+                    {processing ? 'Processing...' : 'Continue to launch review'}
                 </button>
             </div>
 
             <p className="text-xs text-gray-500 text-center">
-                By continuing, you authorize us to charge your card for ad spend.
+                Your card is charged only after you approve the ads and budget and a channel qualifies.
                 You can manage your billing in Settings → Ad Spend Billing.
             </p>
         </form>
@@ -253,7 +249,7 @@ const NewCardForm = ({ campaign, strategy, creativeFingerprints, existingCredit,
                     campaign_id: campaign?.id,
                     strategy_id: strategy?.id,
                     creative_fingerprints: creativeFingerprints,
-                    daily_budget: estimatedDailySpend,
+                    daily_budget: campaign?.daily_budget ?? estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 },
             });
@@ -310,12 +306,12 @@ const NewCardForm = ({ campaign, strategy, creativeFingerprints, existingCredit,
                         processing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-dark hover:bg-brand-darker'
                     }`}
                 >
-                    {processing ? 'Processing...' : `Pay ${money(upfrontCharge, currency)} & review launch`}
+                    {processing ? 'Processing...' : 'Continue to launch review'}
                 </button>
             </div>
 
             <p className="text-xs text-gray-500 text-center">
-                By continuing, you authorize us to charge your card for ad spend.
+                Your card is charged only after you approve the ads and budget and a channel qualifies.
                 You can manage your billing in Settings → Ad Spend Billing.
             </p>
         </form>
@@ -323,8 +319,7 @@ const NewCardForm = ({ campaign, strategy, creativeFingerprints, existingCredit,
 };
 
 // Main Modal Component
-export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, strategy, creativeFingerprints, existingCredit, hasPaymentMethod }) {
-    const currency = useCurrency();
+export default function AdSpendSetupModal({ show, onClose, onSuccess, onContinueWithCredit, campaign, campaignName, strategy, creativeFingerprints, existingCredit, hasPaymentMethod }) {
     const isTopUp = existingCredit && existingCredit.status === 'active';
     return (
         <Modal show={show} onClose={onClose} maxWidth="lg">
@@ -335,13 +330,13 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                     </h2>
                     <p className="mt-1 text-sm text-gray-500">
                         {isTopUp
-                            ? <>Add funds for <strong>{campaignName}</strong>. Your existing balance of <strong>{money(existingCredit.current_balance, currency)}</strong> will be topped up.</>
-                            : <>Before deploying <strong>{campaignName}</strong>, we need to fund your ad spend account.</>
+                            ? <>You can save a card for <strong>{campaignName}</strong> to cover any amount beyond your available advertising credit.</>
+                            : <>Before deploying <strong>{campaignName}</strong>, you can save a payment method for its approved advertising.</>
                         }
                     </p>
                 </div>
 
-                {strategy && <p className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">You will review a launch for {strategy.platform}. Funding uses the campaign’s approved total budget; this credit is shared across its platforms.</p>}
+                {strategy && <p className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">You will review a launch for {strategy.platform}. Funding uses this channel’s approved daily allocation.</p>}
                 {hasPaymentMethod ? (
                     <SavedCardForm
                         campaign={campaign}
@@ -352,7 +347,7 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                         onCancel={onClose}
                     />
                 ) : (
-                    <Elements stripe={stripePromise}>
+                    <StripeCardElements>
                         <NewCardForm
                             campaign={campaign}
                             strategy={strategy}
@@ -361,7 +356,10 @@ export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, 
                             onSuccess={onSuccess}
                             onCancel={onClose}
                         />
-                    </Elements>
+                    </StripeCardElements>
+                )}
+                {!hasPaymentMethod && onContinueWithCredit && (
+                    <button className="mt-3 text-sm font-medium text-brand-dark underline" type="button" onClick={onContinueWithCredit}>Review launch using available credit</button>
                 )}
             </div>
         </Modal>

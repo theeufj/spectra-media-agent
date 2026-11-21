@@ -63,14 +63,18 @@ class CollateralPlan
         if ($includeVideo && $owner?->id === $strategy->id) {
             $remaining = VideoCollateral::remainingForCampaign($campaign);
             $remaining = min($remaining, $allowance->remaining($campaign->customer, 'video') ?? $remaining);
-            $platforms = $performanceMax && ! $eligible->contains(fn (Strategy $candidate) => preg_match('/facebook|instagram|meta/i', $candidate->platform))
-                ? ['Google Ads (Performance Max)'] : ['Google Ads (Performance Max)', 'Facebook Ads'];
+            $platforms = [];
+            if ($eligible->contains(fn (Strategy $candidate) => preg_match('/google|youtube/i', $candidate->platform))) {
+                $platforms[] = 'Google Ads (Performance Max)';
+            }
+            // The existing renderer names vertical mobile video “Facebook Ads”. Google also uses that orientation.
+            if ($platforms !== [] || $eligible->contains(fn (Strategy $candidate) => preg_match('/facebook|instagram|meta/i', $candidate->platform))) {
+                $platforms[] = 'Facebook Ads';
+            }
             if (\App\Services\Creative\StarterCreativeQuota::applies($campaign->customer)) {
                 $platforms = array_values(array_filter($platforms, $campaign->customer->allowsAdPlatform(...)));
             }
-            $availableConcepts = $performanceMax
-                ? (int) ceil($remaining / count($platforms))
-                : intdiv($remaining, count($platforms));
+            $availableConcepts = $platforms === [] || $remaining === 0 ? 0 : max(1, intdiv($remaining, count($platforms)));
             $concepts = min(max(1, (int) config('ai.video_concepts_per_campaign', 2)), $availableConcepts);
             for ($concept = 0; $concept < $concepts; $concept++) {
                 foreach ($platforms as $shape => $platform) {

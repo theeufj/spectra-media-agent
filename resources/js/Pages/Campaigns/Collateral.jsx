@@ -91,7 +91,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const { generatingAdCopy, setGeneratingAdCopy, generatingImage, setGeneratingImage, generatingVideo, setGeneratingVideo, collateral, applySavedSelection, isPolling, setIsPolling, collateralError, setCollateralError } = useCollateralGeneration({ currentStrategy, adCopy, imageCollaterals, videoCollaterals, generationPending, creativeReview, creativeRelease });
     const creativeFingerprints = Object.fromEntries(Object.entries(collateral.creativeRelease || {}).filter(([, state]) => state.status === 'passed').map(([id, state]) => [id, state.fingerprint]));
-    const isLivePerformanceMax = strategy => strategy?.campaign_type === 'performance_max' && strategy.deployment_status === 'active';
+    const canUpdateLive = strategy => strategy?.deployment_status === 'active' && (strategy.campaign_type === 'performance_max' || /facebook|instagram|meta/i.test(strategy.platform));
     const selectedImages = collateral.imageCollaterals.filter(image => image.should_deploy && image.is_active !== false);
     const [editingImage, setEditingImage] = useState(null);
     const [extendingVideo, setExtendingVideo] = useState(null);
@@ -350,7 +350,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         if (approvalPending.current || deploying) return;
         setDeploying(true);
         setConfirmModal(previous => ({ ...previous, show: false }));
-        const updating = isLivePerformanceMax(strategy);
+        const updating = canUpdateLive(strategy);
         const endpoint = updating ? route('campaigns.creative-release', { campaign: campaign.uuid, strategy: strategy.uuid })
             : route(strategy ? 'deployment.deploy-platform' : 'deployment.deploy');
         const payload = updating ? { fingerprint: creativeFingerprints[strategy.id] }
@@ -363,18 +363,23 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
     const requestLaunchConsent = (strategy = null, fundingMessage = '') => {
         const target = strategy ? strategy.platform.replace(/\s*\(SEM\)/gi, '') : 'all selected platforms';
-        const updating = strategy ? alreadyCreated(strategy) || isLivePerformanceMax(strategy) : launchStrategies.every(alreadyCreated);
+        const updating = strategy ? alreadyCreated(strategy) || canUpdateLive(strategy) : launchStrategies.every(alreadyCreated);
         const waitsForGoogle = googleNeedsSetup && (strategy ? /google/i.test(strategy.platform) : launchStrategies.some(item => /google/i.test(item.platform)));
+        const rotationMessage = 'Reviewed variants can rotate within your approved offer, audience, destination and budget. ';
         const setupMessage = waitsForGoogle ? 'Ads will be created automatically after Google account access and funding are ready. ' : '';
         const action = `${updating ? 'Update' : setupOnly ? 'Create' : 'Launch'} ${adsLabel(strategy)}`;
+        const days = reviewSummary.funding_days ?? 7;
+        const caps = (strategy ? [strategy] : launchStrategies).filter(item => !alreadyCreated(item)).map(item =>
+            `${item.platform}: ${money(item.daily_budget, currency)}/day, up to ${money(Number(item.daily_budget) * days, currency)}`
+        ).join('. ');
         setConfirmModal({
             show: true,
-            title: isLivePerformanceMax(strategy) ? 'Update live Performance Max ads' : `${action}?`,
-            message: isLivePerformanceMax(strategy) ? 'Approve the selected copy, images and video for your live campaign. Your approved daily budget still applies.' : `${fundingMessage ? `${fundingMessage} ` : ''}${setupMessage}${setupOnly
+            title: canUpdateLive(strategy) ? (strategy.campaign_type === 'performance_max' ? 'Update live Performance Max ads' : 'Update live Meta ads') : `${action}?`,
+            message: canUpdateLive(strategy) ? 'Approve the selected copy, images and video for your live campaign. Reviewed variants can rotate within this offer, audience, destination and daily budget. New claims or assets require your approval.' : `${fundingMessage ? `${fundingMessage} ` : ''}${setupMessage}${rotationMessage}${setupOnly
                 ? `We'll ${updating ? 'update' : 'create'} your selected ads ${strategy ? `in your ${target} account` : 'across your selected platforms'} and leave them paused. Nothing spends until you switch them on.`
-                : `${updating ? 'Update' : 'Launch'} your selected ads on ${target}. Your approved campaign budget is ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day.`}`,
+                : `${updating ? 'Update' : 'Launch'} your selected ads on ${target}. Your approved campaign budget is ${money(reviewSummary.daily_budget ?? campaign.daily_budget, currency)} per day. ${caps ? `For the next ${days} days you authorize ${caps}. ` : ''}For each ready channel we reserve available credit and charge only the shortfall to your saved card after account and tracking verification.`}`,
             onConfirm: () => confirmDeploy(strategy),
-            confirmText: isLivePerformanceMax(strategy) ? 'Approve and update ads' : action,
+            confirmText: canUpdateLive(strategy) ? 'Approve and update ads' : action,
             isDestructive: false,
         });
     };
@@ -403,7 +408,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         }
         if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
         if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
-        if (isLivePerformanceMax(strategy)) { requestLaunchConsent(strategy); return; }
+        if (canUpdateLive(strategy)) { requestLaunchConsent(strategy); return; }
         if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
             toast.warning('Confirm your daily budget before launch.'); router.visit(route('campaigns.show', campaign.uuid)); return;
         }
@@ -413,17 +418,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         if (googleLinkNeedsApproval && selected.some(item => /google/i.test(item.platform))) {
             requestLaunchConsent(strategy, 'Your Google account still needs to accept our manager invitation.'); return;
         }
-        if (!setupOnly && managedBillingEnabled) {
-            const duration = campaign.start_date && campaign.end_date ? Math.max(1, Math.ceil((new Date(campaign.end_date) - new Date(campaign.start_date)) / 86400000) + 1) : 30;
-            const daily = Number(campaign.daily_budget || 0) || Number(campaign.total_budget || 0) / duration;
-            if (!adSpendCredit || Number(adSpendCredit.current_balance) < daily * Math.min(7, duration)) { setShowAdSpendSetupModal(true); return; }
+        const selectedCents = selected.filter(item => !alreadyCreated(item)).reduce((total, item) => total + Math.round(Number(item.daily_budget || 0) * 100), 0);
+        const availableCents = adSpendCredit?.available_cents ?? Math.round(Number(adSpendCredit?.current_balance || 0) * 100);
+        if (!setupOnly && managedBillingEnabled && !hasPaymentMethod && availableCents < selectedCents * (reviewSummary.funding_days ?? 7)) {
+            setShowAdSpendSetupModal(true); return;
         }
         requestLaunchConsent(strategy);
     };
     const handleAdSpendSetupSuccess = result => {
         setShowAdSpendSetupModal(false);
         const charged = Number(result.credit_amount) || 0;
-        requestLaunchConsent(deployTarget, charged > 0
+        requestLaunchConsent(deployTarget, result.deferred ? result.message : charged > 0
             ? `Charged ${money(charged, currency)} for campaign ad spend credit. Balance: ${money(Number(result.new_balance) || 0, currency)}.`
             : `Your existing campaign credit covers this launch. No additional charge was needed.`);
     };
@@ -459,7 +464,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     <div className="relative" ref={deployDropdownRef}>
                         <div className="flex">
                             <button
-                                onClick={() => handleDeploy(isLivePerformanceMax(currentStrategy) ? currentStrategy : singleLaunchStrategy)}
+                                onClick={() => handleDeploy(canUpdateLive(currentStrategy) ? currentStrategy : singleLaunchStrategy)}
                                 disabled={savingApproval || deploying}
                                 aria-describedby={setupOnly ? 'paused-ads-explanation' : undefined}
                                 className={`px-4 py-2 bg-brand-dark text-white ${hasPlatformChoices ? 'rounded-l-lg' : 'rounded-lg'} hover:bg-brand-darker transition font-medium`}
@@ -468,7 +473,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                     once to build an account they will run themselves,
                                     the button creates the ads — it does not start
                                     them. */}
-                                {isLivePerformanceMax(currentStrategy) ? 'Update live ads' : launchLabel}
+                                {canUpdateLive(currentStrategy) ? 'Update live ads' : launchLabel}
                             </button>
                             {hasPlatformChoices && <button
                                 onClick={() => setDeployDropdownOpen(o => !o)}
@@ -521,7 +526,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 show={showAdSpendSetupModal}
                 onClose={() => setShowAdSpendSetupModal(false)}
                 onSuccess={handleAdSpendSetupSuccess}
-                campaign={campaign}
+                onContinueWithCredit={() => { setShowAdSpendSetupModal(false); requestLaunchConsent(deployTarget); }}
+                campaign={{ ...campaign, funding_days: reviewSummary.funding_days, funding_daily_budget: deployTarget?.daily_budget ?? launchStrategies.reduce((total, item) => total + Number(item.daily_budget || 0), 0) }}
                 campaignName={deployTarget ? `${campaign.name} — ${deployTarget.platform}` : campaign.name}
                 strategy={deployTarget}
                 creativeFingerprints={creativeFingerprints}

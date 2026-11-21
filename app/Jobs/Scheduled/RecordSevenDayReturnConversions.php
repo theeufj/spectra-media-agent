@@ -2,8 +2,9 @@
 
 namespace App\Jobs\Scheduled;
 
-use App\Jobs\RecordSiteConversion;
-use App\Models\Customer;
+use App\Jobs\RecordSiteGoogleConversion;
+use App\Models\FeatureUsageDaily;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -30,21 +31,25 @@ class RecordSevenDayReturnConversions implements ShouldQueue
 
     public function handle(): void
     {
-        // users.created_at, qualified: the relation is a belongsToMany, so the
-        // generated query joins customer_user, and both tables carry created_at.
-        // Unqualified, Postgres rejected the whole query as ambiguous and this
-        // job failed every night — silently, until report() started reaching the
-        // admin dashboard.
-        Customer::whereHas('users', fn ($q) => $q
-            // gclid, gbraid or wbraid. Google substitutes the latter two
-            // wherever iOS ATT applies, so a gclid-only filter dropped every
-            // iOS signup from the sweep before the fan-out could see it.
-            // Qualified for the same reason created_at is: the belongsToMany
-            // joins customer_user, so an unqualified column is a coin toss.
-            ->where(fn ($q) => $q->whereNotNull('users.gclid')
-                ->orWhereNotNull('users.gbraid')
-                ->orWhereNotNull('users.wbraid'))
-            ->whereBetween('users.created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
-        )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
+        // Scan completed retention windows. Each event belongs to the person who
+        // used the product and has one stable occurrence timestamp across retries.
+        User::whereBetween('created_at', [now()->subDays(10), now()->subDays(7)])
+            ->where(fn ($query) => $query->whereNotNull('gclid')->orWhereNotNull('gbraid')->orWhereNotNull('wbraid'))
+            ->eachById(function (User $user) {
+                $start = $user->created_at->copy()->addDays(7);
+                $usage = FeatureUsageDaily::where('user_id', $user->id)->where('last_at', '>=', $start)
+                    ->where('last_at', '<', $start->copy()->addDay())->orderBy('last_at')->first();
+                if ($usage) {
+                    $key = 'seven_day_return:'.$user->id.':'.$user->created_at->timestamp;
+                    $record = \App\Models\SpectraConversionEvent::firstOrCreate(['deduplication_key' => $key], [
+                        'user_id' => $user->id, 'event' => 'seven_day_return', 'occurred_at' => $usage->last_at,
+                        'mode' => 'server_google', 'ad_identifiers' => $user->googleAdIdentifiers(),
+                        'gclid' => $user->gclid, 'value' => 0, 'currency' => 'USD',
+                    ]);
+                    if (! $record->uploaded_to_google) {
+                        RecordSiteGoogleConversion::dispatch($user, 'seven_day_return', $record->occurred_at, $record->id);
+                    }
+                }
+            });
     }
 }

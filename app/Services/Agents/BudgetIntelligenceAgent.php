@@ -6,11 +6,8 @@ use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
-use App\Models\FacebookAdsPerformanceData;
-use App\Models\GoogleAdsPerformanceData;
+use App\Services\Campaigns\BudgetAllocationEvidence;
 use App\Services\Campaigns\CampaignBudgetService;
-use App\Services\FacebookAds\FacebookCampaignMetrics;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -250,9 +247,7 @@ class BudgetIntelligenceAgent
     {
         $reallocationRules = $this->config['reallocation_rules'] ?? [];
 
-        // Use adaptive ROAS threshold if available, otherwise config default
-        $adaptiveThresholds = AdaptiveThresholds::forCustomer($customer);
-        $minRoas = $adaptiveThresholds['min_roas_threshold'] ?? $reallocationRules['min_roas_threshold'] ?? config('optimization.budget_intelligence.reallocation_roas_ratio', 2.0);
+        $minRoas = $reallocationRules['min_roas_threshold'] ?? config('optimization.budget_intelligence.reallocation_roas_ratio', 2.0);
         $maxShift = $reallocationRules['max_shift_percentage'] ?? 20;
         $minDays = $reallocationRules['min_data_days'] ?? 7;
         $minConversions = $reallocationRules['min_conversions'] ?? config('optimization.budget_intelligence.reallocation_min_conversions', 15);
@@ -260,100 +255,29 @@ class BudgetIntelligenceAgent
         $recommendations = [];
         $performers = ['winners' => [], 'losers' => []];
 
-        foreach ($campaigns as $campaign) {
-            $metrics = null;
-            $platform = null;
-
-            // Try Google Ads first
-            if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
-                $platform = 'google_ads';
-                $customerId = $customer->google_ads_customer_id;
-                $resourceName = $campaign->googleAdsResourceName();
-
-                try {
-                    $getPerformance = $this->ads()->campaignPerformance($customer);
-                    $metrics = $getPerformance($customerId, $resourceName, 'LAST_30_DAYS');
-                } catch (\Throwable $e) {
-                    report($e);
-                    Log::warning('BudgetIntelligenceAgent: Could not analyze Google campaign', [
-                        'campaign_id' => $campaign->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Try Facebook Ads if no Google metrics
-            if (! $metrics && $campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
-                $platform = 'facebook_ads';
-
-                try {
-                    $insightService = new FacebookInsightService($customer);
-                    $dateEnd = now()->format('Y-m-d');
-                    $dateStart = now()->subDays(30)->format('Y-m-d');
-
-                    $insights = $insightService->getCampaignInsights(
-                        $campaign->facebook_ads_campaign_id,
-                        $dateStart,
-                        $dateEnd
-                    );
-
-                    if (! empty($insights)) {
-                        // Aggregate Facebook insights into a metrics structure
-                        $totalSpend = 0;
-                        $totalConversions = 0;
-                        $totalConversionValue = 0;
-                        $goal = FacebookCampaignMetrics::actionType(FacebookCampaignMetrics::strategy($campaign));
-                        foreach ($insights as $day) {
-                            $totalSpend += (float) ($day['spend'] ?? 0);
-                            $totalConversions += FacebookCampaignMetrics::conversions($day['actions'] ?? null, $goal);
-                            // Extract purchase ROAS value if available
-                            foreach ($day['action_values'] ?? [] as $av) {
-                                if (($av['action_type'] ?? '') === 'purchase') {
-                                    $totalConversionValue += (float) ($av['value'] ?? 0);
-                                }
-                            }
-                        }
-                        $metrics = [
-                            'cost_micros' => $totalSpend * 1000000,
-                            'conversions' => $totalConversions,
-                            'conversion_value' => $totalConversionValue,
-                        ];
-                    }
-                } catch (\Throwable $e) {
-                    report($e);
-                    Log::warning('BudgetIntelligenceAgent: Could not analyze Facebook campaign', [
-                        'campaign_id' => $campaign->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            if (! $metrics) {
+        $resources = app(BudgetAllocationEvidence::class)->resources($customer, $campaigns, 30);
+        foreach ($resources as $resource) {
+            if ($resource['goal'] !== 'purchase' || $resource['days'] < $minDays) {
                 continue;
             }
+            $campaign = $resource['campaign'];
+            $platform = $resource['platform'].'_ads';
+            $cost = $resource['spend'];
+            $conversions = $resource['conversions'];
+            $conversionValue = $resource['conversion_value'];
 
-            $cost = ($metrics['cost_micros'] ?? 0) / 1000000;
-            $conversions = $metrics['conversions'] ?? 0;
-            $conversionValue = $metrics['conversion_value'] ?? 0;
-
-            // Use actual conversion value from API if available, then customer AOV.
-            // Without AOV the ROAS calculation is meaningless — skip reallocation for this campaign.
-            $aov = $customer->average_order_value;
-            if (! $aov && $conversionValue <= 0) {
-                Log::info('BudgetIntelligenceAgent: Skipping campaign for reallocation — average_order_value not set and no conversion value from API', [
-                    'campaign_id' => $campaign->id,
-                    'customer_id' => $customer->id,
-                ]);
-
+            // Reallocation proposals require actual reported value in a comparable currency.
+            if ($conversionValue <= 0 || ! $cost) {
                 continue;
             }
-            $revenue = $conversionValue > 0 ? $conversionValue : ($conversions * ($aov ?? 0));
+            $revenue = $conversionValue;
             $roas = $cost > 0 ? $revenue / $cost : 0;
 
             if ($conversions >= $minConversions) {
                 $entry = [
                     'campaign' => $campaign,
                     'platform' => $platform,
+                    'external_campaign_id' => $resource['resource_id'], 'budget' => $resource['budget'], 'currency' => $resource['currency'],
                     'roas' => $roas,
                     'cost' => $cost,
                     'conversions' => $conversions,
@@ -367,12 +291,10 @@ class BudgetIntelligenceAgent
             }
         }
 
-        // Generate recommendations and auto-execute small shifts
-        $autoExecuteThreshold = 10; // Auto-execute shifts ≤10% of budget
         if (! empty($performers['winners']) && ! empty($performers['losers'])) {
             foreach ($performers['losers'] as $loser) {
                 $shiftPercent = min($maxShift, 10); // Start conservative
-                $shiftAmount = $loser['campaign']->daily_budget * ($shiftPercent / 100);
+                $shiftAmount = $loser['budget'] * ($shiftPercent / 100);
                 $winner = $performers['winners'][0];
 
                 $recommendation = [
@@ -385,6 +307,7 @@ class BudgetIntelligenceAgent
                     'to_campaign_id' => $winner['campaign']->id,
                     'to_platform' => $winner['platform'],
                     'to_roas' => round($winner['roas'], 2),
+                    'currency' => $loser['currency'], 'from_resource' => $loser['external_campaign_id'], 'to_resource' => $winner['external_campaign_id'],
                     'shift_amount' => $shiftAmount,
                     'shift_percent' => $shiftPercent,
                     'auto_executed' => false,
@@ -411,44 +334,21 @@ class BudgetIntelligenceAgent
     {
         $cacheKey = "cross_platform_reallocation:{$customer->id}";
 
-        $campaignIds = $customer->campaigns()
-            ->where('status', 'active')
-            ->pluck('id');
-
-        if ($campaignIds->isEmpty()) {
+        Cache::forget($cacheKey);
+        $campaigns = $customer->campaigns()->with(['customer', 'strategies'])->where('status', 'active')->get();
+        $resources = collect(app(BudgetAllocationEvidence::class)->resources($customer, $campaigns, 3));
+        if ($resources->isEmpty() || $resources->first()['goal'] !== 'purchase') {
             return null;
         }
-
-        $since = now()->subDays(3)->toDateString();
-
-        $google = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)
-            ->where('date', '>=', $since)
-            ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
-            ->first();
-
-        $facebook = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)
-            ->where('date', '>=', $since)
-            ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
-            ->first();
-
-        $gCost = (float) ($google->cost ?? 0);
-        $fCost = (float) ($facebook->cost ?? 0);
-        $totalSpend = $gCost + $fCost;
-
-        if ($totalSpend < 100) {
+        $google = $resources->where('platform', 'google');
+        $facebook = $resources->where('platform', 'facebook');
+        $gCost = $google->sum('spend');
+        $fCost = $facebook->sum('spend');
+        if ($gCost + $fCost < 100 || $google->sum('conversions') < 15 || $facebook->sum('conversions') < 15) {
             return null;
         }
-
-        $gConv = (float) ($google->conversions ?? 0);
-        $fConv = (float) ($facebook->conversions ?? 0);
-
-        if ($gConv < 15 || $fConv < 15) {
-            return null;
-        }
-
-        $aov = (float) ($customer->average_order_value ?? 0);
-        $gValue = (float) ($google->conversion_value ?? 0) ?: ($gConv * $aov);
-        $fValue = (float) ($facebook->conversion_value ?? 0) ?: ($fConv * $aov);
+        $gValue = $google->sum('conversion_value');
+        $fValue = $facebook->sum('conversion_value');
 
         if ($gValue <= 0 || $fValue <= 0) {
             return null;
@@ -489,6 +389,7 @@ class BudgetIntelligenceAgent
         }
 
         $shiftAmount = round($weakDailySpend * 0.10, 2);
+        $currency = $customer->billingCurrency();
         $recommendation = [
             'type' => 'cross_platform_reallocation',
             'strong_platform' => $strongPlatform,
@@ -497,7 +398,7 @@ class BudgetIntelligenceAgent
             'weak_roas' => round($weakRoas, 2),
             'ratio' => round(max($ratio, 1 / $ratio), 2),
             'suggested_shift' => $shiftAmount,
-            'shift_direction' => "Move \${$shiftAmount}/day from {$weakPlatform} → {$strongPlatform}",
+            'currency' => $currency, 'shift_direction' => "Move {$currency} {$shiftAmount}/day from {$weakPlatform} → {$strongPlatform}",
             'reason' => ucfirst(str_replace('_', ' ', $strongPlatform)).' ROAS is '.round(max($ratio, 1 / $ratio), 1).'x higher than '.ucfirst(str_replace('_', ' ', $weakPlatform)).' over the last 3 days',
             'google_roas' => round($gRoas, 2),
             'facebook_roas' => round($fRoas, 2),

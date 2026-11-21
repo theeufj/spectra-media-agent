@@ -48,7 +48,8 @@ class GenerateVideo implements ShouldQueue
          * nothing may be inserted before it.
          */
         protected int $variationIndex = 0,
-        protected bool $force = false
+        protected bool $force = false,
+        protected ?string $revisionId = null
     ) {
         $this->quotaWorkId = (string) \Illuminate\Support\Str::uuid();
     }
@@ -156,6 +157,9 @@ class GenerateVideo implements ShouldQueue
     {
         Log::info("Starting video generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
+        if ($this->revisionId !== null && ($this->strategy->fresh()?->creative_revision['id'] ?? null) !== $this->revisionId) {
+            return;
+        }
         if ($this->strategy->campaign_type === 'performance_max' && strtolower($this->platform) === 'google') {
             $this->platform = 'Google Ads (Performance Max)';
         }
@@ -326,7 +330,7 @@ class GenerateVideo implements ShouldQueue
             // strategy's Facebook deploy ever saw the video.
             $videoCollateral = VideoCollateral::reserve($this->campaign, [
                 'campaign_id' => $this->campaign->id,
-                'strategy_id' => $metaOffer ? $this->strategy->id : null,
+                'strategy_id' => $metaOffer || $this->revisionId !== null ? $this->strategy->id : null,
                 'platform' => $this->platform,
                 'script' => $script,
                 'variation_index' => $this->variationIndex,
@@ -335,13 +339,14 @@ class GenerateVideo implements ShouldQueue
                     'strategy_id' => $this->strategy->id,
                     'concept' => $actionableContent,
                     'starter_quota_key' => $reservation,
+                    'creative_revision_id' => $this->revisionId,
                     'script_model' => config('ai.models.default'),
                     'script_prompt_hash' => hash('sha256', $scriptPrompt),
                     'template_hash' => hash_file('sha256', app_path('Prompts/VideoFromScriptPrompt.php')),
                 ],
                 'status' => 'pending',
                 'is_active' => true,
-                ...(($isPerformanceMax || $metaOffer) && $this->strategy->hasDeploymentFootprint() ? ['should_deploy' => false] : []),
+                ...(($this->revisionId !== null || ($isPerformanceMax || $metaOffer) && $this->strategy->hasDeploymentFootprint()) ? ['should_deploy' => false] : []),
             ]);
 
             if (! $videoCollateral) {

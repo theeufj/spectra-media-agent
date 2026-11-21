@@ -57,10 +57,12 @@ class IntegrationController extends Controller
         $validated = $request->validate([
             'provider' => 'required|in:hubspot,salesforce',
             'access_token' => 'required|string',
+            'consent_field' => ['nullable', 'regex:/^[A-Za-z][A-Za-z0-9_]{0,79}$/D'],
+            'default_currency' => ['nullable', 'regex:/^[A-Z]{3}$/D'],
             'instance_url' => 'nullable|url', // for Salesforce
         ]);
 
-        $credentials = ['access_token' => $validated['access_token']];
+        $credentials = ['access_token' => $validated['access_token'], 'consent_field' => $validated['consent_field'] ?? null, 'default_currency' => $validated['default_currency'] ?? null];
         if ($validated['instance_url'] ?? null) {
             $credentials['instance_url'] = $validated['instance_url'];
         }

@@ -22,7 +22,7 @@ class PerformanceMaxVideoUploadTest extends TestCase
         config(['services.youtube.client_id' => null]);
         $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'end_date' => now()->addDay()]);
-        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'campaign_type' => 'performance_max',
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads', 'campaign_type' => 'performance_max',
             'signed_off_at' => now(), 'google_ads_campaign_id' => 'customers/1234567890/campaigns/123']);
         $video = VideoCollateral::create(['campaign_id' => $campaign->id, 'strategy_id' => $strategy->id,
             'platform' => 'Google Ads (Performance Max)', 'status' => 'completed', 'is_active' => true, 'should_deploy' => false,

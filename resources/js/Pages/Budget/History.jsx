@@ -3,11 +3,12 @@ import { Head } from '@inertiajs/react';
 
 function LogEntry({ log }) {
     const before = log.before_allocation || {};
-    const after = log.after_allocation || {};
+    const suggested = log.trigger === 'scheduled' && !log.auto_executed;
+    const after = (suggested ? log.recommendations?.suggested_splits : log.after_allocation) || {};
     const date = new Date(log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    const platforms = ['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct'];
-    const names = { google_ads_pct: 'Google', facebook_ads_pct: 'Facebook', microsoft_ads_pct: 'Microsoft' };
+    const platforms = ['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'];
+    const names = { google_ads_pct: 'Google', facebook_ads_pct: 'Facebook', microsoft_ads_pct: 'Microsoft', linkedin_ads_pct: 'LinkedIn' };
     const changes = platforms.map(p => ({
         name: names[p],
         before: parseFloat(before[p] || 0),
@@ -21,7 +22,7 @@ function LogEntry({ log }) {
                 <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-900">{date}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${log.auto_executed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {log.trigger}
+                        {suggested ? 'Suggested split' : log.trigger}
                     </span>
                 </div>
                 {log.estimated_improvement_pct > 0 && (

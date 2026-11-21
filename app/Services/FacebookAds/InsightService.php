@@ -12,6 +12,30 @@ class InsightService extends BaseFacebookAdsService
         parent::__construct($customer);
     }
 
+    public function reportingAdSets(string $campaignId): ?array
+    {
+        $rows = $this->getAllPages("/{$campaignId}/adsets", ['fields' => 'id', 'limit' => 100], complete: $complete);
+
+        return $complete ? $rows : null;
+    }
+
+    public function attributionAdSet(string $id): ?array
+    {
+        return $this->get("/{$id}", ['fields' => 'id,account_id,campaign_id,promoted_object,updated_time']);
+    }
+
+    /** A partial page cannot support a treatment comparison. */
+    public function treatmentInsights(string $adset, string $from, string $to): ?array
+    {
+        $rows = $this->getAllPages("/{$adset}/insights", [
+            'fields' => 'account_id,account_currency,campaign_id,adset_id,ad_id,ad_name,impressions,inline_link_clicks,spend,actions,date_start,date_stop',
+            'level' => 'ad', 'time_range' => json_encode(['since' => $from, 'until' => $to], JSON_THROW_ON_ERROR),
+            'limit' => 100,
+        ], complete: $complete);
+
+        return $complete ? $rows : null;
+    }
+
     /**
      * Get insights for a campaign.
      *
@@ -30,6 +54,9 @@ class InsightService extends BaseFacebookAdsService
         try {
             if ($fields === null) {
                 $fields = [
+                    'account_id',
+                    'account_currency',
+                    'campaign_id',
                     'impressions',
                     'inline_link_clicks',
                     'clicks',
@@ -57,7 +84,7 @@ class InsightService extends BaseFacebookAdsService
                 'limit' => 100,
             ]);
 
-            if ($response && isset($response['data'])) {
+            if (is_array($response['data'] ?? null) && empty($response['paging']['next'])) {
                 Log::info("Retrieved campaign insights for campaign {$campaignId}", [
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
@@ -71,7 +98,7 @@ class InsightService extends BaseFacebookAdsService
                 'response' => $response ?? null,
             ]);
 
-            return [];
+            return null;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error getting campaign insights: '.$e->getMessage(), [
@@ -101,11 +128,16 @@ class InsightService extends BaseFacebookAdsService
         try {
             if ($fields === null) {
                 $fields = [
+                    'account_id',
+                    'account_currency',
+                    'campaign_id',
+                    'adset_id',
                     'impressions',
                     'inline_link_clicks',
                     'clicks',
                     'spend',
                     'actions',
+                    'action_values',
                     'reach',
                     'frequency',
                     'cpc',
@@ -122,9 +154,10 @@ class InsightService extends BaseFacebookAdsService
                     'until' => $dateEnd,
                 ]),
                 'time_increment' => '1',
+                'limit' => 100,
             ]);
 
-            if ($response && isset($response['data'])) {
+            if (is_array($response['data'] ?? null) && empty($response['paging']['next'])) {
                 Log::info("Retrieved ad set insights for ad set {$adSetId}", [
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
@@ -138,7 +171,7 @@ class InsightService extends BaseFacebookAdsService
                 'response' => $response ?? null,
             ]);
 
-            return [];
+            return null;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error getting ad set insights: '.$e->getMessage(), [

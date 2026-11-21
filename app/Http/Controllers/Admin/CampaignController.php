@@ -169,6 +169,11 @@ class CampaignController extends Controller
             ]);
         }
 
+        if ($customer->service_type !== 'setup_only' && $campaign->strategies()->whereNull('launch_intent')->get()
+            ->contains(fn ($strategy) => $strategy->requiresInitialMarketResearch())) {
+            return back()->with('flash', ['type' => 'info', 'message' => 'The customer must approve their current ads, channel allocations and payment before deployment.']);
+        }
+
         // Reset deployment_status so the idempotency guard allows deployment
         $campaign->strategies()
             ->whereNotNull('signed_off_at')

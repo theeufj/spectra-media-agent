@@ -58,7 +58,7 @@ class LocalServicesCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - Local Services - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 ...GoogleCampaignSchedule::for($campaign),
                 'categoryBids' => $campaignStructure['category_bids'] ?? [],

@@ -104,12 +104,10 @@ class CustomerBillingController extends Controller
      */
     private function unreconciledSpend(Customer $customer, AdSpendCredit $credit): float
     {
-        $campaignIds = $customer->campaigns()->pluck('id');
-
         $totalActualSpend = 0.0;
 
-        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $model) {
-            $totalActualSpend += (float) $model::whereIn('campaign_id', $campaignIds)->sum('cost');
+        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $label => $model) {
+            $totalActualSpend += (float) app(\App\Services\Billing\BillablePerformance::class)->query($customer, $label)->sum('cost');
         }
 
         $totalActualSpend = round($totalActualSpend, 2);
@@ -128,8 +126,6 @@ class CustomerBillingController extends Controller
             ]);
         }
 
-        $campaignIds = $customer->campaigns()->pluck('id');
-
         // The most recent window rather than the whole account. This page had
         // no bound at all, so it grew a row a day forever.
         $transactionsTotal = $credit->transactions()->count();
@@ -142,7 +138,7 @@ class CustomerBillingController extends Controller
             ->reverse()
             ->values();
 
-        [$dailySpend, $allTimeSpend] = $this->platformSpendForLedger($ledger, $campaignIds);
+        [$dailySpend, $allTimeSpend] = $this->platformSpendForLedger($ledger, $customer);
 
         $transactions = $ledger->map(function ($tx) use ($dailySpend, $allTimeSpend) {
             $row = [
@@ -160,7 +156,7 @@ class CustomerBillingController extends Controller
                 // Deductions = daily billing for the previous day; adjustments = lump-sum reconciliation.
                 // For deductions, scope to the specific date billed; for adjustments, show all-time totals.
                 $isDeduction = $tx->type === AdSpendTransaction::TYPE_DEDUCTION;
-                $billingDate = $tx->created_at->copy()->subDay()->toDateString();
+                $billingDate = ($tx->billed_for?->toDateString() ?? $tx->created_at->copy()->subDay()->toDateString());
 
                 // Every platform the deduction actually billed for. Showing
                 // Google and Facebook alone left a Microsoft or LinkedIn
@@ -215,7 +211,7 @@ class CustomerBillingController extends Controller
      * @param  \Illuminate\Support\Collection<int, AdSpendTransaction>  $ledger
      * @return array{0: array<string, array<string, float>>, 1: array<string, float>}
      */
-    private function platformSpendForLedger($ledger, $campaignIds): array
+    private function platformSpendForLedger($ledger, Customer $customer): array
     {
         $debits = $ledger->filter(
             fn ($tx) => in_array($tx->type, AdSpendTransaction::DEBIT_TYPES, true)
@@ -223,7 +219,7 @@ class CustomerBillingController extends Controller
 
         $billingDates = $debits
             ->filter(fn ($tx) => $tx->type === AdSpendTransaction::TYPE_DEDUCTION)
-            ->map(fn ($tx) => $tx->created_at->copy()->subDay()->toDateString())
+            ->map(fn ($tx) => ($tx->billed_for?->toDateString() ?? $tx->created_at->copy()->subDay()->toDateString()))
             ->unique()
             ->values()
             ->all();
@@ -235,19 +231,19 @@ class CustomerBillingController extends Controller
 
         foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $label => $model) {
             if ($billingDates !== []) {
-                $dailySpend[$label] = $model::whereIn('campaign_id', $campaignIds)
+                $dailySpend[$label] = app(\App\Services\Billing\BillablePerformance::class)->query($customer, $label)
                     ->whereIn('date', $billingDates)
                     ->selectRaw('date, SUM(cost) as spend')
                     ->groupBy('date')
                     ->get()
                     ->mapWithKeys(fn ($row) => [
-                        $row->date->toDateString() => (float) $row->getAttribute('spend'),
+                        $row->getAttribute('date')->toDateString() => (float) $row->getAttribute('spend'),
                     ])
                     ->all();
             }
 
             if ($needsAllTime) {
-                $allTimeSpend[$label] = (float) $model::whereIn('campaign_id', $campaignIds)->sum('cost');
+                $allTimeSpend[$label] = (float) app(\App\Services\Billing\BillablePerformance::class)->query($customer, $label)->sum('cost');
             }
         }
 

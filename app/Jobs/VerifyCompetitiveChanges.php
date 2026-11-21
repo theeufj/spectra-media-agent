@@ -19,6 +19,14 @@ class VerifyCompetitiveChanges implements ShouldQueue
 
     public function handle(CompetitiveRecommendationService $service): void
     {
+        Recommendation::whereNull('source')->where('status', 'pending_verification')
+            ->where('created_at', '>=', now()->subDays(30))->eachById(function (Recommendation $row) {
+                try {
+                    \App\Services\Agents\Optimization\RecommendationReadback::reconcile($row);
+                } catch (\Throwable $error) {
+                    report($error);
+                }
+            });
         Recommendation::where('source', 'competitor')->whereIn('status', ['applied', 'needs_verification', 'verified'])
             ->where('updated_at', '>=', now()->subDays(30))->each(function (Recommendation $rec) use ($service) {
                 try {

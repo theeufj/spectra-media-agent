@@ -35,6 +35,14 @@ class AdvertisingEvidence
         }
 
         return [
+            'customer_sources' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+                ->whereNull('excluded_at')->where('processing_status', 'ready')
+                ->whereIn('source_type', ['text', 'pdf'])->whereNotNull('content')->where('content', '!=', '')
+                ->orderByDesc('indexed_at')->orderBy('id')->limit(8)
+                ->get(['id', 'source_version', 'title', 'original_filename', 'content'])
+                ->map(fn ($source) => ['id' => $source->id, 'version' => $source->source_version,
+                    'title' => $source->title ?: $source->original_filename, 'content' => mb_substr($source->content, 0, 4000)])
+                ->all(),
             'business' => $customer->name,
             'description' => $customer->description,
             'offer_brief' => $campaign->product_focus,

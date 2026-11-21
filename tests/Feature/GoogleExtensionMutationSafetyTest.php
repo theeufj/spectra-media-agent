@@ -85,20 +85,22 @@ class GoogleExtensionMutationSafetyTest extends TestCase
         $this->assertSame([], $result['created']);
     }
 
-    public function test_automation_disabled_during_generation_blocks_the_first_extension_write(): void
+    public function test_automation_disabled_during_callout_inventory_blocks_the_first_extension_write(): void
     {
         $campaign = $this->campaign();
         $this->reader();
         $perf = $this->createMock(GetExtensionPerformance::class);
         $perf->method('countByFieldType')->willReturnCallback(fn ($id, $resource, $field) => $field === AssetFieldType::CALLOUT ? 0 : 4);
         $this->app->bind(GetExtensionPerformance::class, fn () => $perf);
-        $ai = $this->createMock(GeminiService::class);
-        $ai->expects($this->once())->method('generateContent')->willReturnCallback(function () use ($campaign) {
+        $campaign->strategies()->firstOrFail()->forceFill(['ad_extensions' => ['callouts' => ['Campaign Management']]])->save();
+        $linker = $this->createMock(LinkCampaignAsset::class);
+        $linker->expects($this->once())->method('calloutLinks')->willReturnCallback(function () use ($campaign) {
             Feature::for($campaign->customer)->deactivate(AutoHealing::class);
 
-            return ['text' => '["Campaign Management"]'];
+            return [];
         });
-        $this->app->instance(GeminiService::class, $ai);
+        $linker->expects($this->never())->method('__invoke');
+        $this->app->bind(LinkCampaignAsset::class, fn () => $linker);
         $creator = $this->createMock(CreateCalloutAsset::class);
         $creator->expects($this->never())->method('__invoke');
         $this->app->bind(CreateCalloutAsset::class, fn () => $creator);

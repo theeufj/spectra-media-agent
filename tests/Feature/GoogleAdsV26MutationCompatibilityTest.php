@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Jobs\UploadOfflineConversions;
+use App\Models\CrmIntegration;
 use App\Models\Customer;
+use App\Models\OfflineConversion;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\ApplyConversionValueRules;
 use App\Services\GoogleAds\CommonServices\CreateCombinedAudience;
@@ -11,6 +13,8 @@ use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\CreateConversionValueRule;
 use App\Services\GoogleAds\CommonServices\CreateConversionValueRuleSet;
 use App\Services\GoogleAds\CommonServices\PromoteCampaignExperiment;
+use App\Services\GoogleAds\ConversionTrackingService;
+use App\Services\GoogleAds\DataManagerService;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
 use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Google\Ads\GoogleAds\V26\Enums\ConversionActionCountingTypeEnum\ConversionActionCountingType;
@@ -89,20 +93,36 @@ class GoogleAdsV26MutationCompatibilityTest extends TestCase
         }
     }
 
-    public function test_offline_upload_can_create_and_resolve_its_missing_conversion_action(): void
+    public function test_offline_upload_requires_the_selected_purchase_action_and_preserves_its_receipt(): void
     {
         $customer = Customer::factory()->create(['website' => null, 'google_ads_customer_id' => self::CUSTOMER]);
         $resource = 'customers/'.self::CUSTOMER.'/conversionActions/9';
+        $integration = CrmIntegration::create(['customer_id' => $customer->id, 'provider' => 'hubspot']);
+        $conversion = OfflineConversion::create(['customer_id' => $customer->id, 'crm_integration_id' => $integration->id,
+            'source_key' => 'verified-sale', 'gclid' => 'paid-click', 'conversion_name' => 'Purchase', 'conversion_value' => '45.90',
+            'currency_code' => 'AUD', 'conversion_time' => now(), 'upload_status' => 'pending',
+            'delivery_bindings' => ['ad_user_data' => 'granted']]);
         $create = $this->createMock(CreateConversionAction::class);
-        $create->expects($this->once())->method('__invoke')
-            ->with(self::CUSTOMER, 'Offline Conversion', ConversionActionCategory::PBDEFAULT)
-            ->willReturn($resource);
+        $create->expects($this->never())->method('__invoke');
         $this->app->bind(CreateConversionAction::class, fn () => $create);
-        $client = $this->createMock(GoogleAdsClient::class);
-        $client->method('getGoogleAdsServiceClient')->willReturn($this->emptySearch());
-        $resolve = new \ReflectionMethod(UploadOfflineConversions::class, 'getConversionActionResourceName');
+        $tracking = $this->createMock(ConversionTrackingService::class);
+        $tracking->expects($this->once())->method('outcomeDestination')->with(self::CUSTOMER, $resource)
+            ->willReturn(['resource' => $resource, 'category' => 'PURCHASE', 'type' => 'UPLOAD_CLICKS']);
+        $this->app->bind(ConversionTrackingService::class, fn () => $tracking);
+        $uploader = $this->createMock(DataManagerService::class);
+        $uploader->expects($this->once())->method('ingestConversion')
+            ->with(self::CUSTOMER, '9', ['gclid' => 'paid-click'], 45.9, 'AUD', $this->anything(), null, false, 'OTHER', 'verified-sale', ['adUserData' => 'CONSENT_GRANTED'])
+            ->willReturn(['success' => true, 'requestId' => 'google-receipt']);
+        $this->app->instance(DataManagerService::class, $uploader);
 
-        $this->assertSame($resource, $resolve->invoke(new UploadOfflineConversions($customer->id), $client, self::CUSTOMER));
+        (new UploadOfflineConversions($customer->id))->handle();
+        $this->assertSame('failed', $conversion->refresh()->upload_status);
+        $conversion->update(['delivery_bindings' => ['ad_user_data' => 'granted', 'google' => [
+            'destination' => $resource, 'event' => 'Purchase', 'account' => self::CUSTOMER,
+        ]]]);
+        (new UploadOfflineConversions($customer->id))->handle();
+        $this->assertSame('uploaded_all', $conversion->refresh()->upload_status);
+        $this->assertSame('google-receipt', $conversion->upload_results['google_ads']['request_id']);
     }
 
     public function test_combined_audience_preserves_the_intersection_of_all_input_lists(): void

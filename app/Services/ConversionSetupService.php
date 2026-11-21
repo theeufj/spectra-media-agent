@@ -4,11 +4,8 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Services\FacebookAds\PixelService;
-use App\Services\GoogleAds\CommonServices\CreateConversionAction;
-use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
 use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
-use Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -18,18 +15,7 @@ class ConversionSetupService
         private GTMContainerService $gtm
     ) {}
 
-    /**
-     * Run the full conversion tracking setup pipeline for a customer:
-     * 1. Ensure a Spectra-managed GTM container exists (always — we cannot write
-     *    tags into containers owned by the customer's own Google account)
-     * 2. Create Google Ads conversion action
-     * 3. Retrieve conversion ID + label from tag snippets
-     * 4. Add conversion tag + trigger to the Spectra GTM container
-     * 5. Publish the Spectra GTM container
-     * 6. Persist conversion details on the customer record
-     *
-     * Returns an array with 'success', 'snippet' (install snippet HTML), and 'errors'.
-     */
+    /** Provision website measurement. A campaign's selected conversion is configured and tested separately. */
     public function setup(Customer $customer): array
     {
         if ($customer->service_type === 'setup_only') {
@@ -41,11 +27,9 @@ class ConversionSetupService
         $errors = [];
         $snippet = null;
 
-        if (! $customer->google_ads_customer_id) {
-            return ['success' => false, 'errors' => ['Google Ads account not connected']];
+        if (! $customer->google_ads_customer_id && ! $customer->facebook_ads_account_id && ! $customer->microsoft_ads_account_id) {
+            return ['success' => false, 'errors' => ['No advertising account is connected']];
         }
-
-        $customerId = $customer->cleanGoogleCustomerId();
 
         // Step 0: Ensure a Spectra-managed GTM container exists for this customer.
         //
@@ -91,63 +75,18 @@ class ConversionSetupService
             }
         }
 
-        // Step 1: Create conversion action
-        $createService = new CreateConversionAction($customer);
-        $conversionActionName = 'Spectra — '.$customer->name.' Conversion';
-        $resourceName = ($createService)($customerId, $conversionActionName, ConversionActionCategory::SIGNUP);
-
-        if (! $resourceName) {
-            return ['success' => false, 'errors' => ['Failed to create Google Ads conversion action']];
-        }
-
-        // Step 2: Get conversion ID + label for GTM tag
-        $detailsService = new GetConversionActionDetails($customer);
-        $details = ($detailsService)($customerId, $resourceName);
-
-        if (! $details) {
-            Log::warning('ConversionSetupService: Could not retrieve conversion action details', [
-                'customer_id' => $customer->id,
-                'resource_name' => $resourceName,
-            ]);
-        }
-
-        $conversionLabel = $details['conversion_label'] ?? null;
-        $conversionId = $details['conversion_id'] ?? null;
-
-        // Step 3 & 4: Wire tags into GTM if the container has been provisioned
-        if ($customer->gtm_container_id && $conversionId && $conversionLabel) {
-            try {
-                // Google Ads conversion tag
-                $tagResult = $this->gtm->addConversionTag($customer, $conversionActionName, $conversionId, [
-                    'conversion_label' => $conversionLabel,
-                ]);
-
-                if (! ($tagResult['success'] ?? false)) {
-                    $errors[] = 'GTM Google Ads tag creation failed: '.($tagResult['error'] ?? 'unknown');
-                }
-            } catch (\Throwable $e) {
-                report($e);
-                $errors[] = 'GTM Google Ads tag error: '.$e->getMessage();
-                Log::error('ConversionSetupService: GTM Google Ads tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
-            }
-
+        // Install base measurement only. The campaign owner selects the business
+        // outcome and exact website trigger before campaign-specific tags are published.
+        if ($customer->gtm_container_id && $customer->gtm_workspace_id && empty($errors)) {
             // Meta Pixel tag
             try {
-                $pixelId = (new PixelService($customer))->resolvePixelId();
+                $pixelId = $customer->facebook_ads_account_id ? (new PixelService($customer))->resolvePixelId() : null;
                 if ($pixelId) {
                     $fbResult = $this->gtm->addFacebookPixelTag($customer, $pixelId);
                     if (! ($fbResult['success'] ?? false)) {
                         $errors[] = 'GTM Meta Pixel tag failed: '.($fbResult['error'] ?? 'unknown');
                     }
 
-                    // The base tag only reports PageView. Without this, a Meta
-                    // campaign optimising for conversions has no conversion to
-                    // optimise towards — the Google tag alongside it has fired
-                    // on form submit all along.
-                    $fbConversion = $this->gtm->addFacebookConversionTag($customer, $pixelId);
-                    if (! $fbConversion['success']) {
-                        $errors[] = 'GTM Meta conversion tag failed: '.($fbConversion['error'] ?? 'unknown');
-                    }
                 }
             } catch (\Throwable $e) {
                 report($e);
@@ -172,23 +111,9 @@ class ConversionSetupService
                 Log::warning('ConversionSetupService: Microsoft UET GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
             }
 
-            // Lead event tags (fire on form submission)
-            try {
-                $customer->refresh();
-                if ($customer->facebook_pixel_id) {
-                    $this->gtm->addFacebookLeadEventTag($customer, $customer->facebook_pixel_id);
-                }
-                if ($customer->microsoft_uet_tag_id) {
-                    $this->gtm->addMicrosoftLeadEventTag($customer, $customer->microsoft_uet_tag_id);
-                }
-            } catch (\Throwable $e) {
-                report($e);
-                Log::warning('ConversionSetupService: Lead event tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
-            }
-
             // Publish once — covers all tags added above
             try {
-                $publishResult = $this->gtm->publishContainer($customer, 'Spectra: added Google Ads + Meta Pixel + Microsoft UET tags');
+                $publishResult = $this->gtm->publishContainer($customer, 'Site to Spend website measurement');
                 if (! ($publishResult['success'] ?? false)) {
                     $errors[] = 'GTM container publish failed: '.($publishResult['error'] ?? 'unknown');
                 }
@@ -207,34 +132,15 @@ class ConversionSetupService
             }
         }
 
-        // Step 5: Persist on customer record.
-        // Only mark as verified when GTM published successfully — setting it here would
-        // hide the fact that the tag may not be live on the customer's site yet.
-        $gtmPublished = empty($errors);
-
-        $customer->update([
-            'conversion_action_id' => $resourceName,
-            'conversion_action_label' => $conversionLabel,
-            'conversion_tracking_verified_at' => $gtmPublished ? now() : null,
-        ]);
-
-        Log::info('ConversionSetupService: Setup complete', [
-            'customer_id' => $customer->id,
-            'resource_name' => $resourceName,
-            'conversion_id' => $conversionId,
-            'gtm_id' => $customer->gtm_container_id,
-            'gtm_wired' => $customer->gtm_container_id && $conversionId,
-            'errors' => $errors,
-        ]);
+        if (! $customer->gtm_container_id || ! $customer->gtm_workspace_id) {
+            $errors[] = 'The measurement workspace is incomplete.';
+        }
 
         return [
-            'success' => true,
-            'resource_name' => $resourceName,
-            'conversion_id' => $conversionId,
-            'snippet' => $snippet,
+            'success' => empty($errors), 'waiting_for_goal' => true,
+            'resource_name' => null, 'conversion_id' => null, 'snippet' => $snippet,
             'facebook_pixel_id' => $customer->fresh()->facebook_pixel_id,
-            'microsoft_uet_tag_id' => $customer->fresh()->microsoft_uet_tag_id,
-            'errors' => $errors,
+            'microsoft_uet_tag_id' => $customer->fresh()->microsoft_uet_tag_id, 'errors' => $errors,
         ];
     }
 

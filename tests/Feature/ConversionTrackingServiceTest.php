@@ -25,6 +25,27 @@ class ConversionTrackingServiceTest extends TestCase
         );
     }
 
+    public function test_budget_readback_counts_only_the_selected_primary_purchase_action_in_account_currency(): void
+    {
+        $account = '1234567890';
+        $campaign = "customers/{$account}/campaigns/111";
+        $action = "customers/{$account}/conversionActions/222";
+        $row = new GoogleAdsRow(['conversion_action' => new ConversionAction(['resource_name' => $action,
+            'value_settings' => new \Google\Ads\GoogleAds\V26\Resources\ConversionAction\ValueSettings(['always_use_default_value' => false])]),
+            'campaign' => new GoogleCampaign(['resource_name' => $campaign]),
+            'customer' => new \Google\Ads\GoogleAds\V26\Resources\Customer(['id' => (int) $account, 'currency_code' => 'NZD']),
+            'segments' => new \Google\Ads\GoogleAds\V26\Common\Segments(['conversion_action' => $action]),
+            'metrics' => new Metrics(['conversions' => 3.5, 'conversions_value' => 40.75, 'all_conversions' => 400])]);
+        $reader = $this->reader([$row]);
+        $this->assertSame(['conversions' => 3.5, 'conversion_value' => 40.75],
+            $reader->budgetActionTotals($account, $campaign, $action, 'purchase', 'NZD', '2026-11-01', '2026-11-03'));
+        $this->assertStringContainsString("conversion_action.category = 'PURCHASE'", $reader->queries[0]['query']);
+        $this->assertStringContainsString("segments.conversion_action = '{$action}'", $reader->queries[1]['query']);
+        $this->assertNull($reader->budgetActionTotals($account, $campaign, $action, 'purchase', 'USD', '2026-11-01', '2026-11-03'));
+        $row->getConversionAction()->getValueSettings()->setAlwaysUseDefaultValue(true);
+        $this->assertNull($reader->budgetActionTotals($account, $campaign, $action, 'purchase', 'NZD', '2026-11-01', '2026-11-03'));
+    }
+
     private function metrics(float $conversions, float $allConversions = 0.0, int $clicks = 0, int $impressions = 0): GoogleAdsRow
     {
         return new GoogleAdsRow(['metrics' => new Metrics([

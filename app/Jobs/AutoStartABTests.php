@@ -34,7 +34,7 @@ class AutoStartABTests implements ShouldQueue
         $runStart = $this->startRun();
 
         $campaigns = Campaign::with(['strategies.adCopies'])
-            ->serving()
+            ->withServingChannel()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id'))
             ->get();
@@ -58,7 +58,7 @@ class AutoStartABTests implements ShouldQueue
 
                 // Skip if a test is already running for this strategy
                 $hasRunningTest = ABTest::where('strategy_id', $strategy->id)
-                    ->where('status', ABTest::STATUS_RUNNING)
+                    ->whereIn('status', [ABTest::STATUS_RUNNING, ABTest::STATUS_SIGNIFICANT])
                     ->exists();
 
                 if ($hasRunningTest) {
@@ -67,64 +67,20 @@ class AutoStartABTests implements ShouldQueue
                     continue;
                 }
 
-                // Find ad copy for this strategy
-                $adCopy = $strategy->adCopies
-                    ->where('platform', $strategy->platform)
-                    ->first()
-                    ?? $strategy->adCopies->first();
-
-                if (! $adCopy) {
-                    $skipped++;
-
-                    continue;
-                }
-
-                $headlines = array_values(array_filter($adCopy->headlines ?? []));
-                $descriptions = array_values(array_filter($adCopy->descriptions ?? []));
-
-                // Need at least 4 headlines to create a meaningful split
-                if (count($headlines) < 4) {
-                    $skipped++;
-
-                    continue;
-                }
-
                 try {
-                    // Split headlines evenly: first half → A, second half → B
-                    $mid = (int) ceil(count($headlines) / 2);
-                    $variantA = array_slice($headlines, 0, $mid);
-                    $variantB = array_slice($headlines, $mid);
+                    $variants = app(\App\Services\Agents\CreativeTreatmentMetrics::class)->read(
+                        $strategy, now()->subDays(7)->toDateString(), now()->toDateString());
+                    // Stable selection avoids choosing variants based on their past outcome rate.
+                    ksort($variants, SORT_STRING);
+                    $variants = array_slice(array_values($variants), 0, 2);
+                    if (count($variants) < 2) {
+                        $skipped++;
 
-                    $agent->createTest($strategy, ABTest::TYPE_HEADLINE, [
-                        [
-                            'label' => 'Variant A',
-                            'content' => implode(' | ', $variantA),
-                            'meta' => ['headlines' => $variantA, 'descriptions' => $descriptions],
-                        ],
-                        [
-                            'label' => 'Variant B',
-                            'content' => implode(' | ', $variantB),
-                            'meta' => ['headlines' => $variantB, 'descriptions' => $descriptions],
-                        ],
-                    ]);
-
-                    AgentActivity::record(
-                        'creative',
-                        'ab_test_started',
-                        'Started headline A/B test for "'.$campaign->name.'" ('.$strategy->platform.')',
-                        $campaign->customer_id,
-                        $campaign->id,
-                        ['strategy_id' => $strategy->id, 'headlines_a' => count($variantA), 'headlines_b' => count($variantB)]
-                    );
-
-                    Log::info('AutoStartABTests: Created headline test', [
-                        'campaign_id' => $campaign->id,
-                        'strategy_id' => $strategy->id,
-                        'platform' => $strategy->platform,
-                        'variant_a' => count($variantA),
-                        'variant_b' => count($variantB),
-                    ]);
-
+                        continue;
+                    }
+                    $test = $agent->createTest($strategy, ABTest::TYPE_HEADLINE, $variants);
+                    AgentActivity::record('creative', 'ab_test_started', 'Comparing the primary outcome for two published treatments.',
+                        $campaign->customer_id, $campaign->id, ['strategy_id' => $strategy->id, 'test_id' => $test->id]);
                     $started++;
                 } catch (\Throwable $e) {
                     report($e);

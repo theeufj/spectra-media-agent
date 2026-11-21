@@ -262,6 +262,10 @@ class CampaignController extends Controller
                starts it. The success panel told them the opposite on the very
                screen where they watched it happen.
             */
+            'historicalRowsForReview' => collect(['google', 'facebook'])->sum(fn ($platform) => \Illuminate\Support\Facades\DB::table($platform.'_ads_performance_data')
+                ->where('campaign_id', $campaign->id)->whereNull('strategy_id')->count()),
+            'unassignedResources' => collect(\App\Services\Campaigns\CampaignResourceInventory::entries($campaign))
+                ->whereNull('strategy_id')->values()->map(fn ($row) => ['platform' => $row['platform'], 'id' => $row['resource_id']]),
             'setupOnly' => $campaign->customer?->service_type === 'setup_only',
         ]);
     }
@@ -1003,6 +1007,7 @@ class CampaignController extends Controller
         $presentation = app(DeploymentStatusPresenter::class)->present($campaign, $strategy);
 
         return $presentation + [
+            'channel' => app(\App\Services\Deployment\ChannelLaunchStatus::class)->forStrategy($campaign, $strategy, $presentation['delivery_status'] ?? []),
             'id' => $strategy->id,
             'uuid' => $strategy->uuid,
             'platform' => $strategy->platform,

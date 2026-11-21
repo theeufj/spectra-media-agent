@@ -8,6 +8,7 @@ use App\Jobs\FetchLinkedInAdsPerformanceData;
 use App\Jobs\FetchMicrosoftAdsPerformanceData;
 use App\Models\Campaign;
 use App\Models\EnabledPlatform;
+use App\Services\Campaigns\CampaignResourceInventory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,10 +35,11 @@ class FetchPlatformPerformanceData implements ShouldQueue
     public function handle(): void
     {
         Campaign::withDeployedPlatforms()->each(function ($campaign) {
-            if ($campaign->google_ads_campaign_id && EnabledPlatform::isEnabled('google')) {
+            $platforms = array_column(CampaignResourceInventory::entries($campaign), 'platform');
+            if (in_array('google', $platforms, true) && EnabledPlatform::isEnabled('google')) {
                 FetchGoogleAdsPerformanceData::dispatch($campaign);
             }
-            if ($campaign->facebook_ads_campaign_id && EnabledPlatform::isEnabled('facebook')) {
+            if (in_array('facebook', $platforms, true) && EnabledPlatform::isEnabled('facebook')) {
                 FetchFacebookAdsPerformanceData::dispatch($campaign);
             }
             if ($campaign->microsoft_ads_campaign_id && EnabledPlatform::isEnabled('microsoft')) {

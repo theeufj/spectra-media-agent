@@ -45,6 +45,10 @@ class RecordSiteConversion implements ShouldQueue
         // tomorrow must not record the conversion as happening tomorrow.
         // (`signup` is the event that did not need this — it keeps
         // RecordSiteGoogleConversion's default of the registration time.)
+        if ($this->event === 'seven_day_return') {
+            // Discard legacy customer-wide fan-outs queued before per-user proof.
+            return;
+        }
         $occurredAt = now();
 
         foreach ($this->customer->users as $user) {

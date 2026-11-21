@@ -92,6 +92,7 @@ class CollateralController extends Controller
                 'destination' => $strategy->bidding_strategy['landing_page_url'] ?? $campaign->landing_page_url ?: $customer->website,
                 'audience' => $campaign->target_market,
                 'daily_budget' => $campaign->approved_daily_budget ?? $campaign->daily_budget,
+                'funding_days' => \App\Services\Billing\LaunchFunding::runwayDays($campaign),
                 'currency' => $customer->currency_code,
             ],
             'supportsVideo' => $strategy->supportsVideo(),
@@ -109,12 +110,15 @@ class CollateralController extends Controller
             // Mirrors DeployCampaign's own rule: self-funded accounts are
             // billed by the platform directly, so never show them the
             // prepay-funding modal (it double-billed them).
-            'managedBillingEnabled' => Setting::get('managed_billing_enabled', true) && ! $campaign->customer->isSelfFundedAds(),
+            'managedBillingEnabled' => $customer->service_type !== 'setup_only' && (! $customer->isSelfFundedAds() || $allStrategies->contains(fn ($s) => ! str_contains(strtolower($s->platform), 'google'))),
             'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),
             'adSpendCredit' => $adSpendCredit ? [
                 'id' => $adSpendCredit->id,
                 'status' => $adSpendCredit->status,
                 'current_balance' => $adSpendCredit->current_balance,
+                'available_cents' => max(0, \App\Services\Billing\LaunchFunding::cents($adSpendCredit->current_balance)
+                    - (int) \Illuminate\Support\Facades\DB::table('launch_funding_reservations')->where('customer_id', $customer->id)
+                        ->whereIn('status', ['collecting', 'held'])->sum('held_cents')),
                 'payment_status' => $adSpendCredit->payment_status,
             ] : null,
             'harvestedAssetCount' => $harvestedAssetCount,

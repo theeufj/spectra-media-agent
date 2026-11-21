@@ -32,6 +32,17 @@ class StripeWebhookController extends CashierController
         return parent::handleWebhook($request);
     }
 
+    protected function handlePaymentIntentSucceeded(array $payload)
+    {
+        $data = $payload['data']['object'];
+        if (($data['metadata']['type'] ?? null) === 'ad_spend_credit' && isset($data['metadata']['launch_reservation_id'])) {
+            app(\App\Services\Billing\LaunchFunding::class)->creditPayment((int) $data['metadata']['launch_reservation_id'],
+                \Stripe\PaymentIntent::constructFrom($data));
+        }
+
+        return $this->successMethod();
+    }
+
     /**
      * Handle customer subscription created webhook.
      *
@@ -71,22 +82,65 @@ class StripeWebhookController extends CashierController
             ]);
         }
 
-        return \DB::transaction(function () use ($payload) {
+        $response = \DB::transaction(function () use ($payload) {
             $response = parent::handleCustomerSubscriptionCreated($payload);
             $this->bindStarterWorkspace($payload);
 
             return $response;
         });
+        $this->syncCheckoutCard($payload['data']['object']);
+
+        return $response;
     }
 
     protected function handleCustomerSubscriptionUpdated(array $payload)
     {
-        return \DB::transaction(function () use ($payload) {
+        $response = \DB::transaction(function () use ($payload) {
             $response = parent::handleCustomerSubscriptionUpdated($payload);
             $this->bindStarterWorkspace($payload);
 
             return $response;
         });
+        $this->syncCheckoutCard($payload['data']['object']);
+
+        return $response;
+    }
+
+    /** A new Checkout subscription can have its own default card while its Stripe Customer has none. */
+    private function syncCheckoutCard(array $subscription): void
+    {
+        $metadata = $subscription['metadata'] ?? [];
+        $workspaceId = $metadata['workspace_id'] ?? null;
+        $payerId = $metadata['billing_user_id'] ?? null;
+        $methodId = $subscription['default_payment_method'] ?? null;
+        if (($subscription['status'] ?? null) !== 'active' || ! is_string($methodId) || ! str_starts_with($methodId, 'pm_')
+            || ! is_string($workspaceId) || ! ctype_digit($workspaceId) || ! is_string($payerId) || ! ctype_digit($payerId)) {
+            return;
+        }
+        $payer = User::whereKey($payerId)->where('stripe_id', $subscription['customer'])->first();
+        $workspace = $payer?->customers()->find($workspaceId);
+        if (! $payer || ! $workspace || $payer->hasDefaultPaymentMethod()
+            || $workspace->adSpendPayer(allowWithoutPaymentMethod: true)?->id !== $payer->id
+            || ! $payer->subscriptions()->where('stripe_id', $subscription['id'])->where('stripe_status', 'active')->exists()
+            || ! \App\Models\Plan::whereIn('stripe_price_id', array_column(array_column($subscription['items']['data'] ?? [], 'price'), 'id'))->exists()) {
+            return;
+        }
+        $stripe = \Laravel\Cashier\Cashier::stripe();
+        $remote = $stripe->subscriptions->retrieve($subscription['id']);
+        if ($remote->status !== 'active' || $remote->customer !== $payer->stripe_id || $remote->default_payment_method !== $methodId) {
+            return;
+        }
+        $customer = $stripe->customers->retrieve($payer->stripe_id);
+        if (! $customer->invoice_settings?->default_payment_method && ! $customer->default_source) {
+            $method = $stripe->paymentMethods->retrieve($methodId);
+            if ($method->type !== 'card' || $method->customer !== $payer->stripe_id) {
+                return;
+            }
+            $stripe->customers->update($payer->stripe_id, ['invoice_settings' => ['default_payment_method' => $methodId]], [
+                'idempotency_key' => 'subscription-checkout-card:'.$subscription['id'].':'.$methodId,
+            ]);
+        }
+        $payer->updateDefaultPaymentMethodFromStripe();
     }
 
     private function bindStarterWorkspace(array $payload): void
@@ -294,6 +348,9 @@ class StripeWebhookController extends CashierController
         $charge = $payload['data']['object'] ?? [];
 
         if (! empty($charge['id'])) {
+            if (($charge['metadata']['type'] ?? null) === 'ad_spend_credit' && isset($charge['metadata']['launch_reservation_id'])) {
+                app(\App\Services\Billing\LaunchFunding::class)->recordRefund((int) $charge['metadata']['launch_reservation_id'], $charge);
+            }
             $paymentIntent = $charge['payment_intent'] ?? null;
             $paymentIntentId = is_array($paymentIntent) ? ($paymentIntent['id'] ?? null) : $paymentIntent;
             self::recordAdSpendRefund(
