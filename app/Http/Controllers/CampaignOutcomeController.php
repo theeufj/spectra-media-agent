@@ -8,6 +8,7 @@ use App\Models\Strategy;
 use App\Services\Conversions\AdvertiserOutcomeOrigin;
 use App\Services\Conversions\CampaignOutcomeEvidence;
 use App\Services\Conversions\MerchantOrders;
+use App\Services\Conversions\OutcomeReceiptAudit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -71,7 +72,10 @@ class CampaignOutcomeController extends Controller
             'started_at' => now()->toIso8601String(), 'expires_at' => now()->addMinutes(30)->toIso8601String()]);
 
         return response()->json(['challenge' => $nonce, 'expires_at' => now()->addMinutes(30)->toIso8601String(),
-            'send_to' => $details['send_to'] ?? null, 'goal' => $binding['goal'], 'destination' => $binding['destination']])->header('Cache-Control', 'private, no-store');
+            'send_to' => $details['send_to'] ?? null, 'goal' => $binding['goal'], 'destination' => $binding['destination'],
+            'website_origin' => $binding['origin'], 'channel' => $binding['channel'], 'action_type' => $details['type'] ?? null,
+            'capture_url' => ($details['type'] ?? '') === 'WEBPAGE' ? route('campaigns.outcome.google-tag', [$campaign, $record->uuid]) : null,
+            'capture_script' => ($details['type'] ?? '') === 'WEBPAGE' ? asset('google-tag-check.js') : null])->header('Cache-Control', 'private, no-store');
     }
 
     public function record(Request $request, string $strategy, CampaignOutcomeEvidence $evidence): JsonResponse
@@ -80,6 +84,11 @@ class CampaignOutcomeController extends Controller
         $stamp = $request->header('X-Outcome-Timestamp', '');
         abort_unless($record->conversion_webhook_secret && ctype_digit($stamp) && abs(now()->timestamp - (int) $stamp) <= 300
             && hash_equals(hash_hmac('sha256', $stamp.'.'.$request->getContent(), $record->conversion_webhook_secret), $request->header('X-Outcome-Signature', '')), 403);
+        $binding = $evidence->binding($record);
+        $shareMeta = $binding['channel'] === 'facebook' && $request->input('ad_user_data') === 'granted' && $request->input('goal') !== 'refund';
+        $metaTest = $shareMeta && $request->input('mode') === 'test';
+        $metaFields = \Illuminate\Validation\Rule::excludeIf(! $shareMeta);
+        $requiredForTest = \Illuminate\Validation\Rule::requiredIf($metaTest);
         $input = $request->validate([
             'source_id' => 'required|string|max:160', 'goal' => 'required|in:signup,purchase,lead,refund',
             'order_id' => 'nullable|required_if:goal,refund|string|max:160',
@@ -88,18 +97,24 @@ class CampaignOutcomeController extends Controller
             'currency' => ['nullable', 'required_if:goal,purchase,refund', 'regex:/^[A-Z]{3}$/D'],
             'ad_user_data' => 'nullable|required_unless:goal,refund|in:granted,denied,unknown', 'ad_personalization' => 'nullable|in:granted,denied,unknown',
             'gclid' => 'nullable|string|max:255', 'gbraid' => 'nullable|string|max:255', 'wbraid' => 'nullable|string|max:255',
-            'fbc' => ['nullable', 'regex:/^fb\.\d+\.\d{13}\.[a-zA-Z0-9._-]+$/D', 'max:320'],
+            'meta_email_sha256' => [$metaFields, 'nullable', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+            'meta_external_id_sha256' => [$metaFields, 'nullable', 'string', 'regex:/^[a-f0-9]{64}$/D'],
+            'client_user_agent' => [$metaFields, $requiredForTest, 'nullable', 'string', 'max:2048', 'not_regex:/[\x00-\x1f\x7f]/'],
+            'fbc' => [$metaFields, 'nullable', 'regex:/^fb\.\d+\.\d{13}\.[a-zA-Z0-9._-]+$/D', 'max:320'],
             'challenge' => 'required_if:mode,test|nullable|uuid',
             'tag_send_to' => 'nullable|string|max:160', 'tag_event_id' => 'nullable|string|max:160', 'tag_seen_at' => 'nullable|date|before_or_equal:now',
-            'test_code' => 'nullable|string|max:80|alpha_num:ascii',
+            'test_code' => [\Illuminate\Validation\Rule::excludeIf(! $metaTest), $requiredForTest, 'nullable', 'string', 'max:80', 'alpha_num:ascii'],
         ]);
-        $binding = $evidence->binding($record);
+        if ($metaTest && empty($input['fbc']) && empty($input['meta_email_sha256']) && empty($input['meta_external_id_sha256'])) {
+            throw ValidationException::withMessages(['meta_email_sha256' => 'For this Meta test, supply a hash of the consenting visitor’s email or customer ID, or their captured Facebook click cookie.']);
+        }
         $refund = $input['goal'] === 'refund';
         if ((! $refund && (! $binding['destination'] || $input['goal'] !== $binding['goal'])) || ($refund && $input['mode'] !== 'live')
             || CampaignOutcomeEvidence::origin($input['source_url']) !== $binding['origin']
             || parse_url($input['source_url'], PHP_URL_USER) !== null || parse_url($input['source_url'], PHP_URL_PASS) !== null) {
             throw ValidationException::withMessages(['goal' => 'The event must match the selected website, goal, account and destination.']);
         }
+        abort_unless($binding['origin'] && app(AdvertiserOutcomeOrigin::class)->verify($record->campaign->customer, $binding['origin']), 422, 'Verify this website’s ownership before sending business events.');
         $occurred = Carbon::parse($input['occurred_at'])->utc();
         if ($refund) {
             $id = app(MerchantOrders::class)->refund($record->campaign->customer_id, $input, $occurred);
@@ -107,7 +122,6 @@ class CampaignOutcomeController extends Controller
             return response()->json(['refund_id' => $id, 'status' => 'recorded'], 202);
         }
         $businessId = $input['goal'] === 'purchase' ? ($input['order_id'] ?? $input['source_id']) : $input['source_id'];
-        abort_unless($binding['origin'] && app(AdvertiserOutcomeOrigin::class)->verify($record->campaign->customer, $binding['origin']), 422, 'Verify this website’s ownership before sending business events.');
         $key = hash('sha256', $businessId);
         $event = DB::transaction(function () use ($record, $input, $binding, $key, $businessId, $occurred) {
             $strategy = Strategy::whereKey($record->id)->lockForUpdate()->firstOrFail();
@@ -122,6 +136,13 @@ class CampaignOutcomeController extends Controller
                     && Carbon::parse($prior->occurred_at)->equalTo($occurred) && (float) $prior->amount === (float) ($input['amount'] ?? 0)
                     && $prior->currency === ($input['currency'] ?? null), 409);
 
+                if ($prior->delivery_status === 'failed' && ! $prior->payload && ! $prior->provider_receipt) {
+                    abort_unless(is_string($prior->retry_payload_hash) && hash_equals($prior->retry_payload_hash, OutcomeReceiptAudit::retryHash($input)), 409,
+                        'Retry with the original signed event, including its consent and identifiers.');
+                    $store->where('id', $prior->id)->where('delivery_status', 'failed')->whereNull('payload')
+                        ->update(['payload' => Crypt::encryptString(json_encode($input, JSON_THROW_ON_ERROR))]);
+                }
+
                 return $prior;
             }
             if ($input['mode'] === 'test') {
@@ -134,11 +155,15 @@ class CampaignOutcomeController extends Controller
             $id = $store->insertGetId(['strategy_id' => $strategy->id, 'binding' => $binding['fingerprint'], 'source_key' => $key,
                 'goal' => $input['goal'], 'source' => 'signed_website', 'mode' => $input['mode'], 'occurred_at' => $occurred->toIso8601String(),
                 'amount' => $input['amount'] ?? null, 'currency' => $input['currency'] ?? null,
+                'ad_user_data' => $input['ad_user_data'], 'ad_personalization' => $input['ad_personalization'] ?? null,
+                'consent_observed_at' => now()->toIso8601String(), 'retry_payload_hash' => OutcomeReceiptAudit::retryHash($input),
+                ...($binding['channel'] === 'facebook' ? OutcomeReceiptAudit::providerIdentity($input['source_id']) : []),
                 'payload' => Crypt::encryptString(json_encode($input, JSON_THROW_ON_ERROR)), 'created_at' => now(), 'updated_at' => now()]);
 
             return $store->where('id', $id)->first();
         });
-        if (in_array($event->delivery_status, ['pending', 'failed'], true)) {
+        if (in_array($event->delivery_status, ['pending', 'failed'], true)
+            || ($event->delivery_status === 'accepted' && $binding['channel'] === 'google' && $event->provider_receipt)) {
             DeliverCampaignOutcome::dispatch($event->id)->afterCommit();
         }
 

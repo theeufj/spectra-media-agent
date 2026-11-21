@@ -13,6 +13,7 @@ use App\Services\FacebookAds\PixelService;
 use App\Services\GoogleAds\ConversionTrackingService;
 use App\Services\GoogleAds\DataManagerService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -60,7 +61,7 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $service = app(CampaignOutcomeEvidence::class);
         $this->assertFalse($service->forStrategy($strategy)['verified_for_launch']);
         $nonce = $this->postJson(route('campaigns.outcome.test', [$strategy->campaign, $strategy->uuid]))->assertOk()->json('challenge');
-        $values = ['challenge' => $nonce, 'fbc' => 'fb.1.1780000000000.valid', 'test_code' => 'TEST123'];
+        $values = ['challenge' => $nonce, 'fbc' => 'fb.1.1780000000000.valid', 'test_code' => 'TEST123', 'client_user_agent' => 'Mozilla/5.0 (Website QA browser)'];
         $this->postEvent($strategy, $values, 'wrong')->assertForbidden();
         $this->postEvent($strategy, $values + ['source_url' => 'https://foreign.example/signup'])->assertUnprocessable();
         $id = $this->postEvent($strategy, $values)->assertAccepted()->json('event_id');
@@ -73,6 +74,11 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $capi->expects($this->once())->method('sendEvents')->with('222', $this->callback(fn ($events) => $events[0]['event_id'] === 'registration-123' && $events[0]['event_name'] === 'CompleteRegistration'), 'TEST123')->willReturn(['events_received' => 1, 'fbtrace_id' => 'trace']);
         $this->wire($strategy, $id);
         $this->assertTrue($service->forStrategy($strategy)['verified_for_launch']);
+        $test = DB::table('campaign_outcome_events')->where('id', $id)->first();
+        $this->assertSame('granted', $test->ad_user_data);
+        $this->assertNull($test->ad_personalization);
+        $this->assertNull($test->payload);
+        $this->assertSame('registration-123', Crypt::decryptString($test->provider_event_id));
         $this->assertSame(0, $service->forStrategy($strategy)['verified_events']);
         $strategy->campaign->customer->update(['facebook_pixel_id' => '223']);
         $this->assertFalse($service->forStrategy($strategy->fresh())['verified_for_launch']);
@@ -85,17 +91,55 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $service = $this->createMock(ConversionTrackingService::class);
         $this->app->bind(ConversionTrackingService::class, fn () => $service);
         $diagnostic = ['resource' => 'customers/131/conversionActions/42', 'type' => 'WEBPAGE', 'category' => 'SIGNUP', 'send_to' => 'AW-131/abc', 'time_zone' => 'UTC'];
-        $service->expects($this->exactly(2))->method('outcomeDestination')->with('131', 'customers/131/conversionActions/42')->willReturn(
+        $service->expects($this->exactly(3))->method('outcomeDestination')->with('131', 'customers/131/conversionActions/42')->willReturn(
             $diagnostic + ['last_tag_at' => now()->subDay()->utc()->toDateTimeString()],
-            $diagnostic + ['last_tag_at' => now()->utc()->toDateTimeString()]);
+            $diagnostic + ['last_tag_at' => now()->subDay()->utc()->toDateTimeString()],
+            $diagnostic + ['last_tag_at' => now()->addSeconds(7)->utc()->toDateTimeString()]);
         $nonce = $this->postJson(route('campaigns.outcome.test', [$strategy->campaign, $strategy->uuid]))->assertOk()->json('challenge');
         $id = $this->postEvent($strategy, ['challenge' => $nonce, 'tag_send_to' => 'AW-131/abc',
             'tag_seen_at' => now()->toIso8601String(), 'tag_event_id' => 'registration-123'])->assertAccepted()->json('event_id');
         $this->wire($strategy, $id);
+        $this->assertFalse(app(CampaignOutcomeEvidence::class)->forStrategy($strategy)['verified_for_launch']);
+        $capture = ['website_origin' => 'https://example.org', 'challenge' => $nonce, 'send_to' => 'AW-131/abc', 'goal' => 'signup',
+            'event_id' => 'registration-123', 'observed_at' => now()->toIso8601String()];
+        $endpoint = route('campaigns.outcome.google-tag', [$strategy->campaign, $strategy->uuid]);
+        $this->postJson($endpoint, array_merge($capture, ['website_origin' => 'https://wrong.example']))->assertForbidden();
+        $this->postJson($endpoint, array_merge($capture, ['send_to' => 'AW-131/other']))->assertConflict();
+        $this->postJson($endpoint, $capture)->assertNoContent();
+        $this->postJson($endpoint, array_merge($capture, ['event_id' => 'other-registration']))->assertConflict();
+        $this->postJson($endpoint, $capture)->assertNoContent();
+        $this->travel(10)->seconds();
+        $this->wire($strategy, $id);
+        $this->assertStringStartsWith('google-tag-activity:', DB::table('campaign_outcome_events')->where('id', $id)->value('provider_receipt'));
         $evidence = app(CampaignOutcomeEvidence::class)->forStrategy($strategy);
         $this->assertTrue($evidence['verified_for_launch']);
         $this->assertSame('unverified', $evidence['provider_attribution']);
         $this->assertSame(0, $evidence['verified_events']);
+    }
+
+    #[\PHPUnit\Framework\Attributes\TestWith(['78.25', 'AUD', 10, true])]
+    #[\PHPUnit\Framework\Attributes\TestWith(['78.24', 'AUD', 10, false])]
+    #[\PHPUnit\Framework\Attributes\TestWith(['78.25', 'USD', 10, false])]
+    #[\PHPUnit\Framework\Attributes\TestWith(['78.25', 'AUD', 95, false])]
+    public function test_google_purchase_challenge_matches_paid_order_and_bounded_provider_activity(string $amount, string $currency, int $lag, bool $ready): void
+    {
+        $this->freezeSecond();
+        $strategy = $this->fixture('Google');
+        $strategy->update(['conversion_goals' => ['primary_goal' => 'Purchase', 'action_resource' => 'customers/131/conversionActions/42']]);
+        $reader = $this->createMock(ConversionTrackingService::class);
+        $this->app->bind(ConversionTrackingService::class, fn () => $reader);
+        $diagnostic = ['resource' => 'customers/131/conversionActions/42', 'type' => 'WEBPAGE', 'category' => 'PURCHASE', 'send_to' => 'AW-131/order', 'time_zone' => 'UTC'];
+        $reader->method('outcomeDestination')->willReturn($diagnostic + ['last_tag_at' => null], $diagnostic + ['last_tag_at' => now()->addSeconds($lag)->utc()->toDateTimeString()]);
+        $test = $this->postJson(route('campaigns.outcome.test', [$strategy->campaign, $strategy->uuid]))->assertOk()->json();
+        $this->postJson($test['capture_url'], ['website_origin' => 'https://example.org', 'challenge' => $test['challenge'], 'send_to' => 'AW-131/order',
+            'goal' => 'purchase', 'event_id' => 'order-123', 'amount' => $amount, 'currency' => $currency, 'observed_at' => now()->toIso8601String()])->assertNoContent();
+        $id = $this->postEvent($strategy, ['goal' => 'purchase', 'challenge' => $test['challenge'], 'order_id' => 'order-123', 'source_id' => 'webhook-456',
+            'amount' => '78.25', 'currency' => 'AUD'])->assertAccepted()->json('event_id');
+        $this->travel($lag)->seconds();
+        $this->wire($strategy, $id);
+        $evidence = app(CampaignOutcomeEvidence::class)->forStrategy($strategy);
+        $this->assertSame($ready, $evidence['verified_for_launch']);
+        $this->assertSame('unverified', $evidence['provider_attribution']);
     }
 
     public function test_a_paid_order_requires_positive_value_and_denied_consent_never_sends(): void
@@ -166,6 +210,11 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $this->app->bind(PixelService::class, fn () => $pixel);
         $this->assertTrue($native->owns($strategy, $binding), 'Tenant, destination and domain match');
         $this->assertTrue($native->replay($strategy, $binding));
+        $audit = DB::table('campaign_outcome_events')->where('strategy_id', $strategy->id)->where('source', 'native_receipt_replay')->sole();
+        $this->assertSame('granted', $audit->ad_user_data);
+        $this->assertNull($audit->ad_personalization);
+        $this->assertSame($receipt->meta_delivery['event_id'], Crypt::decryptString($audit->provider_event_id));
+        $this->assertSame($receipt->created_at->timestamp, \Illuminate\Support\Carbon::parse($audit->consent_observed_at)->timestamp);
         $this->assertTrue($evidence->forStrategy($strategy)['verified_for_launch']);
         $this->assertSame(0, $evidence->forStrategy($strategy)['verified_events']);
     }
@@ -204,5 +253,86 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $this->assertTrue($native->owns($strategy, $binding), 'Tenant, destination and domain match');
         $this->assertTrue($native->replay($strategy, $binding));
         $this->assertSame(0, $evidence->forStrategy($strategy)['verified_events']);
+    }
+
+    public function test_original_consent_survives_a_terminal_purge_and_a_changed_duplicate(): void
+    {
+        $this->freezeSecond();
+        $strategy = $this->fixture('Facebook');
+        $values = ['mode' => 'live', 'source_id' => 'checkout-confirmed', 'occurred_at' => now()->subMinutes(3)->toIso8601String(),
+            'ad_user_data' => 'denied', 'ad_personalization' => 'unknown'];
+        $id = $this->postEvent($strategy, $values)->assertAccepted()->json('event_id');
+        $this->wire($strategy, $id);
+        $rows = DB::table('campaign_outcome_events')->where('id', $id);
+        $first = $rows->first();
+        $this->assertSame('consent_unavailable', $first->delivery_status);
+        $this->assertNull($first->payload);
+        $this->assertSame('denied', $first->ad_user_data);
+        $this->assertSame('unknown', $first->ad_personalization);
+        $this->assertSame(now()->timestamp, \Illuminate\Support\Carbon::parse($first->consent_observed_at)->timestamp);
+        $this->assertSame('checkout-confirmed', Crypt::decryptString($first->provider_event_id));
+        $this->travel(1)->minutes();
+        $this->assertSame($id, $this->postEvent($strategy, array_replace($values, ['ad_user_data' => 'granted', 'ad_personalization' => 'granted']))->assertAccepted()->json('event_id'));
+        $this->assertEquals($first, $rows->first());
+    }
+
+    public function test_failed_google_poll_retries_the_original_receipt_without_raw_identifiers_or_another_upload(): void
+    {
+        $this->freezeSecond();
+        $strategy = $this->fixture('Google');
+        $service = $this->createMock(ConversionTrackingService::class);
+        $this->app->bind(ConversionTrackingService::class, fn () => $service);
+        $service->expects($this->once())->method('outcomeDestination')->willReturn(['category' => 'SIGNUP', 'type' => 'UPLOAD_CLICKS']);
+        $google = $this->createMock(DataManagerService::class);
+        $google->expects($this->once())->method('ingestConversion')->willReturn(['success' => true, 'requestId' => 'upload-1']);
+        $google->expects($this->exactly(2))->method('retrieveRequestStatus')->with('upload-1')->willReturn(
+            ['success' => false],
+            ['success' => true, 'destinations' => [['destination' => ['operatingAccount' => ['accountType' => 'GOOGLE_ADS', 'accountId' => '131'], 'productDestinationId' => '42'],
+                'requestStatus' => 'SUCCESS', 'eventsIngestionStatus' => ['recordCount' => 1]]]]);
+        $this->app->instance(DataManagerService::class, $google);
+        $values = ['mode' => 'live', 'source_id' => 'business123', 'gclid' => 'qa-click', 'ad_personalization' => 'denied'];
+        $id = $this->postEvent($strategy, $values)->assertAccepted()->json('event_id');
+        $this->wire($strategy, $id);
+        $rows = DB::table('campaign_outcome_events')->where('id', $id);
+        $this->assertNull($rows->value('payload'));
+        try {
+            $this->wire($strategy, $id);
+            $this->fail('The failed status lookup should be retried.');
+        } catch (\RuntimeException $e) {
+            (new DeliverCampaignOutcome($id))->failed($e);
+        }
+        $this->assertSame('failed', $rows->value('delivery_status'));
+        $this->assertSame('upload-1', $rows->value('provider_receipt'));
+        $this->assertSame($id, $this->postEvent($strategy, $values)->assertAccepted()->json('event_id'));
+        $this->wire($strategy, $id);
+        $row = $rows->first();
+        $this->assertSame('processed', $row->delivery_status);
+        $this->assertSame('upload-1', $row->provider_receipt);
+        $this->assertSame(hash('sha256', 'business123'), Crypt::decryptString($row->provider_event_id));
+        $this->assertSame('granted', $row->ad_user_data);
+        $this->assertSame('denied', $row->ad_personalization);
+        $this->assertNull($row->payload);
+    }
+
+    public function test_spent_retries_can_restore_only_the_exact_original_signed_payload(): void
+    {
+        $this->freezeSecond();
+        $strategy = $this->fixture('Google');
+        $values = ['mode' => 'live', 'gclid' => 'original-click'];
+        $id = $this->postEvent($strategy, $values)->assertAccepted()->json('event_id');
+        $rows = DB::table('campaign_outcome_events')->where('id', $id);
+        (new DeliverCampaignOutcome($id))->failed(new \RuntimeException('Temporary provider outage'));
+        $original = $rows->first();
+        $this->assertSame('failed', $original->delivery_status);
+        $this->assertNull($original->payload);
+        $this->assertNotEmpty($original->retry_payload_hash);
+        $this->postEvent($strategy, array_replace($values, ['gclid' => 'different-click']))->assertConflict();
+        $this->postEvent($strategy, array_replace($values, ['ad_user_data' => 'unknown']))->assertConflict();
+        $this->assertNull($rows->value('payload'));
+        $this->assertSame($id, $this->postEvent($strategy, $values)->assertAccepted()->json('event_id'));
+        $restored = $rows->first();
+        $this->assertSame($original->consent_observed_at, $restored->consent_observed_at);
+        $this->assertSame('original-click', json_decode(Crypt::decryptString($restored->payload), true)['gclid']);
+        $this->assertNull($restored->ad_personalization);
     }
 }

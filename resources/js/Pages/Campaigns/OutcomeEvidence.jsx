@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { fetchJson } from '@/utils/http';
+import GoogleTagTest from './GoogleTagTest';
 
 export default function OutcomeEvidence({ auth, campaign, strategy, evidence, setupUrl, testUrl }) {
     const [setup, setSetup] = useState(null);
@@ -33,7 +34,8 @@ export default function OutcomeEvidence({ auth, campaign, strategy, evidence, se
                 <button type="button" disabled={busy} className="underline" onClick={() => request(setupUrl, setSetup)}>Show my integration details</button>
                 {setup && <div className="mt-3 space-y-2">
                     <code className="block break-all">{setup.endpoint}</code><code className="block break-all">{setup.signing_secret}</code>
-                    <p>POST JSON with source_id, goal, mode, occurred_at, source_url and ad_user_data. For a purchase, send its amount, currency and a stable order_id. The source_id is used as the order ID if you omit order_id. For a refund, send goal refund, mode live, its unique refund ID as source_id, the original order_id, and the positive amount and currency. Refunds update your order reporting. Use granted, denied or unknown for consent. Supply a captured gclid, gbraid, wbraid or fbc for the relevant platform when available.</p>
+                    <p>POST JSON with source_id, goal, mode, occurred_at, source_url and ad_user_data. For a purchase, send its amount, currency and a stable order_id. The source_id is used as the order ID if you omit order_id. For a refund, send goal refund, mode live, its unique refund ID as source_id, the original order_id, and the positive amount and currency. Refunds update your order reporting. Use granted, denied or unknown for consent. For Google imports, supply the captured gclid, gbraid or wbraid when available.</p>
+                    {setup.binding?.channel === 'facebook' && <p>With permission to share measurement data, send the visitor’s browser <code>client_user_agent</code> from the original website request. Include either <code>meta_email_sha256</code> (lowercase and trim the email before hashing), <code>meta_external_id_sha256</code> (hash your stable customer ID), or the visitor’s captured <code>fbc</code> cookie. Hash on your server using SHA-256 and send lowercase hexadecimal. You can test before anyone clicks an ad.</p>}
                     <p>Send the current Unix timestamp in X-Outcome-Timestamp. Set X-Outcome-Signature to the lowercase hex HMAC-SHA256 of the timestamp, a period, and the exact request body, using your signing key.</p>
                 </div>}
             </details>
@@ -42,8 +44,9 @@ export default function OutcomeEvidence({ auth, campaign, strategy, evidence, se
             {test && !test.verified && <div className="space-y-2 rounded-lg border p-4">
                 <p>Run the business action on your website before {new Date(test.expires_at).toLocaleTimeString()}. Send mode <code>test</code> and this challenge with the signed event.</p>
                 <code className="block break-all">{test.challenge}</code>
-                {test.send_to ? <p>From the same successful Google tag invocation, include tag_event_id matching source_id, tag_seen_at and tag_send_to <code>{test.send_to}</code>. Verification checks when Google last received this exact tag.</p>
-                    : <p>For Meta, include the Test Events code for the selected dataset and complete the action in your consented test session. For a Google import, replay a genuine event with the same source ID and data. Verification requires its successfully processed live receipt.</p>}
+                {test.send_to && test.capture_url ? <GoogleTagTest test={test} />
+                    : test.channel === 'google' ? <p>Google click imports require a genuine Google Ads click and a matching live event that Google has processed. For a new advertiser, select a website conversion action in the campaign’s Google conversion goal, publish its reviewed success tag, then start a fresh test.</p>
+                    : <p>For Meta, use Events Manager → dataset <code>{test.destination}</code> → Test Events. Copy its code into <code>test_code</code>, then complete a real signup or purchase in a consenting browser session and send the matching fields from backend setup.</p>}
             </div>}
             {error && <p role="alert">{error}</p>}
             <Link href={route('campaigns.outcome.show', { campaign: campaign.uuid, strategy: strategy.uuid })} className="block underline">Refresh verification status</Link>

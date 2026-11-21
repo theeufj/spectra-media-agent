@@ -446,6 +446,13 @@ HTML;
                 ]];
             }
         }
+        $variables = $purchaseVariables;
+        if (($goal['objective'] ?? null) === 'signup') {
+            $variables[] = ['name' => 'Site to Spend '.$strategyUuid.' signup source_id', 'type' => 'v', 'parameter' => [
+                ['key' => 'name', 'type' => 'template', 'value' => 'sitetospend.source_id'],
+                ['key' => 'dataLayerVersion', 'type' => 'integer', 'value' => '2'],
+            ]];
+        }
         $trigger = ['name' => 'Site to Spend '.$strategyUuid.' '.substr(hash('sha256', json_encode([$goal, $purchaseVariables])), 0, 16),
             'filter' => [$condition('Page Hostname', $host)]];
         if ($purchaseVariables !== []) {
@@ -483,12 +490,12 @@ HTML;
             $this->assertReviewedWorkspaceChanges($customer, $workspace, $token, $strategyUuid);
             $authorize();
             $types = $trigger['type'] === 'pageview' ? 'type=pageHostname&type=pageUrl' : 'type=pageHostname&type=event';
-            $variables = $this->makeApiCall('POST', "/{$workspace}/built_in_variables?{$types}", $token);
-            if (! $variables['success']) {
+            $enabled = $this->makeApiCall('POST', "/{$workspace}/built_in_variables?{$types}", $token);
+            if (! $enabled['success']) {
                 return ['success' => false, 'error' => 'The reviewed trigger variables could not be enabled.'];
             }
-            if ($purchaseVariables !== [] && ! $this->ensureReviewedVariables($workspace, $token, $purchaseVariables, $authorize)) {
-                return ['success' => false, 'error' => 'The purchase amount, currency and transaction variables could not be verified.'];
+            if ($variables !== [] && ! $this->ensureReviewedVariables($workspace, $token, $variables, $authorize)) {
+                return ['success' => false, 'error' => 'The reviewed business event variables could not be verified.'];
             }
             $existing = collect($listed['data']['trigger'] ?? [])->firstWhere('name', $trigger['name']);
             if ($existing) {
@@ -521,6 +528,9 @@ HTML;
                     $tag['parameter'][] = ['key' => $key, 'type' => 'template', 'value' => '{{Site to Spend '.$strategyUuid.' purchase '.$field.'}}'];
                 }
             }
+            if (($goal['objective'] ?? null) === 'signup') {
+                $tag['parameter'][] = ['key' => 'orderId', 'type' => 'template', 'value' => '{{Site to Spend '.$strategyUuid.' signup source_id}}'];
+            }
             $endpoint = "/{$workspace}/tags".($existingTag ? '/'.$existingTag['tagId'] : '');
             $authorize();
             $written = $this->makeApiCall($existingTag ? 'PUT' : 'POST', $endpoint, $token, $tag);
@@ -531,7 +541,7 @@ HTML;
                 return ['success' => false, 'error' => 'The reviewed conversion tag could not be saved.'];
             }
 
-            return $this->publishReviewedWorkspace($customer, $workspace, $token, $tag, $trigger + ['triggerId' => (string) $triggerId], $authorize, $purchaseVariables);
+            return $this->publishReviewedWorkspace($customer, $workspace, $token, $tag, $trigger + ['triggerId' => (string) $triggerId], $authorize, $variables);
         }
 
         return ['success' => false, 'error' => 'A writable managed tag workspace is required.'];
@@ -688,7 +698,7 @@ HTML;
         return is_string($name) && match ($type) {
             'tag' => $name === $prefix.'conversion',
             'trigger' => preg_match('/^'.preg_quote($prefix, '/').'[a-f0-9]{16}$/D', $name) === 1,
-            'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency'], true),
+            'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency', $prefix.'signup source_id'], true),
             'builtInVariable' => in_array($entity['type'] ?? null, ['pageHostname', 'pageUrl', 'event'], true),
             default => false,
         };
@@ -742,7 +752,7 @@ HTML;
                     $namedEntity = is_string($name) && match ($type) {
                         'tag' => $name === $prefix.'conversion',
                         'trigger' => preg_match('/^'.preg_quote($prefix, '/').'[a-f0-9]{16}$/D', $name) === 1,
-                        'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency'], true),
+                        'variable' => in_array($name, [$prefix.'purchase transaction_id', $prefix.'purchase value', $prefix.'purchase currency', $prefix.'signup source_id'], true),
                     };
                     if ($namedEntity && \Illuminate\Support\Str::isUuid($strategyUuid)) {
                         $allowed = count(array_diff(array_keys($change), ['changeStatus', $type])) === 0;
