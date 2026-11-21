@@ -190,7 +190,13 @@ class ConversionsApiService
                 continue;
             }
 
-            if (in_array($key, $hashFields)) {
+            if (in_array($key, ['em_sha256', 'external_id_sha256'], true)) {
+                // The advertiser hashed these on their own server. Rehashing prevents matches.
+                if (! is_string($value) || ! preg_match('/^[a-f0-9]{64}$/D', $value)) {
+                    throw new \InvalidArgumentException('Meta match data must be a lowercase SHA-256 digest.');
+                }
+                $formatted[$key === 'em_sha256' ? 'em' : 'external_id'] = [$value];
+            } elseif (in_array($key, $hashFields)) {
                 // Normalize and hash
                 $normalized = $this->normalizeValue($key, $value);
                 $formatted[$key] = hash('sha256', $normalized);

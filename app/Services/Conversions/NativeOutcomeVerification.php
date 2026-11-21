@@ -72,6 +72,8 @@ class NativeOutcomeVerification
         $key = hash('sha256', $binding['fingerprint'].':'.$receipt->deduplication_key);
         DB::table('campaign_outcome_events')->upsert([['strategy_id' => $strategy->id, 'binding' => $binding['fingerprint'],
             'source_key' => $key, 'goal' => $binding['goal'], 'mode' => 'test', 'source' => 'native_receipt_replay',
+            'ad_user_data' => 'granted', 'ad_personalization' => null, 'consent_observed_at' => $receipt->created_at?->toIso8601String(),
+            ...OutcomeReceiptAudit::providerIdentity($binding['channel'] === 'facebook' ? $receipt->meta_delivery['event_id'] : $receipt->deduplication_key),
             'occurred_at' => $receipt->occurred_at->toIso8601String(), 'delivery_status' => 'verified', 'provider_receipt' => $id,
             'created_at' => now(), 'updated_at' => now()]], ['strategy_id', 'mode', 'source_key'], ['updated_at', 'delivery_status', 'provider_receipt']);
 

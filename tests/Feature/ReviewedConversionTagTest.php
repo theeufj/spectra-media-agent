@@ -335,6 +335,16 @@ class ReviewedConversionTagTest extends TestCase
         $this->assertNull($customer->fresh()->conversion_tracking_verified_at);
     }
 
+    public function test_signup_tag_uses_the_confirmed_business_id_on_the_actual_google_request(): void
+    {
+        $result = $this->configure($this->customerOwned(), ['objective' => 'signup', 'trigger' => 'event', 'event_name' => 'account_created']);
+        $this->assertTrue($result['success']);
+        $this->assertSame('sitetospend.source_id', array_values($this->variables)[0]['parameter'][0]['value']);
+        $tag = collect($this->tags)->firstWhere('type', 'awct');
+        $params = collect($tag['parameter'])->pluck('value', 'key');
+        $this->assertSame('{{Site to Spend '.self::STRATEGY.' signup source_id}}', $params['orderId']);
+    }
+
     public function test_purchase_tag_requires_positive_actual_amount_currency_and_unique_transaction_and_verifies_live_variables(): void
     {
         $customer = $this->customer();
