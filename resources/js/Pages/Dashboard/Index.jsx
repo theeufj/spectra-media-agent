@@ -290,7 +290,7 @@ function TabBtn({ children }) {
 // ═══════════════════════════════════════════════════════════════
 // Main Dashboard Component
 // ═══════════════════════════════════════════════════════════════
-export default function Dashboard({ auth }) {
+export default function Dashboard({ auth, merchantOrders = {} }) {
     const currency = useCurrency();
     const {
         campaigns, defaultCampaign, days: initialDays,
@@ -516,6 +516,18 @@ export default function Dashboard({ auth }) {
                                                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily Spend vs Revenue</h3>
                                                     <DailyChart data={displayDailyTrend} />
                                                 </div>
+                                            )}
+
+                                            {!selectedCampaign && Object.keys(merchantOrders).length > 0 && (
+                                                <section className="rounded-xl border border-gray-200 bg-white p-6">
+                                                    <h2 className="mb-3 text-lg font-semibold text-gray-900">Website orders and refunds</h2>
+                                                    <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+                                                        <thead><tr>{['Currency', 'Orders', 'Gross sales', 'Refunds', 'Refund amount', 'Net sales'].map(label => <th className="py-2 pr-3" key={label}>{label}</th>)}</tr></thead>
+                                                        <tbody>{Object.entries(merchantOrders).map(([iso, entry]) => <tr key={iso}>
+                                                            <th scope="row">{iso}</th><td>{entry.orders}</td><td>{money(entry.gross_cents / 100, iso)}</td><td>{entry.refunds}</td><td>{money(entry.refund_cents / 100, iso)}</td><td>{money(entry.net_cents / 100, iso)}</td>
+                                                        </tr>)}</tbody>
+                                                    </table></div>
+                                                </section>
                                             )}
 
                                             {/* Per-campaign performance chart (when campaign selected) */}

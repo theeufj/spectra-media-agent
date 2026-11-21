@@ -11,8 +11,15 @@ class HubSpotConnector implements CrmConnectorInterface
 
     protected string $baseUrl = 'https://api.hubapi.com';
 
+    private ?string $consentField;
+
+    private ?string $currency;
+
     public function __construct(array $credentials)
     {
+        $field = $credentials['consent_field'] ?? '';
+        $this->consentField = is_string($field) && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,79}$/D', $field) ? $field : null;
+        $this->currency = $credentials['default_currency'] ?? null;
         $this->accessToken = $credentials['access_token'] ?? '';
     }
 
@@ -44,7 +51,7 @@ class HubSpotConnector implements CrmConnectorInterface
         do {
             $params = [
                 'limit' => 100,
-                'properties' => 'dealname,amount,closedate,gclid,pipeline,dealstage,hs_analytics_source,hs_analytics_first_url',
+                'properties' => ['dealname', 'amount', 'deal_currency_code', 'closedate', 'gclid', 'pipeline', 'dealstage', 'hs_analytics_source', 'hs_analytics_first_url', ...($this->consentField ? [$this->consentField] : [])],
                 'filterGroups' => [[
                     'filters' => [
                         ['propertyName' => 'dealstage', 'operator' => 'EQ', 'value' => 'closedwon'],
@@ -83,6 +90,8 @@ class HubSpotConnector implements CrmConnectorInterface
                     'gclid' => $gclid,
                     'fbclid' => $fbclid,
                     'msclid' => $msclid,
+                    'ad_measurement_consent' => in_array($props[$this->consentField ?? ''] ?? null, [true, 'true', 'granted'], true),
+                    'currency_code' => $props['deal_currency_code'] ?? $this->currency,
                     'crm_data' => $props,
                 ];
             }

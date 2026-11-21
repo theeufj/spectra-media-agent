@@ -22,6 +22,9 @@ Route::middleware('throttle:600,1')->group(function () {
         ->name('tracking.conversion');
 });
 
+Route::post('/outcomes/{strategy}', [\App\Http\Controllers\CampaignOutcomeController::class, 'record'])
+    ->whereUuid('strategy')->middleware('throttle:120,1')->name('outcomes.record');
+
 // Demo Endpoint (Rate limited)
 Route::middleware('throttle:3,1')->group(function () {
     Route::post('/demo/generate-full', [\App\Http\Controllers\Api\DemoController::class, 'generateFull'])

@@ -5,8 +5,9 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\Recommendation;
+use App\Services\Campaigns\CampaignResourceInventory;
 use App\Services\CircuitBreaker\CircuitBreakerService;
-use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\FacebookAttributionEvidence;
 use App\Services\FacebookAds\FacebookCampaignMetrics;
 use App\Services\FacebookAds\InsightService;
 use App\Services\GoogleAds\RecommendationGenerationService;
@@ -34,20 +35,30 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
 
     protected Campaign $campaign;
 
-    public function __construct(Campaign $campaign)
+    protected ?string $resourceId = null;
+
+    public function __construct(Campaign $campaign, ?string $resourceId = null)
     {
         $this->campaign = $campaign;
+        $this->resourceId = $resourceId;
     }
 
     public function handle(): void
     {
-        if (empty($this->campaign->facebook_ads_campaign_id)) {
-            Log::warning("Campaign {$this->campaign->id} does not have a Facebook Ads Campaign ID. Skipping performance fetch.");
+        $entries = collect(CampaignResourceInventory::entries($this->campaign))->where('platform', 'facebook');
+        if ($this->resourceId === null && $entries->count() > 1) {
+            foreach ($entries as $entry) {
+                static::dispatch($this->campaign, $entry['resource_id']);
+            }
 
             return;
         }
-
-        $lock = Cache::lock('fetch-facebook-performance-data-'.$this->campaign->facebook_ads_campaign_id, 600);
+        $entry = $this->resourceId === null ? $entries->first() : $entries->firstWhere('resource_id', $this->resourceId);
+        if (! $entry) {
+            return;
+        }
+        $strategy = $this->campaign->strategies->firstWhere('id', $entry['strategy_id']);
+        $lock = Cache::lock('fetch-facebook-performance-'.$entry['account_id'].'-'.$entry['resource_id'], 600);
         $circuitBreaker = new CircuitBreakerService('FacebookAdsAPI');
         $customer = $this->campaign->customer;
 
@@ -57,34 +68,30 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
             return;
         }
 
-        if ($lock->get() && $circuitBreaker->isAvailable()) {
+        if ($circuitBreaker->isAvailable() && $lock->get()) {
             try {
                 Log::info("Starting FetchFacebookAdsPerformanceData job for campaign ID: {$this->campaign->id}");
 
-                $insightService = new InsightService($customer);
+                $insightService = app(InsightService::class, ['customer' => $customer]);
                 // Backfill 30 days on first run; 7 days on subsequent runs.
-                $hasData = \App\Models\FacebookAdsPerformanceData::where('campaign_id', $this->campaign->id)->exists();
+                $hasData = \App\Models\FacebookAdsPerformanceData::where('campaign_id', $this->campaign->id)->where('facebook_campaign_id', $entry['resource_id'])->exists();
                 $daysBack = $hasData ? 7 : 30;
                 $dateStart = now()->subDays($daysBack)->format('Y-m-d');
                 $dateEnd = now()->format('Y-m-d');
 
-                $strategy = FacebookCampaignMetrics::strategy($this->campaign);
                 $actionType = FacebookCampaignMetrics::actionType($strategy);
                 $insights = $insightService->getCampaignInsights(
-                    $this->campaign->facebook_ads_campaign_id,
+                    $entry['resource_id'],
                     $dateStart,
                     $dateEnd
                 );
 
                 if (is_array($insights) && empty($insights)) {
-                    $insights = $this->getFallbackAdSetInsights($this->campaign, $insightService, $dateStart, $dateEnd, $actionType);
+                    $insights = $this->getFallbackAdSetInsights($this->campaign, $insightService, $dateStart, $dateEnd, $actionType, $entry['resource_id'], $entry['account_id']);
                 }
 
                 if ($insights === null) {
-                    $circuitBreaker->recordFailure();
-                    $this->fail(new \Exception('Failed to fetch Facebook Ads insights'));
-
-                    return;
+                    throw new \RuntimeException('Meta did not return a complete daily campaign report.');
                 }
 
                 $circuitBreaker->recordSuccess();
@@ -93,26 +100,33 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 foreach ($insights as $insight) {
                     $date = $insight['date_start'] ?? $insight['date_stop'] ?? null;
 
-                    if (! $date) {
-                        continue;
+                    if (! $date || ($insight['date_stop'] ?? '') !== $date || $date < $dateStart || $date > $dateEnd
+                        || (string) ($insight['account_id'] ?? '') !== $entry['account_id']
+                        || (string) ($insight['campaign_id'] ?? '') !== $entry['resource_id']
+                        || ! preg_match('/^[A-Z]{3}$/D', (string) ($insight['account_currency'] ?? ''))) {
+                        throw new \RuntimeException('Daily Meta delivery did not identify the requested account, campaign, currency and day.');
                     }
 
                     // Parse conversions from actions
                     $conversions = $insight['goal_conversions'] ?? FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $actionType);
                     $clicks = (int) ($insight['inline_link_clicks'] ?? 0);
 
-                    $cost = (float) ($insight['spend'] ?? 0);
+                    $cost = (string) ($insight['spend'] ?? '0');
                     $data = [
                         'campaign_id' => $this->campaign->id,
-                        'facebook_campaign_id' => $this->campaign->facebook_ads_campaign_id,
+                        'facebook_campaign_id' => $entry['resource_id'],
+                        'facebook_account_id' => $entry['account_id'],
+                        'currency' => $insight['account_currency'],
                         'date' => $date,
+                        'strategy_id' => $entry['strategy_id'],
                         'impressions' => (int) ($insight['impressions'] ?? 0),
                         'clicks' => $clicks,
                         'cost' => $cost,
                         'conversions' => $conversions,
+                        'conversion_value' => $insight['purchase_value'] ?? FacebookCampaignMetrics::conversions($insight['action_values'] ?? null, 'purchase'),
                         'reach' => (int) ($insight['reach'] ?? null),
                         'frequency' => (float) ($insight['frequency'] ?? null),
-                        'cpc' => $clicks > 0 ? round($cost / $clicks, 4) : 0,
+                        'cpc' => $clicks > 0 ? bcround(bcdiv($cost, (string) $clicks, 6), 4) : 0,
                         'cpm' => (float) ($insight['cpm'] ?? null),
                         'cpa' => $conversions > 0 ? round($cost / $conversions, 2) : 0.0,
                     ];
@@ -120,7 +134,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     FacebookAdsPerformanceData::updateOrCreate(
                         [
                             'campaign_id' => $this->campaign->id,
-                            'facebook_campaign_id' => $this->campaign->facebook_ads_campaign_id,
+                            'facebook_campaign_id' => $entry['resource_id'],
                             'date' => $data['date'],
                         ],
                         $data
@@ -133,22 +147,32 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     'records_stored' => count($performanceData),
                 ]);
 
-                // Generate recommendations based on performance
-                if ($strategy && ! empty($performanceData)) {
-                    $recommendationService = new RecommendationGenerationService;
+                if (! $strategy) {
+                    return;
+                }
+                $evidence = app(FacebookAttributionEvidence::class);
+                $evidence->synchronize($strategy, $entry, $insightService);
+                // The legacy campaign totals include on-site/omni events. Only the signed ad-set pixel can inform a budget change.
+                $recommendationRows = $evidence->verifiedDays($strategy)->whereBetween('date', [$dateStart, $dateEnd])
+                    ->select(['date', 'impressions', 'clicks', 'cost', 'currency'])
+                    ->selectRaw('attributed_conversions AS conversions, attributed_value AS conversion_value')
+                    ->get()->map(fn ($row) => (array) $row)->all();
+
+                if ($recommendationRows !== []) {
+                    $recommendationService = app(RecommendationGenerationService::class);
                     $campaignConfig = [
-                        'campaignId' => $this->campaign->facebook_ads_campaign_id,
+                        'campaignId' => $entry['resource_id'],
                         'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
                         'platform' => 'facebook',
                     ];
 
-                    $recommendations = ($recommendationService)($performanceData, $campaignConfig);
+                    $recommendations = ($recommendationService)($recommendationRows, $campaignConfig);
 
                     foreach ($recommendations as $rec) {
                         Recommendation::create([
                             'campaign_id' => $this->campaign->id,
                             'type' => $rec['type'] ?? 'UNKNOWN',
-                            'target_entity' => $this->recommendationTarget($rec),
+                            'target_entity' => array_merge($this->recommendationTarget($rec), ['external_campaign_id' => $entry['resource_id'], 'strategy_id' => $entry['strategy_id'], 'account_id' => $entry['account_id']]),
                             'parameters' => $this->recommendationParameters($rec),
                             'rationale' => $rec['rationale'] ?? '',
                             'status' => 'pending',
@@ -159,13 +183,14 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     Log::info('Generated '.count($recommendations)." recommendations for campaign {$this->campaign->id}");
                 }
 
-                $lock->release();
             } catch (\Throwable $e) {
                 Log::error("Error in FetchFacebookAdsPerformanceData job for campaign {$this->campaign->id}: ".$e->getMessage(), [
                     'exception' => $e,
                 ]);
                 $circuitBreaker->recordFailure();
                 throw $e;
+            } finally {
+                $lock->release();
             }
         } else {
             Log::warning("Could not acquire lock or circuit breaker is open for campaign {$this->campaign->id}");
@@ -234,9 +259,14 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         string $dateStart,
         string $dateEnd,
         string $actionType = 'purchase',
+        ?string $resourceId = null,
+        ?string $accountId = null,
     ): array {
-        $adSetService = new AdSetService($campaign->customer);
-        $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+        $resourceId ??= $campaign->facebook_ads_campaign_id;
+        $adSets = $insightService->reportingAdSets($resourceId);
+        if ($adSets === null) {
+            throw new \RuntimeException('Meta could not list all ad sets for the daily delivery report.');
+        }
         $aggregated = [];
 
         foreach ($adSets as $adSet) {
@@ -244,32 +274,40 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 continue;
             }
 
-            $adSetInsights = $insightService->getAdSetInsights($adSet['id'], $dateStart, $dateEnd) ?? [];
+            $adSetInsights = $insightService->getAdSetInsights($adSet['id'], $dateStart, $dateEnd);
+            if ($adSetInsights === null) {
+                throw new \RuntimeException('Meta returned an incomplete fallback delivery report.');
+            }
 
             foreach ($adSetInsights as $insight) {
                 $date = $insight['date_start'] ?? $insight['date_stop'] ?? null;
-                if (! $date) {
-                    continue;
+                $currency = $insight['account_currency'] ?? '';
+                if (! $date || $date !== ($insight['date_stop'] ?? '') || ! preg_match('/^[A-Z]{3}$/D', $currency)
+                    || (string) ($insight['campaign_id'] ?? '') !== $resourceId || (string) ($insight['account_id'] ?? '') !== $accountId
+                    || (string) ($insight['adset_id'] ?? '') !== (string) $adSet['id'] || ($aggregated[$date]['account_currency'] ?? $currency) !== $currency) {
+                    throw new \RuntimeException('Fallback Meta delivery contained unexpected account, ad set, currency or date.');
                 }
 
                 if (! isset($aggregated[$date])) {
                     $aggregated[$date] = [
-                        'date_start' => $date,
+                        'date_start' => $date, 'campaign_id' => $resourceId, 'account_id' => $accountId, 'account_currency' => $currency,
                         'date_stop' => $date,
                         'impressions' => 0,
                         'inline_link_clicks' => 0,
-                        'spend' => 0.0,
+                        'spend' => '0.00',
                         'reach' => 0,
                         'frequency' => 0.0,
                         'cpm' => 0.0,
                         'goal_conversions' => 0,
+                        'purchase_value' => 0,
                     ];
                 }
 
                 $aggregated[$date]['impressions'] += (int) ($insight['impressions'] ?? 0);
                 $aggregated[$date]['inline_link_clicks'] += (int) ($insight['inline_link_clicks'] ?? 0);
-                $aggregated[$date]['spend'] += (float) ($insight['spend'] ?? 0);
+                $aggregated[$date]['spend'] = bcadd($aggregated[$date]['spend'], (string) ($insight['spend'] ?? '0'), 6);
                 $aggregated[$date]['reach'] += (int) ($insight['reach'] ?? 0);
+                $aggregated[$date]['purchase_value'] += FacebookCampaignMetrics::conversions($insight['action_values'] ?? null, 'purchase');
                 $aggregated[$date]['goal_conversions'] += FacebookCampaignMetrics::conversions($insight['actions'] ?? null, $actionType);
             }
         }

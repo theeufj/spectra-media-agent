@@ -153,30 +153,15 @@ class CampaignBudgetService
 
     private function reconcileGoogle(Campaign $campaign, Customer $customer, int $cents, bool $automatic, array &$changes): ?bool
     {
-        if (! $campaign->google_ads_campaign_id) {
-            return null;
+        $entries = collect(CampaignResourceInventory::entries($campaign))->where('platform', 'google');
+        if ($entries->isEmpty()) {
+            return $campaign->google_ads_campaign_id ? false : null;
         }
-        if (! $customer->google_ads_customer_id) {
-            return false;
-        }
-
         $accountId = $customer->cleanGoogleCustomerId();
         $prefix = "customers/{$accountId}/campaigns/";
-        $targets = [];
-        $paused = [];
-        foreach ($campaign->strategies as $strategy) {
-            if ($this->platform($strategy->platform) !== 'google') {
-                continue;
-            }
-            $id = $strategy->reusableGoogleCampaignId();
-            $resource = $id === null ? 'pending:'.$strategy->id : (ctype_digit($id) ? $prefix.$id : $id);
-            $targets[$resource] = ($targets[$resource] ?? 0) + (int) round($strategy->daily_budget * 100);
-            if ($automatic && $strategy->deployment_status === 'paused') {
-                $paused[$resource] = true;
-            }
-        }
-
-        $targets = $targets ?: [$campaign->googleAdsResourceName() => 1];
+        $targets = $this->budgetTargets($campaign, 'google', $entries);
+        $paused = $automatic ? $campaign->strategies->where('deployment_status', 'paused')
+            ->mapWithKeys(fn ($s) => [($entries->firstWhere('strategy_id', $s->id)['resource_name'] ?? 'pending:'.$s->id) => true])->all() : [];
         $ok = true;
         foreach (self::split($cents, $targets) as $resource => $share) {
             if (isset($paused[$resource]) || str_starts_with($resource, 'pending:') || ($automatic && $share <= 0)) {
@@ -212,17 +197,45 @@ class CampaignBudgetService
 
     private function reconcileMeta(Campaign $campaign, Customer $customer, int $cents, bool $automatic, array &$changes): ?bool
     {
-        $id = $campaign->facebook_ads_campaign_id;
-        if (! $id) {
-            return null;
-        }
-        if (! $customer->facebook_ads_account_id) {
-            return false;
+        $entries = collect(CampaignResourceInventory::entries($campaign))->where('platform', 'facebook');
+        if ($entries->isEmpty()) {
+            return $campaign->facebook_ads_campaign_id ? false : null;
         }
         if ($customer->is_sandbox) {
             return true;
         }
+        $targets = $this->budgetTargets($campaign, 'facebook', $entries);
+        $ok = true;
+        foreach (self::split($cents, $targets) as $id => $share) {
+            $entry = $entries->firstWhere('resource_id', (string) $id);
+            if (! $entry || ($automatic && ($share <= 0 || $campaign->strategies->firstWhere('id', $entry['strategy_id'])?->deployment_status === 'paused'))) {
+                continue;
+            }
+            $ok = $this->reconcileMetaResource($customer, (string) $id, $share, $automatic, $changes) && $ok;
+        }
 
+        return $ok;
+    }
+
+    private function budgetTargets(Campaign $campaign, string $platform, \Illuminate\Support\Collection $entries): array
+    {
+        $targets = [];
+        foreach ($campaign->strategies as $strategy) {
+            if ($this->platform($strategy->platform) !== $platform) {
+                continue;
+            }
+            $resource = $entries->firstWhere('strategy_id', $strategy->id)['resource_name'] ?? 'pending:'.$strategy->id;
+            $targets[$resource] = (int) round($strategy->daily_budget * 100);
+        }
+        if (! $targets && $entries->count() === 1) {
+            $targets[$entries->first()['resource_name']] = 1;
+        }
+
+        return $targets;
+    }
+
+    private function reconcileMetaResource(Customer $customer, string $id, int $cents, bool $automatic, array &$changes): bool
+    {
         $service = new FacebookCampaignService($customer);
         $accountId = preg_replace('/^act_/', '', $customer->facebook_ads_account_id);
         $before = $service->getCampaign($id);

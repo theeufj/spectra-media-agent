@@ -70,7 +70,28 @@ class CreativeRelease
             }
         }
 
+        // A release already approved on the former fingerprint can keep serving. A change
+        // to any of its legacy inputs or a new approval switches to the versioned evidence scope.
+        $previous = $strategy->creative_approval ?? [];
+        $legacy = ! isset($previous['mandate']) && ($previous['fingerprint'] ?? null) === $fingerprint;
+        $campaign = $strategy->campaign;
+        $mandate = [
+            'version' => 1, 'evidence' => hash('sha256', json_encode(app(\App\Services\Campaigns\AdvertisingEvidence::class)->context($campaign, $strategy), JSON_THROW_ON_ERROR)),
+            'brand_version' => $campaign->customer?->brandGuideline?->approved_version,
+            'brief' => [$strategy->ad_copy_strategy, $strategy->imagery_strategy, $strategy->video_strategy],
+            'offer' => $campaign->product_focus, 'audience' => $campaign->target_market,
+            'geography' => $campaign->geographic_targeting, 'destination' => $contents['destination'],
+            'bidding' => $strategy->bidding_strategy, 'goal' => $strategy->conversion_goals,
+            'approved_budget' => \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget), 'strategy_budget' => \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget),
+        ];
+        if (! $legacy) {
+            $fingerprint = hash('sha256', json_encode([$contents, $mandate], JSON_THROW_ON_ERROR));
+        }
+
         return [
+            'mandate' => $mandate,
+            'copy_digest' => hash('sha256', json_encode([$contents['copy'], $contents['search_offers']], JSON_THROW_ON_ERROR)),
+            'legacy' => $legacy,
             'fingerprint' => $fingerprint,
             'copy' => $copy,
             'images' => $images,
@@ -142,7 +163,7 @@ class CreativeRelease
         }
     }
 
-    public function approve(Strategy $strategy, ?string $postedFingerprint = null): void
+    public function approve(Strategy $strategy, ?string $postedFingerprint = null, ?array $reviewedPairs = null): void
     {
         $this->assertReady($strategy, $postedFingerprint);
         $selection = $this->selection($strategy);
@@ -150,8 +171,20 @@ class CreativeRelease
             throw ValidationException::withMessages(['creative' => 'Your selected ads changed. Review the current selection before launching.']);
         }
 
+        $metaPairs = [];
+        if (preg_match('/facebook|instagram|meta/i', $strategy->platform) && ($selection['images']->isNotEmpty() || $selection['videos']->isNotEmpty())) {
+            $pairs = \App\Services\FacebookAds\FacebookCreativeCopy::fromRows($selection['copy']);
+            foreach (['image' => 'images', 'video' => 'videos'] as $type => $group) {
+                foreach ($selection[$group] as $asset) {
+                    $key = $type.'_ad_'.$asset->id;
+                    $metaPairs[$key] = $reviewedPairs[$key] ?? $pairs[count($metaPairs) % count($pairs)];
+                }
+            }
+        }
         $strategy->update(['creative_approval' => [
             'fingerprint' => $selection['fingerprint'],
+            ...($selection['legacy'] ? [] : ['allow_variant_rotation' => true, 'mandate' => hash('sha256', json_encode($selection['mandate'], JSON_THROW_ON_ERROR))]),
+            'facebook_variants' => $metaPairs, 'copy_digest' => $selection['copy_digest'],
             'copy_ids' => $selection['copy']->pluck('id')->all(),
             'image_ids' => $selection['images']->pluck('id')->all(),
             'google_native_cta' => $selection['google_native_cta'],

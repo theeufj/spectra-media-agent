@@ -7,6 +7,23 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 /** Read-only configuration used for deployment checks and delayed creative verification. */
 class ReadCampaignConfiguration extends BaseGoogleAdsService
 {
+    public function findEmptyPausedLaunch(string $account, string $id): ?string
+    {
+        if (! \Illuminate\Support\Str::isUuid($id) || $account !== $this->customer?->cleanGoogleCustomerId()) {
+            return null;
+        }
+        $rows = $this->rows($account, "SELECT campaign.resource_name, campaign.status, campaign.advertising_channel_type FROM campaign WHERE campaign.name LIKE 'STS {$id} %'");
+        $campaign = $rows[0]['campaign'] ?? [];
+        $resource = $campaign['resourceName'] ?? '';
+        if (count($rows) !== 1 || ($campaign['status'] ?? '') !== 'PAUSED' || ! preg_match('#^customers/'.$account.'/campaigns/\d+$#D', $resource)) {
+            return null;
+        }
+        $group = ($campaign['advertisingChannelType'] ?? '') === 'PERFORMANCE_MAX' ? 'asset_group' : 'ad_group';
+        $children = $this->rows($account, "SELECT {$group}.id FROM {$group} WHERE campaign.resource_name = '{$resource}' LIMIT 1");
+
+        return $children === [] ? $resource : null;
+    }
+
     public function ads(string $customerId, string $campaign): array
     {
         if (! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#', $campaign)) {
@@ -37,6 +54,7 @@ class ReadCampaignConfiguration extends BaseGoogleAdsService
         return [
             'campaign' => $this->rows($customerId, "SELECT campaign.resource_name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.maximize_conversions.target_cpa_micros, campaign.asset_automation_settings, campaign_budget.amount_micros FROM campaign WHERE campaign.resource_name = '{$campaign}'")[0] ?? [],
             'groups' => $this->performanceMaxGroups($customerId, $campaign),
+            'assets' => $this->rows($customerId, "SELECT asset_group.resource_name, asset_group_asset.asset, asset_group_asset.field_type FROM asset_group_asset WHERE campaign.resource_name = '{$campaign}' AND asset_group_asset.status = 'ENABLED'"),
             'ctas' => $this->rows($customerId, "SELECT asset_group.resource_name, asset.call_to_action_asset.call_to_action FROM asset_group_asset WHERE campaign.resource_name = '{$campaign}' AND asset_group_asset.field_type = 'CALL_TO_ACTION_SELECTION' AND asset_group_asset.status = 'ENABLED'"),
         ];
     }

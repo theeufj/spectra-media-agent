@@ -29,6 +29,36 @@ class ConversionTrackingService extends BaseGoogleAdsService
         return false;
     }
 
+    /** Read the exact enabled action and the provider's account type before sending an event. */
+    public function outcomeDestination(string $customerId, string $resource): ?array
+    {
+        $customerId = $this->validatedCustomerId($customerId);
+        $this->validateResource($customerId, $resource, 'conversionActions');
+        $query = "SELECT conversion_action.resource_name, conversion_action.status, conversion_action.type, conversion_action.category, conversion_action.tag_snippets, metrics.conversion_last_received_request_date_time FROM conversion_action WHERE conversion_action.resource_name = '{$resource}' AND conversion_action.status = 'ENABLED'";
+        foreach ($this->readRows($customerId, $query) as $row) {
+            $action = $row->getConversionAction();
+            if ($action && $action->getResourceName() === $resource && $action->getStatus() === ConversionActionStatus::ENABLED) {
+                $sendTo = null;
+                foreach ($action->getTagSnippets() as $snippet) {
+                    if (preg_match('/["\']send_to["\']\s*:\s*["\'](AW-\d+\/[a-zA-Z0-9_-]+)["\']/', $snippet->getEventSnippet(), $match)) {
+                        $sendTo = $match[1];
+                        break;
+                    }
+                }
+                $zone = null;
+                foreach ($this->readRows($customerId, 'SELECT customer.time_zone FROM customer LIMIT 1') as $account) {
+                    $zone = $account->getCustomer()?->getTimeZone();
+                }
+
+                return ['time_zone' => $zone, 'resource' => $resource, 'last_tag_at' => $row->getMetrics()?->getConversionLastReceivedRequestDateTime(),
+                    'send_to' => $sendTo, 'category' => \Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory::name($action->getCategory()),
+                    'type' => \Google\Ads\GoogleAds\V26\Enums\ConversionActionTypeEnum\ConversionActionType::name($action->getType())];
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Fresh account activity, not proof that a particular conversion action works.
      * API failures propagate: unavailable evidence must never become zero activity.
@@ -84,6 +114,43 @@ class ConversionTrackingService extends BaseGoogleAdsService
         }
 
         return $activity;
+    }
+
+    /** Exact primary action for a budget comparison over completed days in one account currency. */
+    public function budgetActionTotals(string $account, string $campaign, string $action, string $goal, string $currency, string $from, string $to): ?array
+    {
+        $account = $this->validatedCustomerId($account);
+        $this->validateResource($account, $campaign, 'campaigns');
+        $this->validateResource($account, $action, 'conversionActions');
+        $category = ['purchase' => 'PURCHASE', 'signup' => 'SIGNUP', 'lead' => 'SUBMIT_LEAD_FORM'][$goal] ?? null;
+        if (! $category || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $from) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $to) || $from > $to) {
+            return null;
+        }
+        $eligible = false;
+        $query = "SELECT conversion_action.resource_name, conversion_action.value_settings.always_use_default_value FROM conversion_action WHERE conversion_action.resource_name = '{$action}' AND conversion_action.status = 'ENABLED' AND conversion_action.primary_for_goal = TRUE AND conversion_action.category = '{$category}'";
+        foreach ($this->readRows($account, $query) as $row) {
+            $actual = $row->getConversionAction();
+            $eligible = $actual?->getResourceName() === $action && ($goal !== 'purchase'
+                || ($actual->getValueSettings() && ! $actual->getValueSettings()->getAlwaysUseDefaultValue()));
+        }
+        if (! $eligible) {
+            return null;
+        }
+        $count = 0.0;
+        $value = 0.0;
+        $query = 'SELECT customer.id, customer.currency_code, campaign.resource_name, segments.conversion_action, metrics.conversions, metrics.conversions_value '
+            ."FROM campaign WHERE campaign.resource_name = '{$campaign}' AND segments.conversion_action = '{$action}' AND segments.date BETWEEN '{$from}' AND '{$to}'";
+        foreach ($this->readRows($account, $query) as $row) {
+            $metrics = $row->getMetrics();
+            if (! $metrics || (string) $row->getCustomer()?->getId() !== $account || $row->getCustomer()?->getCurrencyCode() !== $currency
+                || $row->getCampaign()?->getResourceName() !== $campaign || $row->getSegments()?->getConversionAction() !== $action) {
+                return null;
+            }
+            $count += $metrics->getConversions();
+            $value += $goal === 'purchase' ? $metrics->getConversionsValue() : 0;
+        }
+
+        return ['conversions' => $count, 'conversion_value' => $value];
     }
 
     /** Read valued purchase activity for one campaign and an unambiguous purchase action. */

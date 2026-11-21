@@ -49,6 +49,7 @@ class RegisteredUserController extends Controller
             // Carried across by InvitationController::accept(). Validated here
             // because it was read raw off the request and fed to a query: an
             // array payload is a 500, and nothing bounded its length.
+            'ad_measurement_consent' => ['nullable', 'boolean'],
             'invitation_token' => ['nullable', 'string', 'max:64'],
         ];
 
@@ -69,6 +70,7 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
             'demo_url' => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
             'tenant_key' => $tenant['key'] ?? null,
+            'ad_measurement_consent' => $request->has('ad_measurement_consent') ? $request->boolean('ad_measurement_consent') : null,
         ]);
 
         // A lead who registers stops being a lead. Without this both chains

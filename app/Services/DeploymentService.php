@@ -319,11 +319,11 @@ class DeploymentService
     {
         $normalized = strtolower(trim($platform));
 
-        if (str_contains($normalized, 'google')) {
+        if (str_contains($normalized, 'google') || in_array($normalized, ['pmax', 'performance_max', 'performance max'], true)) {
             return 'google';
         }
 
-        if (str_contains($normalized, 'facebook') || str_contains($normalized, 'meta')) {
+        if (str_contains($normalized, 'facebook') || str_contains($normalized, 'meta') || str_contains($normalized, 'instagram')) {
             return 'facebook';
         }
 

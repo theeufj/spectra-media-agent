@@ -2,34 +2,14 @@
 
 namespace App\Services\Agents;
 
-use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Notifications\CriticalAgentAlert;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\AdSetService;
-use App\Services\GeminiService;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Facebook's equivalent of Google's Quality Score improvement agent.
- *
- * Facebook Ad Relevance Diagnostics has three sub-scores:
- *   quality_ranking            — ad quality vs. competing ads targeting the same audience
- *   engagement_rate_ranking    — expected engagement rate vs. competing ads
- *   conversion_rate_ranking    — expected conversion rate vs. competing ads with the same optimisation goal
- *
- * Actions mirror QualityScoreImprovementAgent:
- *   quality_ranking BELOW_AVERAGE       → regenerate ad copy via Gemini
- *   engagement_rate_ranking BELOW_AVERAGE → flag creative for refresh (create CreativeBrief when model exists)
- *   conversion_rate_ranking BELOW_AVERAGE → dispatch CRO audit on landing page
- *   All three BELOW_AVERAGE + >2000 impressions → auto-pause ad
- */
 class FacebookAdRelevanceDiagnosticsAgent
 {
-    public function __construct(private GeminiService $gemini) {}
-
     public function analyze(Campaign $campaign): array
     {
         $customer = $campaign->customer;
@@ -48,7 +28,6 @@ class FacebookAdRelevanceDiagnosticsAgent
 
         $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
         $actions = [];
-        $paused = [];
         $flagged = [];
         $errors = [];
 
@@ -57,7 +36,7 @@ class FacebookAdRelevanceDiagnosticsAgent
 
             foreach ($ads as $ad) {
                 try {
-                    $this->diagnoseAd($campaign, $customer, $ad, $actions, $paused, $flagged, $errors);
+                    $this->diagnoseAd($campaign, $customer, $ad, $actions, $flagged);
                 } catch (\Throwable $e) {
                     report($e);
                     $errors[] = "Error processing ad '{$ad['name']}': ".$e->getMessage();
@@ -66,73 +45,40 @@ class FacebookAdRelevanceDiagnosticsAgent
             }
         }
 
-        if (! empty($actions) || ! empty($paused)) {
+        if ($actions || $flagged) {
             AgentActivity::record(
                 'facebook_relevance',
-                'relevance_diagnostics_applied',
-                'Applied '.(count($actions) + count($paused))." relevance action(s) for \"{$campaign->name}\"",
+                'relevance_diagnostics_reviewed',
+                'Reviewed '.count($flagged)." relevance issue(s) for \"{$campaign->name}\"",
                 $campaign->customer_id,
                 $campaign->id,
-                ['actions' => $actions, 'paused' => $paused, 'flagged' => $flagged, 'errors' => $errors]
+                ['actions' => $actions, 'paused' => [], 'flagged' => $flagged, 'errors' => $errors]
             );
-        }
-
-        if (! empty($paused)) {
-            $this->notifyPaused($campaign, $paused);
         }
 
         return [
             'actions' => $actions,
-            'paused' => $paused,
+            'paused' => [],
             'flagged' => $flagged,
             'errors' => $errors,
         ];
     }
 
-    private function diagnoseAd(Campaign $campaign, object $customer, array $ad, array &$actions, array &$paused, array &$flagged, array &$errors): void
+    private function diagnoseAd(Campaign $campaign, \App\Models\Customer $customer, array $ad, array &$actions, array &$flagged): void
     {
         $adId = $ad['id'] ?? null;
         $adName = $ad['name'] ?? $adId;
-        $impressions = (int) ($ad['impressions'] ?? 0);
         $qualityRank = $ad['quality_ranking'] ?? 'UNKNOWN';
         $engageRank = $ad['engagement_rate_ranking'] ?? 'UNKNOWN';
         $cvRank = $ad['conversion_rate_ranking'] ?? 'UNKNOWN';
 
-        $belowAvgCount = (int) ($qualityRank === 'BELOW_AVERAGE')
-                       + (int) ($engageRank === 'BELOW_AVERAGE')
-                       + (int) ($cvRank === 'BELOW_AVERAGE');
-
-        // Auto-pause: all three below average with sufficient data
-        if ($belowAvgCount >= 3 && $impressions >= 2000 && $adId) {
-            $adService = new AdService($customer);
-            $paused_ok = $adService->pauseAd($adId);
-
-            if ($paused_ok) {
-                $paused[] = ['ad_id' => $adId, 'ad_name' => $adName, 'impressions' => $impressions];
-            } else {
-                $errors[] = "Failed to pause ad '{$adName}'";
+        if ($qualityRank === 'BELOW_AVERAGE' && $adId) {
+            $staged = app(\App\Services\Creative\ApprovedVariantRotation::class)->proposeMeta($campaign, (string) $adId);
+            if ($staged) {
+                $actions[] = ['ad_id' => $adId, 'action' => 'replacement_staged'];
             }
-
-            return;
-        }
-
-        // Root cause 1: Low quality ranking → regenerate ad copy
-        if ($qualityRank === 'BELOW_AVERAGE') {
-            $strategy = $campaign->strategies()->latest()->first();
-            if ($strategy) {
-                $variations = $this->generateAdCopyVariations($campaign, $customer);
-                foreach ($variations as $variant) {
-                    AdCopy::create([
-                        'strategy_id' => $strategy->id,
-                        'platform' => 'Facebook',
-                        'headlines' => $variant['headlines'] ?? [],
-                        'descriptions' => $variant['descriptions'] ?? [],
-                    ]);
-                }
-                if ($variations) {
-                    $actions[] = ['ad' => $adName, 'action' => 'generated_copy', 'reason' => 'quality_ranking: BELOW_AVERAGE', 'variants' => count($variations)];
-                }
-            }
+            $flagged[] = ['ad' => $adName, 'ad_id' => $adId, 'issue' => 'below_average_quality',
+                'recommendation' => $staged ? 'An approved replacement is staged for Meta review.' : 'Review a new creative variant for this placement.'];
         }
 
         // Root cause 2: Low engagement ranking → flag for creative refresh
@@ -146,82 +92,17 @@ class FacebookAdRelevanceDiagnosticsAgent
 
         // Root cause 3: Low conversion ranking → trigger CRO audit
         if ($cvRank === 'BELOW_AVERAGE') {
-            $landingPage = $customer->website ?? null;
+            $landingPage = $campaign->landing_page_url ?: $customer->website;
             if ($landingPage) {
-                \App\Jobs\RunCroAudit::dispatch($landingPage, $customer->id)
+                $actions[] = ['ad_id' => $adId, 'action' => 'landing_page_audit_queued'];
+                \App\Jobs\RunCroAudit::dispatch($customer->id, $landingPage)
                     ->delay(now()->addMinutes(5));
             }
             $flagged[] = [
                 'ad' => $adName,
                 'issue' => 'conversion_rate_ranking: BELOW_AVERAGE',
-                'recommendation' => 'CRO audit dispatched for landing page. Check form length, page speed, and message match with ad.',
+                'recommendation' => $landingPage ? 'A landing-page audit was queued for this campaign.' : 'Confirm the landing page for this campaign.',
             ];
-        }
-    }
-
-    private function notifyPaused(Campaign $campaign, array $paused): void
-    {
-        $cacheKey = "notif:fb_relevance_paused:{$campaign->id}";
-        if (Cache::has($cacheKey)) {
-            return;
-        }
-
-        $adList = implode(', ', array_column($paused, 'ad_name'));
-        $count = count($paused);
-        $message = "{$count} Facebook ad(s) were paused in \"{$campaign->name}\" — all three Ad Relevance Diagnostics ranked BELOW_AVERAGE with 2000+ impressions: {$adList}.";
-
-        CriticalAgentAlert::deliver(
-            'facebook_relevance',
-            'Low-Relevance Facebook Ads Paused',
-            $message,
-            ['campaign_id' => $campaign->id, 'paused' => $paused],
-            CriticalAgentAlert::RECIPIENTS_ADMINS,
-            $campaign->customer
-        );
-
-        Cache::put($cacheKey, true, now()->addHours(24));
-    }
-
-    private function generateAdCopyVariations(Campaign $campaign, object $customer): array
-    {
-        $prompt = <<<PROMPT
-You are an expert Facebook Ads copywriter. Generate 2 ad copy variations to improve Ad Relevance Diagnostics scores.
-
-Business: {$customer->name}
-Campaign: {$campaign->name}
-Website: {$customer->website}
-
-Requirements:
-- Primary Text: max 125 characters, include a strong hook in the first sentence
-- Headline: max 40 characters, benefit-focused
-- Description: max 30 characters, supporting detail
-- Include a clear call to action
-- Write for Facebook/Instagram feed placement
-
-Return ONLY valid JSON:
-[
-  {
-    "headlines": ["Headline 1"],
-    "descriptions": ["Primary text that hooks immediately. CTA here.", "Description line"]
-  },
-  {
-    "headlines": ["Headline 2"],
-    "descriptions": ["Different angle primary text. CTA.", "Description line"]
-  }
-]
-PROMPT;
-
-        try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
-            $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
-            $data = json_decode(trim($text), true);
-
-            return (json_last_error() === JSON_ERROR_NONE && is_array($data)) ? $data : [];
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('FacebookAdRelevanceDiagnosticsAgent: Copy generation failed: '.$e->getMessage());
-
-            return [];
         }
     }
 }

@@ -70,7 +70,11 @@ class BudgetController extends Controller
             return redirect()->route('dashboard');
         }
         $allocator = new CrossChannelBudgetAllocator;
-        $result = $allocator->rebalance($customer, 'manual');
+        $validated = $request->validate(['approval_fingerprint' => ['required', 'string', 'size:64']]);
+        $result = $allocator->rebalance($customer, 'manual', $validated['approval_fingerprint']);
+        if ($result['status'] === 'needs_approval') {
+            return back()->withErrors(['split' => $result['reason']]);
+        }
 
         return back()->with('success', $result['status'] === 'rebalanced' ? 'Budget rebalanced successfully.' : 'No changes needed.');
     }

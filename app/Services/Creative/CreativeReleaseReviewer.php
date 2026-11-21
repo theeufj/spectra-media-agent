@@ -82,10 +82,23 @@ class CreativeReleaseReviewer
                         $imageHashes[$image->id] = hash('sha256', $bytes);
                         if ($image->google_display_banners !== null) {
                             try {
-                                $bannerHashes[$image->id] = app(GoogleDisplayBannerSet::class)->verifiedHashes($image);
+                                $verified = app(GoogleDisplayBannerSet::class)->verifiedHashes($image, $bytes);
+                                $bannerSheet = DisplayBannerReviewSheet::make($image, $verified);
                             } catch (\RuntimeException $e) {
                                 $issues[] = "Image #{$image->id}: ".$e->getMessage();
+
+                                continue;
                             }
+                            $set = $image->google_display_banners;
+                            $bannerPrompt = $context.' These are actual exported fixed-size display advertisements. Each numbered banner must have a readable, unclipped call to action, headline and recognizable brand at its native size. Check contrast, cropping and consistency with the approved offer. Reject each failing size individually. '
+                                .'Expected wording: '.json_encode([$set['brand'], $set['headline'], $set['cta']], JSON_THROW_ON_ERROR);
+                            foreach ($this->assess($strategy, $bannerPrompt, array_keys($bannerSheet['labels']), $bannerSheet['bytes'], 'image/jpeg') as $number => $verdict) {
+                                if (! $verdict['passed']) {
+                                    $issues[] = "Image #{$image->id}, ".$bannerSheet['labels'][$number].': '.$verdict['feedback'];
+                                }
+                            }
+                            $bannerHashes[$image->id] = $verified;
+                            unset($bannerSheet);
                         }
                         if ($strategy->campaign_type === 'performance_max') {
                             $field = PerformanceMaxLogo::imageField($image, $strategy, $bytes, duringReview: true);
@@ -136,7 +149,8 @@ class CreativeReleaseReviewer
                     continue;
                 }
                 $videoHashes[$video->id] = hash('sha256', $bytes);
-                $prompt = $context.' Inspect the attached final video, including the spoken claims, readable text and imagery, through the ending. '
+                $destination = (string) ($strategy->bidding_strategy['landing_page_url'] ?? $strategy->campaign->landing_page_url ?? $strategy->campaign->customer?->website);
+                $prompt = $context.' Verify the rendered audio pronounces the advertiser name intelligibly and consistently, the advertised action matches the destination, and any visible or spoken destination is accurate. Describe the brand heard and the end-card action or domain in the verdict. Expected advertiser and destination: '.json_encode([$evidence['business'] ?? null, $destination], JSON_THROW_ON_ERROR).'. Inspect the attached final video, including the spoken claims, readable text and imagery, through the ending. '
                     .'Reject cropped or clipped copy, mid-sentence endings, unsupported claims and unclear or mismatched narration. '
                     .'If the final audio or visuals cannot be assessed, reject the video. The draft script is context, not evidence of what the video says. '
                     .'Draft script: '.json_encode($video->script, JSON_THROW_ON_ERROR);
@@ -217,7 +231,10 @@ class CreativeReleaseReviewer
         $prompt .= ' Return JSON only in this format: {"assets":[{"id":123,"passed":true,"feedback":"concrete visual or audible observation"}]}. '
             .'Supply one verdict per asset ID: '.json_encode($ids, JSON_THROW_ON_ERROR).'.';
         $response = $this->gemini->generateContent(config('ai.models.pro'), $prompt,
-            config: ['temperature' => 0.2, 'maxOutputTokens' => 4096, 'responseMimeType' => 'application/json'],
+            config: ['temperature' => 0.2, 'maxOutputTokens' => 8192, 'responseMimeType' => 'application/json',
+                'responseSchema' => ['type' => 'OBJECT', 'properties' => ['assets' => ['type' => 'ARRAY', 'items' => [
+                    'type' => 'OBJECT', 'properties' => ['id' => ['type' => 'INTEGER'], 'passed' => ['type' => 'BOOLEAN'], 'feedback' => ['type' => 'STRING']],
+                    'required' => ['id', 'passed', 'feedback']]]], 'required' => ['assets']]],
             maxRetries: 1, imageBase64: base64_encode($bytes), imageMimeType: $mime,
             context: ['campaign_id' => $strategy->campaign_id, 'customer_id' => $strategy->campaign->customer_id, 'task_type' => 'creative_release_review',
                 'text_timeout_seconds' => $mime === 'video/mp4' ? 75 : 45]);

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Services\Agents\AudienceIntelligenceAgent;
 use Illuminate\Bus\Queueable;
@@ -34,8 +35,13 @@ class RunAudienceIntelligence implements ShouldQueue
         foreach ($customers as $customer) {
             try {
                 Log::info("RunAudienceIntelligence: Analyzing customer {$customer->id}");
-                $audienceAgent->analyzeAudiencePerformance($customer);
-                $audienceAgent->refreshFacebookAudiences($customer);
+                $analysis = $audienceAgent->analyzeAudiencePerformance($customer);
+                if (! empty($analysis['recommendations'])) {
+                    AgentActivity::record('audience', 'audience_recommendations', 'Audience recommendations are ready for review.',
+                        $customer->id, details: ['recommendations' => $analysis['recommendations']]);
+                }
+                $refresh = $audienceAgent->refreshFacebookAudiences($customer);
+                $errors += count($refresh['errors'] ?? []);
                 $processed++;
             } catch (\Throwable $e) {
                 report($e);

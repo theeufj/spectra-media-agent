@@ -128,6 +128,10 @@ class CreativeReleaseTest extends TestCase
         $gemini = $this->createMock(GeminiService::class);
         $gemini->expects($this->exactly(2))->method('generateContent')->willReturnCallback(
             function (string $model, string $prompt, array $config, ?string $instruction, bool $thinking, bool $search, ?int $retries, ?string $data, string $mime) use ($image, $video) {
+                if ($mime === 'video/mp4') {
+                    $this->assertStringContainsString('pronounces the advertiser name', $prompt);
+                    $this->assertStringContainsString('spoken destination is accurate', $prompt);
+                }
                 if ($mime === 'image/jpeg') {
                     $this->assertSame(IMAGETYPE_JPEG, getimagesizefromstring(base64_decode($data))[2]);
 

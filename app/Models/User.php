@@ -17,6 +17,7 @@ use Laravel\Cashier\Billable;
  * see casts() — and every caller treats it as one, so the annotation states
  * the truth rather than every usage site working around a wrong inference.
  *
+ * @property bool|null $ad_measurement_consent
  * @property array<string, mixed>|null $notification_preferences
  */
 class User extends Authenticatable implements MustVerifyEmail
@@ -57,6 +58,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'msclid',
         'demo_url',
         'tenant_key',
+        'ad_measurement_consent',
         // Both of these are written through update()/fill() and were silently
         // dropped for being absent here: banning a user (Admin\UserController)
         // left banned_at NULL, so CheckForBannedUser never fired, and the
@@ -86,6 +88,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'banned_at' => 'datetime',
+            'ad_measurement_consent' => 'boolean',
             'password' => 'hashed',
             'notification_preferences' => 'array',
             // Encrypted at rest: a database dump should not hand over the

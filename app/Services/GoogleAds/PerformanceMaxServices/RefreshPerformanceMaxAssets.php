@@ -260,7 +260,7 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
         return AssetFieldType::value($match[1]);
     }
 
-    private function reviewedText(Strategy $strategy, int $id): array
+    protected function reviewedText(Strategy $strategy, int $id): array
     {
         $adCopy = $strategy->deployableAdCopies()->whereKey($id)->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
         if (! $adCopy instanceof AdCopy || ! PerformanceMaxCopy::hasCompleteDescriptions($adCopy->descriptions ?? [])) {
@@ -276,7 +276,7 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
         return $text;
     }
 
-    private function reviewedMedia(Strategy $strategy, array $imageIds, array $videoIds): array
+    protected function reviewedMedia(Strategy $strategy, array $imageIds, array $videoIds): array
     {
         $images = ImageCollateral::forDeployment($strategy)->where('campaign_id', $strategy->campaign_id)->whereKey($imageIds)->get();
         $videos = VideoCollateral::forDeployment($strategy)->where('campaign_id', $strategy->campaign_id)->whereKey($videoIds)
@@ -298,7 +298,7 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
             }
 
             $name = 'PMax image '.substr(hash('sha256', $bytes), 0, 32);
-            $media[] = ['field' => $field, 'key' => $name, 'data' => ['name' => $name, 'image_asset' => new ImageAsset(['data' => $bytes])]];
+            $media[] = ['field' => $field, 'key' => $name, 'local_type' => 'image', 'local_id' => $image->id, 'data' => ['name' => $name, 'image_asset' => new ImageAsset(['data' => $bytes])]];
         }
         foreach ($videos as $video) {
             if (! preg_match('/^[A-Za-z0-9_-]{11}$/D', $video->youtube_video_id)) {
@@ -310,14 +310,14 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
                     throw new \RuntimeException("Video {$video->id} no longer matches the approved render.");
                 }
             }
-            $media[] = ['field' => AssetFieldType::YOUTUBE_VIDEO, 'key' => $video->youtube_video_id,
+            $media[] = ['field' => AssetFieldType::YOUTUBE_VIDEO, 'key' => $video->youtube_video_id, 'local_type' => 'video', 'local_id' => $video->id,
                 'data' => ['name' => "Reviewed video {$video->id}", 'youtube_video_asset' => new YoutubeVideoAsset(['youtube_video_id' => $video->youtube_video_id])]];
         }
 
         return $media;
     }
 
-    private function missingAssets(array $links, array $text, array $media): array
+    protected function missingAssets(array $links, array $text, array $media): array
     {
         $seen = [];
         foreach ($links as $link) {
@@ -344,7 +344,7 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
     {
         $this->ensureClient();
         $links = [];
-        $query = "SELECT asset_group_asset.resource_name, asset_group_asset.field_type, asset_group_asset.source, asset_group_asset.status, asset_group_asset.primary_status, asset.name, asset.text_asset.text, asset.youtube_video_asset.youtube_video_id FROM asset_group_asset WHERE campaign.resource_name = '{$campaign}' AND asset_group.resource_name = '{$group}' AND asset_group_asset.status != 'REMOVED'";
+        $query = "SELECT asset_group_asset.resource_name, asset_group_asset.asset, asset_group_asset.field_type, asset_group_asset.source, asset_group_asset.status, asset_group_asset.primary_status, asset.name, asset.text_asset.text, asset.youtube_video_asset.youtube_video_id FROM asset_group_asset WHERE campaign.resource_name = '{$campaign}' AND asset_group.resource_name = '{$group}' AND asset_group_asset.status != 'REMOVED'";
         foreach ($this->searchQuery($account, $query)->iterateAllElements() as $row) {
             $link = $row->getAssetGroupAsset();
             $asset = $row->getAsset();
@@ -355,7 +355,8 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
                 AssetFieldType::YOUTUBE_VIDEO => $asset?->getYoutubeVideoAsset()?->getYoutubeVideoId() ?? '',
                 default => $asset?->getName() ?? '',
             };
-            $links[] = ['field' => $field, 'resource' => $link->getResourceName(), 'key' => $key, 'advertiser' => $link->getSource() === AssetSource::ADVERTISER,
+            $links[] = ['field' => $field, 'resource' => $link->getResourceName(), 'asset' => $link->getAsset(), 'key' => $key, 'advertiser' => $link->getSource() === AssetSource::ADVERTISER,
+                'enabled' => $link->getStatus() === AssetLinkStatus::ENABLED,
                 'eligible' => $link->getStatus() === AssetLinkStatus::ENABLED && $link->getPrimaryStatus() === AssetLinkPrimaryStatus::ELIGIBLE,
                 'pending' => $link->getStatus() === AssetLinkStatus::ENABLED && $link->getPrimaryStatus() === AssetLinkPrimaryStatus::PENDING];
         }
@@ -363,7 +364,7 @@ class RefreshPerformanceMaxAssets extends BaseGoogleAdsService
         return $links;
     }
 
-    private function operations(string $account, string $group, array $create, array $remove): array
+    protected function operations(string $account, string $group, array $create, array $remove): array
     {
         $assets = [];
         $links = array_map(static fn (string $resource): MutateOperation => new MutateOperation([

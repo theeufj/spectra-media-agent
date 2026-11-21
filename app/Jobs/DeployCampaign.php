@@ -49,7 +49,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return (string) $this->campaign->id;
+        return $this->strategyId !== null && $this->launchId !== null ? $this->campaign->id.':'.$this->launchId : (string) $this->campaign->id;
     }
 
     public function __construct(
@@ -215,7 +215,12 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         }
 
         // Pre-launch compliance check — abort if any check fails
-        $complianceResult = app(PreLaunchComplianceAgent::class)->check($this->campaign);
+        $leg = ($strategies->first()?->launch_intent['version'] ?? 1) === 2 ? $strategies->first() : null;
+        $complianceCampaign = clone $this->campaign;
+        if ($leg) {
+            $complianceCampaign->setRelation('strategies', new \Illuminate\Database\Eloquent\Collection([$leg]));
+        }
+        $complianceResult = app(PreLaunchComplianceAgent::class)->check($complianceCampaign);
         if (! $complianceResult['passed']) {
             Log::warning("DeployCampaign: Campaign {$this->campaign->id} failed compliance check, aborting deployment.", [
                 'failures' => $complianceResult['failures'],
@@ -234,9 +239,15 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
         // Requiring prepaid ad credit there bills them twice for the same
         // clicks. Those customers are gated on their subscription and their
         // media allowance instead, both checked below.
-        $managedBillingEnabled = Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds();
+        $selfFunded = $leg ? ($leg->launch_intent['funding']['payer'] ?? null) === 'customer' : $customer->isSelfFundedAds();
+        $managedBillingEnabled = ! $selfFunded && ($leg !== null || Setting::get('managed_billing_enabled', true));
+        if ($leg && ! $launch->canPublish($leg)) {
+            $this->failPendingStrategies('Funding, tracking or the approved account changed; review this channel before publishing.');
 
-        if ($customer->isSelfFundedAds()) {
+            return;
+        }
+
+        if ($selfFunded) {
             /*
                The media allowance is a subscription concept, and a one-time
                setup customer has no subscription. They paid US$999 for exactly
@@ -342,6 +353,12 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                 'platform' => $strategy->platform,
             ]);
 
+            if (($strategy->launch_intent['version'] ?? 1) === 2) {
+                $strategy->refresh();
+                $strategy->forceFill(['launch_intent' => [...$strategy->launch_intent, 'platform_submission_started_at' => now()->toIso8601String(),
+                    'campaign_create_checkpoint' => $this->useAgents && config('app.use_execution_agents', true)
+                        && in_array(DeploymentService::normalizePlatform($strategy->platform), ['google', 'facebook'], true)]])->save();
+            }
             $result = DeploymentService::deploy(
                 $this->campaign,
                 $strategy,

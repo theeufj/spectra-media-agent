@@ -85,26 +85,30 @@ class DeactivateCustomerService
         $touched = false;
         $problems = [];
 
-        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
-            $result = (new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer))
-                ->pause($customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName());
-
-            $result['success'] ? $touched = true : $problems[] = 'Google: '.($result['error'] ?? 'unknown');
+        if ($campaign->customer_id !== $customer->id) {
+            return 'The workspace does not own this campaign.';
         }
-
-        // Per platform, not per campaign: one platform throwing must not skip
-        // the platforms after it, or the campaign carries on spending on those.
-        // \Throwable, since a wrong method name is an \Error.
-        if ($campaign->facebook_ads_campaign_id) {
+        $entries = \App\Services\Campaigns\CampaignResourceInventory::entries($campaign);
+        foreach ($entries as $entry) {
             try {
-                // updateCampaign with a status payload — Facebook's service has no
-                // updateStatus method, unlike Microsoft's and LinkedIn's.
-                (new \App\Services\FacebookAds\CampaignService($customer))
-                    ->updateCampaign($campaign->facebook_ads_campaign_id, ['status' => 'PAUSED']);
-                $touched = true;
+                if ($entry['platform'] === 'google') {
+                    $api = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
+                    $response = $api->pause($entry['account_id'], $entry['resource_name']);
+                    $confirmed = $response['success'] && $api->confirmedStatus($entry['account_id'], $entry['resource_name'], 'PAUSED');
+                } else {
+                    $api = new \App\Services\FacebookAds\CampaignService($customer);
+                    $api->updateCampaign($entry['resource_id'], ['status' => 'PAUSED']);
+                    $read = $api->getCampaign($entry['resource_id']);
+                    $confirmed = (string) ($read['id'] ?? '') === $entry['resource_id'] && ($read['status'] ?? '') === 'PAUSED';
+                }
+                if ($confirmed) {
+                    $touched = true;
+                } else {
+                    $problems[] = 'Pause unconfirmed on '.$entry['platform'].' campaign '.$entry['resource_id'];
+                }
             } catch (\Throwable $e) {
                 report($e);
-                $problems[] = 'Facebook: '.$e->getMessage();
+                $problems[] = 'Pause failed on '.$entry['platform'].' campaign '.$entry['resource_id'];
             }
         }
 

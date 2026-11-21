@@ -61,7 +61,7 @@ class DemandGenCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - DemandGen - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 ...GoogleCampaignSchedule::for($campaign),
                 'targetCpaMicros' => $strategy->cpa_target ?? null,

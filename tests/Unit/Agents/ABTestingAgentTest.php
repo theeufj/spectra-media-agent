@@ -135,14 +135,8 @@ class ABTestingAgentTest extends TestCase
         ]);
         $abTest->id = 1;
 
-        // Mock refreshVariantMetrics to return existing variants (skip Google Ads call)
-        $agentMock = Mockery::mock(ABTestingAgent::class, [$this->geminiMock])
-            ->makePartial()
-            ->shouldAllowMockingProtectedMethods();
-
-        $agentMock->shouldReceive('refreshVariantMetrics')
-            ->once()
-            ->andReturn($abTest->variants);
+        $this->bindOutcomeReadback($abTest, $strategy);
+        $agentMock = $this->agent;
 
         Log::spy();
 
@@ -198,13 +192,8 @@ class ABTestingAgentTest extends TestCase
         ]);
         $abTest->id = 2;
 
-        $agentMock = Mockery::mock(ABTestingAgent::class, [$this->geminiMock])
-            ->makePartial()
-            ->shouldAllowMockingProtectedMethods();
-
-        $agentMock->shouldReceive('refreshVariantMetrics')
-            ->once()
-            ->andReturn($abTest->variants);
+        $this->bindOutcomeReadback($abTest, $strategy);
+        $agentMock = $this->agent;
 
         $result = $agentMock->evaluateTest($abTest);
 
@@ -241,5 +230,23 @@ class ABTestingAgentTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertEquals('Test has not reached significance', $result['reason']);
+    }
+
+    private function bindOutcomeReadback(ABTest $test, Strategy $strategy): void
+    {
+        $test->setRelation('strategy', $strategy);
+        $test->results = ['binding' => 'signup-approval'];
+        $variants = $test->variants;
+        foreach ($variants as &$variant) {
+            $variant['treatment_id'] = 'provider-'.$variant['id'];
+        }
+        unset($variant);
+        $test->variants = $variants;
+        $evidence = $this->createMock(\App\Services\Conversions\CampaignOutcomeEvidence::class);
+        $evidence->method('binding')->with($strategy)->willReturn(['fingerprint' => 'signup-approval', 'destination' => 'signup', 'goal' => 'signup']);
+        $this->app->instance(\App\Services\Conversions\CampaignOutcomeEvidence::class, $evidence);
+        $readback = $this->createMock(\App\Services\Agents\CreativeTreatmentMetrics::class);
+        $readback->expects($this->once())->method('read')->willReturn(array_column($variants, null, 'treatment_id'));
+        $this->app->instance(\App\Services\Agents\CreativeTreatmentMetrics::class, $readback);
     }
 }

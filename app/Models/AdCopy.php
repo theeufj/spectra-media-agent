@@ -18,6 +18,7 @@ class AdCopy extends Model
     protected $fillable = [
         'strategy_id',
         'persona_id',
+        'creative_revision_id',
         'platform',
         'headlines',
         'long_headlines',

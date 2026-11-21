@@ -39,7 +39,7 @@ class VideoConceptSetTest extends TestCase
     use DatabaseTransactions;
 
     /** @return array{Campaign, Strategy} */
-    private function signedOffCampaign(int $videoAllowance): array
+    private function signedOffCampaign(int $videoAllowance, string $platform = 'Google Ads'): array
     {
         $user = User::factory()->create();
         $campaign = Campaign::factory()->create();
@@ -53,6 +53,7 @@ class VideoConceptSetTest extends TestCase
 
         $strategy = Strategy::factory()->create([
             'campaign_id' => $campaign->id,
+            'platform' => $platform,
             'imagery_strategy' => 'A boutique maker in a sunlit studio.',
             'video_strategy' => 'Show the maker building their store and taking a first order.',
             'signed_off_at' => now(),
@@ -133,6 +134,16 @@ class VideoConceptSetTest extends TestCase
         // Concept 0 landscape + portrait, concept 1 landscape + portrait. The
         // two shapes share a concept on purpose: one ad, two placements.
         $this->assertSame([0, 0, 1, 1], $this->dispatchedConcepts());
+    }
+
+    public function test_one_meta_only_slot_goes_to_the_meta_renderer(): void
+    {
+        Queue::fake();
+        [$campaign, $strategy] = $this->signedOffCampaign(1, 'Facebook Ads');
+        (new GenerateStrategyCollateral($campaign, $strategy, $campaign->customer->users()->first()->id))->handle();
+
+        Queue::assertPushed(GenerateVideo::class, 1);
+        Queue::assertPushed(GenerateVideo::class, fn ($job) => (new \ReflectionProperty($job, 'platform'))->getValue($job) === 'Facebook Ads');
     }
 
     public function test_the_plan_allowance_caps_the_set(): void

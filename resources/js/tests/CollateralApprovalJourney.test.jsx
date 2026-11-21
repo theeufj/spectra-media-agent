@@ -17,11 +17,11 @@ vi.mock('@/Components/RefineImageModal', () => ({ default: () => null }));
 vi.mock('@/Components/ExtendVideoModal', () => ({ default: () => null }));
 vi.mock('@/Components/SubscriptionRequiredModal', () => ({ default: () => null }));
 vi.mock('@/Components/DeploymentDisabledModal', () => ({ default: () => null }));
-vi.mock('@/Components/AdSpendSetupModal', () => ({ default: ({ show, strategy, onSuccess }) => show ? <section><p>Fund {strategy?.platform || 'all'}</p><button onClick={() => onSuccess({ credit_amount: 30, new_balance: 140 })}>Funding succeeded</button></section> : null }));
+vi.mock('@/Components/AdSpendSetupModal', () => ({ default: ({ show, strategy, onSuccess }) => show ? <section><p>Prepare payment for {strategy?.platform || 'all'}</p><button onClick={() => onSuccess({ deferred: true, credit_amount: 0, message: 'Your payment method is saved.' })}>Continue after saving card</button></section> : null }));
 vi.mock('@/Components/ConfirmationModal', () => ({ default: ({ show, title, message, onConfirm, confirmText }) => show ? <section role="dialog"><h2>{title}</h2><p>{message}</p><button onClick={onConfirm}>{confirmText}</button></section> : null }));
 vi.mock('@/Components/Modal', () => ({ default: () => null }));
 vi.mock('@/Components/CreativeSizesModal', () => ({ default: () => null }));
-const strategy = { id: 11, uuid: 'strategy-a', platform: 'Facebook Ads', signed_off_at: '2026-10-01', campaign_type: 'display', ad_copies_count: 1, image_collaterals_count: 0, video_collaterals_count: 0 };
+const strategy = { id: 11, daily_budget: 20, uuid: 'strategy-a', platform: 'Facebook Ads', signed_off_at: '2026-10-01', campaign_type: 'display', ad_copies_count: 1, image_collaterals_count: 0, video_collaterals_count: 0 };
 const copy = { id: 14, strategy_id: 11, platform: 'Facebook Ads', headlines: ['Repair your sailboat'], descriptions: ['Book a service'], should_deploy: false, updated_at: '2026-10-01' };
 const fingerprint = 'a'.repeat(64);
 const secondFingerprint = 'b'.repeat(64);
@@ -179,10 +179,12 @@ describe('one platform launch consent', () => {
     it('preserves its selected strategy through funding and explicit launch consent', () => {
         const { getByRole, getByText } = render(<Collateral {...props} managedBillingEnabled />);
         fireEvent.click(getByRole('button', { name: 'Launch Facebook ads' }));
-        expect(getByText('Fund Facebook Ads')).toBeInTheDocument();
+        expect(getByText('Prepare payment for Facebook Ads')).toBeInTheDocument();
         expect(router.post).not.toHaveBeenCalled();
-        fireEvent.click(getByRole('button', { name: 'Funding succeeded' }));
+        fireEvent.click(getByRole('button', { name: 'Continue after saving card' }));
         expect(getByRole('dialog')).toHaveTextContent('Launch Facebook ads?');
+        expect(getByRole('dialog')).toHaveTextContent('Your payment method is saved.');
+        expect(getByRole('dialog')).toHaveTextContent('charge only the shortfall');
         fireEvent.click(within(getByRole('dialog')).getByRole('button', { name: 'Launch Facebook ads' }));
         expect(router.post).toHaveBeenCalledWith('/__route__/deployment.deploy-platform', { campaign_id: 8, strategy_id: 11, creative_fingerprints: { 11: fingerprint } }, expect.any(Object));
     });

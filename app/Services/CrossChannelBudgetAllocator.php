@@ -9,6 +9,8 @@ use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\PlatformBudgetAllocation;
+use App\Services\Campaigns\BudgetAllocationEvidence;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class CrossChannelBudgetAllocator
@@ -32,14 +34,25 @@ class CrossChannelBudgetAllocator
         $snapshot = $this->getPerformanceSnapshot($customer);
         $recommendations = $this->generateRecommendations($allocation, $snapshot);
 
+        if (! empty($recommendations['suggested_splits'])) {
+            $recommendations['approval_fingerprint'] = $this->fingerprint($allocation, $recommendations['suggested_splits'], $snapshot['evidence']);
+        }
+
         // Enrich with Gemini AI reasoning if enough data
-        $aiReasoning = $this->getAiReasoning($snapshot, $allocation);
+        $aiReasoning = empty($recommendations['suggested_splits']) ? null : $this->getAiReasoning($snapshot, $allocation);
         if ($aiReasoning) {
             $recommendations['ai_reasoning'] = $aiReasoning;
             $allocation->update([
                 'ai_reasoning' => $aiReasoning,
                 'last_ai_analysis_at' => now(),
             ]);
+        }
+
+        // Unqualified historical aggregates are available for diagnostics, never as proposal evidence in the customer's budget editor.
+        if (empty($snapshot['evidence'])) {
+            foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
+                $snapshot[$platform] = ['campaigns' => $snapshot[$platform]['campaigns']];
+            }
         }
 
         return [
@@ -52,59 +65,53 @@ class CrossChannelBudgetAllocator
     /**
      * Execute a rebalance based on recommendations.
      */
-    public function rebalance(Customer $customer, string $trigger = 'manual'): array
+    public function rebalance(Customer $customer, string $trigger = 'manual', ?string $approvedFingerprint = null): array
     {
         $allocation = PlatformBudgetAllocation::where('customer_id', $customer->id)->first();
         if (! $allocation) {
-            return ['error' => 'No budget allocation configured'];
+            return ['status' => 'no_changes', 'reason' => 'No budget allocation configured'];
         }
-
         $snapshot = $this->getPerformanceSnapshot($customer);
-        $recommendations = $this->generateRecommendations($allocation, $snapshot);
 
-        if (empty($recommendations['suggested_splits'])) {
-            return ['status' => 'no_changes', 'reason' => 'Insufficient data for rebalance'];
-        }
+        return DB::transaction(function () use ($customer, $trigger, $approvedFingerprint, $snapshot) {
+            $allocation = PlatformBudgetAllocation::where('customer_id', $customer->id)->lockForUpdate()->firstOrFail();
+            $recommendations = $this->generateRecommendations($allocation, $snapshot);
+            $suggested = $recommendations['suggested_splits'] ?? [];
+            if (! $suggested) {
+                return ['status' => 'no_changes', 'reason' => 'No new split is available.'];
+            }
+            $fields = ['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'];
+            $before = $allocation->only($fields);
+            $suggested = array_replace(array_fill_keys($fields, 0), array_intersect_key($suggested, $before));
+            if (array_any($suggested, fn ($pct) => ! is_numeric($pct) || $pct < 0 || $pct > 100) || abs(array_sum($suggested) - 100) > 0.5) {
+                return ['status' => 'no_changes', 'reason' => 'The proposed percentages do not fit the budget envelope.'];
+            }
+            $fingerprint = $this->fingerprint($allocation, $suggested, $snapshot['evidence']);
+            $recommendations['approval_fingerprint'] = $fingerprint;
+            if ($trigger === 'manual' && (! $approvedFingerprint || ! hash_equals($fingerprint, $approvedFingerprint))) {
+                return ['status' => 'needs_approval', 'reason' => 'The proposed split changed. Review the current percentages before saving.'];
+            }
+            $approved = $trigger === 'manual';
+            if ($approved) {
+                $allocation->update($suggested + ['last_rebalanced_at' => now()]);
+            }
+            $log = CrossChannelRebalanceLog::create(['customer_id' => $customer->id, 'before_allocation' => $before,
+                'after_allocation' => $approved ? $suggested : $before, 'performance_snapshot' => $snapshot,
+                'recommendations' => $recommendations, 'trigger' => $trigger, 'auto_executed' => false,
+                'estimated_improvement_pct' => $recommendations['estimated_improvement_pct'] ?? null]);
 
-        $beforeAllocation = [
-            'google_ads_pct' => $allocation->google_ads_pct,
-            'facebook_ads_pct' => $allocation->facebook_ads_pct,
-            'microsoft_ads_pct' => $allocation->microsoft_ads_pct,
-            'linkedin_ads_pct' => $allocation->linkedin_ads_pct,
-        ];
+            return ['status' => $approved ? 'rebalanced' : 'proposed', 'log' => $log, 'before' => $before,
+                'after' => $approved ? $suggested : $before, 'suggested' => $suggested];
+        });
+    }
 
-        $suggested = $recommendations['suggested_splits'];
-        $allocation->update([
-            'google_ads_pct' => $suggested['google_ads_pct'],
-            'facebook_ads_pct' => $suggested['facebook_ads_pct'],
-            'microsoft_ads_pct' => $suggested['microsoft_ads_pct'],
-            'linkedin_ads_pct' => $suggested['linkedin_ads_pct'] ?? 0,
-            'last_rebalanced_at' => now(),
-        ]);
+    private function fingerprint(PlatformBudgetAllocation $allocation, array $suggested, string $evidence): string
+    {
+        $keys = ['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'];
+        $values = fn (array $splits) => array_map(fn ($key) => (int) round((float) ($splits[$key] ?? 0) * 100), $keys);
 
-        $log = CrossChannelRebalanceLog::create([
-            'customer_id' => $customer->id,
-            'before_allocation' => $beforeAllocation,
-            'after_allocation' => $suggested,
-            'performance_snapshot' => $snapshot,
-            'recommendations' => $recommendations,
-            'trigger' => $trigger,
-            'auto_executed' => $trigger !== 'manual',
-            'estimated_improvement_pct' => $recommendations['estimated_improvement_pct'] ?? null,
-        ]);
-
-        Log::info('CrossChannelBudgetAllocator: Rebalanced', [
-            'customer_id' => $customer->id,
-            'before' => $beforeAllocation,
-            'after' => $suggested,
-        ]);
-
-        return [
-            'status' => 'rebalanced',
-            'log' => $log,
-            'before' => $beforeAllocation,
-            'after' => $suggested,
-        ];
+        return hash('sha256', json_encode([$allocation->customer_id, (string) $allocation->total_monthly_budget,
+            $allocation->strategy, $evidence, $values($allocation->only($keys)), $values($suggested)], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -112,7 +119,7 @@ class CrossChannelBudgetAllocator
      */
     protected function getPerformanceSnapshot(Customer $customer): array
     {
-        $campaigns = $customer->campaigns;
+        $campaigns = $customer->campaigns()->with(['customer', 'strategies'])->orderBy('id')->get();
         $since = now()->subDays(30);
         $snapshot = [
             'google_ads' => ['spend' => 0, 'conversions' => 0, 'conversion_value' => 0, 'clicks' => 0, 'impressions' => 0, 'campaigns' => 0],
@@ -135,6 +142,21 @@ class CrossChannelBudgetAllocator
             'linkedin_ads' => ['column' => 'linkedin_campaign_id', 'model' => LinkedInAdsPerformanceData::class],
         ];
 
+        $resources = app(BudgetAllocationEvidence::class)->resources($customer, $campaigns, 30);
+        $snapshot['evidence'] = null;
+        if ($resources !== []) {
+            $basis = collect($resources)->map(fn ($resource) => collect($resource)->except('campaign')->all())->sortBy(fn ($r) => $r['platform'].'/'.$r['resource_id'])->values();
+            $snapshot['evidence'] = hash('sha256', $basis->toJson(JSON_THROW_ON_ERROR));
+            $snapshot['goal'] = $resources[0]['goal'];
+            foreach (collect($resources)->groupBy('platform') as $name => $group) {
+                $key = $name.'_ads';
+                $snapshot[$key]['campaigns'] = $group->count();
+                foreach (['spend', 'conversions', 'conversion_value', 'clicks', 'impressions'] as $metric) {
+                    $snapshot[$key][$metric] = $group->sum($metric);
+                }
+            }
+        }
+
         // One aggregate per platform over that platform's campaigns, rather
         // than one per campaign per platform. SUM() is additive, so the totals
         // are unchanged, but a forty-campaign account no longer issues 160
@@ -144,7 +166,7 @@ class CrossChannelBudgetAllocator
         // conversion_value: its copy of this block selected and accumulated
         // every column except that one, so facebook_ads.roas was structurally
         // 0 and the performance strategy scored the platform on CPA alone.
-        foreach ($platforms as $key => $platform) {
+        foreach ($resources === [] ? $platforms : [] as $key => $platform) {
             $campaignIds = $campaigns
                 ->filter(fn ($campaign) => (bool) $campaign->{$platform['column']})
                 ->pluck('id');
@@ -185,11 +207,25 @@ class CrossChannelBudgetAllocator
      */
     protected function generateRecommendations(PlatformBudgetAllocation $allocation, array $snapshot): array
     {
+        if (empty($snapshot['evidence']) || ($allocation->strategy === 'roas_target' && ($snapshot['goal'] ?? null) !== 'purchase')) {
+            return ['status' => 'insufficient_evidence', 'message' => 'A split needs comparable verified outcomes and account spend in the same billing currency on both channels.'];
+        }
+        foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
+            if ($allocation->{$platform.'_pct'} > 0 && $snapshot[$platform]['campaigns'] < 1) {
+                return ['status' => 'insufficient_evidence', 'message' => 'An allocated channel has no comparable reporting data.'];
+            }
+        }
         $activePlatforms = collect(['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'])
             ->filter(fn ($p) => $snapshot[$p]['campaigns'] > 0);
 
         if ($activePlatforms->count() < 2) {
             return ['status' => 'single_platform', 'message' => 'Need at least 2 active platforms for cross-channel optimization'];
+        }
+
+        if (in_array($allocation->strategy, ['performance', 'roas_target'], true) && $activePlatforms->contains(
+            fn ($p) => $snapshot[$p]['spend'] <= 0 || $snapshot[$p]['conversions'] < config('optimization.budget_intelligence.reallocation_min_conversions', 15)
+        )) {
+            return ['status' => 'insufficient_evidence', 'message' => 'More verified conversions are needed on each channel before comparing returns.'];
         }
 
         return match ($allocation->strategy) {

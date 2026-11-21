@@ -4,8 +4,6 @@ namespace App\Jobs;
 
 use App\Mail\DailyPerformanceReport;
 use App\Models\Customer;
-use App\Models\FacebookAdsPerformanceData;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\GeminiService;
 use App\Services\Reporting\YesterdayPerformanceSummary;
@@ -167,34 +165,25 @@ class SendDailyPerformanceReports implements ShouldQueue
      */
     private function buildWeeklyRollup(Customer $customer, GeminiService $gemini): array
     {
-        $campaignIds = $customer->campaigns()->pluck('id');
-        $thisWeekStart = now()->subDays(7)->toDateString();
-        $lastWeekStart = now()->subDays(14)->toDateString();
-        $lastWeekEnd = now()->subDays(7)->toDateString();
+        $summary = app(YesterdayPerformanceSummary::class);
+        $end = now($customer->timezone ?: config('app.timezone'))->startOfDay();
+        $week = $summary->platforms($customer, $end->copy()->subDays(7)->toDateString(), $end->copy()->subDay()->toDateString());
+        $lastWeek = $summary->platforms($customer, $end->copy()->subDays(14)->toDateString(), $end->copy()->subDays(8)->toDateString());
 
         $rollup = [];
-
-        $platforms = [
-            'google' => GoogleAdsPerformanceData::class,
-            'facebook' => FacebookAdsPerformanceData::class,
-        ];
-
-        foreach ($platforms as $name => $model) {
-            $current = $model::whereIn('campaign_id', $campaignIds)->where('date', '>=', $thisWeekStart)->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
-            $prior = $model::whereIn('campaign_id', $campaignIds)->whereBetween('date', [$lastWeekStart, $lastWeekEnd])->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
-
-            if (! $current || ($current->impressions ?? 0) == 0) {
+        foreach ($week as $name => $current) {
+            if (! $current['impressions'] || $current['conversions'] === null || $current['spend'] === null || ! $current['currency']) {
                 continue;
             }
-
-            $spend = round($current->cost ?? 0, 2);
-            $convs = round($current->conversions ?? 0, 1);
-            $cpa = $convs > 0 ? round($spend / $convs, 2) : null;
-            $priorCpa = ($prior && ($prior->conversions ?? 0) > 0) ? round(($prior->cost ?? 0) / $prior->conversions, 2) : null;
+            $unit = $current['currency'];
+            $spend = $current['spend'];
+            $convs = $current['conversions'];
+            $cpa = $current['cpa'];
+            $priorCpa = $lastWeek[$name]['currency'] === $unit ? $lastWeek[$name]['cpa'] : null;
             $trend = ($cpa && $priorCpa) ? ($cpa < $priorCpa ? '↓' : '↑') : '→';
 
             $rollup[$name] = [
-                'spend' => $spend,
+                'currency' => $unit, 'spend' => $spend,
                 'conversions' => $convs,
                 'cpa' => $cpa,
                 'prior_cpa' => $priorCpa,
@@ -204,11 +193,11 @@ class SendDailyPerformanceReports implements ShouldQueue
 
             // One Gemini sentence per platform
             try {
-                $priorCpaStr = $priorCpa ? "\${$priorCpa}" : 'N/A';
-                $cpaStr = $cpa ? "\${$cpa}" : 'N/A';
+                $priorCpaStr = $priorCpa ? "{$unit} {$priorCpa}" : 'N/A';
+                $cpaStr = $cpa ? "{$unit} {$cpa}" : 'N/A';
                 $response = $gemini->generateContent(
                     config('ai.models.default'),
-                    "Write one sentence (≤20 words) summarising this week's ".ucfirst($name)." Ads performance for {$customer->name}: spend \${$spend}, {$convs} conversions, CPA {$cpaStr} vs last week {$priorCpaStr}.",
+                    "Write one sentence (≤20 words) summarising this week's ".ucfirst($name)." Ads performance for {$customer->name}: spend {$unit} {$spend}, {$convs} conversions, CPA {$cpaStr} vs last week {$priorCpaStr}.",
                     ['temperature' => 0.3, 'maxOutputTokens' => 60]
                 );
                 $rollup[$name]['summary'] = trim($response['text'] ?? '');

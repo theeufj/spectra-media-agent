@@ -3,14 +3,12 @@ import { fetchJson } from '@/utils/http';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useToast } from '@/Components/Toast';
 import { Head, router } from '@inertiajs/react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import StripeCardElements from '@/Components/StripeCardElements';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { brandTint } from '@/Components/Marketing/Hero';
 import { money, dateTime } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 
-// Initialize Stripe
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_KEY);
 
 // Card styling
 const CARD_ELEMENT_OPTIONS = {
@@ -123,7 +121,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
 };
 
 // Main Component
-const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = null, topUp = null }) => {
+const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = null, topUp = null, reservations = [] }) => {
     const currency = useCurrency();
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [retrying, setRetrying] = useState(false);
@@ -254,6 +252,11 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
                         </div>
                     )}
 
+                    {reservations.length > 0 && <section className="rounded-lg border bg-white p-5"><h3 className="font-semibold">Reserved advertising credit</h3>
+                        <ul>{reservations.map(row => <li key={row.id}>
+                            {row.platform === 'facebook' ? 'Meta' : 'Google'} · {row.payer === 'customer' ? 'Paid directly to the platform' : `${formatCurrency(row.held_cents / 100)} reserved`}
+                            {row.status === 'collecting' && ' · Payment pending'}
+                        </li>)}</ul></section>}
                     {/* Credit Balance Card */}
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-6">
@@ -314,7 +317,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
                             </div>
 
                             {showPaymentForm ? (
-                                <Elements stripe={stripePromise}>
+                                <StripeCardElements>
                                     <PaymentForm
                                         isRetry={paymentFailed}
                                         buttonText={paymentFailed ? 'Update & Retry Payment' : 'Update Payment Method'}
@@ -326,7 +329,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed, paymentMethod = nu
                                     >
                                         Cancel
                                     </button>
-                                </Elements>
+                                </StripeCardElements>
                             ) : (
                                 <div className="flex items-center p-4 bg-gray-50 rounded-lg">
                                     <svg className="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

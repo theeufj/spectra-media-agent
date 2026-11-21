@@ -671,7 +671,7 @@ class GenerateImage implements ShouldQueue
                         'cloudfront_url' => $cloudFrontUrl,
                         'format' => $format,
                         'layout' => $layout,
-                        ...(($this->onlyFormat !== null || $metaOffer) && $this->strategy->hasDeploymentFootprint() ? ['should_deploy' => false] : []),
+                        ...(($this->creativeRunId !== null && ($this->strategy->creative_revision['id'] ?? null) === $this->creativeRunId || ($this->onlyFormat !== null || $metaOffer) && $this->strategy->hasDeploymentFootprint()) ? ['should_deploy' => false] : []),
                         'generation_metadata' => ($imageData['provenance'] ?? []) + [
                             'generation_id' => $this->strategy->generation_id,
                             'creative_run_id' => $this->creativeRunId,

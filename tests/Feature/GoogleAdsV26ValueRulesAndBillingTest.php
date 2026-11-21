@@ -63,7 +63,7 @@ class GoogleAdsV26ValueRulesAndBillingTest extends TestCase
     private function service(string $class): BaseGoogleAdsService
     {
         $service = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
-        (new \ReflectionProperty(BaseGoogleAdsService::class, 'customer'))->setValue($service, new Customer);
+        (new \ReflectionProperty(BaseGoogleAdsService::class, 'customer'))->setValue($service, new Customer(['currency_code' => 'AUD', 'google_ads_manager_customer_id' => '9999999999']));
         (new \ReflectionProperty(BaseGoogleAdsService::class, 'client'))->setValue($service, $this->client);
 
         return $service;
@@ -114,10 +114,11 @@ class GoogleAdsV26ValueRulesAndBillingTest extends TestCase
 
     private function paymentsAccount(): void
     {
+        config(['billing.agency_funding_sources.google' => ['1234567890123456']]);
         $this->response(new SearchGoogleAdsResponse);
         $this->response(new ListPaymentsAccountsResponse(['payments_accounts' => [new PaymentsAccount([
             'resource_name' => 'customers/9999999999/paymentsAccounts/1234567890123456',
-            'payments_account_id' => '1234567890123456', 'name' => 'Spectra MCC billing', 'currency_code' => 'AUD',
+            'paying_manager_customer' => 'customers/9999999999', 'payments_account_id' => '1234567890123456', 'name' => 'Spectra MCC billing', 'currency_code' => 'AUD',
         ])]]));
     }
 

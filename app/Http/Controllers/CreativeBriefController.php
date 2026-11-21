@@ -44,9 +44,9 @@ class CreativeBriefController extends Controller
     public function action(CreativeBrief $creativeBrief): RedirectResponse
     {
         $this->authorizeBrief($creativeBrief);
-        $creativeBrief->markActioned();
+        app(\App\Services\Creative\CreativeRevisions::class)->actionBrief($creativeBrief);
 
-        return back()->with('success', 'Brief marked as actioned.');
+        return back()->with('success', 'Your approved brief is queued for draft generation. Review the resulting ads in campaign collateral.');
     }
 
     public function dismiss(CreativeBrief $creativeBrief): RedirectResponse

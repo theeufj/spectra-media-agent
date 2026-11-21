@@ -104,33 +104,12 @@ class StrategyController extends Controller
             'video_strategy' => 'required|string',
         ]);
 
-        if ($strategy->imagery_strategy !== $validated['imagery_strategy']) {
-            // A manually rewritten image brief supersedes the generated concept set.
-            $validated['creative_concepts'] = null;
-            $validated['creative_candidates'] = null;
-            $validated['creative_review'] = null;
+        $changed = app(\App\Services\Creative\CreativeRevisions::class)->edit($strategy, $validated);
+        if ($changed !== []) {
+            app(CampaignMarketResearchWorkflow::class)->request($strategy->campaign);
         }
-
-        $strategy->update($validated);
-        app(CampaignMarketResearchWorkflow::class)->request($strategy->campaign);
-
-        // If this strategy was already signed off, its collateral is now stale.
-        // Delete existing ad copies and images and re-queue generation.
-        // Videos are left untouched (expensive, slow — user can regenerate manually).
-        if ($strategy->signed_off_at) {
-            $campaign = $strategy->campaign;
-
-            $strategy->adCopies()->delete();
-            $strategy->imageCollaterals()->each(function ($img) {
-                \App\Services\StorageHelper::delete($img->s3_path);
-                $img->delete();
-            });
-
-            foreach (app(\App\Services\Campaigns\CollateralPlan::class)->forStrategy($campaign, $strategy, includeVideo: false) as $job) {
-                dispatch($job);
-            }
-
-            return back()->with('success', 'Strategy updated — regenerating ad copy and images.');
+        if ($strategy->signed_off_at && $changed !== []) {
+            return back()->with('success', 'The changed creative is being prepared as a draft. Your previous ads remain available.');
         }
 
         return back()->with('success', 'Strategy updated!');

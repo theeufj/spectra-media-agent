@@ -12,14 +12,18 @@ use App\Models\Setting;
 use App\Models\Strategy;
 use App\Models\User;
 use App\Policies\CampaignPolicy;
+use App\Services\Billing\LaunchFunding;
+use App\Services\Billing\PlatformFunding;
 use App\Services\Campaigns\CampaignMarketResearch;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Conversions\CampaignOutcomeEvidence;
 use App\Services\Creative\CreativeRelease;
 use App\Services\DeploymentService;
 use App\Services\FacebookAds\BusinessManagerService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -51,12 +55,19 @@ class CampaignLaunchIntent
             if (! $customer || ! app(CampaignPolicy::class)->deploy($user, $current) || ! $this->canPrepare($current, $customer)) {
                 throw ValidationException::withMessages(['campaign_id' => 'This workspace cannot launch the campaign right now.']);
             }
-            if ($current->strategies()->whereIn('deployment_status', [self::WAITING, 'queued', 'deploying'])->exists()) {
+            $pending = [self::WAITING, 'queued', 'deploying'];
+            // Legacy paused handovers share one launch approval across the whole campaign.
+            if (($customer->service_type === 'setup_only' || $strategyId === null && $fingerprints === [])
+                && $current->strategies()->whereIn('deployment_status', $pending)->exists()) {
                 return null;
             }
             $strategies = $current->strategies()->when($strategyId !== null, fn ($query) => $query->whereKey($strategyId))
+                ->where(fn ($query) => $query->whereNull('deployment_status')->orWhereNotIn('deployment_status', $pending))
                 ->whereNotNull('signed_off_at')->orderBy('id')->lockForUpdate()->get()
                 ->reject(fn (Strategy $strategy) => $strategy->isDeployed());
+            if ($strategies->contains(fn (Strategy $strategy) => isset($strategy->launch_intent['campaign_create']))) {
+                throw ValidationException::withMessages(['campaign_id' => 'Site to Spend is checking an existing platform submission for this strategy.']);
+            }
             if ($strategies->isEmpty()) {
                 return null;
             }
@@ -80,6 +91,11 @@ class CampaignLaunchIntent
                 || $current->budget_confirmed_at === null || $strategies->contains(fn (Strategy $strategy) => CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget) <= 0)) {
                 throw ValidationException::withMessages(['daily_budget' => 'Approve the daily budget and platform allocations before launching ads.']);
             }
+            $committed = $current->strategies()->get()->filter(fn (Strategy $s) => $strategies->contains('id', $s->id) || $s->reservesDeploymentBudget())
+                ->sum(fn (Strategy $s) => CampaignSpendGuardrails::moneyToMicros($s->daily_budget));
+            if ($committed > $budget) {
+                throw ValidationException::withMessages(['daily_budget' => 'The selected channel allocations exceed your approved total budget.']);
+            }
             $platforms = $strategies->map(fn (Strategy $strategy) => DeploymentService::normalizePlatform($strategy->platform))->unique()->values()->all();
             $researchApproval = $needsResearch ? ($current->search_delivery_state['market_research'] ?? []) : [];
             $id = (string) Str::uuid();
@@ -97,9 +113,17 @@ class CampaignLaunchIntent
                 'google_manager' => $customer->google_ads_manager_customer_id ?: MccAccount::getActive()?->google_customer_id,
                 'staged_accounts' => null,
             ];
-            foreach ($strategies as $strategy) {
+            $independent = $customer->service_type !== 'setup_only';
+            $payer = $independent ? $customer->adSpendPayer(allowWithoutPaymentMethod: true) : null;
+            foreach ($strategies as $index => $strategy) {
+                $channel = $independent ? [
+                    'version' => 2, 'approval_id' => $id, 'id' => $index === $strategies->keys()->first() ? $id : (string) Str::uuid(),
+                    'platforms' => [DeploymentService::normalizePlatform($strategy->platform)],
+                    'daily_cents' => LaunchFunding::cents($strategy->daily_budget),
+                    'max_reserve_cents' => LaunchFunding::cents($strategy->daily_budget) * LaunchFunding::runwayDays($current), 'payer_user_id' => $payer?->id,
+                ] : [];
                 $this->creative->approve($strategy, $fingerprints[$strategy->id]);
-                $strategy->forceFill(['launch_intent' => [...$intent,
+                $strategy->forceFill(['launch_intent' => [...$intent, ...$channel,
                     'signed_off_at' => $strategy->signed_off_at?->toIso8601String(),
                     'creative_fingerprint' => $strategy->creative_approval['fingerprint'] ?? null,
                 ], 'deployment_status' => self::WAITING, 'deployment_error' => null])->save();
@@ -115,6 +139,28 @@ class CampaignLaunchIntent
     /** Queue exactly the still-current approved strategies once prerequisites are available. */
     public function resume(int $campaignId, string $id): bool
     {
+        $legs = Strategy::where('campaign_id', $campaignId)->where('launch_intent->version', 2)
+            ->where(fn ($q) => $q->where('launch_intent->approval_id', $id)->orWhere('launch_intent->id', $id))
+            ->where('deployment_status', self::WAITING)->get();
+        if ($legs->isNotEmpty()) {
+            $queued = false;
+            foreach ($legs as $leg) {
+                try {
+                    $lock = Cache::lock('launch-leg:'.$leg->launch_intent['id'], 180);
+                    if ($lock->get()) {
+                        try {
+                            $queued = $this->resumeLeg($leg) || $queued;
+                        } finally {
+                            $lock->release();
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+
+            return $queued;
+        }
         $waitingMeta = Strategy::query()->where('campaign_id', $campaignId)->where('launch_intent->id', $id)
             ->where('deployment_status', self::WAITING)->whereNotNull('launch_intent->meta_account_issue')
             ->with('campaign.customer')->first();
@@ -170,6 +216,75 @@ class CampaignLaunchIntent
         return true;
     }
 
+    private function resumeLeg(Strategy $leg): bool
+    {
+        $leg->refresh()->load('campaign.customer');
+        $campaign = $leg->campaign;
+        $customer = $campaign->customer;
+        $intent = $leg->launch_intent;
+        if ($leg->deployment_status !== self::WAITING) {
+            return false;
+        }
+        if (! $this->isCurrent($campaign, $customer, $leg)) {
+            $this->invalidate($campaign, new Collection([$leg]));
+
+            return false;
+        }
+        $platform = $intent['platforms'][0];
+        $proof = app(PlatformFunding::class)->assess($customer, $platform);
+        $evidence = $proof['ready'] ? app(CampaignOutcomeEvidence::class)->forStrategy($leg) : [];
+        $funding = [];
+        if (! $proof['ready']) {
+            $message = $proof['message'];
+            $code = $proof['code'];
+        } elseif (($evidence['requires_verification'] ?? true) && ! ($evidence['verified_for_launch'] ?? false)) {
+            $code = 'conversion_test_required';
+            $message = 'Verify a test conversion at the approved destination before funding this channel.';
+        } else {
+            $funding = app(LaunchFunding::class)->reserve($leg, $proof);
+            $message = $funding['ready'] ? null : $funding['message'];
+            $code = $funding['ready'] ? 'funded' : ($funding['code'] ?? 'funding_pending');
+        }
+        $queued = DB::transaction(function () use ($leg, $intent, $code, $message, $proof, $evidence, $funding) {
+            $campaign = Campaign::whereKey($leg->campaign_id)->lockForUpdate()->firstOrFail();
+            $current = Strategy::whereKey($leg->id)->lockForUpdate()->firstOrFail();
+            if ($current->deployment_status !== self::WAITING || ($current->launch_intent['id'] ?? null) !== $intent['id']) {
+                return false;
+            }
+            $customer = $campaign->customer;
+            if (! $this->isCurrent($campaign, $customer, $current)) {
+                $this->invalidate($campaign, new Collection([$current]));
+
+                return false;
+            }
+            $current->forceFill(['launch_intent' => [...$current->launch_intent, 'funding' => [
+                'code' => $code, 'payer' => $proof['payer'], 'account' => $proof['account'], 'currency' => $proof['currency'],
+                'target_cents' => LaunchFunding::runwayDays($campaign) * $intent['daily_cents'],
+                'owner' => $code === 'conversion_test_required' ? 'Website owner' : ($funding['owner'] ?? null),
+                'setup_url' => $funding['setup_url'] ?? ($code === 'conversion_test_required' ? ($evidence['setup_url'] ?? null) : null),
+            ]], 'deployment_error' => $message])->save();
+            if ($message !== null || ! app(LaunchFunding::class)->funded($current)) {
+                return false;
+            }
+            $this->bindAccounts($campaign, $customer, new Collection([$current]), 'queued');
+            if ($campaign->status === CampaignStatus::PendingAdminDeployment) {
+                $campaign->update(['status' => CampaignStatus::Draft, 'pending_admin_deployment_at' => null]);
+            }
+
+            return true;
+        });
+        if ($queued) {
+            try {
+                DeployCampaign::dispatch($campaign, strategyId: $leg->id, launchId: $intent['id']);
+            } catch (\Throwable $e) {
+                $this->strategies($campaign, $intent['id'], 'queued')->update(['deployment_status' => self::WAITING]);
+                throw $e;
+            }
+        }
+
+        return $queued;
+    }
+
     /** @return Collection<int, Strategy> */
     public function claim(Campaign $campaign, string $id): Collection
     {
@@ -185,7 +300,7 @@ class CampaignLaunchIntent
 
                 return new Collection;
             }
-            if (! $this->accountsReady($customer, $strategies->first()->launch_intent['platforms']) || ! CampaignSpendGuardrails::hasLaunchFunding($customer)) {
+            if (! $this->accountsReady($customer, $strategies->first()->launch_intent['platforms']) || ! $this->funded($customer, $strategies->first())) {
                 $this->strategies($current, $id, 'queued')->update(['deployment_status' => self::WAITING]);
 
                 return new Collection;
@@ -196,6 +311,13 @@ class CampaignLaunchIntent
 
             return $strategies;
         });
+    }
+
+    public function approvalCurrent(Strategy $strategy): bool
+    {
+        $current = $strategy->fresh(['campaign.customer']);
+
+        return $current && $current->campaign?->customer && $this->isCurrent($current->campaign, $current->campaign->customer, $current);
     }
 
     public function canPublish(Strategy $strategy): bool
@@ -209,7 +331,28 @@ class CampaignLaunchIntent
 
         return $campaign && $customer && $this->isCurrent($campaign, $customer, $current)
             && $this->accountsReady($customer, $current->launch_intent['platforms'])
-            && CampaignSpendGuardrails::hasLaunchFunding($customer);
+            && $this->funded($customer, $current) && $this->publicationReady($customer, $current);
+    }
+
+    private function funded(Customer $customer, Strategy $strategy): bool
+    {
+        return ($strategy->launch_intent['version'] ?? 1) === 2
+            ? app(LaunchFunding::class)->funded($strategy) : CampaignSpendGuardrails::hasLaunchFunding($customer);
+    }
+
+    private function publicationReady(Customer $customer, Strategy $strategy): bool
+    {
+        if (($strategy->launch_intent['version'] ?? 1) !== 2) {
+            return true;
+        }
+        $approved = $strategy->launch_intent['funding'] ?? [];
+        $proof = app(PlatformFunding::class)->assess($customer, $strategy->launch_intent['platforms'][0]);
+        $events = app(CampaignOutcomeEvidence::class)->forStrategy($strategy);
+
+        return $proof['ready'] && $proof['account'] === ($approved['account'] ?? null)
+            && $proof['payer'] === ($approved['payer'] ?? null)
+            && $proof['currency'] === ($approved['currency'] ?? null)
+            && (! ($events['requires_verification'] ?? true) || ($events['verified_for_launch'] ?? false));
     }
 
     public function attachProvisionedMetaAccount(Campaign $campaign, string $id): void
@@ -271,10 +414,17 @@ class CampaignLaunchIntent
         $currentAccounts = $customer->only(CampaignMarketResearch::APPROVAL_ACCOUNT_FIELDS);
         if ($intent['research_approval'] !== null) {
             app(CampaignMarketResearchWorkflow::class)->bindApprovedAccounts($campaign,
-                $intent['staged_accounts'] ?? $intent['accounts'], $intent['research_approval']);
+                $intent['research_accounts'] ?? $intent['staged_accounts'] ?? $intent['accounts'], $intent['research_approval']);
+            if (($intent['version'] ?? 1) === 2) {
+                $newApproval = $this->research->approvalFingerprint($campaign);
+                foreach ($campaign->strategies()->where('launch_intent->approval_id', $intent['approval_id'])->lockForUpdate()->get() as $sibling) {
+                    $sibling->forceFill(['launch_intent' => [...$sibling->launch_intent,
+                        'research_accounts' => $currentAccounts, 'research_approval' => $newApproval]])->save();
+                }
+            }
         }
         foreach ($strategies as $strategy) {
-            $intentForStrategy = $strategy->launch_intent;
+            $intentForStrategy = $strategy->refresh()->launch_intent;
             unset($intentForStrategy['meta_account_issue']);
             $strategy->forceFill(['launch_intent' => [...$intentForStrategy,
                 'staged_accounts' => $currentAccounts,
@@ -342,7 +492,7 @@ class CampaignLaunchIntent
         $accountPlatforms = ['google_ads_customer_id' => 'google', 'facebook_ads_account_id' => 'facebook',
             'microsoft_ads_customer_id' => 'microsoft', 'microsoft_ads_account_id' => 'microsoft', 'linkedin_ads_account_id' => 'linkedin'];
         foreach ($accountPlatforms as $field => $platform) {
-            if ($prior[$field] === $current[$field]) {
+            if ((($intent['version'] ?? 1) === 2 && ! in_array($platform, $intent['platforms'], true)) || $prior[$field] === $current[$field]) {
                 continue;
             }
             if ($prior[$field] || ! $current[$field] || ! in_array($platform, $intent['platforms'], true)
@@ -352,7 +502,7 @@ class CampaignLaunchIntent
         }
         $previousLink = $prior['google_ads_link_status'];
         $link = $current['google_ads_link_status'];
-        if ($previousLink !== $link) {
+        if ($previousLink !== $link && (($intent['version'] ?? 1) !== 2 || in_array('google', $intent['platforms'], true))) {
             $acceptedLink = $previousLink === 'pending' && $link === 'active' && $prior['google_ads_customer_id'];
             $provisionedAccount = $previousLink === null && $link === 'managed'
                 && ! $prior['google_ads_customer_id'] && $current['google_ads_customer_id'];
@@ -370,9 +520,13 @@ class CampaignLaunchIntent
         return true;
     }
 
+    /** @param Collection<int, Strategy> $strategies */
     private function invalidate(Campaign $campaign, Collection $strategies): void
     {
         foreach ($strategies as $strategy) {
+            if (($strategy->launch_intent['version'] ?? 1) === 2 && ! $strategy->hasDeploymentFootprint()) {
+                app(LaunchFunding::class)->release($strategy);
+            }
             $strategy->update(['deployment_status' => 'failed',
                 'deployment_error' => 'Launch approval changed while setup was pending. Review your current campaign, budget, and ads before trying again.']);
         }

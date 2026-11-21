@@ -68,7 +68,7 @@ class ShoppingCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - Shopping - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 ...GoogleCampaignSchedule::for($campaign),
                 'merchantId' => $merchantId,

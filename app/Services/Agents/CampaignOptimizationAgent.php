@@ -122,6 +122,10 @@ class CampaignOptimizationAgent
                         $recommendations['categorized']['auto_apply'] = [];
                     }
 
+                    $resource = $campaign->google_ads_campaign_id ?? $campaign->facebook_ads_campaign_id;
+                    if ($resource) {
+                        Cache::put("optimization:campaign:{$campaign->id}:{$resource}", $recommendations, now()->addHours($this->cacheTtlHours()));
+                    }
                     Cache::put("optimization:campaign:{$campaign->id}", $recommendations, now()->addHours($this->cacheTtlHours()));
 
                     return $recommendations;
@@ -138,6 +142,11 @@ class CampaignOptimizationAgent
 
             return null;
         }
+    }
+
+    public function cacheResourceAnalyses(int $campaignId, array $analysis): void
+    {
+        Cache::put("optimization:campaign:{$campaignId}", ['resources' => $analysis], now()->addHours($this->cacheTtlHours()));
     }
 
     public function getCachedRecommendations(int $campaignId): ?array

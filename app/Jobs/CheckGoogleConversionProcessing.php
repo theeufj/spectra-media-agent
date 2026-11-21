@@ -67,7 +67,7 @@ class CheckGoogleConversionProcessing implements ShouldBeUnique, ShouldQueue
 
         $result = $service->retrieveRequestStatus($this->requestId);
         $details = $result['success']
-            ? $this->diagnostics($result['destinations'] ?? [], $event->google_conversion_resource)
+            ? self::diagnostics($result['destinations'] ?? [], $event->google_conversion_resource)
             : ['status' => 'CHECK_FAILED', 'message' => $result['error'] ?? 'Google processing status is unavailable.'];
         // A stale/duplicate job cannot overwrite a newer receipt or terminal result.
         $updated = SpectraConversionEvent::whereKey($event->id)->where('google_request_id', $this->requestId)
@@ -131,7 +131,7 @@ class CheckGoogleConversionProcessing implements ShouldBeUnique, ShouldQueue
     }
 
     /** Only the exact account/action we uploaded to can prove processing. */
-    private function diagnostics(array $destinations, string $resource): array
+    public static function diagnostics(array $destinations, string $resource): array
     {
         if (! preg_match('~^customers/(\d+)/conversionActions/(\d+)$~', $resource, $parts) || count($destinations) !== 1) {
             return ['status' => 'CHECK_FAILED', 'message' => 'Processing destinations do not match the saved upload.'];
@@ -144,8 +144,8 @@ class CheckGoogleConversionProcessing implements ShouldBeUnique, ShouldQueue
             return ['status' => 'CHECK_FAILED', 'message' => 'Processing destination does not match the saved account and action.'];
         }
         $status = $result['requestStatus'] ?? 'REQUEST_STATUS_UNKNOWN';
-        $errors = $this->counts(data_get($result, 'errorInfo.errorCounts', []));
-        $warnings = $this->counts(data_get($result, 'warningInfo.warningCounts', []));
+        $errors = self::counts(data_get($result, 'errorInfo.errorCounts', []));
+        $warnings = self::counts(data_get($result, 'warningInfo.warningCounts', []));
         $records = data_get($result, 'eventsIngestionStatus.recordCount');
         // We send one real event per request. Record count includes failures;
         // a count alone cannot prove successful processing or ad attribution.
@@ -160,7 +160,7 @@ class CheckGoogleConversionProcessing implements ShouldBeUnique, ShouldQueue
             'errors' => $errors, 'warnings' => $warnings];
     }
 
-    private function counts(mixed $counts): array
+    private static function counts(mixed $counts): array
     {
         if (! is_array($counts)) {
             return [];

@@ -67,7 +67,7 @@ class OperationsJourneyTest extends TestCase
             'daily_budget' => 40, 'approved_daily_budget' => 40]);
         [$target, $fingerprint] = $this->reviewedGoogleStrategy($campaign);
         $other = Strategy::factory()->for($campaign)->create(['platform' => 'Facebook Ads', 'signed_off_at' => now(), 'daily_budget' => 20]);
-        AdSpendCredit::factory()->for($customer)->create();
+        AdSpendCredit::factory()->for($customer)->create(['currency' => $customer->billingCurrency()]);
         $payload = ['campaign_id' => $campaign->id, 'strategy_id' => $target->id, 'creative_fingerprints' => [$target->id => $fingerprint]];
         $this->post(route('deployment.deploy-platform'), $payload)->assertSessionHas('flash.type', 'error');
         Queue::assertNotPushed(DeployCampaign::class);
@@ -77,6 +77,13 @@ class OperationsJourneyTest extends TestCase
         $this->post(route('deployment.deploy-platform'), $payload)->assertSessionHas('flash.type', 'error');
         Queue::assertNotPushed(DeployCampaign::class);
         $this->approveProposal($campaign);
+        $funding = $this->createMock(\App\Services\Billing\PlatformFunding::class);
+        $funding->method('assess')->willReturn(['ready' => true, 'payer' => 'agency', 'currency' => $customer->billingCurrency(),
+            'account' => $customer->cleanGoogleCustomerId(), 'code' => 'ready', 'message' => 'Approved agency payer']);
+        $this->app->instance(\App\Services\Billing\PlatformFunding::class, $funding);
+        $evidence = $this->createMock(\App\Services\Conversions\CampaignOutcomeEvidence::class);
+        $evidence->method('forStrategy')->willReturn(['requires_verification' => true, 'verified_for_launch' => true]);
+        $this->app->instance(\App\Services\Conversions\CampaignOutcomeEvidence::class, $evidence);
         $this->post(route('deployment.deploy-platform'), $payload)->assertRedirect(route('campaigns.deployment-status', $campaign, absolute: false));
         $this->assertSame('queued', $target->fresh()->deployment_status);
         $this->assertNull($other->fresh()->deployment_status);

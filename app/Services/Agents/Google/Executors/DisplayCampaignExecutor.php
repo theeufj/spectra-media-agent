@@ -98,7 +98,7 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->fresh()?->daily_budget,
                 'status' => 'PAUSED',
                 'biddingStrategyType' => $desired['type'],

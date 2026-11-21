@@ -3,16 +3,39 @@
 @section('title', 'Daily Performance Report')
 
 @section('content')
+    @php
+        $money = static function (array $metrics, string $field = 'spend') {
+            if ($field === 'spend') {
+                $amounts = [];
+                foreach ($metrics['money_by_currency'] ?? [] as $currency => $values) {
+                    $amounts[] = $currency.' '.number_format((float) $values['spend'], 2);
+                }
+                if ($metrics['currency_unverified'] ?? false) $amounts[] = 'Currency unverified';
+                return $amounts ? implode(' + ', $amounts) : '—';
+            }
+            return isset($metrics[$field], $metrics['currency'])
+                ? $metrics['currency'].' '.number_format($metrics[$field], 2) : '—';
+        };
+        $count = static fn (array $metrics) => isset($metrics['conversions']) ? number_format($metrics['conversions'], 1)
+            : (($metrics['confirmed_conversions'] ?? 0) > 0 ? number_format($metrics['confirmed_conversions'], 1).' confirmed' : 'Unverified');
+    @endphp
     <h1 style="margin-top: 0;">Daily Performance Report</h1>
     <p>Hi {{ $user->name }},</p>
     <p>Here's your campaign performance summary for <strong>{{ $summary['date'] }}</strong>.</p>
+
+    @if(isset($summary['first_party']))
+        <p>Your website recorded {{ $summary['first_party']['signups'] }} signups, {{ $summary['first_party']['leads'] ?? 0 }} leads and {{ $summary['first_party']['purchases'] }} paid orders. Connected CRMs recorded {{ $summary['first_party']['crm_deals'] }} closed deals.</p>
+        @foreach($summary['first_party']['orders_by_currency'] ?? [] as $currency => $order)
+            <p>{{ $currency }} · {{ $order['orders'] }} orders · Gross {{ number_format($order['gross_cents'] / 100, 2) }} · {{ $order['refunds'] }} refunds totaling {{ number_format($order['refund_cents'] / 100, 2) }} · Net {{ number_format($order['net_cents'] / 100, 2) }}</p>
+        @endforeach
+    @endif
 
     {{-- Combined Totals --}}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin: 24px 0; border-collapse: collapse;">
         <tr>
             <td width="50%" style="padding: 16px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px 0 0 0;">
                 <div style="font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Spend</div>
-                <div style="font-size: 24px; font-weight: 700; color: #2d3748;">${{ number_format($summary['combined']['spend'], 2) }}</div>
+                <div style="font-size: 24px; font-weight: 700; color: #2d3748;">{{ $money($summary['combined']) }}</div>
                 @if(($summary['changes']['spend'] ?? 0) != 0)
                     <div style="font-size: 12px; color: {{ $summary['changes']['spend'] > 0 ? '#e53e3e' : '#38a169' }};">
                         {{ $summary['changes']['spend'] > 0 ? '+' : '' }}{{ $summary['changes']['spend'] }}% vs prior day
@@ -20,8 +43,8 @@
                 @endif
             </td>
             <td width="50%" style="padding: 16px; background: #f7fafc; border: 1px solid #e2e8f0; border-left: none; border-radius: 0 6px 0 0;">
-                <div style="font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Conversions</div>
-                <div style="font-size: 24px; font-weight: 700; color: #2d3748;">{{ number_format($summary['combined']['conversions'], 1) }}</div>
+                <div style="font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Platform-reported conversions</div>
+                <div style="font-size: 24px; font-weight: 700; color: #2d3748;">{{ $count($summary['combined']) }}</div>
                 @if(($summary['changes']['conversions'] ?? 0) != 0)
                     <div style="font-size: 12px; color: {{ $summary['changes']['conversions'] > 0 ? '#38a169' : '#e53e3e' }};">
                         {{ $summary['changes']['conversions'] > 0 ? '+' : '' }}{{ $summary['changes']['conversions'] }}% vs prior day
@@ -60,11 +83,11 @@
             </td>
             <td width="34%" style="padding: 12px; text-align: center; background: #fff5f5; border: 1px solid #fed7d7; border-left: none;">
                 <div style="font-size: 11px; color: #718096; text-transform: uppercase;">CPC</div>
-                <div style="font-size: 18px; font-weight: 700; color: #2d3748;">${{ number_format($summary['combined']['cpc'], 2) }}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #2d3748;">{{ $money($summary['combined'], 'cpc') }}</div>
             </td>
             <td width="33%" style="padding: 12px; text-align: center; background: #fff5f5; border: 1px solid #fed7d7; border-left: none; border-radius: 0 6px 6px 0;">
                 <div style="font-size: 11px; color: #718096; text-transform: uppercase;">CPA</div>
-                <div style="font-size: 18px; font-weight: 700; color: #2d3748;">${{ number_format($summary['combined']['cpa'], 2) }}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #2d3748;">{{ $money($summary['combined'], 'cpa') }}</div>
             </td>
         </tr>
     </table>
@@ -86,19 +109,19 @@
                 @if($summary['google']['impressions'] > 0)
                 <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">Google Ads</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">${{ number_format($summary['google']['spend'], 2) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $money($summary['google']) }}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['google']['clicks']) }}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['google']['impressions']) }}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['google']['conversions'], 1) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $count($summary['google']) }}</td>
                 </tr>
                 @endif
                 @if($summary['facebook']['impressions'] > 0)
                 <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">Facebook Ads</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">${{ number_format($summary['facebook']['spend'], 2) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $money($summary['facebook']) }}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['facebook']['clicks']) }}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['facebook']['impressions']) }}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($summary['facebook']['conversions'], 1) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $count($summary['facebook']) }}</td>
                 </tr>
                 @endif
             </tbody>
@@ -124,14 +147,9 @@
                         {{ $campaign['campaign_name'] }}
                         <span style="font-size: 11px; color: #a0aec0;">({{ $campaign['platform'] }})</span>
                     </td>
-                    @php
-                        $cSpend = ($campaign['google']['spend'] ?? 0) + ($campaign['facebook']['spend'] ?? 0);
-                        $cClicks = ($campaign['google']['clicks'] ?? 0) + ($campaign['facebook']['clicks'] ?? 0);
-                        $cConv = ($campaign['google']['conversions'] ?? 0) + ($campaign['facebook']['conversions'] ?? 0);
-                    @endphp
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">${{ number_format($cSpend, 2) }}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($cClicks) }}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($cConv, 1) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $money($campaign['combined'] ?? []) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ number_format($campaign['combined']['clicks'] ?? (($campaign['google']['clicks'] ?? 0) + ($campaign['facebook']['clicks'] ?? 0))) }}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right;">{{ $count($campaign['combined'] ?? []) }}</td>
                 </tr>
                 @endforeach
             </tbody>

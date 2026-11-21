@@ -122,6 +122,9 @@ Route::middleware(['auth'])->group(function () {
     // POST /subscription/checkout
     Route::post('/subscription/checkout', [App\Http\Controllers\SubscriptionController::class, 'checkout'])->name('subscription.checkout');
 
+    Route::get('/subscription/checkout/{attempt}/cancel', [App\Http\Controllers\SubscriptionController::class, 'cancelCheckout'])
+        ->whereUuid('attempt')->middleware('signed')->name('subscription.checkout.cancel');
+
     // Route to redirect the user to the Stripe Billing Portal.
     // GET /subscription/portal
     Route::get('/subscription/portal', [App\Http\Controllers\SubscriptionController::class, 'portal'])->name('subscription.portal');
@@ -248,6 +251,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // GET /campaigns/{campaign}/deployment-status
     Route::get('/campaigns/{campaign}/deployment-status', [App\Http\Controllers\CampaignController::class, 'deploymentStatus'])->name('campaigns.deployment-status');
 
+    Route::get('/campaigns/{campaign}/conversion-evidence/{strategy}', [App\Http\Controllers\CampaignOutcomeController::class, 'show'])->whereUuid('strategy')->name('campaigns.outcome.show');
+    Route::post('/campaigns/{campaign}/conversion-evidence/{strategy}/test', [App\Http\Controllers\CampaignOutcomeController::class, 'begin'])->whereUuid('strategy')->middleware('throttle:6,1')->name('campaigns.outcome.test');
+    Route::post('/campaigns/{campaign}/conversion-evidence/{strategy}/setup', [App\Http\Controllers\CampaignOutcomeController::class, 'setup'])->whereUuid('strategy')->middleware('throttle:10,1')->name('campaigns.outcome.setup');
     Route::get('/campaigns/{campaign}/conversion-goal', [App\Http\Controllers\SetupConversionGoalController::class, 'edit'])->name('campaigns.conversion-goal.edit');
     Route::post('/campaigns/{campaign}/conversion-goal', [App\Http\Controllers\SetupConversionGoalController::class, 'update'])
         ->middleware('throttle:5,1')->name('campaigns.conversion-goal.update');
@@ -347,6 +353,7 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
     Route::post('/billing/ad-spend/add-credit', [App\Http\Controllers\AdSpendBillingController::class, 'addCredit'])->name('billing.ad-spend.add-credit');
     Route::post('/billing/ad-spend/retry-payment', [App\Http\Controllers\AdSpendBillingController::class, 'retryPayment'])->name('billing.ad-spend.retry');
     Route::post('/billing/ad-spend/update-payment-method', [App\Http\Controllers\AdSpendBillingController::class, 'updatePaymentMethod'])->name('billing.ad-spend.update-payment-method');
+    Route::get('/billing/ad-spend/reservations/{reservation}/confirm', [App\Http\Controllers\AdSpendBillingController::class, 'confirmReservation'])->whereNumber('reservation')->name('billing.ad-spend.confirm-reservation');
     Route::post('/billing/ad-spend/setup-for-deployment', [App\Http\Controllers\AdSpendBillingController::class, 'setupForDeployment'])->name('billing.ad-spend.setup-for-deployment');
 });
 

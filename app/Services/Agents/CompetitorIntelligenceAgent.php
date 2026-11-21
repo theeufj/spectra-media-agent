@@ -84,9 +84,25 @@ class CompetitorIntelligenceAgent
             }
         }
 
+        foreach (['discovery', 'analysis', 'auction_insights'] as $stage) {
+            if (! empty($results[$stage]['error'])) {
+                $results['errors'][] = $stage.': '.$results[$stage]['error'];
+            }
+            foreach ($results[$stage]['errors'] ?? [] as $issue) {
+                $message = is_array($issue) ? ($issue['error'] ?? 'Source unavailable.') : $issue;
+                $results['errors'][] = $stage.': '.$message;
+            }
+        }
+        if ($results['errors'] !== []) {
+            return $results; // Keep the last successful strategy while source coverage is incomplete.
+        }
+
         // Step 4: Generate counter-strategy
         try {
             $results['counter_strategy'] = $this->generateCounterStrategy($customer);
+            if (($results['counter_strategy']['status'] ?? null) === 'error') {
+                $results['errors'][] = $results['counter_strategy']['message'] ?? 'Counter-strategy generation failed.';
+            }
         } catch (\Throwable $e) {
             report($e);
             $results['errors'][] = 'Counter-strategy failed: '.$e->getMessage();

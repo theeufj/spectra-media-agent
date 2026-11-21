@@ -90,7 +90,7 @@ class ConversionsApiService
      * @param  string  $pixelId  The Facebook Pixel ID
      * @param  array  $events  Array of event data
      */
-    public function sendEvents(string $pixelId, array $events): ?array
+    public function sendEvents(string $pixelId, array $events, ?string $testCode = null): ?array
     {
         if (! $this->accessToken) {
             Log::error('CAPI: No access token available');
@@ -106,6 +106,7 @@ class ConversionsApiService
                 [
                     'access_token' => $this->accessToken,
                     'data' => json_encode($formattedEvents),
+                    ...($testCode ? ['test_event_code' => $testCode] : []),
                 ]
             );
 
@@ -114,7 +115,7 @@ class ConversionsApiService
 
                 Log::info('CAPI: Events sent successfully', [
                     'pixel_id' => $pixelId,
-                    'events_received' => $result['events_received'] ?? count($events),
+                    'events_received' => $result['events_received'] ?? null,
                     'customer_id' => $this->customer->id,
                 ]);
 

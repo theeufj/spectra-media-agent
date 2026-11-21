@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\Recommendation;
+use App\Services\Campaigns\CampaignResourceInventory;
 use App\Services\CircuitBreaker\CircuitBreakerService;
 use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\RecommendationGenerationService;
@@ -33,24 +34,34 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
     protected Campaign $campaign;
 
-    public function __construct(Campaign $campaign)
+    protected ?string $resourceId = null;
+
+    public function __construct(Campaign $campaign, ?string $resourceId = null)
     {
         $this->campaign = $campaign;
+        $this->resourceId = $resourceId;
     }
 
     public function handle(): void
     {
-        if (empty($this->campaign->google_ads_campaign_id)) {
-            Log::warning("Campaign {$this->campaign->id} does not have a Google Ads Campaign ID. Skipping performance fetch.");
+        $entries = collect(CampaignResourceInventory::entries($this->campaign))->where('platform', 'google');
+        if ($this->resourceId === null && $entries->count() > 1) {
+            foreach ($entries as $entry) {
+                static::dispatch($this->campaign, $entry['resource_id']);
+            }
 
             return;
         }
-
-        $lock = Cache::lock('fetch-performance-data-'.$this->campaign->google_ads_campaign_id, 600);
+        $entry = $this->resourceId === null ? $entries->first() : $entries->firstWhere('resource_id', $this->resourceId);
+        if (! $entry) {
+            return;
+        }
+        $strategy = $this->campaign->strategies->firstWhere('id', $entry['strategy_id']);
+        $lock = Cache::lock('fetch-google-performance-'.$entry['account_id'].'-'.$entry['resource_id'], 600);
         $circuitBreaker = new CircuitBreakerService('GoogleAdsAPI');
         $customer = $this->campaign->customer;
 
-        if ($lock->get() && $circuitBreaker->isAvailable()) {
+        if ($circuitBreaker->isAvailable() && $lock->get()) {
             try {
                 Log::info("Starting FetchGoogleAdsPerformanceData job for campaign ID: {$this->campaign->id}");
 
@@ -59,13 +70,13 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
                 // Backfill 30 days on first run; 7 days on subsequent runs.
                 // The updateOrCreate below prevents duplicates on overlap.
-                $hasData = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $this->campaign->id)->exists();
+                $hasData = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $this->campaign->id)->where('google_campaign_id', $entry['resource_id'])->exists();
                 $daysBack = $hasData ? 7 : 30;
 
-                $resourceName = $this->campaign->google_ads_campaign_id;
+                $resourceName = $entry['resource_name'];
                 $dateFrom = now()->subDays($daysBack)->format('Y-m-d');
                 $dateTo = now()->format('Y-m-d');
-                $query = 'SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, '
+                $query = 'SELECT customer.id, customer.currency_code, campaign.id, campaign.name, metrics.impressions, metrics.clicks, '
                        .'metrics.cost_micros, metrics.conversions, metrics.conversions_value, '
                        .'metrics.search_impression_share, metrics.search_top_impression_share, '
                        .'metrics.view_through_conversions, metrics.all_conversions, metrics.interaction_rate, '
@@ -74,19 +85,25 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                        ."AND segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}'";
 
                 $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
-                    'customer_id' => $customer->google_ads_customer_id,
+                    'customer_id' => $entry['account_id'],
                     'query' => $query,
                 ]));
                 $circuitBreaker->recordSuccess();
 
                 $performanceData = [];
                 foreach ($response->getIterator() as $googleAdsRow) {
+                    $remoteCustomer = $googleAdsRow->getCustomer();
+                    $currency = $remoteCustomer?->getCurrencyCode();
+                    if ((string) $remoteCustomer?->getId() !== $entry['account_id'] || (string) $googleAdsRow->getCampaign()?->getId() !== $entry['resource_id']
+                        || ! preg_match('/^[A-Z]{3}$/D', (string) $currency)) {
+                        throw new \RuntimeException('Daily Google delivery did not identify the requested account, campaign and currency.');
+                    }
                     $metrics = $googleAdsRow->getMetrics();
                     $segments = $googleAdsRow->getSegments();
 
                     $impressions = $metrics->getImpressions();
                     $clicks = $metrics->getClicks();
-                    $cost = $metrics->getCostMicros() / 1000000;
+                    $cost = bcdiv((string) $metrics->getCostMicros(), '1000000', 6);
                     $conversions = $metrics->getConversions();
                     $conversionValue = $metrics->getConversionsValue();
                     $searchImpressionShare = $metrics->getSearchImpressionShare();
@@ -98,6 +115,9 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     $data = [
                         'campaign_id' => $this->campaign->id,
                         'date' => $segments->getDate(),
+                        'google_campaign_id' => $entry['resource_id'],
+                        'google_account_id' => $entry['account_id'], 'currency' => $currency,
+                        'strategy_id' => $entry['strategy_id'],
                         'impressions' => $impressions,
                         'clicks' => $clicks,
                         'cost' => $cost,
@@ -114,7 +134,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     ];
 
                     GoogleAdsPerformanceData::updateOrCreate(
-                        ['campaign_id' => $this->campaign->id, 'date' => $segments->getDate()],
+                        ['campaign_id' => $this->campaign->id, 'google_campaign_id' => $entry['resource_id'], 'date' => $segments->getDate()],
                         $data
                     );
                     $performanceData[] = $data;
@@ -122,11 +142,10 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
                 Log::info("Successfully fetched and stored Google Ads performance data for campaign ID: {$this->campaign->id}");
 
-                $strategy = $this->campaign->strategies()->latest()->first();
                 if ($strategy) {
                     $recommendationService = new RecommendationGenerationService;
                     $campaignConfig = [
-                        'campaignId' => $this->campaign->google_ads_campaign_id,
+                        'campaignId' => $entry['resource_name'],
                         'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
                     ];
                     $recommendations = ($recommendationService)($performanceData, $campaignConfig);
@@ -135,7 +154,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                         Recommendation::create([
                             'campaign_id' => $this->campaign->id,
                             'type' => $rec['type'] ?? 'UNKNOWN',
-                            'target_entity' => $this->recommendationTarget($rec),
+                            'target_entity' => array_merge($this->recommendationTarget($rec), ['external_campaign_id' => $entry['resource_id'], 'strategy_id' => $entry['strategy_id'], 'account_id' => $entry['account_id']]),
                             'parameters' => $this->recommendationParameters($rec),
                             'rationale' => $rec['rationale'] ?? '',
                             'status' => 'pending',

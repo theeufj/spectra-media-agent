@@ -51,6 +51,9 @@ class OwnSitePurchaseTracking
             && preg_match('/\A[A-Za-z0-9._~+\/=\-]{1,255}\z/D', reset($identifiers)) === 1;
         $destination = $serverRoute ? RecordSiteGoogleConversion::setupPurchaseDestination() : null;
         $event = SpectraConversionEvent::firstOrCreate(['deduplication_key' => 'paid_setup:'.$session['id']], [
+            'verified_source' => ['kind' => 'stripe_checkout', 'id' => $session['id'], 'transaction' => $session['id'],
+                'user_id' => $user->id, 'consent' => $user->ad_measurement_consent === true, 'livemode' => ($session['livemode'] ?? null) === true,
+                'paid_cents' => $amount, 'currency' => strtoupper($session['currency']), 'paid_at' => $completedAt],
             'event' => 'paid_setup', 'user_id' => $user->id, 'mode' => $serverRoute ? 'server_google' : 'verified_purchase',
             'value' => intdiv($amount, 100).'.'.str_pad((string) ($amount % 100), 2, '0', STR_PAD_LEFT),
             'currency' => 'USD', 'occurred_at' => CarbonImmutable::createFromTimestampUTC($completedAt),
@@ -64,6 +67,10 @@ class OwnSitePurchaseTracking
         // so queued or failed server deliveries cannot fall back to that tag.
         if ($event->mode === 'server_google' && $event->ad_identifiers && ! $event->uploaded_to_google) {
             RecordSiteGoogleConversion::dispatch($user, 'paid_setup', $event->occurred_at, $event->id)->afterCommit();
+        }
+
+        if ($user->tenant_key === 'sitetospend' && $user->fbclid && $user->ad_measurement_consent === true && ($event->meta_delivery['status'] ?? null) !== 'accepted') {
+            \App\Jobs\RecordSiteFacebookConversion::dispatch($user, $event->event, receiptId: $event->id)->afterCommit();
         }
 
         return $event;

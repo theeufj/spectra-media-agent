@@ -132,7 +132,7 @@ class BusinessManagerService
     }
 
     /** @return array{code: string, message: string}|null */
-    public function launchAccountIssue(string $adAccountId): ?array
+    public function launchAccountIssue(string $adAccountId, ?array &$payerEvidence = null): ?array
     {
         $accountId = preg_replace('/^act_/', '', $adAccountId);
         $unverified = ['code' => 'facebook_account_unverified',
@@ -144,7 +144,7 @@ class BusinessManagerService
         try {
             $response = Http::withToken($this->systemUserToken)->timeout(8)
                 ->get("{$this->graphApiUrl}/{$this->apiVersion}/act_{$accountId}", [
-                    'fields' => 'id,business,account_status,user_tasks,funding_source',
+                    'fields' => 'id,business,account_status,user_tasks,funding_source,currency',
                 ]);
             if (! $response->successful() || $response->json('id') !== 'act_'.$accountId) {
                 return $unverified;
@@ -166,6 +166,8 @@ class BusinessManagerService
             if (blank($response->json('funding_source')) || (string) $response->json('funding_source') === '0') {
                 return ['code' => 'facebook_account_funding_missing', 'message' => 'Add a funding source to the Meta ad account in Billing and payments before ads can run.'];
             }
+
+            $payerEvidence = ['currency' => (string) $response->json('currency'), 'source' => (string) $response->json('funding_source')];
 
             return null;
         } catch (\Throwable $e) {

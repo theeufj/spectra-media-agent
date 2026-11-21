@@ -13,6 +13,24 @@ class CampaignService extends BaseFacebookAdsService
         parent::__construct($customer);
     }
 
+    public function findEmptyPausedLaunch(string $account, string $id): ?string
+    {
+        if (! \Illuminate\Support\Str::isUuid($id) || ! ctype_digit($account)
+            || $account !== preg_replace('/^act_/', '', (string) $this->customer->facebook_ads_account_id)) {
+            return null;
+        }
+        $rows = $this->getAllPages("/act_{$account}/campaigns", ['fields' => 'id,name,status,account_id', 'limit' => 100], complete: $complete);
+        $matches = collect($rows)->filter(fn ($row) => str_starts_with($row['name'] ?? '', 'STS '.$id.' '));
+        $found = $matches->first();
+        if (! $complete || $matches->count() !== 1 || ($found['status'] ?? '') !== 'PAUSED'
+            || ($found['account_id'] ?? '') !== $account || ! ctype_digit($found['id'] ?? '')) {
+            return null;
+        }
+        $children = $this->get("/{$found['id']}/adsets", ['fields' => 'id', 'limit' => 1]);
+
+        return ($children['data'] ?? null) === [] && empty($children['paging']['next']) ? $found['id'] : null;
+    }
+
     /**
      * List all campaigns for an ad account.
      *

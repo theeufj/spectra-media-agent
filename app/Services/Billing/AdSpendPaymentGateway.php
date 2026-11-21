@@ -53,6 +53,17 @@ class AdSpendPaymentGateway
         }
     }
 
+    /** Inspect an uncertain payment without confirming or creating any charge. */
+    public function inspect(string $paymentIntentId): PaymentIntent
+    {
+        return $this->retrieve($paymentIntentId);
+    }
+
+    public function cancelUncollected(string $id, string $key): PaymentIntent
+    {
+        return Cashier::stripe()->paymentIntents->cancel($id, [], ['idempotency_key' => $key]);
+    }
+
     private function remember(int $attemptId, string $intentId): void
     {
         DB::table('ad_spend_charge_attempts')->where('id', $attemptId)->update(['payment_intent_id' => $intentId, 'updated_at' => now()]);

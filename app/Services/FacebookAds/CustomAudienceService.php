@@ -40,7 +40,7 @@ class CustomAudienceService extends BaseFacebookAdsService
     ): ?array {
         try {
             // Step 1: Create the custom audience container
-            $audience = $this->post("/act_{$accountId}/customaudiences", [
+            $audience = $this->post('/'.(str_starts_with($accountId, 'act_') ? $accountId : 'act_'.$accountId).'/customaudiences', [
                 'name' => $name,
                 'description' => $description,
                 'subtype' => 'CUSTOM',
@@ -223,7 +223,7 @@ class CustomAudienceService extends BaseFacebookAdsService
                 ],
             ];
 
-            $response = $this->post("/act_{$accountId}/customaudiences", [
+            $response = $this->post('/'.(str_starts_with($accountId, 'act_') ? $accountId : 'act_'.$accountId).'/customaudiences', [
                 'name' => $name,
                 'description' => $description,
                 'subtype' => 'WEBSITE',
@@ -270,7 +270,7 @@ class CustomAudienceService extends BaseFacebookAdsService
         float $ratio = 0.01
     ): ?array {
         try {
-            $response = $this->post("/act_{$accountId}/customaudiences", [
+            $response = $this->post('/'.(str_starts_with($accountId, 'act_') ? $accountId : 'act_'.$accountId).'/customaudiences', [
                 'name' => $name,
                 'subtype' => 'LOOKALIKE',
                 'origin_audience_id' => $sourceAudienceId,
@@ -311,8 +311,8 @@ class CustomAudienceService extends BaseFacebookAdsService
     public function listAudiences(string $accountId): ?array
     {
         try {
-            $response = $this->get("/act_{$accountId}/customaudiences", [
-                'fields' => 'id,name,description,subtype,approximate_count,delivery_status,operation_status',
+            $response = $this->get('/'.(str_starts_with($accountId, 'act_') ? $accountId : 'act_'.$accountId).'/customaudiences', [
+                'fields' => 'id,name,description,subtype,approximate_count_lower_bound,time_created,lookalike_spec,delivery_status,operation_status',
             ]);
 
             return $response['data'] ?? [];
@@ -332,7 +332,7 @@ class CustomAudienceService extends BaseFacebookAdsService
     {
         try {
             return $this->get("/{$audienceId}", [
-                'fields' => 'id,name,description,subtype,approximate_count,delivery_status,operation_status,time_created,time_updated',
+                'fields' => 'id,name,description,subtype,approximate_count_lower_bound,time_created,lookalike_spec,delivery_status,operation_status,time_created,time_updated',
             ]);
         } catch (\Throwable $e) {
             report($e);

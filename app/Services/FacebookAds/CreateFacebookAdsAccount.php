@@ -49,11 +49,11 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
         return config('services.facebook.system_user_token');
     }
 
-    public static function canProvision(Customer $customer): bool
+    public static function canProvision(Customer $customer, bool $prequalifying = false): bool
     {
         $brand = $customer->brandGuideline;
 
-        return ! $customer->is_sandbox && $customer->hasPaidDeploymentAccess() && $customer->allowsAdPlatform('facebook')
+        return ! $customer->is_sandbox && ($prequalifying || ($customer->hasPaidDeploymentAccess() && $customer->allowsAdPlatform('facebook')))
             && ! $customer->facebook_ads_account_id && ctype_digit((string) $customer->facebook_page_id)
             && isset(self::TIMEZONES[$customer->timezone]) && $brand?->user_verified
             && ($brand->approved_version === null || $brand->approved_version === $brand->profile_version)
@@ -69,14 +69,14 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
     }
 
     /** Provision at paid research intent, without creating campaigns or setting up billing. */
-    public function provision(): ?string
+    public function provision(bool $prequalifying = false): ?string
     {
         $customerId = $this->customer->id;
 
-        return Cache::lock('provision-meta-ad-account:'.$customerId, 180)->block(5, function (): ?string {
+        return Cache::lock('provision-meta-ad-account:'.$customerId, 180)->block(5, function () use ($prequalifying): ?string {
             $customer = $this->customer->fresh();
             $business = (string) config('services.facebook.business_manager_id');
-            if (! $customer || ! self::canProvision($customer) || ! ctype_digit($business) || ! $this->accessToken) {
+            if (! $customer || ! self::canProvision($customer, $prequalifying) || ! ctype_digit($business) || ! $this->accessToken) {
                 return $customer?->facebook_ads_account_id;
             }
             $this->customer = $customer;
@@ -126,9 +126,9 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
                 return null;
             }
 
-            return DB::transaction(function () use ($customer, $page, $id): ?string {
+            return DB::transaction(function () use ($customer, $page, $id, $prequalifying): ?string {
                 $current = Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
-                if (! self::canProvision($current) || (string) $current->facebook_page_id !== $page
+                if (! self::canProvision($current, $prequalifying) || (string) $current->facebook_page_id !== $page
                     || $current->billingCurrency() !== $customer->billingCurrency() || $current->timezone !== $customer->timezone
                     || Customer::whereKeyNot($current->id)->whereIn('facebook_ads_account_id', [$id, 'act_'.$id])->exists()) {
                     return null;
@@ -180,7 +180,9 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
             }
 
             // The advertiser is the customer's selected Page on the new business-owned account.
+            $funding = array_values(config('billing.agency_funding_sources.facebook', []));
             $response = $this->post("/{$businessId}/adaccount", [
+                ...(count($funding) === 1 && ctype_digit($funding[0]) ? ['funding_id' => $funding[0]] : []),
                 'name' => $accountName,
                 'currency' => $currency,
                 'timezone_id' => $timezoneId,

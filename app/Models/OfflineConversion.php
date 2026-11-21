@@ -24,6 +24,8 @@ class OfflineConversion extends Model
         'upload_status',
         'upload_results',
         'upload_attempts',
+        'source_key',
+        'delivery_bindings',
         'crm_data',
     ];
 
@@ -33,6 +35,7 @@ class OfflineConversion extends Model
         'upload_results' => 'array',
         'upload_attempts' => 'integer',
         'crm_data' => 'array',
+        'delivery_bindings' => 'array',
     ];
 
     public function customer(): BelongsTo

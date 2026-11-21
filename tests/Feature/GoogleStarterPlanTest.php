@@ -65,6 +65,9 @@ class GoogleStarterPlanTest extends TestCase
     public function test_checkout_sells_the_monthly_price_and_its_signed_webhook_grants_only_the_selected_workspace(): void
     {
         $this->withoutExceptionHandling();
+        $funding = $this->createMock(\App\Services\Billing\PlatformFunding::class);
+        $funding->expects($this->once())->method('forPlan')->willReturn(['ready' => true, 'channels' => ['google' => ['ready' => true]]]);
+        $this->app->instance(\App\Services\Billing\PlatformFunding::class, $funding);
         config(['cashier.secret' => 'sk_test_starter_fixture', 'services.stripe.secret' => 'sk_test_starter_fixture', 'cashier.webhook.secret' => 'whsec_starter_fixture',
             'services.stripe.webhook.secret' => 'whsec_starter_fixture']);
         Setting::set('deployment_enabled', true);
@@ -84,10 +87,13 @@ class GoogleStarterPlanTest extends TestCase
                 if ($method === 'get' && $path === '/v1/customers/cus_starter_fixture') {
                     return ['{"id":"cus_starter_fixture","object":"customer"}', 200, []];
                 }
+                if ($method === 'get' && in_array($path, ['/v1/checkout/sessions', '/v1/subscriptions'], true)) {
+                    return ['{"object":"list","data":[],"has_more":false}', 200, []];
+                }
                 if ($method === 'post' && $path === '/v1/checkout/sessions') {
                     $this->session = $params;
 
-                    return ['{"id":"cs_test_starter","object":"checkout.session","url":"https://checkout.stripe.test/starter"}', 200, []];
+                    return [json_encode(['id' => 'cs_test_starter', 'object' => 'checkout.session', 'url' => 'https://checkout.stripe.test/starter', 'status' => 'open', 'customer' => $params['customer'], 'client_reference_id' => $params['client_reference_id'], 'mode' => 'subscription'], JSON_THROW_ON_ERROR), 200, []];
                 }
                 throw new \RuntimeException("Unexpected Stripe path: {$path}");
             }

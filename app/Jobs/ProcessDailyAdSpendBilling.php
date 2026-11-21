@@ -68,6 +68,7 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         // only looked at the local one, so a campaign live on the platform but
         // not locally active spent without ever being billed — silently, because
         // finding nobody to bill looks exactly like having nobody to bill.
+        app(\App\Services\Billing\LaunchFunding::class)->reopenAmendedSpend();
         $customers = $this->eligibleCustomers($recoverableStatuses);
 
         // Idempotency: bill each customer at most once per calendar day. On a mid-run
@@ -95,7 +96,7 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
                 $latestDate = now()->subDay()->toDateString();
             }
             $dates = DB::table('ad_spend_billing_runs')->where('customer_id', $customer->id)
-                ->whereIn('status', ['failed', 'processing', 'awaiting_payment'])->whereNotNull('spend_date')
+                ->whereIn('status', ['pending', 'failed', 'processing', 'awaiting_payment'])->whereNotNull('spend_date')
                 ->where('spend_date', '<=', $latestDate)->orderBy('spend_date')->pluck('spend_date')
                 ->push($latestDate)->unique();
             foreach ($dates as $billingDate) {
@@ -259,7 +260,10 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
     {
         return Customer::whereHas('adSpendCredit')
             ->where(function ($query) use ($recoverableStatuses) {
-                $query->whereExists(fn ($pending) => $pending->selectRaw('1')->from('ad_spend_billing_runs')->whereColumn('customer_id', 'customers.id')->whereIn('status', ['failed', 'processing', 'awaiting_payment']))
+                $query->whereExists(fn ($pending) => $pending->selectRaw('1')->from('ad_spend_billing_runs')->whereColumn('customer_id', 'customers.id')->whereIn('status', ['pending', 'failed', 'processing', 'awaiting_payment']))
+                    ->orWhereExists(fn ($reserve) => $reserve->selectRaw('1')->from('launch_funding_reservations')
+                        ->whereColumn('launch_funding_reservations.customer_id', 'customers.id')->where('payer', 'agency')
+                        ->where('status', 'held')->where('held_cents', '>', 0))
                     ->orWhereHas('campaigns', function ($q) {
                         $q->where('status', 'active')
                             ->orWhere('platform_status', 'ENABLED');

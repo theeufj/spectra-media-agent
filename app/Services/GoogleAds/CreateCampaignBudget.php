@@ -5,7 +5,6 @@ namespace App\Services\GoogleAds;
 use App\Models\Customer;
 use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V26\Services\Client\CampaignBudgetServiceClient;
 use Google\Ads\GoogleAds\V26\Services\MutateCampaignBudgetsRequest;
 
 class CreateCampaignBudget extends BaseGoogleAdsService
@@ -27,7 +26,6 @@ class CreateCampaignBudget extends BaseGoogleAdsService
         $campaignBudgetOperation = new CampaignBudgetOperation;
         $campaignBudgetOperation->setCreate($campaignBudget);
 
-        /** @var CampaignBudgetServiceClient $campaignBudgetServiceClient */
         $this->ensureClient();
         $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
         $request = new MutateCampaignBudgetsRequest([
@@ -37,6 +35,6 @@ class CreateCampaignBudget extends BaseGoogleAdsService
         ]);
         $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
 
-        return $response->getResults() ? $response->getResults()[0]->getResourceName() : null;
+        return count($response->getResults()) > 0 ? $response->getResults()[0]->getResourceName() : null;
     }
 }

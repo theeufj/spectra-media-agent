@@ -24,6 +24,7 @@ const PLATFORM_LABELS = {
 const BRIEF_TYPE_LABELS = {
     fatigue_refresh: 'Creative Fatigue',
     ab_winner: 'A/B Winner',
+    pmax_replacement: 'Performance Max replacement',
     scheduled_refresh: 'Scheduled Refresh',
     cross_platform_winner: 'Cross-Platform Winner',
 };
@@ -115,7 +116,7 @@ function BriefCard({ brief, onAction, onDismiss, pending }) {
                     </div>
                 )}
 
-                {brief.campaign?.uuid && <p className="mt-4 text-xs text-gray-600">Review and update the <Link href={route('campaigns.show', brief.campaign.uuid)} className="text-brand-dark underline">campaign creative</Link>, then mark this brief completed. This button records progress; it does not change live ads.</p>}
+                {brief.campaign?.uuid && <p className="mt-4 text-xs text-gray-600">Generate a draft from this brief, then approve it in <Link href={route('campaigns.show', brief.campaign.uuid)} className="text-brand-dark underline">campaign creative</Link>.</p>}
                 {['pending', 'in_review'].includes(brief.status) && (
                     <div className="mt-4 flex flex-wrap gap-2">
                         <button
@@ -123,7 +124,7 @@ function BriefCard({ brief, onAction, onDismiss, pending }) {
                             onClick={() => onAction(brief.id)}
                             className="px-3 py-1.5 text-xs font-medium bg-brand-dark text-white rounded hover:bg-brand-darker transition"
                         >
-                            {pending === brief.id ? 'Saving…' : 'Mark completed'}
+                            {pending === brief.id ? 'Saving…' : 'Approve brief and generate draft'}
                         </button>
                         <button
                             disabled={pending === brief.id}

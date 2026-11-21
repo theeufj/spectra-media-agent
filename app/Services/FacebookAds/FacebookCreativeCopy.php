@@ -15,9 +15,16 @@ class FacebookCreativeCopy
      */
     public static function variations(Strategy $strategy): array
     {
+        return self::fromRows($strategy->deployableAdCopies()->get());
+    }
+
+    public static function fromRows(iterable $copyRows): array
+    {
         $sets = [];
-        $copyRows = $strategy->deployableAdCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->get();
         foreach ($copyRows as $copy) {
+            if (! preg_match('/facebook|meta|instagram/i', (string) $copy->platform)) {
+                continue;
+            }
             $headlines = self::lines($copy->getAttribute('headlines'));
             $bodies = self::lines($copy->getAttribute('descriptions'));
             if ($headlines === [] || $bodies === []) {

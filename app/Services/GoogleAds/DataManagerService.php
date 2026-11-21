@@ -101,6 +101,7 @@ class DataManagerService
         bool $validateOnly = false,
         string $eventSource = 'WEB',
         ?string $transactionId = null,
+        array $consent = [],
     ): array {
         if (! $this->mcc) {
             return ['success' => false, 'error' => 'No active MCC account'];
@@ -128,20 +129,24 @@ class DataManagerService
             'adIdentifiers' => $adIdentifiers,
             'currency' => $currency,
             'conversionValue' => $value,
-            // DMA consent. These are our own funnel conversions where the visitor
-            // proceeded through the site; adjust if a real consent signal is available.
-            'consent' => [
-                'adUserData' => 'CONSENT_GRANTED',
-                'adPersonalization' => 'CONSENT_GRANTED',
-            ],
         ];
+
+        // Only pass choices actually recorded at the source. Unknown is never opt-in.
+        $choices = array_intersect_key($consent, array_flip(['adUserData', 'adPersonalization']));
+        $choices = array_filter($choices, fn ($choice) => in_array($choice, ['CONSENT_GRANTED', 'CONSENT_DENIED'], true));
+        if ($choices !== []) {
+            $event['consent'] = $choices;
+        }
+        if (($choices['adUserData'] ?? null) === 'CONSENT_DENIED') {
+            return ['success' => false, 'error' => 'Advertising data consent denied'];
+        }
 
         if ($transactionId !== null) {
             $event['transactionId'] = $transactionId;
         }
 
         // Enhanced matching: attach the SHA-256 hash of the normalized email.
-        if ($email) {
+        if ($email && ($choices['adUserData'] ?? null) === 'CONSENT_GRANTED') {
             $event['userData'] = [
                 'userIdentifiers' => [
                     ['emailAddress' => $this->hashEmail($email)],

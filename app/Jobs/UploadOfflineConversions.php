@@ -3,19 +3,15 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Models\MccAccount;
 use App\Models\OfflineConversion;
 use App\Services\FacebookAds\ConversionsApiService;
 use App\Services\GoogleAds\DataManagerService;
 use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
-use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClientBuilder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class UploadOfflineConversions implements ShouldQueue
@@ -31,6 +27,11 @@ class UploadOfflineConversions implements ShouldQueue
     public function __construct(
         protected int $customerId
     ) {}
+
+    public function middleware(): array
+    {
+        return [(new \Illuminate\Queue\Middleware\WithoutOverlapping('offline-purchase:'.$this->customerId))->releaseAfter(60)->expireAfter(600)];
+    }
 
     public function handle(): void
     {
@@ -159,166 +160,70 @@ class UploadOfflineConversions implements ShouldQueue
     /** @return int rows settled — uploaded or charged an attempt */
     protected function uploadToGoogleAds(Customer $customer, $conversions): int
     {
-        try {
-            $customerId = $customer->google_ads_customer_id;
-            if (! $customerId) {
-                Log::warning('UploadOfflineConversions: Customer has no Google Ads ID', ['customer_id' => $customer->id]);
-
-                return $this->chargeAttempt($conversions, 'google_ads', 'Customer has no Google Ads customer id');
-            }
-
-            $client = $this->buildGoogleAdsClient();
-            if (! $client) {
-                Log::error('UploadOfflineConversions: Failed to build Google Ads client');
-
-                return $this->chargeAttempt($conversions, 'google_ads', 'Could not build a Google Ads client');
-            }
-
-            $conversionActionResourceName = $this->getConversionActionResourceName($client, $customerId);
-            if (! $conversionActionResourceName) {
-                Log::error('UploadOfflineConversions: Could not resolve conversion action', ['customer_id' => $customerId]);
-
-                return $this->chargeAttempt($conversions, 'google_ads', 'Could not resolve an UPLOAD_CLICKS conversion action');
-            }
-
-            // Data Manager ingests into the conversion action by its numeric id
-            // (productDestinationId), not the full customers/{cid}/conversionActions/{id}.
-            $conversionActionId = explode('/', $conversionActionResourceName)[3] ?? null;
-            if (! $conversionActionId) {
-                Log::error('UploadOfflineConversions: Could not parse conversion action id', ['resource' => $conversionActionResourceName]);
-
-                return $this->chargeAttempt($conversions, 'google_ads', "Unparseable conversion action resource name {$conversionActionResourceName}");
-            }
-
-            // Upload each conversion via the Data Manager API (the legacy
-            // UploadClickConversions endpoint is closed to new integrations).
-            $dataManager = new DataManagerService;
-            $uploaded = 0;
-            $failed = 0;
-
-            foreach ($conversions as $conversion) {
-                $results = $conversion->upload_results ?? [];
-
-                $result = $dataManager->ingestGclidConversion(
-                    operatingAccountId: (string) $customerId,
-                    conversionActionId: (string) $conversionActionId,
-                    gclid: $conversion->gclid,
-                    value: (float) $conversion->conversion_value,
-                    currency: $conversion->currency_code ?? 'USD',
-                    occurredAt: $conversion->conversion_time,
-                    email: $conversion->email ?? null,
-                );
-
-                if ($result['success']) {
-                    $uploaded++;
-                    $results['google_ads'] = ['status' => 'uploaded', 'request_id' => $result['requestId'] ?? null, 'uploaded_at' => now()->toDateTimeString()];
-                    $conversion->update([
-                        'upload_status' => ! empty($conversion->fbclid) ? 'uploaded_google' : 'uploaded_all',
-                        'upload_results' => $results,
-                    ]);
-                } else {
-                    $failed++;
-                    $results['google_ads'] = ['status' => 'failed', 'error' => $result['error'] ?? 'unknown', 'attempted_at' => now()->toDateTimeString()];
-                    $conversion->update([
-                        'upload_status' => 'failed',
-                        'upload_results' => $results,
-                        'upload_attempts' => $conversion->upload_attempts + 1,
-                    ]);
-                }
-            }
-
-            Log::info('UploadOfflineConversions: Uploaded to Google Ads via Data Manager', [
-                'customer_id' => $customer->id,
-                'uploaded' => $uploaded,
-                'failed' => $failed,
-            ]);
-
-            return $uploaded + $failed;
-        } catch (\Throwable $e) {
-            // Surface in the admin exception dashboard; the batch continues.
-            report($e);
-            foreach ($conversions as $conversion) {
-                $conversion->update([
-                    'upload_status' => 'failed',
-                    'upload_results' => array_merge($conversion->upload_results ?? [], ['google_ads_error' => $e->getMessage()]),
-                    'upload_attempts' => $conversion->upload_attempts + 1,
-                ]);
-            }
-            Log::error('UploadOfflineConversions: Google Ads upload failed', ['error' => $e->getMessage()]);
-
-            return $conversions->count();
-        }
+        return $this->uploadPurchases($customer, $conversions, 'google_ads');
     }
 
-    /** @return int rows settled — uploaded or charged an attempt */
     protected function uploadToFacebook(Customer $customer, $conversions): int
     {
-        try {
-            $pixelId = $customer->facebook_pixel_id;
-            if (! $pixelId) {
-                Log::warning('UploadOfflineConversions: Customer has no Facebook Pixel ID', ['customer_id' => $customer->id]);
-
-                return $this->chargeAttempt($conversions, 'facebook', 'Customer has no Facebook pixel id');
-            }
-
-            $capiService = new ConversionsApiService($customer);
-
-            $events = [];
-            foreach ($conversions as $conversion) {
-                $events[] = [
-                    'event_name' => $conversion->conversion_name ?? 'OfflineConversion',
-                    'event_time' => $conversion->conversion_time->timestamp,
-                    'action_source' => 'system_generated',
-                    'user_data' => [
-                        'fbc' => "fb.1.{$conversion->conversion_time->timestamp}.{$conversion->fbclid}",
-                    ],
-                    'custom_data' => [
-                        'value' => (float) $conversion->conversion_value,
-                        'currency' => $conversion->currency_code ?? 'USD',
-                    ],
-                ];
-            }
-
-            $result = $capiService->sendEvents($pixelId, $events);
-
-            foreach ($conversions as $conversion) {
-                $results = $conversion->upload_results ?? [];
-
-                if ($result) {
-                    $results['facebook'] = ['status' => 'uploaded', 'uploaded_at' => now()->toDateTimeString()];
-                    $newStatus = ($conversion->upload_status === 'uploaded_google' || empty($conversion->gclid))
-                        ? 'uploaded_all'
-                        : 'uploaded_facebook';
-                    $conversion->update([
-                        'upload_status' => $newStatus,
-                        'upload_results' => $results,
-                    ]);
-                } else {
-                    $results['facebook'] = ['status' => 'failed', 'attempted_at' => now()->toDateTimeString()];
-                    $conversion->update([
-                        'upload_status' => 'failed',
-                        'upload_results' => $results,
-                        'upload_attempts' => $conversion->upload_attempts + 1,
-                    ]);
-                }
-            }
-
-            Log::info('UploadOfflineConversions: Uploaded to Facebook', [
-                'customer_id' => $customer->id,
-                'count' => $conversions->count(),
-            ]);
-
-            return $conversions->count();
-        } catch (\Throwable $e) {
-            // Surface in the admin exception dashboard; the batch continues.
-            report($e);
-            Log::error('UploadOfflineConversions: Facebook upload failed', ['error' => $e->getMessage()]);
-
-            return $this->chargeAttempt($conversions, 'facebook', $e->getMessage());
-        }
+        return $this->uploadPurchases($customer, $conversions, 'facebook');
     }
 
-    /** @return int rows settled — uploaded or charged an attempt */
+    private function uploadPurchases(Customer $customer, $conversions, string $platform): int
+    {
+        foreach ($conversions as $conversion) {
+            try {
+                $conversion->refresh();
+                $results = $conversion->upload_results ?? [];
+                if (($results[$platform]['status'] ?? null) === 'uploaded') {
+                    continue;
+                }
+                $google = $platform === 'google_ads';
+                $binding = $conversion->delivery_bindings[$google ? 'google' : 'facebook'] ?? [];
+                $account = $google ? $customer->cleanGoogleCustomerId() : preg_replace('/^act_/', '', (string) $customer->facebook_ads_account_id);
+                $destination = $binding['destination'] ?? null;
+                if (($conversion->delivery_bindings['ad_user_data'] ?? '') !== 'granted' || ! $conversion->source_key || ! $conversion->crm_integration_id || ! $account || ($binding['account'] ?? null) !== $account
+                    || ($binding['event'] ?? '') !== 'Purchase' || ! $destination || $conversion->conversion_value <= 0) {
+                    throw new \RuntimeException('A verified CRM sale and one selected purchase destination on this account are required.');
+                }
+                if ($google) {
+                    $details = app(\App\Services\GoogleAds\ConversionTrackingService::class, ['customer' => $customer])->outcomeDestination($account, $destination);
+                    if (($details['type'] ?? null) !== 'UPLOAD_CLICKS' || ($details['category'] ?? null) !== 'PURCHASE') {
+                        throw new \RuntimeException('Select an enabled Google purchase import action.');
+                    }
+                    $result = app(DataManagerService::class)->ingestConversion($account, basename($destination), ['gclid' => $conversion->gclid],
+                        (float) $conversion->conversion_value, $conversion->currency_code, $conversion->conversion_time, eventSource: 'OTHER', transactionId: $conversion->source_key, consent: ['adUserData' => 'CONSENT_GRANTED']);
+                    if (! $result['success'] || ! filled($result['requestId'] ?? null)) {
+                        throw new \RuntimeException('Google did not return a CRM purchase receipt.');
+                    }
+                    $receipt = $result['requestId'];
+                } else {
+                    if ($customer->facebook_pixel_id !== $destination || ! app(\App\Services\FacebookAds\PixelService::class, ['customer' => $customer])->isLinked($destination, $account)) {
+                        throw new \RuntimeException('The selected Meta purchase dataset is unavailable.');
+                    }
+                    $result = app(ConversionsApiService::class, ['customer' => $customer])->sendEvent($destination, [
+                        'event_name' => 'Purchase', 'event_id' => $conversion->source_key, 'event_time' => $conversion->conversion_time->timestamp,
+                        'action_source' => 'system_generated', 'user_data' => ['fbc' => 'fb.1.'.($conversion->conversion_time->timestamp * 1000).'.'.$conversion->fbclid],
+                        'custom_data' => ['value' => (float) $conversion->conversion_value, 'currency' => $conversion->currency_code],
+                    ]);
+                    if (($result['events_received'] ?? null) !== 1 || ! filled($result['fbtrace_id'] ?? null)) {
+                        throw new \RuntimeException('Meta did not acknowledge the CRM purchase.');
+                    }
+                    $receipt = $result['fbtrace_id'];
+                }
+                $results[$platform] = ['status' => 'uploaded', 'destination' => $destination, 'request_id' => $receipt, 'uploaded_at' => now()->toIso8601String()];
+                $remaining = ($conversion->gclid && ($results['google_ads']['status'] ?? '') !== 'uploaded')
+                    || ($conversion->fbclid && ($results['facebook']['status'] ?? '') !== 'uploaded')
+                    || ($conversion->msclid && ($results['microsoft']['status'] ?? '') !== 'uploaded');
+                $conversion->update(['upload_results' => $results, 'upload_status' => $remaining ? 'pending' : 'uploaded_all']);
+            } catch (\Throwable $e) {
+                report($e);
+                $this->chargeAttempt(collect([$conversion]), $platform, $e->getMessage());
+            }
+        }
+
+        return $conversions->count();
+    }
+
     protected function uploadToMicrosoft(Customer $customer, $conversions): int
     {
         try {
@@ -398,101 +303,6 @@ class UploadOfflineConversions implements ShouldQueue
         }
     }
 
-    /**
-     * Get or create the offline conversion action resource name.
-     */
-    protected function getConversionActionResourceName($client, string $customerId): ?string
-    {
-        $cacheKey = "offline_conversion_action:{$customerId}";
-        $cached = Cache::get($cacheKey);
-        if ($cached) {
-            return $cached;
-        }
-
-        try {
-            // Query for existing offline conversion action
-            $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
-            $query = 'SELECT conversion_action.resource_name, conversion_action.name '
-                .'FROM conversion_action '
-                ."WHERE conversion_action.type = 'UPLOAD_CLICKS' "
-                ."AND conversion_action.status = 'ENABLED' "
-                .'LIMIT 1';
-
-            $response = $googleAdsServiceClient->search(
-                new \Google\Ads\GoogleAds\V26\Services\SearchGoogleAdsRequest([
-                    'customer_id' => $customerId,
-                    'query' => $query,
-                ])
-            );
-
-            foreach ($response->iterateAllElements() as $row) {
-                $resourceName = $row->getConversionAction()->getResourceName();
-                Cache::put($cacheKey, $resourceName, now()->addHours(24));
-
-                return $resourceName;
-            }
-
-            // No existing action found — create one
-            $conversionActionService = app(\App\Services\GoogleAds\CommonServices\CreateConversionAction::class, [
-                'customer' => Customer::find($this->customerId),
-            ]);
-            $resourceName = $conversionActionService(
-                $customerId,
-                'Offline Conversion',
-                \Google\Ads\GoogleAds\V26\Enums\ConversionActionCategoryEnum\ConversionActionCategory::PBDEFAULT
-            );
-
-            if ($resourceName) {
-                Cache::put($cacheKey, $resourceName, now()->addHours(24));
-            }
-
-            return $resourceName;
-        } catch (\Throwable $e) {
-            // Surface in the admin exception dashboard; the batch continues.
-            report($e);
-            Log::error('UploadOfflineConversions: Failed to resolve conversion action', ['error' => $e->getMessage()]);
-
-            return null;
-        }
-    }
-
-    protected function buildGoogleAdsClient(): ?\Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient
-    {
-        try {
-            $configPath = storage_path('app/google_ads_php.ini');
-            if (! file_exists($configPath)) {
-                return null;
-            }
-
-            $mccAccount = MccAccount::getActive();
-            if (! $mccAccount) {
-                return null;
-            }
-
-            $mccRefreshToken = $mccAccount->getDecryptedRefreshToken();
-
-            $oAuth2Credential = (new OAuth2TokenBuilder)
-                ->fromFile($configPath)
-                ->withRefreshToken($mccRefreshToken)
-                ->build();
-
-            return (new GoogleAdsClientBuilder)
-                ->fromFile($configPath)
-                ->withOAuth2Credential($oAuth2Credential)
-                ->withLoginCustomerId($mccAccount->google_customer_id)
-                ->build();
-        } catch (\Throwable $e) {
-            // Surface in the admin exception dashboard; the batch continues.
-            report($e);
-            Log::error('UploadOfflineConversions: Failed to build client', ['error' => $e->getMessage()]);
-
-            return null;
-        }
-    }
-
-    /**
-     * Handle a job failure.
-     */
     public function failed(\Throwable $exception): void
     {
         Log::error('UploadOfflineConversions failed: '.$exception->getMessage(), [

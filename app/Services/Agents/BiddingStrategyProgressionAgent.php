@@ -68,6 +68,10 @@ class BiddingStrategyProgressionAgent
             }
         }
         if ($next === 'TARGET_ROAS') {
+            if (! $this->hasVerifiedPurchaseValues($strategy, $before['currency'])) {
+                return $this->skip('Value bidding needs verified purchase receipts in the account currency.');
+            }
+
             $actual = $this->roas($perf);
             $roas = $actual === null ? null : round($actual * (float) config('optimization.bidding_strategy.roas_target_multiplier', 0.9), 2);
             if ($roas === null || ! is_finite($roas) || $roas <= 0) {
@@ -204,6 +208,21 @@ class BiddingStrategyProgressionAgent
         });
 
         return ['success' => true, 'from' => $before['strategy'], 'to' => $next, 'target_cpa' => $cpa, 'target_roas' => $roas, 'reason' => $reason];
+    }
+
+    private function hasVerifiedPurchaseValues(Strategy $strategy, string $currency): bool
+    {
+        $binding = app(\App\Services\Conversions\CampaignOutcomeEvidence::class)->binding($strategy);
+        if ($binding['goal'] !== 'purchase' || ! $binding['destination']) {
+            return false;
+        }
+        $receipts = DB::table('campaign_outcome_events')->where('strategy_id', $strategy->id)
+            ->where('binding', $binding['fingerprint'])->where('mode', 'live')->where('goal', 'purchase')
+            ->whereIn('delivery_status', ['processed', 'verified'])->whereNotNull('provider_receipt')
+            ->where('occurred_at', '>=', now()->subDays(30))->where('amount', '>', 0);
+
+        return (clone $receipts)->where('currency', strtoupper($currency))->count() >= 2
+            && ! (clone $receipts)->where('currency', '!=', strtoupper($currency))->exists();
     }
 
     private function recommendPerformanceMaxValueBidding(Campaign $campaign, Strategy $strategy, string $account, string $resource, array $before): array

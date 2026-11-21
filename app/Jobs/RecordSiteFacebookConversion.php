@@ -10,7 +10,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Fires a server-side Facebook CAPI event for a sitetospend.com own-site conversion.
@@ -30,97 +29,72 @@ class RecordSiteFacebookConversion implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    // Map own-site event keys → Facebook standard event names
-    private const EVENT_MAP = [
-        'signup' => 'CompleteRegistration',
-        'pricing_visit' => 'ViewContent',
-        'sandbox_launched' => 'StartTrial',
-        'campaign_live' => 'Subscribe',
-        'seven_day_return' => 'Purchase',
-    ];
+    public int $tries = 6;
+
+    public array $backoff = [60, 300, 900, 1800, 3600];
 
     public function __construct(
         protected User $user,
         protected string $event,
         protected ?string $eventSourceUrl = null,
         protected ?string $clientUserAgent = null,
+        protected ?int $receiptId = null,
     ) {}
 
     public function handle(): void
     {
-        if (! $this->user->fbclid) {
+        if (! $this->user->fbclid || $this->user->ad_measurement_consent === false) {
             return;
         }
 
+        if ($this->user->tenant_key !== 'sitetospend') {
+            return;
+        }
         $source = $this->eventSourceUrl ?? null;
         $userAgent = $this->clientUserAgent ?? null;
-        if (! $source || parse_url($source, PHP_URL_HOST) !== 'sitetospend.com' || ! filled($userAgent)) {
-            Log::warning('RecordSiteFacebookConversion: Site to Spend browser event context is missing.');
-
+        $signup = $this->event === 'signup';
+        if ($signup && (! $source || parse_url($source, PHP_URL_HOST) !== 'sitetospend.com' || ! filled($userAgent))) {
+            throw new \RuntimeException('The signup is missing its own-site browser context.');
+        }
+        if (! $signup && ! in_array($this->event, ['paid_setup', 'paid_subscription'], true)) {
             return;
         }
-
-        $pixelId = config('services.facebook.spectra_pixel_id');
-        if (! $pixelId) {
-            Log::debug('RecordSiteFacebookConversion: FACEBOOK_SPECTRA_PIXEL_ID not configured — skipping');
-
+        $record = SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->whereNotNull('occurred_at')
+            ->when($this->receiptId, fn ($query) => $query->whereKey($this->receiptId))->firstOrFail();
+        if (! $signup && (! $this->receiptId || $record->value <= 0 || ! str_starts_with((string) $record->deduplication_key, $this->event.':'))) {
+            throw new \LogicException('An authentic positive Stripe receipt is required.');
+        }
+        $pixelId = (string) config('services.facebook.spectra_pixel_id');
+        if (! ctype_digit($pixelId)) {
+            throw new \RuntimeException('No own-site Meta dataset is configured.');
+        }
+        $eventName = $signup ? 'CompleteRegistration' : 'Purchase';
+        $delivery = $record->meta_delivery;
+        if (($delivery['status'] ?? '') === 'accepted') {
             return;
         }
-
-        $fbEventName = self::EVENT_MAP[$this->event] ?? null;
-        if (! $fbEventName) {
-            Log::debug("RecordSiteFacebookConversion: no Facebook event mapping for '{$this->event}'");
-
-            return;
+        if ($delivery && ($delivery['dataset'] ?? null) !== $pixelId) {
+            throw new \RuntimeException('The configured Meta dataset changed after registration.');
         }
-
-        $config = config("conversions.events.{$this->event}", []);
-
-        // Construct a minimal customer stub so ConversionsApiService can instantiate
-        $customer = new \App\Models\Customer;
-        $service = new ConversionsApiService($customer);
-
-        $eventData = [
-            'event_name' => $fbEventName,
-            'event_time' => now()->timestamp,
-            'event_id' => hash('sha256', "sitetospend:{$this->event}:{$this->user->id}"),
-            'action_source' => 'website',
-            'event_source_url' => $source,
-            'user_data' => [
-                'em' => hash('sha256', strtolower(trim($this->user->email))),
-                'fn' => hash('sha256', strtolower(explode(' ', trim($this->user->name))[0])),
-                'fbc' => "fb.1.{$this->user->created_at->timestamp}.{$this->user->fbclid}",
-                'client_user_agent' => $userAgent,
-            ],
-        ];
-
-        if (! empty($config['value'])) {
-            $eventData['custom_data'] = [
-                'value' => (float) $config['value'],
-                'currency' => $config['currency'] ?? 'USD',
-            ];
-        }
-
+        $id = hash('sha256', $record->deduplication_key);
+        $delivery = ['dataset' => $pixelId, 'event_id' => $id, 'event' => $eventName, 'status' => 'pending'];
+        $record->update(['meta_delivery' => $delivery]);
         try {
-            $result = $service->sendEvent($pixelId, $eventData);
-
-            SpectraConversionEvent::record($this->event, $this->user->id, [
-                'gclid' => null,
-                'fbclid' => $this->user->fbclid,
-                'mode' => 'server_facebook',
-                'uploaded' => (bool) $result,
+            $result = (new ConversionsApiService(new \App\Models\Customer))->sendEvent($pixelId, [
+                'event_name' => $eventName, 'event_time' => $record->occurred_at->timestamp,
+                'event_id' => $id, 'action_source' => $signup ? 'website' : 'system_generated', 'event_source_url' => $source,
+                ...($signup ? [] : ['custom_data' => ['value' => (float) $record->value, 'currency' => $record->currency]]),
+                'user_data' => ['fbc' => 'fb.1.'.($this->user->created_at->timestamp * 1000).'.'.$this->user->fbclid,
+                    'client_user_agent' => $userAgent, ...($this->user->ad_measurement_consent ? ['em' => $this->user->email] : [])],
             ]);
-
-            if ($result) {
-                Log::info("RecordSiteFacebookConversion: sent '{$this->event}' ({$fbEventName}) for user {$this->user->id}");
-            } else {
-                Log::warning("RecordSiteFacebookConversion: CAPI returned null for '{$this->event}' user {$this->user->id}");
+            if (($result['events_received'] ?? null) !== 1 || empty($result['fbtrace_id'])) {
+                throw new \RuntimeException('Meta did not acknowledge the registration event.');
             }
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error("RecordSiteFacebookConversion: failed for '{$this->event}': ".$e->getMessage(), [
-                'user_id' => $this->user->id,
-            ]);
+            $record->update(['meta_delivery' => array_merge($delivery, ['status' => 'accepted',
+                'trace' => $result['fbtrace_id'], 'events_received' => 1, 'accepted_at' => now()->toIso8601String()])]);
+        } catch (\Throwable $error) {
+            $record->update(['meta_delivery' => array_merge($delivery, ['status' => 'failed'])]);
+            throw $error;
         }
     }
 }

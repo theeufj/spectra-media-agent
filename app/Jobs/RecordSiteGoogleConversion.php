@@ -126,6 +126,9 @@ class RecordSiteGoogleConversion implements ShouldQueue
         $record = $eventId
             ? SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->findOrFail($eventId)
             : null;
+        if ($this->event === 'seven_day_return' && (! $record || ! str_starts_with((string) $record->deduplication_key, 'seven_day_return:'))) {
+            return;
+        }
         if (in_array($this->event, ['paid_subscription', 'paid_setup'], true) && ! $record) {
             throw new \LogicException('Paid conversions require a verified paid receipt.');
         }
@@ -143,6 +146,9 @@ class RecordSiteGoogleConversion implements ShouldQueue
         if ($record?->uploaded_to_google) {
             CheckGoogleConversionProcessing::scheduleFor($record);
 
+            return;
+        }
+        if ($this->user->ad_measurement_consent === false) {
             return;
         }
         if (! $adIdentifiers) {
@@ -178,7 +184,7 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
         try {
             $resourceName = $this->event === 'paid_setup' ? $record->google_conversion_resource
-                : Setting::get("conversion_resource_name.{$actionKey}");
+                : ($record->google_conversion_resource ?: Setting::get("conversion_resource_name.{$actionKey}"));
             if ($this->event === 'paid_setup' && ! self::isCanonicalPurchaseDestination($resourceName)) {
                 throw new \RuntimeException('The paid setup receipt has no valid pinned canonical Purchase destination. Review its tracking configuration.');
             }
@@ -200,6 +206,7 @@ class RecordSiteGoogleConversion implements ShouldQueue
                 occurredAt: $record->occurred_at,
                 email: $this->user->email,
                 transactionId: $record->deduplication_key,
+                consent: $this->user->ad_measurement_consent ? ['adUserData' => 'CONSENT_GRANTED'] : [],
             );
             if (! $result['success']) {
                 throw new \RuntimeException('Google conversion upload failed: '.($result['error'] ?? 'unknown error'));

@@ -17,7 +17,6 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Inertia\Testing\AssertableInertia as Assert;
 use Stripe\ApiRequestor;
 use Stripe\HttpClient\ClientInterface;
-use Stripe\PaymentIntent;
 use Tests\TestCase;
 
 /**
@@ -41,6 +40,7 @@ class BillingPayerSelectionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutVite();
         config(['cashier.secret' => 'sk_test_payer_selection', 'services.stripe.secret' => 'sk_test_payer_selection']);
         $this->previousStripeClient = ApiRequestor::httpClient();
         $this->stripe = new PayerSelectionStripeTransport;
@@ -150,16 +150,6 @@ class BillingPayerSelectionTest extends TestCase
         return [$campaign, $strategy, $fingerprint];
     }
 
-    private function expectCharge(Customer $customer, User $payer, string $paymentMethod): void
-    {
-        $this->mock(AdSpendPaymentGateway::class, function ($mock) use ($customer, $payer, $paymentMethod) {
-            $mock->shouldReceive('collect')->once()->withArgs(fn ($account, $params, $key) => $account->id === $customer->id
-                && $params['customer'] === $payer->stripe_id && $params['payment_method'] === $paymentMethod
-                && $params['amount'] === 14000 && $params['currency'] === 'aud')
-                ->andReturn(PaymentIntent::constructFrom(['id' => 'pi_payer_test', 'object' => 'payment_intent', 'amount' => 14000, 'currency' => 'aud', 'status' => 'succeeded']));
-        });
-    }
-
     public function test_funding_and_both_displays_use_the_other_owners_saved_card(): void
     {
         $customer = Customer::factory()->create(['currency_code' => 'AUD']);
@@ -172,19 +162,19 @@ class BillingPayerSelectionTest extends TestCase
 
         $this->get(route('billing.ad-spend'))->assertInertia(fn (Assert $page) => $page->where('paymentMethod.payer_name', $payer->name)->where('paymentMethod.last4', '0005'));
         $this->get(route('campaigns.collateral.show', [$campaign, $strategy]))->assertInertia(fn (Assert $page) => $page->where('hasPaymentMethod', true));
-        $this->expectCharge($customer, $payer, 'pm_saved');
+        $this->mock(AdSpendPaymentGateway::class)->shouldNotReceive('collect');
         $this->postJson(route('billing.ad-spend.setup-for-deployment'), [
             'campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20,
             'creative_fingerprints' => [$strategy->id => $fingerprint],
         ])
-            ->assertOk()->assertJsonPath('credit_amount', '140.00');
+            ->assertOk()->assertJsonPath('credit_amount', 0)->assertJsonPath('deferred', true);
 
         $this->assertNull($firstOwner->fresh()->stripe_id);
-        $this->assertDatabaseHas('ad_spend_credits', ['customer_id' => $customer->id, 'stripe_payment_method_id' => 'pm_saved']);
-        $this->assertSame([['method' => 'get', 'path' => '/v1/customers/cus_payer']], $this->stripe->requests);
+        $this->assertDatabaseMissing('ad_spend_credits', ['customer_id' => $customer->id]);
+        $this->assertSame([], $this->stripe->requests);
     }
 
-    public function test_a_members_replacement_card_updates_the_selected_business_payer_then_funds_it(): void
+    public function test_a_members_replacement_card_updates_the_business_payer_without_collecting_before_approval(): void
     {
         $customer = Customer::factory()->create(['currency_code' => 'AUD']);
         $actor = $this->attach($customer, 'member@example.com', 'admin', null);
@@ -198,13 +188,74 @@ class BillingPayerSelectionTest extends TestCase
         $this->assertNull($actor->fresh()->pm_type);
         $this->assertSame('0005', $payer->fresh()->pm_last_four);
         $this->get(route('billing.ad-spend'))->assertInertia(fn (Assert $page) => $page->where('paymentMethod.payer_name', $payer->name)->where('paymentMethod.last4', '0005'));
-        $this->expectCharge($customer, $payer, 'pm_replacement');
+        $this->mock(AdSpendPaymentGateway::class)->shouldNotReceive('collect');
         $this->postJson(route('billing.ad-spend.setup-for-deployment'), [
             'campaign_id' => $campaign->id, 'strategy_id' => $strategy->id, 'daily_budget' => 20,
             'creative_fingerprints' => [$strategy->id => $fingerprint],
         ])->assertOk();
-        $this->assertDatabaseHas('ad_spend_credits', ['customer_id' => $customer->id, 'stripe_payment_method_id' => 'pm_replacement']);
+        $this->assertDatabaseMissing('ad_spend_credits', ['customer_id' => $customer->id]);
         $this->assertNotContains('/v1/customers/'.$actor->stripe_id, array_column($this->stripe->requests, 'path'));
+    }
+
+    public function test_a_second_member_cannot_open_hosted_checkout_against_the_wrong_stripe_customer(): void
+    {
+        $customer = Customer::factory()->create();
+        $this->attach($customer, 'billing@example.com', 'owner', 'visa')->forceFill(['stripe_id' => 'cus_payer'])->save();
+        $member = $this->attach($customer, 'member@example.com', 'member', null);
+        $plan = Plan::updateOrCreate(['slug' => 'starter'], ['name' => 'Starter', 'price_cents' => 9900, 'stripe_price_id' => 'price_workspace_only', 'billing_interval' => 'month', 'is_active' => true]);
+        Setting::set('deployment_enabled', true);
+        $this->actingAs($member)->withSession(['active_customer_id' => $customer->id])->from(route('subscription.pricing'))
+            ->post(route('subscription.checkout'), ['price_id' => $plan->stripe_price_id, 'platforms' => ['google']])
+            ->assertRedirect(route('subscription.pricing'))->assertSessionHas('flash.message', 'The workspace billing contact must start its monthly subscription.');
+        $this->assertNull($member->fresh()->stripe_id);
+        $this->assertSame([], $this->stripe->requests);
+    }
+
+    public static function unresolvedPaymentStates(): array
+    {
+        return [['requires_action'], ['requires_payment_method']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unresolvedPaymentStates')]
+    public function test_the_exact_payer_can_resolve_a_bank_challenge_or_decline_and_the_one_shortfall_is_collected(string $initialStatus): void
+    {
+        $customer = Customer::factory()->create(['currency_code' => 'AUD', 'facebook_ads_account_id' => 'act_47813', 'facebook_page_id' => '7766']);
+        $approver = $this->attach($customer, 'manager@example.com', 'owner', null);
+        $payer = $this->attach($customer, 'billing@example.com', 'owner', 'visa');
+        $payer->forceFill(['stripe_id' => 'cus_payer', 'subscription_status' => 'active'])->save();
+        $approver->forceFill(['subscription_status' => 'active'])->save();
+        $this->stripe->defaults['cus_payer'] = 'pm_saved';
+        $this->stripe->intentStatus = $initialStatus;
+        [$campaign, $strategy, $fingerprint] = $this->campaignFor($customer);
+        $wallet = \App\Models\AdSpendCredit::factory()->for($customer)->create(['current_balance' => 20, 'currency' => 'AUD']);
+        $funding = $this->createMock(\App\Services\Billing\PlatformFunding::class);
+        $funding->method('assess')->willReturn(['ready' => true, 'platform' => 'facebook', 'account' => '47813', 'currency' => 'AUD', 'payer' => 'agency', 'code' => 'ready', 'message' => 'Verified']);
+        $this->app->instance(\App\Services\Billing\PlatformFunding::class, $funding);
+        $events = $this->createMock(\App\Services\Conversions\CampaignOutcomeEvidence::class);
+        $events->method('forStrategy')->willReturn(['requires_verification' => true, 'verified_for_launch' => true]);
+        $this->app->instance(\App\Services\Conversions\CampaignOutcomeEvidence::class, $events);
+        $launches = app(\App\Services\Deployment\CampaignLaunchIntent::class);
+        $id = $launches->request($campaign, $approver, $strategy->id, [$strategy->id => $fingerprint]);
+        $this->assertNotNull($id);
+        $this->assertFalse($launches->resume($campaign->id, $id));
+        $hold = \Illuminate\Support\Facades\DB::table('launch_funding_reservations')->where('strategy_id', $strategy->id)->sole();
+        $this->assertSame(12000, $hold->charge_cents);
+        $this->assertSame(2000, $hold->held_cents);
+        $this->assertSame('20.00', $wallet->fresh()->current_balance);
+        $this->assertSame('requires_action', $strategy->fresh()->launch_intent['funding']['code']);
+        $url = $strategy->fresh()->launch_intent['funding']['setup_url'];
+        $this->actingAs($approver)->withSession(['active_customer_id' => $customer->id])->get($url)->assertNotFound();
+        $this->actingAs($payer)->withSession(['active_customer_id' => $customer->id])->get($url)
+            ->assertRedirect(route('cashier.payment', ['id' => 'pi_launch_fixture', 'redirect' => route('billing.ad-spend')]));
+        $this->stripe->intentStatus = 'succeeded';
+        $this->assertTrue($launches->resume($campaign->id, $id));
+        $this->assertFalse($launches->resume($campaign->id, $id));
+        $this->assertSame('140.00', $wallet->fresh()->current_balance);
+        $this->assertSame(1, $wallet->transactions()->where('stripe_charge_id', 'pi_launch_fixture')->count());
+        $this->assertSame(1, collect($this->stripe->requests)->where('path', '/v1/payment_intents')->where('method', 'post')->count());
+        $this->assertSame('cus_payer', $this->stripe->intentParams['customer']);
+        $this->assertSame(12000, (int) $this->stripe->intentParams['amount']);
+        $this->assertDatabaseHas('ad_spend_charge_attempts', ['idempotency_key' => 'launch-reservation:'.$id.':12000', 'payment_intent_id' => 'pi_launch_fixture']);
     }
 
     public function test_membership_is_required_to_replace_a_business_payment_method(): void
@@ -226,10 +277,24 @@ class PayerSelectionStripeTransport implements ClientInterface
 
     public array $defaults = [];
 
+    public ?string $intentStatus = null;
+
+    public array $intentParams = [];
+
     public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
     {
         $path = parse_url($absUrl, PHP_URL_PATH);
         $this->requests[] = ['method' => $method, 'path' => $path];
+        if ($this->intentStatus && ($method === 'post' && $path === '/v1/payment_intents' || $method === 'get' && $path === '/v1/payment_intents/pi_launch_fixture')) {
+            if ($method === 'post') {
+                $this->intentParams = $params;
+            }
+            $fields = $this->intentParams;
+            $fields['amount'] = (int) $fields['amount'];
+            $fields['amount_received'] = $this->intentStatus === 'succeeded' ? $fields['amount'] : 0;
+
+            return [json_encode([...$fields, 'id' => 'pi_launch_fixture', 'object' => 'payment_intent', 'status' => $this->intentStatus]), 200, []];
+        }
         if ($path === '/v1/customers/cus_payer' && in_array($method, ['get', 'post'], true)) {
             if ($method === 'post') {
                 $this->defaults['cus_payer'] = $params['invoice_settings']['default_payment_method'];

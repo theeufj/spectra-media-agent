@@ -115,12 +115,21 @@ class BiddingStrategyProgressionTest extends TestCase
 
     public function test_roas_progression_requires_measured_value_and_never_uses_a_default(): void
     {
-        [$campaign, , $writer, $agent] = $this->fixture('TARGET_CPA');
+        [$campaign, $strategy, $writer, $agent] = $this->fixture('TARGET_CPA');
         $agent->month = ['conversions' => 100, 'cost_micros' => 2_000_000_000];
         $agent->recent = ['conversions' => 50, 'cost_micros' => 1_000_000_000];
         $this->assertTrue($agent->evaluate($campaign)['skipped']);
         $this->assertCount(0, $writer->writes);
         $agent->month['conversion_value'] = 10_000;
+        $this->assertTrue($agent->evaluate($campaign)['skipped']);
+        $strategy->forceFill(['conversion_goals' => ['primary_goal' => 'purchase', 'action_resource' => 'customers/1234567890/conversionActions/54']])->save();
+        $binding = app(\App\Services\Conversions\CampaignOutcomeEvidence::class)->binding($strategy);
+        foreach ([3499, 2099] as $value) {
+            \Illuminate\Support\Facades\DB::table('campaign_outcome_events')->insert(['strategy_id' => $strategy->id,
+                'binding' => $binding['fingerprint'], 'source_key' => hash('sha256', (string) $value), 'goal' => 'purchase',
+                'mode' => 'live', 'source' => 'website', 'occurred_at' => now(), 'amount' => $value / 100, 'currency' => 'AUD',
+                'delivery_status' => 'processed', 'provider_receipt' => 'processed-'.$value, 'created_at' => now(), 'updated_at' => now()]);
+        }
         $this->assertTrue($agent->evaluate($campaign)['success']);
         $this->assertSame(4.5, $writer->writes[0][4]);
     }

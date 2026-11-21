@@ -16,13 +16,19 @@ class PublicWebsiteFetcher
         return $this->fetch($url, 'Mozilla/5.0 (compatible; SiteToSpend/1.0)', 30, 10);
     }
 
+    /** Website ownership must be proven on the exact original HTTPS origin. */
+    public function getWithoutRedirects(string $url): Response
+    {
+        return $this->fetch($url, 'SiteToSpend-Verification/1.0', 8, 3, true, false);
+    }
+
     /** A preliminary desktop crawl check; Google uses its own network and IPs. */
     public function getForAd(string $url): Response
     {
         return $this->fetch($url, 'AdsBot-Google (+http://www.google.com/adsbot.html)', 12, 5, true);
     }
 
-    private function fetch(string $url, string $userAgent, float $timeout, float $connectTimeout, bool $boundTotal = false): Response
+    private function fetch(string $url, string $userAgent, float $timeout, float $connectTimeout, bool $boundTotal = false, bool $followRedirects = true): Response
     {
         $deadline = microtime(true) + $timeout;
         for ($hop = 0; $hop < 6; $hop++) {
@@ -51,7 +57,7 @@ class PublicWebsiteFetcher
                         }
                     },
                 ])->get($url);
-            if (! in_array($response->status(), [301, 302, 303, 307, 308], true)) {
+            if (! $followRedirects || ! in_array($response->status(), [301, 302, 303, 307, 308], true)) {
                 return $response;
             }
             $location = $response->header('Location');

@@ -2,11 +2,9 @@
 
 namespace App\Services\FacebookAds;
 
-use App\Features\PerUserFacebookToken;
 use App\Models\Customer;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Log;
-use Laravel\Pennant\Feature;
 
 abstract class BaseFacebookAdsService
 {
@@ -40,39 +38,9 @@ abstract class BaseFacebookAdsService
         return $instance;
     }
 
-    /**
-     * Get the Facebook access token.
-     *
-     * When the PerUserFacebookToken feature flag is active for this customer's
-     * user, resolves a non-expired token from the connections table. Falls back
-     * to the platform System User token in all other cases.
-     */
+    /** All managed campaign calls use the agency system user. */
     protected function getAccessToken(): ?string
     {
-        $user = $this->customer?->users()->first();
-
-        if ($user && Feature::for($user)->active(PerUserFacebookToken::class)) {
-            $connection = $user->connections()
-                ->where('platform', 'facebook_api')
-                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-                ->first();
-
-            if ($connection?->access_token) {
-                Log::info('[FacebookAds] Using per-user OAuth token', [
-                    'customer_id' => $this->customer->id,
-                    'user_id' => $user->id,
-                    'connection_id' => $connection->id,
-                ]);
-
-                return $connection->access_token;
-            }
-
-            Log::warning('[FacebookAds] PerUserFacebookToken flag active but no valid connection found, falling back to system token', [
-                'customer_id' => $this->customer->id,
-                'user_id' => $user->id,
-            ]);
-        }
-
         return config('services.facebook.system_user_token');
     }
 
@@ -135,8 +103,9 @@ abstract class BaseFacebookAdsService
      * @param  array<string, mixed>  $params
      * @return list<array<string, mixed>>
      */
-    protected function getAllPages(string $endpoint, array $params = [], int $maxPages = 25): array
+    protected function getAllPages(string $endpoint, array $params = [], int $maxPages = 25, ?bool &$complete = null): array
     {
+        $complete = false;
         $rows = [];
         $after = null;
 
@@ -159,16 +128,19 @@ abstract class BaseFacebookAdsService
 
             // A next link is the only reliable "there is more": the cursor is
             // present on the last page too.
-            $after = isset($response['paging']['next'])
-                ? ($response['paging']['cursors']['after'] ?? null)
-                : null;
+            if (empty($response['paging']['next'])) {
+                $complete = true;
 
-            if ($after === null) {
                 return $rows;
             }
+            $next = $response['paging']['cursors']['after'] ?? null;
+            if (! is_string($next) || $next === '' || $next === $after) {
+                break;
+            }
+            $after = $next;
         }
 
-        Log::warning('Facebook paging stopped at the page cap — results may be incomplete', [
+        Log::warning('Facebook paging stopped before a complete response', [
             'endpoint' => $endpoint,
             'pages' => $maxPages,
             'rows' => count($rows),

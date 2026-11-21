@@ -137,6 +137,13 @@ class DeploymentStatusPresenter
                 $delivery['status'] = 'learning';
                 $delivery['reason'] = 'Google has enabled your campaign and its bidding strategy is learning. Check campaign reporting for impressions.';
             } elseif (! $campaign->googleAdsPerformanceData()
+                ->where(function ($query) use ($campaign, $resource) {
+                    $query->where('google_campaign_id', basename($resource));
+                    if (! $campaign->strategies()->whereNotNull('google_ads_campaign_id')
+                        ->where('google_ads_campaign_id', '!=', $resource)->where('google_ads_campaign_id', '!=', basename($resource))->exists()) {
+                        $query->orWhereNull('google_campaign_id');
+                    }
+                })
                 ->where('date', '>=', $strategy->deployed_at?->copy()->setTimezone($campaign->customer->timezone ?: config('app.timezone'))->toDateString())
                 ->where('impressions', '>', 0)->exists()) {
                 $delivery['status'] = 'eligible';

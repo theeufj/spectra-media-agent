@@ -111,6 +111,7 @@ class MetricsFetcher
     {
         try {
             $data = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('google_campaign_id', (string) $campaign->googleCampaignNumericId())
                 ->whereBetween('date', [
                     now()->subDays(60)->toDateString(),
                     now()->subDays(30)->toDateString(),

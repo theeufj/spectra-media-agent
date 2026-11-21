@@ -113,6 +113,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         if (! $this->hasPixelInstalled($context)) {
             if ($this->targetsWebsiteSignup($strategy)) {
                 $result->addError('signup_dataset_missing', 'Connect and verify the website signup dataset on this Meta ad account before deploying.');
+            } elseif (FacebookCampaignMetrics::declaredGoal($strategy) !== null) {
+                $result->addError('website_dataset_missing', 'Verify the website conversion dataset on this Meta ad account before deploying.');
             } else {
                 $result->addWarning('no_pixel', 'No verified Meta dataset is available for this ad account. Conversion tracking and Advantage+ campaigns will be limited.');
             }
@@ -342,7 +344,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
             foreach ($images as $index => $image) {
                 try {
-                    $copy = $variations[$index % count($variations)];
+                    $copy = $strategy->creative_approval['facebook_variants']['image_ad_'.$image->id] ?? $variations[$index % count($variations)];
                     $imageUrl = StorageHelper::url($image->s3_path);
                     $creative = $this->creativeService->createImageCreative(
                         $accountId,
@@ -369,6 +371,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     );
                     if ($ad && isset($ad['id'])) {
                         $result->addPlatformId('image_ad_'.$image->id, $ad['id']);
+                        if ($strategy->creative_approval !== null && $adsCreated !== count($strategy->creative_approval['image_ids']) + count($strategy->creative_approval['video_ids'])) {
+                            $result->addError('meta_partial_release', 'Meta must confirm every selected ad before this campaign can launch.');
+
+                            return $result;
+                        }
                         if ($adsCreated === 0) {
                             // Store the first ad ID on the strategy for reference
                             $strategy->facebook_creative_id = $creative['id'];
@@ -390,7 +397,13 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
             foreach ($videos as $index => $video) {
                 try {
-                    $copy = $variations[($images->count() + $index) % count($variations)];
+                    $copy = $strategy->creative_approval['facebook_variants']['video_ad_'.$video->id] ?? $variations[($images->count() + $index) % count($variations)];
+                    if ($strategy->creative_approval !== null) {
+                        $bytes = $video->s3_path ? StorageHelper::get($video->s3_path) : null;
+                        if (! $bytes || ! app(\App\Services\Creative\CreativeRelease::class)->matchesMedia($strategy, 'video', $video->id, $bytes)) {
+                            throw new \RuntimeException('A selected video no longer matches the approved render.');
+                        }
+                    }
                     $videoUrl = StorageHelper::url($video->s3_path);
                     $creative = $this->creativeService->createVideoCreative(
                         $accountId,
@@ -468,18 +481,19 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): array {
         // Idempotency guard — reuse existing campaign on retry
-        if (! empty($campaign->facebook_ads_campaign_id)) {
+        $existingId = $strategy->reusableFacebookCampaignId();
+        if ($existingId !== null) {
             Log::info('FacebookAdsExecutionAgent: Reusing existing Facebook campaign from prior attempt', [
                 'campaign_id' => $campaign->id,
-                'facebook_ads_campaign_id' => $campaign->facebook_ads_campaign_id,
+                'facebook_ads_campaign_id' => $existingId,
             ]);
-            $result->addPlatformId('campaign', $campaign->facebook_ads_campaign_id);
+            $result->addPlatformId('campaign', $existingId);
 
             if ($strategy->facebook_adset_id) {
-                return ['id' => $campaign->facebook_ads_campaign_id];
+                return ['id' => $existingId];
             }
 
-            $existing = $this->campaignService->getCampaign($campaign->facebook_ads_campaign_id);
+            $existing = $this->campaignService->getCampaign($existingId);
             if (! isset($existing['objective'])) {
                 throw new \RuntimeException('Could not verify the existing Facebook campaign objective before retrying ad-set creation.');
             }
@@ -495,8 +509,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
-            $campaign->name,
-            $this->targetsWebsiteSignup($strategy) ? 'OUTCOME_LEADS' : ($campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC'),
+            \App\Services\Deployment\SubmittedCampaign::name($strategy, 'facebook', $accountId, $campaign->name),
+            match (FacebookCampaignMetrics::declaredGoal($strategy)) {
+                'signup', 'lead' => 'OUTCOME_LEADS', 'purchase' => 'OUTCOME_SALES',
+                default => $campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC',
+            },
             $dailyBudgetCents,
             'PAUSED',
         );
@@ -506,11 +523,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         $result->addPlatformId('campaign', $fbCampaign['id']);
-        $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
-        $campaign->save();
-
-        $strategy->facebook_campaign_id = $fbCampaign['id'];
-        $strategy->save();
+        $strategy->recordFacebookCampaignId((string) $fbCampaign['id']);
 
         return $fbCampaign;
     }
@@ -561,7 +574,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $targeting = $row['evidence']['meta']['targeting_spec'] ?? FacebookAudienceTargeting::forReview($strategy, $countries);
         }
 
-        $websiteSignup = $this->targetsWebsiteSignup($strategy);
+        $event = FacebookCampaignMetrics::pixelEvent(FacebookCampaignMetrics::declaredGoal($strategy));
         $endDate = $campaign->getAttribute('end_date');
         $endTime = $endDate === null ? null : \Carbon\CarbonImmutable::parse(
             $endDate->toDateString(), $this->customer->timezone ?: config('app.timezone')
@@ -571,7 +584,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $promotedObject = null;
         if ($this->customer->facebook_pixel_id) {
             $eventType = match (true) {
-                $websiteSignup => 'COMPLETE_REGISTRATION',
+                $event !== null => strtoupper($event),
                 str_contains($objective, 'LEADS') => 'LEAD',
                 str_contains($objective, 'SALES') => 'PURCHASE',
                 default => 'LEAD',
@@ -590,11 +603,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaignId,
             $campaign->name.' - Ad Set',
             $targeting,
-            $websiteSignup ? 'OFFSITE_CONVERSIONS' : $optimizationGoal,
+            $event !== null ? 'OFFSITE_CONVERSIONS' : $optimizationGoal,
             $this->childStatus(),
             $promotedObject,
             endTime: $endTime,
-            destinationType: $websiteSignup ? 'WEBSITE' : null,
+            destinationType: $event !== null ? 'WEBSITE' : null,
         );
 
         if (! $fbAdSet || ! isset($fbAdSet['id'])) {

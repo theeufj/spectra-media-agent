@@ -12,6 +12,10 @@ class GoogleAdsPerformanceData extends Model
 
     protected $fillable = [
         'campaign_id',
+        'strategy_id',
+        'google_campaign_id',
+        'google_account_id',
+        'currency',
         'date',
         'impressions',
         'clicks',

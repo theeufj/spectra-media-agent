@@ -66,6 +66,11 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
 
             return;
         }
+        if ($strategy->creative_approval !== null && count($strategy->creative_approval['copy_ids'] ?? []) !== 1) {
+            $result->addError('pmax_copy_selection', 'Choose one complete Performance Max copy set before launching.');
+
+            return;
+        }
         $textAssets = PerformanceMaxAssetSpec::text($adCopy);
         if (count($textAssets[AssetFieldType::HEADLINE]) < 3 || $textAssets[AssetFieldType::LONG_HEADLINE] === []
             || count($textAssets[AssetFieldType::DESCRIPTION]) < 2 || ! array_any($textAssets[AssetFieldType::DESCRIPTION], fn (string $text) => mb_strlen($text) <= 60)) {
@@ -116,7 +121,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             $campaignName = $campaign->name.' - PMax - '.$timestamp;
 
             $campaignData = [
-                'businessName' => $campaignName,
+                'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
                 'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
                 ...GoogleCampaignSchedule::for($campaign),
             ];
@@ -151,6 +156,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
 
         // 2. Prepare Assets
         $assets = [];
+        $mediaBindings = [];
         $createTextAssetService = new CreateTextAsset($this->customer);
         $uploadImageService = new UploadImageAsset($this->customer);
 
@@ -172,7 +178,12 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
 
         $approvedLogos = $imageCollaterals->filter(fn (ImageCollateral $image) => isset($reviewedLogos[$image->id]));
         $marketingImages = $imageCollaterals->reject(fn (ImageCollateral $image) => PerformanceMaxLogo::designated($image));
-        foreach ($approvedLogos->take(5)->concat($marketingImages->take(15)) as $image) {
+        if ($approvedLogos->count() > 5 || $marketingImages->count() > 15 || $approvedLogos->count() + $marketingImages->count() !== $imageCollaterals->count()) {
+            $result->addError('pmax_image_selection', 'Review the selected marketing images and logos against the platform limits before launch.');
+
+            return;
+        }
+        foreach ($approvedLogos->concat($marketingImages) as $image) {
             try {
                 $imageData = StorageHelper::get($image->s3_path);
                 if (! $imageData) {
@@ -202,6 +213,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
                     continue;
                 }
                 $assets[] = ['asset' => $assetResourceName, 'field_type' => $field];
+                $mediaBindings[$assetResourceName] = ['type' => 'image', 'id' => $image->id, 'field' => AssetFieldType::name($field)];
                 if ($field === AssetFieldType::LOGO) {
                     $hasLogo = true;
                 }
@@ -211,6 +223,11 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             }
         }
 
+        if (count($assets) !== array_sum(array_map('count', $textAssets)) + $imageCollaterals->count()) {
+            $result->addError('pmax_partial_selection', 'Google did not register every selected headline, description and image. The campaign is still paused.');
+
+            return;
+        }
         if (! $hasLogo) {
             $result->addError('pmax_business_logo_unavailable', 'Google could not register the customer-approved business logo. Check the selected logo and retry the paused deployment.');
 
@@ -220,23 +237,31 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         // 2.3 Video Assets — collected separately and linked AFTER the asset group
         // is created, so a short/invalid video can't abort the whole batch.
         $uploadVideoAssetService = new UploadVideoAsset($this->customer);
-        $videoCollaterals = VideoCollateral::forDeployment($strategy)
-            ->where('status', 'completed')
-            ->whereNotNull('youtube_video_id')
-            ->limit(15)
-            ->get();
-        $videosWithoutYouTubeId = VideoCollateral::forDeployment($strategy)
-            ->where('status', 'completed')
-            ->whereNull('youtube_video_id')
-            ->count();
+        $videos = VideoCollateral::forDeployment($strategy)->where('status', 'completed');
+        if ((clone $videos)->whereNull('youtube_video_id')->exists()) {
+            (new \App\Jobs\UploadPMaxVideoAssets($strategy->id, $customerId, prepareOnly: true))->handle();
+        }
+        $videoCollaterals = (clone $videos)->whereNotNull('youtube_video_id')->get();
+        if ($videos->count() !== $videoCollaterals->count()) {
+            $result->addError('pmax_video_upload_pending', 'Every selected video must finish uploading before this campaign can launch.');
+
+            return;
+        }
 
         // Pre-register video assets (upload step only — linking happens after group creation)
         $videoAssetResourceNames = [];
         foreach ($videoCollaterals as $video) {
             try {
+                $bytes = $video->s3_path ? StorageHelper::get($video->s3_path) : null;
+                if (! $bytes || ! app(CreativeRelease::class)->matchesMedia($strategy, 'video', $video->id, $bytes)) {
+                    $result->addError('pmax_video_changed', 'A selected video no longer matches the approved render.');
+
+                    return;
+                }
                 $assetResourceName = ($uploadVideoAssetService)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
                 if ($assetResourceName) {
                     $videoAssetResourceNames[] = $assetResourceName;
+                    $mediaBindings[$assetResourceName] = ['type' => 'video', 'id' => $video->id, 'field' => 'YOUTUBE_VIDEO'];
                 } else {
                     $result->addWarning('pmax_video_asset_unavailable', 'Google Ads could not register one of the reviewed video assets.');
                 }
@@ -246,8 +271,14 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             }
         }
 
-        if ($videosWithoutYouTubeId > 0) {
-            $result->addWarning('videos_pending_youtube', "{$videosWithoutYouTubeId} video(s) have no YouTube ID yet — they will be linked automatically once uploaded. Run: php artisan pmax:repair-assets --strategy={$strategy->id}");
+        if ($videoCollaterals->count() > 15 || count($videoAssetResourceNames) !== $videoCollaterals->count()) {
+            $result->addError('pmax_video_selection', 'Google must register every reviewed video within the group limit before launch.');
+
+            return;
+        }
+        $required = array_map(fn ($asset) => ['asset' => $asset['asset'], 'field_type' => AssetFieldType::name($asset['field_type'])], $assets);
+        foreach ($videoAssetResourceNames as $videoAssetResource) {
+            $required[] = ['asset' => $videoAssetResource, 'field_type' => 'YOUTUBE_VIDEO'];
         }
 
         // 3. Create Asset Group with text + image assets only (no videos)
@@ -312,16 +343,10 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             }
         }
 
-        // Dispatch async job to upload any videos that don't have YouTube IDs yet
-        if ($videosWithoutYouTubeId > 0) {
-            \App\Jobs\UploadPMaxVideoAssets::dispatch($strategy->id, $customerId, $assetGroupResourceName)
-                ->delay(now()->addSeconds(30));
-        }
-
         // 4. Add Ad Extensions (Sitelinks, Callouts) - PMax can use campaign-level assets
         $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
 
-        $result->addMetadata('google_pmax_staging', ['campaign_resource' => $campaignResourceName,
+        $result->addMetadata('google_pmax_staging', ['campaign_resource' => $campaignResourceName, 'required_assets' => $required, 'media_bindings' => $mediaBindings,
             'asset_group' => $assetGroupResourceName, 'final_urls' => [$finalUrl], 'native_cta' => $nativeCta,
             'goal_action' => $intent['action_resource'], 'budget_micros' => \App\Services\Campaigns\CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget)]);
     }
