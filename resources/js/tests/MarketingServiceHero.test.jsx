@@ -147,7 +147,7 @@ describe('Homepage ad preview', () => {
             expect(within(card).getByText(/See sample ad copy for your website/)).toBeVisible();
             expect(within(card).getByRole('form', { name: 'Build my ads' })).toBeVisible();
             expect(window.location.search).toBe('?utm_source=google');
-            expect(container.querySelector('a[href^="/register"]')).toBeNull();
+            expect(within(card).getByRole('link', { name: 'Create a free account without a preview' })).toHaveAttribute('href', '/register');
         } finally {
             window.history.replaceState({}, '', '/');
             if (previous) window.Element.prototype.scrollIntoView = previous;
@@ -161,7 +161,8 @@ describe('Homepage ad preview', () => {
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ errors: { url: ['Check your website address.'] } }), { status: 422 }))
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({
                 success: true, url: website, ad_copy: { headlines: ['Example offer'], descriptions: ['Built for the example site.'] },
-            })));
+            })))
+            .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ ok: true })));
         vi.stubGlobal('fetch', fetch);
         render(<Landing publicContent={homeContent} />);
         const form = screen.getByRole('form', { name: 'Build my ads' });
@@ -175,7 +176,11 @@ describe('Homepage ad preview', () => {
         fireEvent.submit(form);
         const preview = await screen.findByRole('region', { name: 'Your ad preview' });
         expect(within(preview).getByText('Example offer', { exact: false })).toBeVisible();
-        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(fetch.mock.calls.filter(([url]) => url === '/api/demo/generate-full')).toHaveLength(2);
+        const telemetry = fetch.mock.calls.filter(([url]) => url === '/spectra/conversion');
+        expect(telemetry).toHaveLength(1);
+        expect(JSON.parse(telemetry[0][1].body)).toEqual({ event: 'try_now' });
+        expect(preview).toHaveFocus();
         expect(fetch.mock.calls[1][0]).toBe('/api/demo/generate-full');
         expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: website, first_name: 'Jordan', email: 'jordan@example.test' });
         expect(within(preview).getByRole('link').getAttribute('href')).toBe('/register?demo_url=' + encodeURIComponent(website));
@@ -199,6 +204,7 @@ describe('Homepage ad preview', () => {
         expect(form).toHaveAttribute('aria-busy', 'true');
         expect(screen.getByRole('status')).toHaveTextContent('Reading your site and preparing an ad preview.');
         expect(screen.getByRole('button', { name: 'Building your preview…' })).toBeDisabled();
+        expect(screen.getByRole('link', { name: 'Create a free account without a preview' })).toBeVisible();
         reject(new TypeError('Network failure'));
         expect(await screen.findByRole('alert')).toHaveTextContent('Please retry.');
         expect(screen.getByLabelText('Your website URL')).toHaveValue('example.test');

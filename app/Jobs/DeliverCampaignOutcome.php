@@ -162,8 +162,8 @@ class DeliverCampaignOutcome implements ShouldQueue
 
             return;
         }
-        $ids = array_filter(array_intersect_key($payload, array_flip(['gclid', 'gbraid', 'wbraid'])));
-        if (count($ids) !== 1) {
+        $ids = \App\Support\AdClickIdentifiers::google($payload);
+        if ($ids === null) {
             $this->save('awaiting_evidence');
 
             return;

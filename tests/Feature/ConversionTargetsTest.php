@@ -117,6 +117,16 @@ class ConversionTargetsTest extends TestCase
         ]);
     }
 
+    public function test_anonymous_preview_and_signup_use_the_same_web_click_identifier(): void
+    {
+        $this->withSession(['click_ids' => ['gbraid' => 'app-click', 'wbraid' => 'web-click']])
+            ->postJson('/spectra/conversion', ['event' => 'try_now'])->assertOk();
+
+        $this->assertDatabaseHas('spectra_conversion_events', [
+            'event' => 'try_now', 'gclid' => 'web-click', 'user_id' => null,
+        ]);
+    }
+
     public function test_authenticated_visitor_falls_back_to_the_stored_gclid(): void
     {
         $user = User::factory()->create(['gclid' => 'StoredGclid456']);

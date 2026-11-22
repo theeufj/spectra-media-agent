@@ -3,8 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Campaign;
+use App\Services\Campaigns\RestartOwnedSignupCampaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 
 /** Fresh platform metrics. API failures propagate; stale local spend is not a stop signal. */
 class GetCampaignSpendSafety extends BaseGoogleAdsService
@@ -20,17 +22,24 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($resource !== "customers/{$customerId}/campaigns/{$campaign->googleCampaignNumericId()}") {
             throw new \RuntimeException('Spend safety campaign resource does not match its customer account.');
         }
-        $query = 'SELECT customer.time_zone, customer.currency_code, campaign.start_date_time, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
+        $query = 'SELECT customer.id, customer.status, customer.manager, customer.test_account, customer.time_zone, customer.currency_code, campaign.resource_name, campaign.start_date_time, campaign.end_date_time, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
             .'campaign_budget.amount_micros FROM campaign '
             ."WHERE campaign.resource_name = '{$resource}'";
         $snapshot = null;
         foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
             $snapshot = [
                 'status' => $row->getCampaign()->getStatus(),
+                'customer_id' => (string) $row->getCustomer()->getId(),
+                'customer_status' => $row->getCustomer()->getStatus(),
+                'manager_or_test' => $row->getCustomer()->getManager() || $row->getCustomer()->getTestAccount(),
+                'resource' => $row->getCampaign()->getResourceName(),
                 'campaign_type' => $row->getCampaign()->getAdvertisingChannelType(),
                 'account_timezone' => $row->getCustomer()->getTimeZone(),
                 'currency_code' => $row->getCustomer()->getCurrencyCode(),
                 'campaign_start_date' => $row->getCampaign()->getStartDateTime(),
+                'starts_at_local' => $row->getCampaign()->getStartDateTime(),
+                'ends_at_local' => $row->getCampaign()->getEndDateTime(),
+                'campaign_end_date' => CampaignDateTimes::calendarDate($row->getCampaign()->getEndDateTime()),
                 'bidding_strategy' => $row->getCampaign()->getBiddingStrategyType(),
                 'cpc_bid_ceiling_micros' => (int) ($row->getCampaign()->getTargetSpend()?->getCpcBidCeilingMicros() ?? 0),
                 'daily_budget_micros' => (int) $row->getCampaignBudget()->getAmountMicros(),
@@ -61,11 +70,16 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         // clicks mature; it cannot accidentally count pre-trial spend twice.
         $snapshot['matured_cost_micros'] = $this->metricsBetween($customerId, $resource, $snapshot['campaign_start_date'], $end)['cost_micros'];
         $windowStart = max($start, $snapshot['campaign_start_date']);
+        $restartDate = $snapshot['campaign_type'] === AdvertisingChannelType::PERFORMANCE_MAX
+            ? RestartOwnedSignupCampaign::verifiedBaselineDate($campaign, $resource, $snapshot['account_timezone']) : null;
+        if ($restartDate !== null) {
+            $windowStart = max($windowStart, $restartDate);
+        }
         $matured = $this->metricsBetween($customerId, $resource, $windowStart, $end);
         $recent = $this->metricsBetween($customerId, $resource, $windowStart, $today->toDateString());
         $snapshot['window_matured_cost_micros'] = $matured['cost_micros'];
         $snapshot['window_conversions'] = $recent['conversions'];
-        $snapshot['window_start'] = $start;
+        $snapshot['window_start'] = $restartDate === null ? $start : $windowStart;
         $snapshot['matured_through'] = $end;
         $snapshot['amplifying_bid_modifiers'] = [];
         foreach (['campaign_criterion', 'ad_group_bid_modifier', 'ad_group_criterion'] as $entity) {

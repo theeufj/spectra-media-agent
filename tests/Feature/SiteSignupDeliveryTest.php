@@ -27,13 +27,13 @@ class SiteSignupDeliveryTest extends TestCase
         $event = SpectraConversionEvent::where('event', 'signup')->sole();
         $this->assertEmpty($event->ad_identifiers);
         $this->assertFalse($event->uploaded_to_google);
-        $this->assertSame('no_click_identifier', $event->googleDeliveryStatus());
+        $this->assertSame('consent_not_granted', $event->googleDeliveryStatus());
         Queue::assertNotPushed(RecordSiteGoogleConversion::class);
     }
 
     public function test_real_registration_uses_durable_id_deduplication_and_actual_registration_time(): void
     {
-        $user = User::factory()->create(['wbraid' => 'fixture-braid', 'created_at' => now()->subMinutes(10)]);
+        $user = User::factory()->create(['tenant_key' => 'sitetospend', 'ad_measurement_consent' => true, 'wbraid' => 'fixture-braid', 'created_at' => now()->subMinutes(10)]);
         $service = app(SiteSignupConversionService::class);
         $event = $service->record($user);
         $second = $service->record($user);
@@ -53,7 +53,7 @@ class SiteSignupDeliveryTest extends TestCase
 
     public function test_queue_outage_preserves_event_and_reports_failure_without_breaking_signup(): void
     {
-        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        $user = User::factory()->create(['tenant_key' => 'sitetospend', 'ad_measurement_consent' => true, 'gclid' => 'fixture-click']);
         Bus::shouldReceive('dispatch')->once()->andThrow(new \RuntimeException('Fixture queue unavailable'));
         $before = ExceptionLog::count();
         $event = app(SiteSignupConversionService::class)->record($user);
@@ -65,16 +65,20 @@ class SiteSignupDeliveryTest extends TestCase
     public function test_google_signup_records_once_and_existing_google_login_is_not_a_new_conversion(): void
     {
         Mail::fake();
-        $identity = (new \Laravel\Socialite\Two\User)->map([
+        $identity = (new \Laravel\Socialite\Two\User)->setRaw(['email_verified' => true])->map([
             'id' => 'fixture-id', 'email' => 'google-fixture@example.com', 'name' => 'Google fixture',
         ]);
         $provider = Mockery::mock();
         $provider->shouldReceive('user')->andReturn($identity);
         Socialite::shouldReceive('driver')->with('google')->twice()->andReturn($provider);
-        $this->withSession(['click_ids' => ['gbraid' => 'fixture-google-braid']])
+        $this->withSession(['click_ids' => ['gbraid' => 'fixture-google-braid'], 'oauth_signup_measurement' => ['consent' => true, 'version' => 'signup-email-v1']])
             ->get('/auth/google/callback')->assertRedirect();
         $user = User::where('email', 'google-fixture@example.com')->firstOrFail();
         $this->assertSame('fixture-google-braid', $user->gbraid);
+        $this->assertTrue($user->ad_measurement_consent);
+        $this->assertFalse(SpectraConversionEvent::sole()->hasSignupEmailMatch());
+        $this->assertArrayNotHasKey('google_email_hash', SpectraConversionEvent::sole()->verified_source);
+        $this->assertFalse(session()->has('oauth_signup_measurement'));
         $this->assertDatabaseCount('spectra_conversion_events', 1);
         Queue::assertPushed(RecordSiteGoogleConversion::class, 1);
         $this->get('/auth/google/callback')->assertRedirect();

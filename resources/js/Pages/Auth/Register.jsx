@@ -1,12 +1,10 @@
-import { useEffect } from 'react';
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import PlatformIcon from '@/Components/PlatformIcon';
 import TurnstileField from '@/Components/TurnstileField';
 import { Field, OrDivider, OAUTH_BUTTON, SUBMIT } from '@/Components/Forms';
 import { brandTint } from '@/Components/Marketing/Hero';
 import { SparklesIcon } from '@heroicons/react/24/outline';
-import { trackConversion } from '@/utils/conversions';
 import { previewContactFor } from '@/utils/previewContact';
 
 function getDemoUrl() {
@@ -36,20 +34,13 @@ export default function Register({ enabledPlatforms = [] }) {
         name: '',
         email: '',
         ...previewContactFor(demoDomain ? demoUrl : ''),
-        ad_measurement_consent: false,
+        ad_measurement_consent: 0,
+        ad_measurement_consent_version: 'signup-email-v1',
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',
         demo_url: demoDomain ? demoUrl : '',
     });
-
-    // Fire a conversion for visitors arriving from the landing page demo — they've already
-    // seen value from the tool so this signup represents a higher-intent lead.
-    useEffect(() => {
-        if (demoUrl) {
-            trackConversion('sandbox_launched');
-        }
-    }, []);
 
     const submit = (e) => {
         e.preventDefault();
@@ -142,8 +133,9 @@ export default function Register({ enabledPlatforms = [] }) {
                     />
 
                     <label className="flex items-start gap-2 text-sm text-gray-700">
-                        <input type="checkbox" checked={data.ad_measurement_consent} onChange={e => setData('ad_measurement_consent', e.target.checked)} />
-                        Allow Google and Meta to match this signup and future paid conversions to ads using my advertising identifiers. Optional.
+                        <input type="checkbox" name="ad_measurement_consent" checked={data.ad_measurement_consent === 1}
+                            onChange={e => setData('ad_measurement_consent', e.target.checked ? 1 : 0)} />
+                        Optional. Share a hashed version of my email address and my ad click identifiers with Google and Meta to measure which ads led to my signup or a later purchase.
                     </label>
 
                     <button type="submit" disabled={processing} className={SUBMIT}>
@@ -168,17 +160,19 @@ export default function Register({ enabledPlatforms = [] }) {
                         <OrDivider />
                         <div className="space-y-3">
                             {enabledPlatforms.map((platform) => (
-                                <a
+                                <button
                                     key={platform.slug}
-                                    href={
-                                        route(`${platform.slug}.redirect`) +
-                                        (demoUrl ? `?demo_url=${encodeURIComponent(demoUrl)}` : '')
-                                    }
+                                    type="button"
+                                    onClick={() => router.post(route(`register.${platform.slug}.redirect`), {
+                                        ...(demoDomain ? { demo_url: demoUrl } : {}),
+                                        ad_measurement_consent: data.ad_measurement_consent,
+                                        ad_measurement_consent_version: data.ad_measurement_consent_version,
+                                    })}
                                     className={OAUTH_BUTTON}
                                 >
                                     <PlatformIcon slug={platform.slug} />
                                     Sign up with {platform.name}
-                                </a>
+                                </button>
                             ))}
                         </div>
                     </>

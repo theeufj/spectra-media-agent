@@ -41,7 +41,7 @@ class FacebookGraphWriteTest extends TestCase
         config(['services.facebook.spectra_pixel_id' => '123456789', 'services.facebook.system_user_token' => 'test-token']);
         Http::fake(['graph.facebook.com/*/123456789/events' => Http::response(['events_received' => 1, 'fbtrace_id' => 'fixture-receipt'])]);
         $user = User::factory()->create(['fbclid' => 'test-click', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
-        $receipt = app(\App\Services\SiteSignupConversionService::class)->record($user);
+        $receipt = app(\App\Services\SiteSignupConversionService::class)->record($user, 'signup-email-v1', formSuppliedEmail: true);
 
         (new RecordSiteFacebookConversion($user, 'signup', 'https://sitetospend.com/register', 'TestBrowser/1.0'))->handle();
 

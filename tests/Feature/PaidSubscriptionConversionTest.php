@@ -66,6 +66,7 @@ class PaidSubscriptionConversionTest extends TestCase
         $this->withSession(['click_ids' => ['wbraid' => 'fixture-braid']])
             ->post('/register', [
                 'name' => 'Conversion fixture', 'email' => 'conversion-fixture@example.com',
+                'ad_measurement_consent' => true,
                 'password' => 'Password!2345', 'password_confirmation' => 'Password!2345',
             ])->assertRedirect();
         $user = User::where('email', 'conversion-fixture@example.com')->firstOrFail();
@@ -162,7 +163,11 @@ class PaidSubscriptionConversionTest extends TestCase
 
     public function test_failed_upload_retries_the_same_record_timestamp_and_transaction_id(): void
     {
-        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        $user = User::factory()->create(['gclid' => 'fixture-click', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
+        app(\App\Services\SiteSignupConversionService::class)->record($user);
+        $reader = $this->createMock(\App\Services\GoogleAds\SignupImportDestination::class);
+        $reader->expects($this->exactly(2))->method('allowsEmail')->willReturn(false);
+        $this->app->instance(\App\Services\GoogleAds\SignupImportDestination::class, $reader);
         $dm = $this->dataManager();
         Http::fake(['datamanager.googleapis.com/*' => Http::sequence()
             ->push(['error' => 'Temporary provider failure'], 503)
@@ -172,7 +177,7 @@ class PaidSubscriptionConversionTest extends TestCase
             $job->handle($dm);
             $this->fail('A rejected upload must fail the job so the queue retries.');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Temporary provider failure', $e->getMessage());
+            $this->assertStringContainsString('HTTP 503', $e->getMessage());
         }
         $record = SpectraConversionEvent::sole();
         $this->assertFalse($record->uploaded_to_google);
@@ -193,7 +198,8 @@ class PaidSubscriptionConversionTest extends TestCase
     {
         Setting::where('key', 'conversion_resource_name.signup_import')->delete();
         Cache::flush();
-        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        $user = User::factory()->create(['gclid' => 'fixture-click', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
+        app(\App\Services\SiteSignupConversionService::class)->record($user);
         $dm = $this->dataManager();
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('not provisioned');

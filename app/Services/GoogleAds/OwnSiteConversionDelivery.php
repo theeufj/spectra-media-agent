@@ -13,7 +13,7 @@ class OwnSiteConversionDelivery
         foreach (['signup', 'paid_subscription', 'paid_setup'] as $event) {
             $counts = ['registrations_or_payments' => 0, 'provider_accepted' => 0, 'processed' => 0,
                 'processed_with_warnings' => 0, 'processing' => 0, 'processing_failed' => 0, 'processing_unknown' => 0, 'legacy_unverified' => 0,
-                'upload_failed' => 0, 'awaiting_upload' => 0, 'no_click_identifier' => 0];
+                'upload_failed' => 0, 'awaiting_upload' => 0, 'no_click_identifier' => 0, 'consent_not_granted' => 0, 'awaiting_email_verification' => 0];
             $records = SpectraConversionEvent::where('event', $event)->where('mode', 'server_google')
                 ->where('created_at', '>=', now()->subDays($days))
                 ->orderBy('id')->lazyById(200);
@@ -36,7 +36,8 @@ class OwnSiteConversionDelivery
         return is_string($resource) && SpectraConversionEvent::where('event', 'signup')
             ->where('mode', 'server_google')->where('google_conversion_resource', $resource)
             ->where('google_processing_status', 'SUCCESS')->where('uploaded_to_google', true)
-            ->whereNotNull('google_request_id')->whereNotNull('occurred_at')->whereNotNull('ad_identifiers')
-            ->where('google_accepted_at', '>=', now()->subDays($days))->exists();
+            ->whereNotNull('google_request_id')->whereNotNull('occurred_at')
+            ->where('google_accepted_at', '>=', now()->subDays($days))->lazyById(100)
+            ->contains(fn (SpectraConversionEvent $event) => $event->googleDeliveryStatus() === 'processed');
     }
 }

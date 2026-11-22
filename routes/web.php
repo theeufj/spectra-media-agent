@@ -415,9 +415,9 @@ Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     // tell ad-driven conversions from organic ones.
     $clickIds = \App\Http\Middleware\CaptureClickIds::all();
     // Any Google identifier counts — on iOS it is gbraid/wbraid, not gclid.
-    $googleClickId = $clickIds['gclid'] ?? $clickIds['gbraid'] ?? $clickIds['wbraid'] ?? null;
+    $identifiers = \App\Support\AdClickIdentifiers::google($clickIds);
     \App\Models\SpectraConversionEvent::record($event, $user?->id, [
-        'gclid' => $googleClickId ?? $user?->googleClickId(),
+        'gclid' => $identifiers ? reset($identifiers) : $user?->googleClickId(),
         'fbclid' => $clickIds['fbclid'] ?? $user?->fbclid,
     ]);
 

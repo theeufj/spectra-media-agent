@@ -23,15 +23,27 @@ class GoogleController extends Controller
     public function redirect()
     {
         session()->forget(SetupGoogleIdentity::SESSION_KEY);
+        // A login link carries no signup choice. Replace any abandoned OAuth attempt.
+        $request = request();
+        $request->session()->forget('oauth_signup_measurement');
+        if ($request->isMethod('post')) {
+            $request->validate(['ad_measurement_consent' => 'required|boolean', 'ad_measurement_consent_version' => 'nullable|string|max:40']);
+            $request->session()->put('oauth_signup_measurement', [
+                'consent' => $request->boolean('ad_measurement_consent'),
+                'version' => $request->input('ad_measurement_consent_version'),
+            ]);
+        }
         // Preserve demo_url across the OAuth round-trip via session.
-        $demoUrl = request()->query('demo_url');
+        $demoUrl = $request->input('demo_url');
         if ($demoUrl && filter_var($demoUrl, FILTER_VALIDATE_URL)) {
             session(['oauth_demo_url' => $demoUrl]);
         }
 
         // Only request identity scopes — Google Ads is managed via platform MCC,
         // GTM is managed via platform service account. No per-user API access needed.
-        return Socialite::driver('google')->redirect();
+        $redirect = Socialite::driver('google')->redirect();
+
+        return $request->header('X-Inertia') ? \Inertia\Inertia::location($redirect->getTargetUrl()) : $redirect;
     }
 
     public function setupIdentity(Request $request, Customer $customer, SetupGoogleIdentity $identity)
@@ -58,6 +70,11 @@ class GoogleController extends Controller
         }
 
         $demoUrl = session()->pull('oauth_demo_url');
+        $choice = $request->session()->pull('oauth_signup_measurement', []);
+        if (! $googleUser instanceof \Laravel\Socialite\Two\User || ! in_array($googleUser->getRaw()['email_verified'] ?? null, [true, 'true'], true)
+            || ! filter_var($googleUser->getEmail(), FILTER_VALIDATE_EMAIL)) {
+            return redirect()->route('login')->withErrors(['email' => 'Google must verify your email before you can sign in with it.']);
+        }
 
         // Best available tenant signal: the host this callback ran on. OAuth
         // providers redirect to one registered URI, so a skin-domain signup
@@ -72,6 +89,7 @@ class GoogleController extends Controller
             'password' => Hash::make(Str::random(24)),
             'demo_url' => $demoUrl,
             'tenant_key' => $tenant['key'] ?? null,
+            'ad_measurement_consent' => $choice['consent'] ?? null,
         ]);
 
         // Always mark email as verified when signing in via Google (Google has verified it)
@@ -93,9 +111,9 @@ class GoogleController extends Controller
                 $user->refresh();
             }
 
-            app(\App\Services\SiteSignupConversionService::class)->record($user);
-            if (! empty($user->fbclid)) {
-                RecordSiteFacebookConversion::dispatch($user, 'signup', route('register'), request()->userAgent());
+            $receipt = app(\App\Services\SiteSignupConversionService::class)->record($user, $choice['version'] ?? null);
+            if ($user->fbclid && $user->tenant_key === 'sitetospend' && $user->ad_measurement_consent === true) {
+                RecordSiteFacebookConversion::dispatch($user, 'signup', route('register'), request()->userAgent(), $receipt->id);
             }
             if (! empty($user->msclid)) {
                 RecordSiteMicrosoftConversion::dispatch($user, 'signup');

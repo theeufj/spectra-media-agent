@@ -66,12 +66,15 @@ class ConversionTrackingController extends Controller
             ->with('user:id,name,email')
             ->orderByDesc('created_at')
             ->limit(50)
-            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at', 'ad_identifiers', 'google_conversion_resource', 'google_accepted_at', 'google_processing_status', 'google_processing_checked_at', 'google_processing_details', 'browser_invoked_at', 'browser_target_resource'])
+            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'currency', 'uploaded_to_google', 'google_request_id', 'upload_error', 'occurred_at', 'created_at', 'ad_identifiers', 'google_conversion_resource', 'google_accepted_at', 'google_processing_status', 'google_processing_checked_at', 'google_processing_details', 'browser_invoked_at', 'browser_target_resource', 'verified_source'])
             ->map(function ($event) {
                 $data = $event->toArray();
                 $data['google_delivery_status'] = $event->googleDeliveryStatus();
                 $data['has_google_click_identifier'] = $event->hasGoogleClickIdentifier();
                 $data['has_facebook_click_identifier'] = (bool) $event->fbclid;
+                if ($event->upload_error && str_contains($event->upload_error, '{')) {
+                    $data['upload_error'] = 'A previous provider request failed. Raw response details are redacted.';
+                }
                 // Counts and reason codes suffice for diagnostics; never expose
                 // the visitor's raw click identifier to the admin table.
                 unset($data['ad_identifiers'], $data['gclid'], $data['fbclid']);

@@ -50,6 +50,7 @@ class RegisteredUserController extends Controller
             // because it was read raw off the request and fed to a query: an
             // array payload is a 500, and nothing bounded its length.
             'ad_measurement_consent' => ['nullable', 'boolean'],
+            'ad_measurement_consent_version' => ['nullable', 'string', 'max:40'],
             'invitation_token' => ['nullable', 'string', 'max:64'],
         ];
 
@@ -115,9 +116,9 @@ class RegisteredUserController extends Controller
         // integrations). This previously relied on a client-side gtag signup event
         // that no page ever fired, so Google saw none of these registrations.
         $freshUser = $user->fresh();
-        app(\App\Services\SiteSignupConversionService::class)->record($freshUser);
-        if (! empty($freshUser->fbclid)) {
-            RecordSiteFacebookConversion::dispatch($freshUser, 'signup', $request->url(), $request->userAgent());
+        $receipt = app(\App\Services\SiteSignupConversionService::class)->record($freshUser, $request->input('ad_measurement_consent_version'), formSuppliedEmail: true);
+        if ($freshUser->fbclid && $freshUser->tenant_key === 'sitetospend' && $freshUser->ad_measurement_consent === true) {
+            RecordSiteFacebookConversion::dispatch($freshUser, 'signup', $request->url(), $request->userAgent(), $receipt->id);
         }
         if (! empty($freshUser->msclid)) {
             RecordSiteMicrosoftConversion::dispatch($freshUser, 'signup');

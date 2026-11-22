@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AdClickIdentifiers;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -62,7 +63,7 @@ class CaptureClickIds
 
         foreach (self::PARAMS as $param) {
             $value = $request->query($param);
-            if (self::valid($value) && empty($stored[$param])) {
+            if (AdClickIdentifiers::valid($value) && empty($stored[$param])) {
                 $stored[$param] = $value;
             }
         }
@@ -106,12 +107,7 @@ class CaptureClickIds
             return [];
         }
 
-        return array_filter(array_intersect_key($values, array_flip(self::PARAMS)), self::valid(...));
-    }
-
-    private static function valid(mixed $value): bool
-    {
-        return is_string($value) && preg_match('/\A[A-Za-z0-9._~+\/=\\-]{1,255}\z/D', $value) === 1;
+        return array_filter(array_intersect_key($values, array_flip(self::PARAMS)), AdClickIdentifiers::valid(...));
     }
 
     private function matches(array $saved, array $context): bool

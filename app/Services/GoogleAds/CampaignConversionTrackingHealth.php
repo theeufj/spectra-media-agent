@@ -107,7 +107,7 @@ class CampaignConversionTrackingHealth
             ->orderBy('id')->lazyById(200);
         foreach ($records as $record) {
             // Organic registrations and legacy rows do not prove an attributable upload was expected.
-            if (! $record->hasGoogleClickIdentifier() || ! $record->occurred_at) {
+            if ((! $record->hasGoogleClickIdentifier() && ! $record->hasSignupEmailMatch()) || ! $record->occurred_at) {
                 continue;
             }
             $status = $record->googleDeliveryStatus();

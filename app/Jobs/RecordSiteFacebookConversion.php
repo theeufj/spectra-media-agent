@@ -53,6 +53,9 @@ class RecordSiteFacebookConversion implements ShouldQueue
         $source = $this->eventSourceUrl ?? null;
         $userAgent = $this->clientUserAgent ?? null;
         $signup = $this->event === 'signup';
+        if ($signup && $this->user->ad_measurement_consent !== true) {
+            return;
+        }
         if ($signup && (! $source || parse_url($source, PHP_URL_HOST) !== 'sitetospend.com' || ! filled($userAgent))) {
             throw new \RuntimeException('The signup is missing its own-site browser context.');
         }
@@ -61,6 +64,10 @@ class RecordSiteFacebookConversion implements ShouldQueue
         }
         $record = SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->whereNotNull('occurred_at')
             ->when($this->receiptId, fn ($query) => $query->whereKey($this->receiptId))->firstOrFail();
+        if ($signup && (($record->verified_source['kind'] ?? null) !== 'registration'
+            || ($record->verified_source['user_id'] ?? null) !== $this->user->id || ($record->verified_source['consent'] ?? null) !== true)) {
+            return;
+        }
         if (! $signup && (! $this->receiptId || $record->value <= 0 || ! str_starts_with((string) $record->deduplication_key, $this->event.':'))) {
             throw new \LogicException('An authentic positive Stripe receipt is required.');
         }
@@ -80,12 +87,13 @@ class RecordSiteFacebookConversion implements ShouldQueue
         $delivery = ['dataset' => $pixelId, 'event_id' => $id, 'event' => $eventName, 'status' => 'pending'];
         $record->update(['meta_delivery' => $delivery]);
         try {
+            $email = app(\App\Services\SiteSignupConversionService::class)->verifiedFormEmail($this->user, $signup ? $record : null);
             $result = (new ConversionsApiService(new \App\Models\Customer))->sendEvent($pixelId, [
                 'event_name' => $eventName, 'event_time' => $record->occurred_at->timestamp,
                 'event_id' => $id, 'action_source' => $signup ? 'website' : 'system_generated', 'event_source_url' => $source,
                 ...($signup ? [] : ['custom_data' => ['value' => (float) $record->value, 'currency' => $record->currency]]),
                 'user_data' => ['fbc' => 'fb.1.'.($this->user->created_at->timestamp * 1000).'.'.$this->user->fbclid,
-                    'client_user_agent' => $userAgent, ...($this->user->ad_measurement_consent ? ['em' => $this->user->email] : [])],
+                    'client_user_agent' => $userAgent, ...($email !== null ? ['em' => $email] : [])],
             ]);
             if (($result['events_received'] ?? null) !== 1 || empty($result['fbtrace_id'])) {
                 throw new \RuntimeException('Meta did not acknowledge the registration event.');

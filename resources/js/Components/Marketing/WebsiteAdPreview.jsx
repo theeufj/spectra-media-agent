@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from '@inertiajs/react';
 import DemoResultsPanel from '@/Components/DemoResultsPanel';
 import Hero, { brandTint, CTA_PRIMARY, CTA_SIZE_COMPACT } from '@/Components/Marketing/Hero';
 import { trackConversion } from '@/utils/conversions';
@@ -21,6 +22,12 @@ export default function WebsiteAdPreview(hero) {
         }
     }, []);
     useEffect(() => () => demoRequest.current?.abort(), []);
+    useEffect(() => {
+        if (result) {
+            previewCard.current?.focus({ preventScroll: true });
+            previewCard.current?.scrollIntoView?.({ block: 'start' });
+        }
+    }, [result]);
 
     const handleDemoSubmit = async e => {
         e.preventDefault();
@@ -53,7 +60,7 @@ export default function WebsiteAdPreview(hero) {
     };
 
     if (result) return (
-        <section id="build-my-ads" aria-label="Your ad preview" className="scroll-mt-20 bg-white px-4 py-10 sm:px-6 lg:px-8"
+        <section id="build-my-ads" ref={previewCard} tabIndex={-1} aria-label="Your ad preview" className="scroll-mt-20 bg-white px-4 py-10 sm:px-6 lg:px-8"
             style={{ backgroundImage: `linear-gradient(to bottom, ${brandTint(10)}, #fff)` }}>
             <DemoResultsPanel result={result} />
         </section>
@@ -118,6 +125,9 @@ export default function WebsiteAdPreview(hero) {
                         <p role="status" className="text-center text-sm font-medium text-brand-darker">Reading your site and preparing an ad preview. This can take a few minutes.</p>
                     </div>
                 )}
+                <Link href="/register" className="mt-4 inline-block text-sm font-medium text-brand-darker underline underline-offset-2">
+                    Create a free account without a preview
+                </Link>
             </div>
         </Hero>
     );

@@ -52,6 +52,7 @@ class GoogleClickIdentifierTest extends TestCase
             ->post('/register', [
                 'name' => 'Test Person',
                 'email' => 'ios-visitor@example.com',
+                'ad_measurement_consent' => true,
                 'password' => 'Password!2345',
                 'password_confirmation' => 'Password!2345',
             ]);
@@ -71,7 +72,11 @@ class GoogleClickIdentifierTest extends TestCase
         Cache::flush();
         Setting::set('conversion_resource_name.signup_import', 'customers/123/conversionActions/456');
 
-        $user = User::factory()->create([$param => 'TestValue123']);
+        $user = User::factory()->create([$param => 'TestValue123', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
+        app(\App\Services\SiteSignupConversionService::class)->record($user);
+        $reader = $this->createMock(\App\Services\GoogleAds\SignupImportDestination::class);
+        $reader->expects($this->once())->method('allowsEmail')->willReturn(false);
+        $this->app->instance(\App\Services\GoogleAds\SignupImportDestination::class, $reader);
 
         /** @var DataManagerService&\Mockery\MockInterface $dm */
         $dm = Mockery::mock(DataManagerService::class);
@@ -86,7 +91,7 @@ class GoogleClickIdentifierTest extends TestCase
         $this->assertDatabaseHas('spectra_conversion_events', [
             'user_id' => $user->id,
             'event' => 'signup',
-            'gclid' => 'TestValue123',
+            'gclid' => $param === 'gclid' ? 'TestValue123' : null,
             'uploaded_to_google' => true,
         ]);
     }
@@ -96,6 +101,10 @@ class GoogleClickIdentifierTest extends TestCase
         $user = User::factory()->create(['gclid' => 'G', 'gbraid' => 'B', 'wbraid' => 'W']);
 
         $this->assertSame(['gclid' => 'G'], $user->googleAdIdentifiers());
+        $user->gclid = '{gclid}';
+        $this->assertSame(['wbraid' => 'W'], $user->googleAdIdentifiers());
+        $user->wbraid = '';
+        $this->assertSame(['gbraid' => 'B'], $user->googleAdIdentifiers());
     }
 
     public function test_a_user_with_no_google_identifier_uploads_nothing(): void

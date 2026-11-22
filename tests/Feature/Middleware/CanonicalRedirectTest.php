@@ -92,6 +92,14 @@ class CanonicalRedirectTest extends TestCase
         }
     }
 
+    public function test_google_campaign_parameters_reach_the_landing_page_even_without_a_click_id(): void
+    {
+        $landing = 'https://sitetospend.com/google-ads-management?gad_source=1&gad_campaignid=12345';
+
+        $this->assertSame(200, $this->response($landing)->getStatusCode());
+        $this->assertSame($landing.'&wbraid=mobile', $this->response($landing.'&wbraid=mobile&junk=1')->headers->get('Location'));
+    }
+
     public function test_a_blog_article_is_canonicalised(): void
     {
         $response = $this->response('https://sitetospend.com/blog/some-article?junk=1');

@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { launchSandbox } from './launch';
 
 const platformColors = {
     google: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-800' },
@@ -40,10 +41,6 @@ function ScenarioCard({ scenarioKey, scenario }) {
 }
 
 export default function SandboxIndex({ scenarios, existingSandbox }) {
-    const handleLaunch = () => {
-        router.post(route('sandbox.launch'));
-    };
-
     const handleDelete = () => {
         if (confirm('This will delete your sandbox and all its data. Continue?')) {
             router.delete(route('sandbox.destroy', existingSandbox.uuid));
@@ -136,7 +133,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
                     {!existingSandbox && (
                         <div className="flex justify-center">
                             <button
-                                onClick={handleLaunch}
+                                onClick={launchSandbox}
                                 className="inline-flex items-center px-8 py-3 bg-violet-600 text-white text-base font-semibold rounded-xl hover:bg-violet-700 shadow-lg shadow-violet-200 transition"
                             >
                                 Launch Sandbox Environment
