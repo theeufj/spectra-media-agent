@@ -92,7 +92,7 @@ const stats = [
  * The <title> and <meta description> written here were duplicates of the
  * server's, not replacements for them — Inertia only swaps tags it owns.
  */
-export default function Landing({ auth, publicContent, plans = [], faqs = [], setupFeeUsd = 999 }) {
+export default function Landing({ auth, tenant, publicContent, plans = [], faqs = [], setupFeeUsd = 999 }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
 
@@ -104,6 +104,7 @@ export default function Landing({ auth, publicContent, plans = [], faqs = [], se
 
                 <main>
                     <WebsiteAdPreview
+                        measureFunnel={tenant?.key === 'sitetospend'}
                         eyebrow={publicContent.eyebrow}
                         headline={publicContent.headline}
                         sub={publicContent.intro}

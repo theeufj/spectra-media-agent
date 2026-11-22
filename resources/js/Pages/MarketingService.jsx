@@ -5,8 +5,10 @@ import Footer from '@/Components/Footer';
 import Hero, { AD_PREVIEW_CTA } from '@/Components/Marketing/Hero';
 import CtaBand from '@/Components/Marketing/CtaBand';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
+import { useSignupFunnel } from '@/hooks/useSignupFunnel';
 
-export default function MarketingService({ auth, service, publicContent = {}, plans = [] }) {
+export default function MarketingService({ auth, tenant, service, publicContent = {}, plans = [] }) {
+    useSignupFunnel(tenant?.key === 'sitetospend', { landing: service.slug === 'google-ads-management' });
     const setupOnly = service.slug === 'google-ads-setup';
     const managementHero = service.slug === 'google-ads-management' ? publicContent.hero : null;
     const previewCta = managementHero?.primaryCta ?? AD_PREVIEW_CTA;

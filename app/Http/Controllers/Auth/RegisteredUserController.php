@@ -9,6 +9,7 @@ use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\Customer;
 use App\Models\User;
 use App\Rules\CloudflareTurnstile;
+use App\Services\SignupFunnel;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,7 +60,14 @@ class RegisteredUserController extends Controller
             $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
         }
 
-        $request->validate($rules);
+        $funnel = app(SignupFunnel::class);
+        $funnel->registrationSubmitted($request);
+        try {
+            $request->validate($rules);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $funnel->registrationFailed($request, $exception);
+            throw $exception;
+        }
 
         $demoUrl = $request->input('demo_url');
 
@@ -73,6 +81,8 @@ class RegisteredUserController extends Controller
             'tenant_key' => $tenant['key'] ?? null,
             'ad_measurement_consent' => $request->has('ad_measurement_consent') ? $request->boolean('ad_measurement_consent') : null,
         ]);
+
+        $funnel->registered($request, $user);
 
         // A lead who registers stops being a lead. Without this both chains
         // run and they get told what they are missing after they have joined.

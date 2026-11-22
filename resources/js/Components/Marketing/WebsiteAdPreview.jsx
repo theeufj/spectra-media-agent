@@ -5,8 +5,18 @@ import Hero, { brandTint, CTA_PRIMARY, CTA_SIZE_COMPACT } from '@/Components/Mar
 import { trackConversion } from '@/utils/conversions';
 import { fetchJson, HttpError } from '@/utils/http';
 import { rememberPreviewContact } from '@/utils/previewContact';
+import { useSignupFunnel } from '@/hooks/useSignupFunnel';
 
-export default function WebsiteAdPreview(hero) {
+function previewFailureReason(error) {
+    if (error.name === 'AbortError') return 'timeout';
+    if (error instanceof TypeError) return 'network';
+    if (error.status === 422) return 'validation';
+    if (error.status === 429) return 'rate_limited';
+    return 'unavailable';
+}
+
+export default function WebsiteAdPreview({ measureFunnel, ...hero }) {
+    const recordStage = useSignupFunnel(measureFunnel, { landing: true });
     const [url, setUrl] = useState('');
     const [firstName, setFirstName] = useState('');
     const [email, setEmail] = useState('');
@@ -21,17 +31,29 @@ export default function WebsiteAdPreview(hero) {
             previewCard.current?.scrollIntoView({ block: 'start' });
         }
     }, []);
-    useEffect(() => () => demoRequest.current?.abort(), []);
+    useEffect(() => () => {
+        const pending = demoRequest.current;
+        demoRequest.current = null;
+        pending?.abort();
+    }, []);
     useEffect(() => {
         if (result) {
+            recordStage('preview_succeeded');
             previewCard.current?.focus({ preventScroll: true });
             previewCard.current?.scrollIntoView?.({ block: 'start' });
         }
-    }, [result]);
+    }, [result, recordStage]);
 
     const handleDemoSubmit = async e => {
         e.preventDefault();
-        if (demoRequest.current || !url.trim()) return;
+        if (demoRequest.current) return;
+        recordStage('preview_started');
+        if (!url.trim()) {
+            recordStage('preview_failed', 'validation');
+            setError('Enter your website address to build a preview.');
+            return;
+        }
+        recordStage('preview_submitted');
         const website = /^https?:\/\//i.test(url.trim()) ? url.trim() : 'https://' + url.trim();
         const controller = new AbortController();
         demoRequest.current = controller;
@@ -43,26 +65,31 @@ export default function WebsiteAdPreview(hero) {
                 method: 'POST', signal: controller.signal,
                 json: { url: website, first_name: firstName.trim(), email: email.trim() },
             });
+            if (demoRequest.current !== controller) return;
             if (data?.success !== true || !data.url) throw new Error('Missing preview');
             rememberPreviewContact(data.url, firstName.trim(), email.trim());
             setResult(data);
             trackConversion('try_now');
         } catch (err) {
+            if (demoRequest.current !== controller) return; // Left the page during generation.
+            recordStage('preview_failed', previewFailureReason(err));
             const validation = err instanceof HttpError ? Object.values(err.body?.errors ?? {}).flat()[0] : null;
             const message = err.status === 429 ? 'Too many previews were requested. Please wait a minute and retry.'
                 : validation || (err.name === 'AbortError' ? 'The preview took longer than expected. Please retry.' : 'We could not finish your preview. Please retry.');
             setError(message);
         } finally {
             clearTimeout(timeout);
-            demoRequest.current = null;
-            setLoading(false);
+            if (demoRequest.current === controller) {
+                demoRequest.current = null;
+                setLoading(false);
+            }
         }
     };
 
     if (result) return (
         <section id="build-my-ads" ref={previewCard} tabIndex={-1} aria-label="Your ad preview" className="scroll-mt-20 bg-white px-4 py-10 sm:px-6 lg:px-8"
             style={{ backgroundImage: `linear-gradient(to bottom, ${brandTint(10)}, #fff)` }}>
-            <DemoResultsPanel result={result} />
+            <DemoResultsPanel result={result} onSignupClick={() => recordStage('signup_cta_clicked')} />
         </section>
     );
 
@@ -70,7 +97,13 @@ export default function WebsiteAdPreview(hero) {
         <Hero {...hero}>
             <div id="build-my-ads" ref={previewCard} className="scroll-mt-20 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
                 <p className="mb-3 text-sm text-gray-600">See sample ad copy for your website before you create an account. We use your email to follow up about the preview.</p>
-                <form aria-label="Build my ads" aria-busy={loading} onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
+                <form aria-label="Build my ads" aria-busy={loading}
+                    onChange={() => recordStage('preview_started')}
+                    onInvalidCapture={() => {
+                        recordStage('preview_started');
+                        recordStage('preview_failed', 'validation');
+                    }}
+                    onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <label htmlFor="demo-first-name" className="sr-only">First name</label>
                         <input
@@ -125,7 +158,7 @@ export default function WebsiteAdPreview(hero) {
                         <p role="status" className="text-center text-sm font-medium text-brand-darker">Reading your site and preparing an ad preview. This can take a few minutes.</p>
                     </div>
                 )}
-                <Link href="/register" className="mt-4 inline-block text-sm font-medium text-brand-darker underline underline-offset-2">
+                <Link href="/register" onClick={() => recordStage('signup_cta_clicked')} className="mt-4 inline-block text-sm font-medium text-brand-darker underline underline-offset-2">
                     Create a free account without a preview
                 </Link>
             </div>

@@ -333,6 +333,7 @@ Schedule::command('model:prune', [
         \App\Models\AgentRun::class,
         \App\Models\AgentActivity::class,
         \App\Models\FeatureUsageDaily::class,
+        \App\Models\SignupFunnelJourney::class,
     ],
 ])->daily()->withoutOverlapping();
 

@@ -16,6 +16,9 @@ use App\Http\Controllers\SeoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::post('/funnel/stages', \App\Http\Controllers\SignupFunnelStageController::class)
+    ->withoutMiddleware([\App\Http\Middleware\CaptureClickIds::class, \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class])
+    ->middleware('throttle:45,1')->name('public-funnel.stage');
 Route::get('/features', [LandingController::class, 'features'])->name('features');
 Route::get('/how-it-works', [LandingController::class, 'howItWorks'])->name('how-it-works');
 Route::get('/pricing', [LandingController::class, 'pricing'])->name('pricing');

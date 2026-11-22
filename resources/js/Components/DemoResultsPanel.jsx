@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
-export default function DemoResultsPanel({ result }) {
+export default function DemoResultsPanel({ result, onSignupClick }) {
     if (!result) return null;
 
     const { url, ad_copy, visuals, forecast, notes = [] } = result;
@@ -128,6 +128,7 @@ export default function DemoResultsPanel({ result }) {
                     <p className="text-gray-600 mb-6">Save your website, check your business profile and choose how we build your campaigns. You review budget and ads before anything goes live.</p>
                     <Link
                         href={`/register?demo_url=${encodeURIComponent(url)}`}
+                        onClick={onSignupClick}
                         className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors w-full sm:w-auto"
                     >
                         Create an account — free to explore
