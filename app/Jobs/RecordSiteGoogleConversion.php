@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\SpectraConversionEvent;
 use App\Models\User;
 use App\Services\GoogleAds\DataManagerService;
+use App\Services\GoogleAds\SignupImportDestination;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -126,6 +127,17 @@ class RecordSiteGoogleConversion implements ShouldQueue
         $record = $eventId
             ? SpectraConversionEvent::where('user_id', $this->user->id)->where('event', $this->event)->findOrFail($eventId)
             : null;
+        if ($this->event === 'signup') {
+            // A pre-release queued job may lack the row ID. Never manufacture
+            // registration-time consent from today's user preferences.
+            $registrationKey = "signup:{$this->user->id}:{$this->user->created_at->timestamp}";
+            $record ??= SpectraConversionEvent::where('deduplication_key', $registrationKey)->first();
+            if (! $record || $record->mode !== 'server_google' || $record->deduplication_key !== $registrationKey
+                || ($record->verified_source['kind'] ?? null) !== 'registration'
+                || ($record->verified_source['user_id'] ?? null) !== $this->user->id || $this->user->tenant_key !== 'sitetospend') {
+                return;
+            }
+        }
         if ($this->event === 'seven_day_return' && (! $record || ! str_starts_with((string) $record->deduplication_key, 'seven_day_return:'))) {
             return;
         }
@@ -148,10 +160,20 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
             return;
         }
+        if ($this->event === 'signup' && (($record->verified_source['consent'] ?? null) !== true || $this->user->ad_measurement_consent !== true)) {
+            if (($record->verified_source['consent'] ?? null) === true) {
+                $record->update(['verified_source' => [...$record->verified_source, 'measurement_withdrawn' => true]]);
+            }
+
+            return;
+        }
         if ($this->user->ad_measurement_consent === false) {
             return;
         }
-        if (! $adIdentifiers) {
+        if (! $adIdentifiers && ! $record?->hasSignupEmailMatch()) {
+            return;
+        }
+        if ($this->event === 'signup' && ! $adIdentifiers && ! $this->user->hasVerifiedEmail()) {
             return;
         }
 
@@ -183,7 +205,7 @@ class RecordSiteGoogleConversion implements ShouldQueue
         }
 
         try {
-            $resourceName = $this->event === 'paid_setup' ? $record->google_conversion_resource
+            $resourceName = in_array($this->event, ['paid_setup', 'signup'], true) ? $record->google_conversion_resource
                 : ($record->google_conversion_resource ?: Setting::get("conversion_resource_name.{$actionKey}"));
             if ($this->event === 'paid_setup' && ! self::isCanonicalPurchaseDestination($resourceName)) {
                 throw new \RuntimeException('The paid setup receipt has no valid pinned canonical Purchase destination. Review its tracking configuration.');
@@ -197,16 +219,29 @@ class RecordSiteGoogleConversion implements ShouldQueue
             // until Google accepts the event and returns a processing request ID.
             $record->update(['google_conversion_resource' => $resourceName]);
 
+            $email = app(\App\Services\SiteSignupConversionService::class)->verifiedFormEmail($this->user, $this->event === 'signup' ? $record : null);
+            $allowEmailOnly = false;
+            if ($this->event === 'signup') {
+                $enabled = app(SignupImportDestination::class)->allowsEmail($resourceName, $adIdentifiers ?? []);
+                $allowEmailOnly = $enabled && $email !== null;
+                if (! $allowEmailOnly) {
+                    $email = null;
+                    if (! $adIdentifiers) {
+                        throw new \RuntimeException('Signup requires an eligible enhanced-conversion email match or a captured Google click ID.');
+                    }
+                }
+            }
             $result = $dataManager->ingestConversion(
                 operatingAccountId: $parts[1],
                 conversionActionId: $parts[2],
-                adIdentifiers: $record->ad_identifiers,
+                adIdentifiers: $record->ad_identifiers ?? [],
                 value: (float) $record->value,
                 currency: $record->currency,
                 occurredAt: $record->occurred_at,
-                email: $this->user->email,
+                email: $email,
                 transactionId: $record->deduplication_key,
                 consent: $this->user->ad_measurement_consent ? ['adUserData' => 'CONSENT_GRANTED'] : [],
+                allowEmailOnly: $allowEmailOnly,
             );
             if (! $result['success']) {
                 throw new \RuntimeException('Google conversion upload failed: '.($result['error'] ?? 'unknown error'));
@@ -233,7 +268,10 @@ class RecordSiteGoogleConversion implements ShouldQueue
                 'request_id' => $result['requestId'],
             ]);
         } catch (\Throwable $e) {
-            $record->update(['upload_error' => mb_substr($e->getMessage(), 0, 2000)]);
+            // Provider exceptions can carry raw request/response payloads. Only
+            // persist our local messages and Google's scrubbed ingestion status.
+            $message = $e::class === \RuntimeException::class ? $e->getMessage() : 'Google signup or delivery verification failed ('.class_basename($e).').';
+            $record->update(['upload_error' => mb_substr($message, 0, 2000)]);
             // Let the queue retry and report final failure, rather than marking
             // a rejected upload as a successful job.
             throw $e;

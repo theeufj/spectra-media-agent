@@ -64,6 +64,7 @@ class ProvisionConversionActions extends Command
         // RecordSiteGoogleConversion on registration.
         'signup_import' => [
             'name' => 'Spectra — Signup (Import)',
+            'counting_type' => ConversionActionCountingType::MANY_PER_CLICK,
             'type' => ConversionActionType::UPLOAD_CLICKS,
             'category' => ConversionActionCategory::SIGNUP,
             'value' => 99.0,
@@ -189,7 +190,7 @@ class ProvisionConversionActions extends Command
                 // New actions start as observations. Promote deliberately only
                 // after checking their delivery path and campaign goals.
                 'primary_for_goal' => false,
-                'counting_type' => ConversionActionCountingType::ONE_PER_CLICK,
+                'counting_type' => $def['counting_type'] ?? ConversionActionCountingType::ONE_PER_CLICK,
                 'value_settings' => new ValueSettings([
                     'default_value' => $def['value'],
                     'default_currency_code' => 'USD',

@@ -190,6 +190,9 @@ class GoogleCampaignSpendSafety
         Cache::lock("campaign-spend-safety:{$campaign->id}", 180)->block(5, function () use ($campaign, $approval) {
             $campaign->refresh()->load('customer');
             $snapshot = $this->snapshot($campaign);
+            if (RestartOwnedSignupCampaign::handles($campaign) && $snapshot['campaign_type'] === AdvertisingChannelType::PERFORMANCE_MAX) {
+                throw new \RuntimeException('Restart this held campaign through the reviewed signup repair workflow.');
+            }
             if ($snapshot['status'] !== GoogleStatus::PAUSED || $this->stopReason($campaign, $snapshot, false) !== null) {
                 throw new \RuntimeException('The campaign still fails its spend limits. Review limits and baseline before restarting.');
             }

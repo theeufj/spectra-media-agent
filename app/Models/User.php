@@ -118,10 +118,8 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * The Google Ads click identifier this user arrived with, if any.
      *
-     * Google sends exactly one of these per click: gclid normally, or wbraid /
-     * gbraid where iOS ATT prevents it. They are mutually exclusive, so the
-     * first one present is the one to use — and code that checks only gclid
-     * silently drops every iOS visitor.
+     * A web landing can carry both braids alongside a click ID. Select the
+     * highest-priority valid identifier and retain its actual field name.
      *
      * Shaped for the Data Manager API's adIdentifiers field.
      *
@@ -129,13 +127,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function googleAdIdentifiers(): ?array
     {
-        foreach (['gclid', 'gbraid', 'wbraid'] as $type) {
-            if (! empty($this->{$type})) {
-                return [$type => $this->{$type}];
-            }
-        }
-
-        return null;
+        return \App\Support\AdClickIdentifiers::google($this->only(['gclid', 'wbraid', 'gbraid']));
     }
 
     /**

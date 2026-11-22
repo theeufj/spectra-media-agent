@@ -27,6 +27,7 @@ class RetryOfflineConversions implements ShouldQueue
 
     public function handle(): void
     {
+        app(\App\Services\SiteSignupConversionService::class)->retryPendingDispatches();
         \App\Models\OfflineConversion::query()
             ->where(function ($q) {
                 $q->where('upload_status', 'pending')

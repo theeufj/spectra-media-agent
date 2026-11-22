@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SpectraConversionEvent extends Model
 {
+    protected $hidden = ['verified_source'];
+
     // Preserve Stripe's UTC instant when writing the timestamptz event time.
     // Laravel's default date format drops the offset before Postgres sees it.
     protected $dateFormat = 'Y-m-d H:i:sP';
@@ -67,6 +69,16 @@ class SpectraConversionEvent extends Model
         return (bool) ($this->ad_identifiers || $this->gclid);
     }
 
+    public function hasSignupEmailMatch(): bool
+    {
+        $source = $this->verified_source;
+
+        return $this->event === 'signup' && ($source['kind'] ?? null) === 'registration' && ($source['tenant'] ?? null) === 'sitetospend'
+            && ($source['form_supplied_email'] ?? false) === true
+            && ($source['consent'] ?? null) === true && ($source['disclosure_version'] ?? null) === 'signup-email-v1'
+            && preg_match('/^[a-f0-9]{64}$/D', $source['google_email_hash'] ?? '') === 1;
+    }
+
     /** A provider receipt proves acceptance for processing, never ad attribution. */
     public function googleDeliveryStatus(): string
     {
@@ -77,7 +89,7 @@ class SpectraConversionEvent extends Model
             return $this->mode === 'client' ? 'browser_recorded' : 'other_platform';
         }
         if ($this->uploaded_to_google) {
-            if (! $this->google_request_id || ! $this->occurred_at || ! $this->ad_identifiers || ! $this->google_accepted_at) {
+            if (! $this->google_request_id || ! $this->occurred_at || (! $this->ad_identifiers && ! $this->hasSignupEmailMatch()) || ! $this->google_accepted_at) {
                 return 'legacy_unverified';
             }
 
@@ -89,11 +101,18 @@ class SpectraConversionEvent extends Model
                 default => 'provider_accepted',
             };
         }
+        if ($this->event === 'signup' && ($this->verified_source['kind'] ?? null) === 'registration'
+            && (($this->verified_source['consent'] ?? null) !== true || ($this->verified_source['measurement_withdrawn'] ?? false))) {
+            return 'consent_not_granted';
+        }
         if ($this->upload_error) {
             return 'upload_failed';
         }
+        if (! $this->hasGoogleClickIdentifier() && $this->hasSignupEmailMatch() && empty($this->verified_source['email_verified_at'])) {
+            return 'awaiting_email_verification';
+        }
 
-        return $this->hasGoogleClickIdentifier() ? 'awaiting_upload' : 'no_click_identifier';
+        return $this->hasGoogleClickIdentifier() || $this->hasSignupEmailMatch() ? 'awaiting_upload' : 'no_click_identifier';
     }
 
     public static function record(string $event, ?int $userId, array $meta = []): self

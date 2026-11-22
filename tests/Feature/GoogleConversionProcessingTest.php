@@ -54,7 +54,11 @@ class GoogleConversionProcessingTest extends TestCase
         $this->freezeTime();
         Cache::flush();
         Setting::set('conversion_resource_name.signup_import', 'customers/123/conversionActions/456');
-        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        $user = User::factory()->create(['gclid' => 'fixture-click', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
+        app(\App\Services\SiteSignupConversionService::class)->record($user);
+        $reader = $this->createMock(\App\Services\GoogleAds\SignupImportDestination::class);
+        $reader->expects($this->once())->method('allowsEmail')->willReturn(false);
+        $this->app->instance(\App\Services\GoogleAds\SignupImportDestination::class, $reader);
         Http::fake(['datamanager.googleapis.com/*' => Http::response(['requestId' => 'fixture-request'])]);
         (new RecordSiteGoogleConversion($user, 'signup'))->handle($this->service());
         $record = SpectraConversionEvent::sole();
@@ -68,20 +72,26 @@ class GoogleConversionProcessingTest extends TestCase
     {
         Cache::flush();
         Setting::set('conversion_resource_name.signup_import', 'customers/123/conversionActions/456');
-        $user = User::factory()->create(['gclid' => 'fixture-click']);
+        $user = User::factory()->create(['gclid' => 'fixture-click', 'tenant_key' => 'sitetospend', 'ad_measurement_consent' => true]);
+        app(\App\Services\SiteSignupConversionService::class)->record($user);
+        $reader = $this->createMock(\App\Services\GoogleAds\SignupImportDestination::class);
+        $reader->expects($this->once())->method('allowsEmail')->willReturn(false);
+        $this->app->instance(\App\Services\GoogleAds\SignupImportDestination::class, $reader);
         Http::fake(['datamanager.googleapis.com/*' => function () {
             $this->assertSame('customers/123/conversionActions/456', SpectraConversionEvent::sole()->google_conversion_resource);
 
-            return Http::response(['error' => ['message' => 'fixture rejected upload']], 400);
+            return Http::response(['error' => ['status' => 'INVALID_ARGUMENT', 'message' => 'fixture private click/email rejected']], 400);
         }]);
         try {
             (new RecordSiteGoogleConversion($user, 'signup'))->handle($this->service());
             $this->fail('A rejected upload must fail the job so that it can retry.');
         } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('fixture rejected upload', $exception->getMessage());
+            $this->assertStringContainsString('HTTP 400 INVALID_ARGUMENT', $exception->getMessage());
+            $this->assertStringNotContainsString('fixture private', $exception->getMessage());
         }
         $record = SpectraConversionEvent::sole();
         $this->assertSame('upload_failed', $record->googleDeliveryStatus());
+        $this->assertStringNotContainsString('fixture private', $record->upload_error);
         $this->assertFalse($record->uploaded_to_google);
         $this->assertNull($record->google_request_id);
         $this->assertNull($record->google_accepted_at);

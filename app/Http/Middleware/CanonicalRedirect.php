@@ -86,6 +86,7 @@ class CanonicalRedirect
                 // never stores the gclid for server-side upload.
                 $trackingParams = [
                     'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclid', 'ttclid',
+                    'gad_source', 'gad_campaignid',
                     'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
                 ];
                 $allowed = array_merge(

@@ -276,6 +276,25 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $this->assertEquals($first, $rows->first());
     }
 
+    public function test_signed_customer_signup_with_a_google_click_id_and_both_braids_sends_only_the_click_id(): void
+    {
+        $strategy = $this->fixture('Google');
+        $tracking = $this->createMock(ConversionTrackingService::class);
+        $tracking->expects($this->once())->method('outcomeDestination')->with('131', 'customers/131/conversionActions/42')
+            ->willReturn(['category' => 'SIGNUP', 'type' => 'UPLOAD_CLICKS']);
+        $this->app->bind(ConversionTrackingService::class, fn () => $tracking);
+        $google = $this->createMock(DataManagerService::class);
+        $google->expects($this->once())->method('ingestConversion')->with('131', '42', ['gclid' => 'fixture-google-click'])
+            ->willReturn(['success' => true, 'requestId' => 'fixture-upload']);
+        $this->app->instance(DataManagerService::class, $google);
+
+        $id = $this->postEvent($strategy, ['mode' => 'live', 'gclid' => 'fixture-google-click', 'gbraid' => 'fixture-app-braid', 'wbraid' => 'fixture-web-braid'])
+            ->assertAccepted()->json('event_id');
+        $this->wire($strategy, $id);
+
+        $this->assertDatabaseHas('campaign_outcome_events', ['id' => $id, 'delivery_status' => 'accepted', 'provider_receipt' => 'fixture-upload']);
+    }
+
     public function test_failed_google_poll_retries_the_original_receipt_without_raw_identifiers_or_another_upload(): void
     {
         $this->freezeSecond();
@@ -284,13 +303,13 @@ class CampaignOutcomeEvidenceTest extends TestCase
         $this->app->bind(ConversionTrackingService::class, fn () => $service);
         $service->expects($this->once())->method('outcomeDestination')->willReturn(['category' => 'SIGNUP', 'type' => 'UPLOAD_CLICKS']);
         $google = $this->createMock(DataManagerService::class);
-        $google->expects($this->once())->method('ingestConversion')->willReturn(['success' => true, 'requestId' => 'upload-1']);
+        $google->expects($this->once())->method('ingestConversion')->with('131', '42', ['wbraid' => 'qa-web'])->willReturn(['success' => true, 'requestId' => 'upload-1']);
         $google->expects($this->exactly(2))->method('retrieveRequestStatus')->with('upload-1')->willReturn(
             ['success' => false],
             ['success' => true, 'destinations' => [['destination' => ['operatingAccount' => ['accountType' => 'GOOGLE_ADS', 'accountId' => '131'], 'productDestinationId' => '42'],
                 'requestStatus' => 'SUCCESS', 'eventsIngestionStatus' => ['recordCount' => 1]]]]);
         $this->app->instance(DataManagerService::class, $google);
-        $values = ['mode' => 'live', 'source_id' => 'business123', 'gclid' => 'qa-click', 'ad_personalization' => 'denied'];
+        $values = ['mode' => 'live', 'source_id' => 'business123', 'gbraid' => 'qa-app', 'wbraid' => 'qa-web', 'ad_personalization' => 'denied'];
         $id = $this->postEvent($strategy, $values)->assertAccepted()->json('event_id');
         $this->wire($strategy, $id);
         $rows = DB::table('campaign_outcome_events')->where('id', $id);

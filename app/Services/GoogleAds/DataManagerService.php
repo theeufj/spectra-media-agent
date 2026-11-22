@@ -102,6 +102,7 @@ class DataManagerService
         string $eventSource = 'WEB',
         ?string $transactionId = null,
         array $consent = [],
+        bool $allowEmailOnly = false,
     ): array {
         if (! $this->mcc) {
             return ['success' => false, 'error' => 'No active MCC account'];
@@ -113,7 +114,7 @@ class DataManagerService
             ARRAY_FILTER_USE_BOTH
         );
 
-        if ($adIdentifiers === []) {
+        if ($adIdentifiers === [] && ! ($allowEmailOnly && $email && ($consent['adUserData'] ?? null) === 'CONSENT_GRANTED')) {
             return ['success' => false, 'error' => 'No usable Google click identifier (gclid/gbraid/wbraid)'];
         }
 
@@ -126,10 +127,13 @@ class DataManagerService
             'destinationReferences' => ['google_ads'],
             'eventSource' => $eventSource, // required: WEB | APP | IN_STORE | PHONE | ...
             'eventTimestamp' => Carbon::instance(Carbon::parse($occurredAt))->utc()->toIso8601ZuluString(),
-            'adIdentifiers' => $adIdentifiers,
             'currency' => $currency,
             'conversionValue' => $value,
         ];
+
+        if ($adIdentifiers !== []) {
+            $event['adIdentifiers'] = $adIdentifiers;
+        }
 
         // Only pass choices actually recorded at the source. Unknown is never opt-in.
         $choices = array_intersect_key($consent, array_flip(['adUserData', 'adPersonalization']));
@@ -149,7 +153,7 @@ class DataManagerService
         if ($email && ($choices['adUserData'] ?? null) === 'CONSENT_GRANTED') {
             $event['userData'] = [
                 'userIdentifiers' => [
-                    ['emailAddress' => $this->hashEmail($email)],
+                    ['emailAddress' => self::hashEmail($email)],
                 ],
             ];
         }
@@ -182,17 +186,25 @@ class DataManagerService
                 return ['success' => true, 'requestId' => is_string($requestId) ? $requestId : null];
             }
 
+            // Error messages and field details can echo the submitted identifiers.
+            $status = $response->json('error.status');
+            $code = in_array($status, ['INVALID_ARGUMENT', 'UNAUTHENTICATED', 'PERMISSION_DENIED', 'NOT_FOUND',
+                'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'ABORTED', 'INTERNAL', 'UNAVAILABLE', 'DEADLINE_EXCEEDED'], true) ? $status : match ($response->status()) {
+                    401 => 'UNAUTHENTICATED',
+                    403 => 'PERMISSION_DENIED',
+                    default => 'REQUEST_REJECTED',
+                };
             Log::warning('DataManagerService: ingest failed', [
                 'status' => $response->status(),
-                'body' => $response->body(),
+                'code' => $code,
                 'action' => $conversionActionId,
             ]);
 
-            return ['success' => false, 'error' => "HTTP {$response->status()}: ".$response->body()];
+            return ['success' => false, 'error' => "HTTP {$response->status()} {$code}"];
         } catch (\Throwable $e) {
-            Log::error('DataManagerService: ingest exception: '.$e->getMessage());
+            Log::error('DataManagerService: ingest exception', ['exception' => $e::class]);
 
-            return ['success' => false, 'error' => $e->getMessage()];
+            return ['success' => false, 'error' => 'Google event ingestion could not be reached.'];
         }
     }
 
@@ -263,8 +275,14 @@ class DataManagerService
      * Normalize (trim + lowercase) and SHA-256 hash an email, hex-encoded,
      * per Data Manager's enhanced-conversion requirements.
      */
-    private function hashEmail(string $email): string
+    public static function hashEmail(string $email): string
     {
-        return hash('sha256', strtolower(trim($email)));
+        $normalized = mb_strtolower(trim($email));
+        [$local, $domain] = array_pad(explode('@', $normalized, 2), 2, '');
+        if (in_array($domain, ['gmail.com', 'googlemail.com'], true)) {
+            $normalized = str_replace('.', '', explode('+', $local, 2)[0]).'@'.$domain;
+        }
+
+        return hash('sha256', $normalized);
     }
 }

@@ -285,6 +285,11 @@ class CampaignController extends Controller
             }
 
             // Management-account pattern — see pauseCampaign().
+            if (\App\Services\Campaigns\RestartOwnedSignupCampaign::handles($campaign)) {
+                app(\App\Services\Campaigns\RestartOwnedSignupCampaign::class)->start($campaign, auth()->user());
+
+                return redirect()->back()->with('flash', ['type' => 'success', 'message' => 'Google confirmed the Performance Max campaign is enabled.']);
+            }
             if (($campaign->spend_safety_hold['reason'] ?? null) === 'manual_pause') {
                 app(\App\Services\Campaigns\GoogleCampaignSpendSafety::class)
                     ->releaseForApprovedRestart($campaign, 'Administrator requested Start in the campaign screen.');

@@ -59,6 +59,24 @@ class GoogleSpendSafetySnapshotTest extends TestCase
         $this->assertSame(0, $snapshot['window_matured_cost_micros']);
     }
 
+    public function test_restarted_performance_max_uses_the_full_restart_account_day_after_the_normal_conversion_lag(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-12 00:30:00', 'UTC'));
+        $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
+        config(['conversions.advertiser_customer_uuid' => $customer->uuid, 'conversions.google_ads_customer_id' => '1234567890']);
+        $resource = 'customers/1234567890/campaigns/999';
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'google_ads_campaign_id' => '999',
+            'spend_guardrails' => ['pmax_signup_restart' => ['status' => 'verified', 'resource' => $resource, 'actor' => 1,
+                'receipt_id' => 42, 'timezone' => 'America/Los_Angeles', 'enabled_at' => '2026-10-09T01:00:00Z']]]);
+        $reader = new FakeCampaignSpendSafetyReader($customer);
+        $reader->campaignType = AdvertisingChannelType::PERFORMANCE_MAX;
+        $snapshot = $reader->forCampaign($campaign);
+        $this->assertSame('2026-10-08', $snapshot['window_start']);
+        $this->assertSame('2026-10-09', $snapshot['matured_through']);
+        $this->assertStringContainsString("BETWEEN '2026-10-08' AND '2026-10-09'", $reader->queries[3]);
+        $this->assertStringContainsString("BETWEEN '2026-10-08' AND '2026-10-11'", $reader->queries[4]);
+    }
+
     public function test_demographic_and_audience_criterion_bid_boosts_are_detected_within_the_campaign(): void
     {
         $customer = Customer::factory()->create(['google_ads_customer_id' => '1234567890']);
@@ -100,6 +118,8 @@ class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
 
     public string $campaignStartDate = '2026-09-01';
 
+    public int $campaignType = AdvertisingChannelType::SEARCH;
+
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
@@ -124,7 +144,7 @@ class FakeCampaignSpendSafetyReader extends GetCampaignSpendSafety
                 'customer' => new GoogleCustomer(['time_zone' => 'America/Los_Angeles', 'currency_code' => 'AUD']),
                 'campaign' => new GoogleCampaign([
                     'start_date_time' => $this->campaignStartDate.' 00:00:00',
-                    'status' => CampaignStatus::ENABLED, 'advertising_channel_type' => AdvertisingChannelType::SEARCH,
+                    'status' => CampaignStatus::ENABLED, 'advertising_channel_type' => $this->campaignType,
                     'bidding_strategy_type' => BiddingStrategyType::TARGET_SPEND,
                     'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
                 ]),

@@ -24,25 +24,20 @@ export function initConversions(targets) {
 
 /**
  * Fire a Google Ads conversion event by name.
- * Safe no-op if gtag is not loaded or the event has not been provisioned yet.
- * Also logs the event server-side so admin can monitor conversion counts.
+ * First-party measurement works independently of the optional Google tag.
  */
 export function trackConversion(event) {
     const target = _targets[event];
-    if (!target || !target.send_to) return;
+    fetchJson('/spectra/conversion', {
+        method: 'POST',
+        json: { event },
+    }).catch(() => {});
 
-    if (typeof gtag === 'function') {
+    if (target?.send_to && typeof gtag === 'function') {
         gtag('event', 'conversion', {
             send_to: target.send_to,
             value: target.value,
             currency: target.currency,
         });
     }
-
-    // Logged even when gtag is blocked, so the admin dashboard reflects real
-    // user behaviour rather than only ad-blocker-free sessions.
-    fetchJson('/spectra/conversion', {
-        method: 'POST',
-        json: { event },
-    }).catch(() => {});
 }

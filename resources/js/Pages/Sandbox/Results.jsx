@@ -1,5 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { launchSandbox } from './launch';
 import { money, count } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import { platformLabel } from '@/utils/platforms';
@@ -601,13 +602,13 @@ export default function SandboxResults({ customer, campaigns, agentResults, perf
                             >
                                 Delete Sandbox
                             </button>
-                            <a
-                                href={route('sandbox.launch')}
-                                onClick={(e) => { e.preventDefault(); router.post(route('sandbox.launch')); }}
+                            <button
+                                type="button"
+                                onClick={launchSandbox}
                                 className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                             >
                                 Regenerate Sandbox
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>

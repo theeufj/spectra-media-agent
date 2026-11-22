@@ -25,7 +25,7 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
      * @param  string  $customerId  Google Ads customer ID (no dashes)
      * @param  string  $campaignResourceName  e.g. "customers/1234567890/campaigns/9876543210"
      * @param  string  $status  'ENABLED', 'PAUSED', or 'REMOVED'
-     * @return array{success: bool, resource_name?: string, new_status?: string, error?: string}
+     * @return array{success: bool, resource_name?: string, new_status?: string, error?: string, rejected?: bool}
      */
     public function execute(string $customerId, string $campaignResourceName, string $status): array
     {
@@ -96,6 +96,7 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
+                'rejected' => in_array($e->getStatus(), ['INVALID_ARGUMENT', 'PERMISSION_DENIED', 'FAILED_PRECONDITION'], true),
             ];
         }
     }
@@ -152,6 +153,7 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
         if (! ctype_digit($account) || ! preg_match("~^customers/{$account}/campaigns/\d+$~D", $resource)) {
             return false;
         }
+        $this->ensureClient();
         $rows = $this->searchQuery($account, "SELECT campaign.resource_name, campaign.status FROM campaign WHERE campaign.resource_name = '{$resource}'");
         foreach ($rows->iterateAllElements() as $row) {
             $remote = $row->getCampaign();

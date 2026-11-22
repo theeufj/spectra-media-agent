@@ -46,6 +46,8 @@ const deliveryLabels = {
     legacy_unverified: ['Legacy delivery unverified', 'yellow'],
     upload_failed: ['Upload failed', 'yellow'],
     awaiting_upload: ['Awaiting upload', 'gray'],
+    consent_not_granted: ['Measurement consent not granted', 'gray'],
+    awaiting_email_verification: ['Waiting for email verification', 'gray'],
     no_click_identifier: ['No Google click identifier', 'gray'],
     browser_recorded: ['Browser event logged', 'gray'],
     awaiting_browser: ['Paid receipt; browser pending', 'amber'],
@@ -87,6 +89,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                         <p className="font-medium text-gray-900">{deliveryEventLabels[event] || event}: {counts.registrations_or_payments}</p>
                                         <p className="mt-2 text-gray-600">Processed: {counts.processed + counts.processed_with_warnings} · Awaiting processing: {counts.provider_accepted + counts.processing}</p>
                                         <p className="mt-1 text-gray-600">Failed: {counts.upload_failed + counts.processing_failed} · Unverified: {counts.legacy_unverified + counts.processing_unknown} · No click identifier: {counts.no_click_identifier}</p>
+                                        {event === 'signup' && <p className="mt-1 text-gray-600">Measurement consent not granted: {counts.consent_not_granted} · Waiting for email verification: {counts.awaiting_email_verification}</p>}
                                     </div>
                                 ))}
                             </div>
@@ -316,7 +319,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <h3 className="text-base font-medium text-gray-900 mb-3">How It Works</h3>
                         <ul className="space-y-2 text-sm text-gray-600">
                             <li><span className="font-medium text-blue-700">Client (gtag):</span> Fires in the browser via <code className="bg-gray-100 px-1 rounded">trackConversion('event')</code> when the user takes an action.</li>
-                            <li><span className="font-medium text-gray-700">Server (API):</span> Genuine registrations and signed first subscription payments are saved before queueing. Google Data Manager uploads require a captured gclid, gbraid or wbraid. No identifier means the event is recorded locally without ad attribution.</li>
+                            <li><span className="font-medium text-gray-700">Server (API)</span> records completed registrations and first subscription payments. With consent, signup imports use a Google click identifier or a verified email entered on our signup form when Google permits enhanced matching.</li>
                             <li><span className="font-medium text-gray-700">Processing:</span> A receipt confirms acceptance only. We check its destination, final processing status and errors. Processing success does not confirm an attributed conversion or a campaign bidding goal.</li>
                             <li>Labels are stored in the <code className="bg-gray-100 px-1 rounded">settings</code> table and served to the frontend on every request via Inertia shared props.</li>
                             <li>Re-provision anytime: <code className="bg-gray-100 px-1 rounded">php artisan conversions:provision</code></li>

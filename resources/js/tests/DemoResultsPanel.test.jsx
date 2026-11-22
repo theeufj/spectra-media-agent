@@ -40,4 +40,10 @@ describe('demo forecast availability', () => {
         }
         expect(within(screen.getByText('fixture keyword').closest('tr')).getByText('0')).toBeVisible();
     });
+
+    it('offers registration before the forecast table on a completed preview', () => {
+        render(<DemoResultsPanel result={result} />);
+        const signup = screen.getByRole('link', { name: /Create an account/ });
+        expect(signup.compareDocumentPosition(screen.getByRole('table')) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
 });
