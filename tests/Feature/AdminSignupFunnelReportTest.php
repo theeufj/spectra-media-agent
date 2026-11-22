@@ -121,10 +121,13 @@ class AdminSignupFunnelReportTest extends TestCase
             ->assertSessionHasErrors(['funnel_source', 'funnel_campaign', 'funnel_entry_surface']);
         $this->get(route('admin.conversions.index', ['funnel_from' => '2026-11-18', 'funnel_to' => '2026-11-17']))
             ->assertSessionHasErrors('funnel_to');
-        $this->get(route('admin.conversions.index', ['funnel_source' => 'meta']))
+        // An empty selected cohort can still have measurement history outside it.
+        $this->journey(source: 'unattributed', campaign: null, entry: '2026-09-20 12:00:00');
+        $earliest = DB::table('signup_funnel_journeys')->min('started_at');
+        $this->get(route('admin.conversions.index', ['funnel_source' => 'meta', 'funnel_campaign' => 'spectra_820022']))
             ->assertSuccessful()->assertInertia(fn (Assert $page) => $page->component('Admin/ConversionTracking')
             ->where('signup_funnel.journeys', 0)
-            ->where('signup_funnel.first_observed_at', null)
+            ->where('signup_funnel.first_observed_at', $earliest)
             ->where('signup_funnel.steps.signup_completed.dropoff_percent', null)
             ->where('signup_funnel.filters.funnel_source', 'meta')
             ->where('signup_funnel.filters.funnel_from', '2026-10-22')

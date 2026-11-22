@@ -31,6 +31,14 @@ class SignupFunnelCaptureTest extends TestCase
         return $res;
     }
 
+    private function currentJourneyId(): string
+    {
+        $id = session('sitetospend_signup_journey');
+        $this->assertIsString($id);
+
+        return $id;
+    }
+
     private function stage(string $stage, array $other = []): TestResponse
     {
         return $this->withCredentials()->postJson(self::SITE.'/funnel/stages', ['stage' => $stage, ...$other]);
@@ -46,7 +54,7 @@ class SignupFunnelCaptureTest extends TestCase
         $this->stage('preview_failed', ['reason' => 'unavailable'])->assertNoContent();
         $this->visit('/google-ads-management?utm_source=facebook&utm_medium=social&utm_campaign=spectra_28')->assertOk();
         $this->visit('/register')->assertOk();
-        $cohort = DB::table('signup_funnel_journeys')->sole();
+        $cohort = DB::table('signup_funnel_journeys')->where('id', $this->currentJourneyId())->sole();
         $this->assertSame('google', $cohort->source);
         $this->assertSame('spectra_9', $cohort->campaign_key);
         $this->assertSame('home_preview', $cohort->entry_surface);
@@ -58,10 +66,12 @@ class SignupFunnelCaptureTest extends TestCase
 
     public function test_endpoint_requires_a_real_landing_and_rejects_fabricated_server_stages_private_fields_and_cross_site_requests(): void
     {
+        $originalCount = DB::table('signup_funnel_journeys')->count();
         $this->stage('landing_visible')->assertNoContent();
-        $this->assertDatabaseCount('signup_funnel_journeys', 0);
+        $this->assertDatabaseCount('signup_funnel_journeys', $originalCount);
         $this->visit('/register?utm_source=google&utm_medium=cpc&utm_campaign=abc%40private.example')->assertOk();
-        $this->assertDatabaseHas('signup_funnel_journeys', ['source' => 'google', 'campaign_key' => null]);
+        $id = $this->currentJourneyId();
+        $this->assertDatabaseHas('signup_funnel_journeys', ['id' => $id, 'source' => 'google', 'campaign_key' => null]);
         foreach (['signup_completed', 'email_verified', 'signup_submitted', 'landing_view', 'signup_viewed'] as $serverStage) {
             $this->stage($serverStage)->assertUnprocessable();
         }
@@ -69,7 +79,7 @@ class SignupFunnelCaptureTest extends TestCase
         $this->stage('signup_failed', ['reason' => 'raw arbitrary message'])->assertUnprocessable();
         $this->stage('signup_failed', ['reason' => 'email_taken'])->assertUnprocessable();
         $this->stage('preview_started')->assertNoContent();
-        $this->assertDatabaseCount('signup_funnel_stages', 1);
+        $this->assertSame(['signup_viewed'], DB::table('signup_funnel_stages')->where('journey_id', $id)->pluck('stage')->all());
         $this->withHeader('Origin', 'https://outside.example')->stage('signup_started')->assertForbidden();
     }
 
@@ -85,11 +95,11 @@ class SignupFunnelCaptureTest extends TestCase
         $this->post(self::SITE.'/register', ['name' => 'Funnel Fixture', 'email' => 'funnel@example.test', 'password' => 'Password!23456',
             'password_confirmation' => 'Password!23456', 'ad_measurement_consent' => false])->assertRedirect();
         $user = User::where('email', 'funnel@example.test')->sole();
-        $cohort = DB::table('signup_funnel_journeys')->sole();
+        $cohort = DB::table('signup_funnel_journeys')->where('id', $this->currentJourneyId())->sole();
         $this->assertSame((string) $cohort->id, $user->signup_funnel_journey_id);
         $this->assertArrayNotHasKey('signup_funnel_journey_id', $user->toArray());
         $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $cohort->id, 'stage' => 'signup_completed']);
-        $this->assertDatabaseMissing('signup_funnel_stages', ['stage' => 'email_verified']);
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $cohort->id, 'stage' => 'email_verified']);
         // A slow diagnostics request holding the old session cookie may complete
         // after registration; its response cannot replace the new auth or CSRF cookie.
         $this->withUnencryptedCookie(config('session.cookie'), $oldSession);
@@ -117,13 +127,13 @@ class SignupFunnelCaptureTest extends TestCase
         $res = $this->withHeader('X-CSRF-TOKEN', $token)->stage('landing_visible');
         $res->assertNoContent();
         $this->assertSame([], $res->headers->getCookies());
-        $this->assertDatabaseHas('signup_funnel_stages', ['stage' => 'landing_visible']);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $this->currentJourneyId(), 'stage' => 'landing_visible']);
     }
 
     public function test_supported_meta_and_service_entry_are_classified_without_recording_other_utm_values(): void
     {
         $this->visit('/google-ads-management?utm_source=facebook&utm_medium=display&utm_campaign=spectra_20&utm_content=private-tag')->assertOk();
-        $cohort = DB::table('signup_funnel_journeys')->sole();
+        $cohort = DB::table('signup_funnel_journeys')->where('id', $this->currentJourneyId())->sole();
         $this->assertSame('meta', $cohort->source);
         $this->assertSame('spectra_20', $cohort->campaign_key);
         $this->assertSame('google_ads_service', $cohort->entry_surface);
@@ -143,42 +153,47 @@ class SignupFunnelCaptureTest extends TestCase
         \Laravel\Socialite\Facades\Socialite::shouldReceive('driver')->with('google')->andReturn($social);
         User::factory()->create(['email' => 'existing-oauth@example.test', 'tenant_key' => 'sitetospend']);
         $this->visit('/register')->assertOk();
+        $id = $this->currentJourneyId();
         $this->post(self::SITE.'/auth/google/register', ['ad_measurement_consent' => false])->assertRedirect();
         $this->visit('/auth/google/callback')->assertRedirect();
-        $this->assertDatabaseMissing('signup_funnel_stages', ['stage' => 'signup_completed']);
-        $this->assertDatabaseMissing('signup_funnel_stages', ['stage' => 'email_verified']);
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_completed']);
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'email_verified']);
         $this->post(self::SITE.'/logout')->assertRedirect();
         $this->app['auth']->forgetGuards();
         $this->unencryptedCookies = [];
         $this->visit('/register')->assertOk();
+        $id = $this->currentJourneyId();
         $this->post(self::SITE.'/auth/google/register', ['ad_measurement_consent' => false])->assertRedirect();
         $this->visit('/auth/google/callback')->assertRedirect();
-        $this->assertDatabaseHas('signup_funnel_stages', ['stage' => 'signup_completed']);
-        $this->assertDatabaseHas('signup_funnel_stages', ['stage' => 'email_verified']);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_completed']);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'email_verified']);
         $this->assertNull(User::where('email', 'fresh-oauth@example.test')->sole()->signup_funnel_journey_id);
     }
 
     public function test_missing_diagnostics_table_cannot_abort_an_outer_application_transaction(): void
     {
+        $originalCount = DB::table('signup_funnel_journeys')->count();
         \Illuminate\Support\Facades\Schema::rename('signup_funnel_stages', 'isolated_funnel_stage_fixture');
         $this->visit(self::PAID)->assertOk();
         $this->assertSame(1, (int) DB::selectOne('SELECT 1 AS usable')->usable);
-        $this->assertDatabaseCount('signup_funnel_journeys', 0);
+        $this->assertDatabaseCount('signup_funnel_journeys', $originalCount);
     }
 
     public function test_failed_signup_records_deduplicated_categories_without_marking_signup_complete(): void
     {
         User::factory()->create(['email' => 'existing@example.test']);
         $this->visit('/register')->assertOk();
+        $id = $this->currentJourneyId();
         $this->stage('signup_failed', ['reason' => 'validation'])->assertNoContent();
         $this->post(self::SITE.'/register', ['email' => 'existing@example.test'])->assertSessionHasErrors('email');
-        $this->assertDatabaseHas('signup_funnel_stages', ['stage' => 'signup_failed', 'reason' => 'email_taken']);
-        $this->assertDatabaseHas('signup_funnel_stages', ['stage' => 'signup_submitted']);
-        $this->assertDatabaseMissing('signup_funnel_stages', ['stage' => 'signup_completed']);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_failed', 'reason' => 'email_taken']);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_submitted']);
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_completed']);
     }
 
     public function test_other_hosts_purpose_prefetch_known_bots_and_privacy_signals_do_not_create_a_cohort(): void
     {
+        $originalCount = DB::table('signup_funnel_journeys')->count();
         $this->get('https://realpropertyads.com/')->assertOk();
         $this->postJson('https://realpropertyads.com/funnel/stages', ['stage' => 'landing_visible'])->assertNotFound();
         $this->withHeader('Sec-Purpose', 'prefetch;prerender')->visit(self::PAID)->assertOk();
@@ -188,16 +203,17 @@ class SignupFunnelCaptureTest extends TestCase
         $this->withHeader('DNT', '1')->visit(self::PAID)->assertOk();
         $this->flushHeaders();
         $this->visit('/register')->assertOk();
-        $this->assertDatabaseCount('signup_funnel_journeys', 0);
+        $this->assertDatabaseCount('signup_funnel_journeys', $originalCount);
     }
 
     public function test_explicit_privacy_signal_retires_existing_cohort_and_stage_submission_cannot_restore_it(): void
     {
         $this->visit(self::PAID)->assertOk();
+        $id = $this->currentJourneyId();
         $this->withHeader('Sec-GPC', '1')->stage('preview_started')->assertNoContent();
         $this->flushHeaders();
         $this->stage('preview_started')->assertNoContent();
-        $this->assertDatabaseCount('signup_funnel_journeys', 0);
-        $this->assertDatabaseCount('signup_funnel_stages', 0);
+        $this->assertDatabaseMissing('signup_funnel_journeys', ['id' => $id]);
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $id]);
     }
 }
