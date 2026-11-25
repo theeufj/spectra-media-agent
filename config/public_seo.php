@@ -5,7 +5,7 @@ return [
     // the same guide or product page as an independent search result.
     'shared_host' => 'sitetospend.com',
 
-    'tenant_specific_paths' => ['/', '/pricing', '/how-it-works'],
+    'tenant_specific_paths' => ['/', '/pricing', '/how-it-works', '/google-ads-setup'],
 
     // Source paths supply the date of the last committed content change. Do
     // not use deployment time or filemtime: a release copies unchanged files.

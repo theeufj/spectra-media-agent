@@ -74,7 +74,7 @@ class GoogleStarterPlanTest extends TestCase
         $starter = Plan::where('slug', 'starter')->firstOrFail();
         $user = User::factory()->create(['stripe_id' => 'cus_starter_fixture', 'starter_platform' => 'facebook']);
         $other = Customer::factory()->create();
-        $business = Customer::factory()->create();
+        $business = Customer::factory()->create(['tenant_key' => 'sitetospend', 'service_type' => 'setup_only']);
         $user->customers()->attach([$other->id, $business->id]);
         $user->roles()->attach(\App\Models\Role::unguarded(fn () => \App\Models\Role::firstOrCreate(['name' => 'user']))->id);
         $mock = new class implements ClientInterface
@@ -107,6 +107,7 @@ class GoogleStarterPlanTest extends TestCase
         } finally {
             ApiRequestor::setHttpClient($old);
         }
+        $this->assertSame('managed', $business->fresh()->service_type);
         $this->assertSame('subscription', $mock->session['mode']);
         $this->assertSame($starter->stripe_price_id, $mock->session['line_items'][0]['price']);
         $metadata = $mock->session['subscription_data']['metadata'];

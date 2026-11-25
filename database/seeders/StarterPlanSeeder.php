@@ -17,7 +17,7 @@ class StarterPlanSeeder extends Seeder
             $plan->legacy_stripe_price_ids = array_values(array_unique(array_filter($pastPrices, fn ($id) => is_string($id) && $id !== '' && $id !== $price)));
             $plan->fill([
                 'name' => 'Starter', 'description' => 'Google Ads management for one business workspace.',
-                'price_cents' => 9900, 'billing_interval' => 'month', 'stripe_price_id' => $price,
+                'price_cents' => Plan::STARTER_MONTHLY_PRICE_CENTS, 'billing_interval' => 'month', 'stripe_price_id' => $price,
                 'features' => [
                     'Google Ads for one business workspace',
                     '12 image concepts and 2 videos each month',

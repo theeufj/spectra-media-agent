@@ -16,7 +16,7 @@ use Tests\TestCase;
  * Asking where they want to advertise and then pricing it is the same two facts
  * in the order a buyer can act on.
  *
- * Starter covers Google. A customer choosing another platform needs Growth.
+ * Starter covers Google. The property catalog also offers Growth.
  */
 class PlanForPlatformsTest extends TestCase
 {
@@ -43,12 +43,13 @@ class PlanForPlatformsTest extends TestCase
     public function test_starter_is_the_google_only_offer(): void
     {
         $this->assertSame('starter', Plan::cheapestFor(['google'])?->slug);
-        $this->assertSame('growth', Plan::cheapestFor(['facebook'])?->slug);
+        $this->assertNull(Plan::cheapestFor(['facebook']));
+        $this->assertSame('growth', Plan::cheapestFor(['facebook'], 'realpropertyads')?->slug);
     }
 
     public function test_two_platforms_is_growth(): void
     {
-        $this->assertSame('growth', Plan::cheapestFor(['google', 'facebook'])?->slug);
+        $this->assertSame('growth', Plan::cheapestFor(['google', 'facebook'], 'realpropertyads')?->slug);
     }
 
     public function test_the_cheapest_that_covers_it_wins(): void
@@ -61,7 +62,7 @@ class PlanForPlatformsTest extends TestCase
     {
         // Agency is "Contact Us" with no stripe_price_id. Offering it as the
         // answer to "what does this cost" is a dead end.
-        $all = Plan::cheapestFor(['google', 'facebook', 'microsoft', 'linkedin']);
+        $all = Plan::cheapestFor(['google', 'facebook', 'microsoft', 'linkedin'], 'realpropertyads');
 
         $this->assertNotSame('agency', $all?->slug);
         $this->assertNotNull($all?->stripe_price_id);
@@ -70,6 +71,24 @@ class PlanForPlatformsTest extends TestCase
     public function test_nothing_selected_has_no_answer(): void
     {
         $this->assertNull(Plan::cheapestFor([]));
+    }
+
+    public function test_flagship_does_not_substitute_another_offer_when_starter_is_unavailable(): void
+    {
+        $starter = Plan::where('slug', 'starter')->firstOrFail();
+        foreach ([
+            ['price_cents' => 14900],
+            ['billing_interval' => 'year'],
+            ['stripe_price_id' => null],
+            ['stripe_price_id' => ''],
+            ['is_active' => false],
+        ] as $change) {
+            $starter->update(array_merge([
+                'price_cents' => 9900, 'billing_interval' => 'month', 'is_active' => true,
+                'stripe_price_id' => 'price_starter_test',
+            ], $change));
+            $this->assertFalse(Plan::offeredTo('sitetospend')->exists());
+        }
     }
 
     public function test_entitlement_still_reads_from_the_same_mapping(): void

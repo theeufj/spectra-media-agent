@@ -60,7 +60,7 @@ export default function Register({ enabledPlatforms = [] }) {
             <div className="mb-6 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">Create your account</h1>
                 <p className="mt-1.5 text-sm text-gray-600">
-                    Free to explore. No credit card until you go live.
+                    Create your account free. You review your ads and advertising budget before launch.
                 </p>
             </div>
 
@@ -71,8 +71,8 @@ export default function Register({ enabledPlatforms = [] }) {
                 >
                     <SparklesIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-darker" aria-hidden="true" />
                     <span>
-                        We'll analyse <strong className="font-semibold">{demoDomain}</strong> and set up your
-                        brand guidelines automatically.
+                        Your website is <strong className="font-semibold">{demoDomain}</strong>.
+                        {' '}Confirm it after signup to start building your business profile.
                     </span>
                 </div>
             )}

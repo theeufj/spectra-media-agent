@@ -3,8 +3,13 @@
     $publicType = data_get($publicProps, 'publicContent.type');
     $publicTenant = data_get($publicProps, 'tenant', []);
     $publicBrand = data_get($publicTenant, 'logo_text', 'sitetospend');
+    $singlePlan = \App\Support\Tenant::singlePlan(data_get($publicTenant, 'key'));
     $previewHomepage = data_get($page, 'component') === 'Landing';
     $previewEntry = $previewHomepage || $publicType === 'service';
+    $earlyExitMonths = data_get($publicProps, 'earlyExitMonths', 3);
+    $earlyExitFeeUsd = data_get($publicProps, 'earlyExitFeeUsd');
+    $monthlyFeeCents = data_get($publicProps, 'plans.0.price_cents');
+    $formatUsd = static fn ($usd) => 'US$'.number_format($usd, fmod($usd, 1.0) ? 2 : 0);
 @endphp
 <div class="min-h-screen bg-gray-50 text-gray-900">
     <header class="border-b border-gray-200 bg-white">
@@ -82,7 +87,7 @@
             @endforeach
             @if(count(data_get($publicProps, 'plans', [])) > 0)
                 <section class="mt-10" aria-labelledby="marketing-plans">
-                    <h2 id="marketing-plans" class="text-2xl font-bold">Current management plans</h2>
+                    <h2 id="marketing-plans" class="text-2xl font-bold">{{ $singlePlan ? 'Google Ads management' : 'Current management plans' }}</h2>
                     <p class="mt-3 text-gray-600">Prices are in USD. Advertising spend is separate.</p>
                     <div class="mt-6 grid gap-6 sm:grid-cols-2">
                         @foreach(data_get($publicProps, 'plans', []) as $plan)
@@ -94,6 +99,18 @@
                             </div>
                         @endforeach
                     </div>
+                </section>
+            @endif
+            @if($singlePlan && data_get($page, 'component') === 'Pricing')
+                @if(count(data_get($publicProps, 'plans', [])) === 0)
+                    <p class="mt-6">Paid signup is currently unavailable. You can still <a href="/#build-my-ads" class="font-semibold underline">preview ads for your business</a>.</p>
+                @endif
+                <section id="management-billing" class="mt-8 rounded-xl border border-gray-200 bg-white p-6">
+                    <h2 class="text-2xl font-bold">Before you launch</h2>
+                    <p class="mt-3">Your first prepaid ad credit covers seven days of estimated advertising spend. A US$20 daily budget means US$140 in initial ad credit. We reconcile actual spend and top up the balance when it runs low.</p>
+                    @if($earlyExitMonths > 0)
+                    <p class="mt-3">If we build in an advertising account you own or control, cancelling or removing access in your first {{ $earlyExitMonths === 1 ? 'paid month' : $earlyExitMonths.' paid months' }} can trigger a {{ $formatUsd($earlyExitFeeUsd) }} setup fee, less subscription fees already paid. @if($earlyExitMonths > 1 && $monthlyFeeCents) After one paid month at {{ $formatUsd($monthlyFeeCents / 100) }}, that leaves {{ $formatUsd(max(0, $earlyExitFeeUsd - $monthlyFeeCents / 100)) }}. @endif Accounts we provision and operate for you are exempt. <a href="/terms-of-service#early-exit" class="font-semibold underline">Read the early-exit terms</a>.</p>
+                    @endif
                 </section>
             @endif
             @if(data_get($publicProps, 'setupFeeUsd'))
@@ -129,7 +146,7 @@
             </section>
             @if($service['slug'] !== 'google-ads-setup')
                 <section class="mt-10" aria-labelledby="current-plans">
-                    <h2 id="current-plans" class="text-2xl font-bold">Current management plans</h2>
+                    <h2 id="current-plans" class="text-2xl font-bold">{{ $singlePlan ? 'Google Ads management' : 'Current management plans' }}</h2>
                     <p class="mt-3 text-gray-600">Subscription prices are in USD. Advertising spend is additional.</p>
                     <div class="mt-6 grid gap-6 sm:grid-cols-2">
                         @foreach(data_get($publicProps, 'plans', []) as $plan)
@@ -142,14 +159,14 @@
                     </div>
                 </section>
             @endif
-            <p class="mt-10"><a href="/#build-my-ads" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">Build my ads</a> <a href="/pricing" class="ml-5 font-semibold underline">Compare pricing</a></p>
+            <p class="mt-10"><a href="/#build-my-ads" class="inline-block rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white">Build my ads</a> <a href="/pricing" class="ml-5 font-semibold underline">{{ $singlePlan ? 'See pricing' : 'Compare pricing' }}</a></p>
         @endif
     </main>
     <footer class="border-t border-gray-200 bg-white px-6 py-8">
         <nav aria-label="More from Site to Spend" class="mx-auto flex max-w-5xl flex-wrap gap-5 text-sm font-semibold">
             <a href="/google-ads-management">Google Ads management</a>
             <a href="/ai-ads-management">AI ads management</a>
-            <a href="/google-ads-setup">One-time Google Ads setup</a>
+            @unless($singlePlan)<a href="/google-ads-setup">One-time Google Ads setup</a>@endunless
             <a href="/blog">Guides</a>
             <a href="/about">About</a>
         </nav>

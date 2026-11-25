@@ -23,7 +23,7 @@ class PublicIndexingTest extends TestCase
         return array_map(fn ($path) => [$path], [
             '/features', '/about', '/blog/how-ai-agents-work',
             '/terms-of-service', '/privacy-policy',
-            '/google-ads-management', '/ai-ads-management', '/google-ads-setup',
+            '/google-ads-management', '/ai-ads-management',
         ]);
     }
 
@@ -40,7 +40,7 @@ class PublicIndexingTest extends TestCase
 
     public function test_distinct_vertical_pages_keep_their_own_canonical_and_identity(): void
     {
-        foreach (['/', '/pricing', '/how-it-works'] as $path) {
+        foreach (['/', '/pricing', '/how-it-works', '/google-ads-setup'] as $path) {
             $response = $this->get('https://realpropertyads.com'.$path)->assertOk();
             $this->assertStringContainsString(
                 '<link rel="canonical" href="https://realpropertyads.com'.$path.'"',

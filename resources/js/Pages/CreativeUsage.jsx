@@ -1,10 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
-export default function CreativeUsage({ auth }) {
-    const { creativeUsage, boostConfig, purchases, flash } = usePage().props;
-    const boost = boostConfig || { price_cents: 2900, image_generations: 25, video_generations: 5, refinements: 25 };
+export default function CreativeUsage({ auth, creativeUsage, boostConfig: boost, purchases }) {
 
     const handleBuyBoost = () => {
         router.post(route('creative-boost.checkout'));
@@ -20,8 +18,8 @@ export default function CreativeUsage({ auth }) {
             <div className="max-w-4xl mx-auto">
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Creative Usage</h1>
                 <p className="text-gray-500 mb-8">
-                    Track your monthly AI generation usage and purchase additional credits.
-                    {!creativeUsage.is_unlimited && (
+                    Track your creative allowance and any bonus credits for this period.
+                    {!creativeUsage.is_unlimited && /^\d{4}-\d{2}$/.test(creativeUsage.period) && (
                         <span className="ml-1 text-sm text-gray-500">
                             Resets at the start of each month.
                         </span>
@@ -31,7 +29,7 @@ export default function CreativeUsage({ auth }) {
                 {/* Flash messages for boost purchase */}
                 {boostStatus === 'success' && (
                     <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200 text-green-800">
-                        Creative Boost applied! Your bonus credits are now available.
+                        After payment is confirmed, your bonus credits appear in your balance below.
                     </div>
                 )}
                 {boostStatus === 'cancelled' && (
@@ -91,7 +89,7 @@ export default function CreativeUsage({ auth }) {
                 )}
 
                 {/* Creative Boost Pack */}
-                {!creativeUsage.is_unlimited && (
+                {boost && !creativeUsage.is_unlimited && (
                     <div
                         className="mb-8 rounded-xl border p-6"
                         style={{
@@ -213,10 +211,7 @@ function UsageBar({ label, icon, used, limit, bonus, remaining }) {
                     <span className="text-sm font-medium text-gray-500">Not on your plan</span>
                 </div>
                 <p className="mt-1.5 text-sm text-gray-600">
-                    Available on Growth.{' '}
-                    <Link href={route('subscription.pricing')} className="font-medium text-brand-dark underline">
-                        See plans
-                    </Link>
+                    Check your <Link href={route('subscription.pricing')} className="font-medium text-brand-dark underline">plan details</Link> to see your included allowances.
                 </p>
             </div>
         );

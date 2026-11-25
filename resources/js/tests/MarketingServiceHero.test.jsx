@@ -1,11 +1,12 @@
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { previewContactFor } from '@/utils/previewContact';
 
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('@inertiajs/react', () => ({
+    usePage: () => ({ props: { tenant: { key: 'realpropertyads', name: 'Real Property Ads' } } }),
     Link: ({ children, ...props }) => <a {...props}>{children}</a>,
 }));
 vi.mock('@/Components/PageTitle', () => ({ default: () => null }));
@@ -14,6 +15,8 @@ vi.mock('@/Components/Footer', () => ({ default: () => <footer /> }));
 
 import MarketingService from '@/Pages/MarketingService';
 import Landing from '@/Pages/Landing';
+import Pricing from '@/Pages/Pricing';
+import RealEstatePricing from '@/Pages/RealEstatePricing';
 
 const homeContent = { headline: 'Preview your ads', intro: 'Explore your business profile free.', sections: [], links: [] };
 
@@ -213,4 +216,57 @@ describe('Homepage ad preview', () => {
         expect(screen.getByRole('button', { name: 'Build my ads' })).toBeEnabled();
     });
 
+});
+
+describe('Site to Spend public offer', () => {
+    beforeEach(() => {
+        vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new globalThis.Response(JSON.stringify({ ok: true }))));
+    });
+
+    it('shows one Google plan and an ungated illustrative report', () => {
+        const { container } = render(<Landing publicContent={homeContent} plans={[
+            plan({ price_cents: 9900 }), plan({ id: 2, name: 'Growth', slug: 'growth', price_cents: 24900 }),
+        ]} />);
+        expect(screen.getByRole('heading', { name: 'Starter' })).toBeVisible();
+        expect(screen.getByText('US$99')).toBeVisible();
+        expect(screen.queryByText('Growth')).toBeNull();
+        const report = within(container.querySelector('#sample-report'));
+        expect(report.getByText(/fictional campaign/i)).toBeVisible();
+        expect(report.getByText(/plumbing courses.*negative keyword/i)).toBeVisible();
+        expect(report.getByText(/US\$280 in media spend ÷ 7 tracked forms = US\$40/)).toBeVisible();
+        expect(screen.getByRole('link', { name: 'See an example report' })).toHaveAttribute('href', '#sample-report');
+    });
+
+    it('explains actual billing terms before signup and sends signed-in customers to workspace billing', () => {
+        const plans = [plan({ price_cents: 9900 })];
+        const page = render(<Pricing publicContent={homeContent} plans={plans} earlyExitFeeUsd={999} />);
+        const pricingVisits = globalThis.fetch.mock.calls.filter(([url]) => url === '/spectra/conversion');
+        expect(pricingVisits).toHaveLength(1);
+        expect(JSON.parse(pricingVisits[0][1].body)).toEqual({ event: 'pricing_visit' });
+        expect(screen.getByText(/first 3 paid months/)).toBeVisible();
+        expect(screen.getByText(/After one US\$99 payment, the remaining fee would be US\$900/)).toBeVisible();
+        expect(screen.getByText(/US\$140 in ad credit/)).toBeVisible();
+        expect(screen.getByRole('link', { name: 'Read the early-exit terms' })).toHaveAttribute('href', '/terms-of-service#early-exit');
+        expect(screen.getByRole('link', { name: 'Create your workspace' })).toHaveAttribute('href', '/register');
+        page.rerender(<Pricing publicContent={homeContent} plans={plans} earlyExitFeeUsd={999} earlyExitMonths={1} auth={{ user: { id: 1 } }} />);
+        expect(screen.getByText(/your first paid month can trigger/)).toBeVisible();
+        expect(screen.queryByText(/remaining fee would be/)).toBeNull();
+        expect(screen.getByRole('link', { name: 'View workspace billing' })).toHaveAttribute('href', '/subscription/pricing');
+    });
+
+    it('leaves the free preview accessible when the paid plan is unavailable', () => {
+        render(<Pricing publicContent={homeContent} earlyExitFeeUsd={999} earlyExitMonths={5} />);
+        expect(screen.getByText(/first 5 paid months/)).toBeVisible();
+        expect(screen.queryByText(/remaining fee would be/)).toBeNull();
+        expect(screen.getByRole('link', { name: 'Build my ads' })).toHaveAttribute('href', '/#build-my-ads');
+        expect(screen.queryByRole('link', { name: 'Create your workspace' })).toBeNull();
+    });
+
+    it('keeps the property site’s additional plans and standalone setup', () => {
+        render(<RealEstatePricing publicContent={homeContent} plans={[
+            plan({ price_cents: 9900 }), plan({ id: 2, name: 'Growth', slug: 'growth', price_cents: 24900 }),
+        ]} setupFeeUsd={999} />);
+        expect(screen.getByRole('heading', { name: 'Growth' })).toBeVisible();
+        expect(screen.getByText('US$999')).toBeVisible();
+    });
 });

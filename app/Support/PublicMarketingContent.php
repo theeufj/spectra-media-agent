@@ -2,21 +2,23 @@
 
 namespace App\Support;
 
+use App\Models\Plan;
+
 /** Core public copy shared by the initial HTML and the interactive pages. */
 class PublicMarketingContent
 {
     /** @return array<string, mixed> */
-    public static function forComponent(string $component): array
+    public static function forComponent(string $component, bool $singlePlan, ?Plan $plan = null): array
     {
         $pages = [
             'Landing' => [
-                'eyebrow' => 'AI-powered ad campaign management',
-                'headline' => 'Automated Google & Meta ads management with the power of AI',
-                'intro' => 'Build campaigns from your website, review the business facts and ads, and choose your budget before launch. On a managed plan, agents monitor delivery and performance after deployment.',
+                'eyebrow' => $plan ? 'US$'.number_format($plan->price_cents / 100).'/month · Ad spend separate' : 'Google Ads for small businesses',
+                'headline' => 'Google Ads management for your small business',
+                'intro' => 'Preview ads written for your website. Approve your campaign and budget before launch, then follow spend, enquiries and changes in your workspace.',
             ],
             'Features' => [
                 'eyebrow' => 'Platform features',
-                'headline' => 'Everything you need to manage your paid ads',
+                'headline' => $singlePlan ? 'Google Ads tools for small businesses' : 'Everything you need to manage your paid ads',
                 'intro' => 'Keyword research, campaign preparation, budget monitoring, conversion tracking and creative reviews in one place.',
             ],
             'HowItWorks' => [
@@ -26,12 +28,12 @@ class PublicMarketingContent
             ],
             'Pricing' => [
                 'eyebrow' => 'Pricing',
-                'headline' => 'Simple, transparent pricing',
-                'intro' => 'Explore your business profile free. Choose ongoing management or a one-time campaign build. Ad spend is separate from your service fee.',
+                'headline' => 'Google Ads management for one business',
+                'intro' => 'One monthly management fee covers your Google campaigns in one workspace. Choose your advertising budget separately.',
             ],
             'About' => [
                 'eyebrow' => 'About us',
-                'headline' => 'Advertising tools for businesses without a large marketing team',
+                'headline' => $singlePlan ? 'About Site to Spend' : 'Advertising tools for businesses without a large marketing team',
                 'intro' => 'Site to Spend brings campaign preparation, platform monitoring and performance reporting together, so business owners can understand what is running and what needs attention.',
             ],
             'RealEstateLanding' => [
@@ -51,6 +53,24 @@ class PublicMarketingContent
             'intro' => 'Ongoing management for your property business, or a Google Ads campaign built once for you to run. Start with a listing or business website, confirm the local offer and choose your advertising allowance separately from the service fee.',
         ];
         $isProperty = str_starts_with($component, 'RealEstate');
+
+        if ($singlePlan) {
+            return [
+                'type' => 'marketing',
+                ...$pages[$component],
+                'sections' => [
+                    ['title' => 'Preview your Google ads', 'body' => 'Start with your website. Review the proposed keywords, copy and service area so the campaign describes the work you want to win.'],
+                    ['title' => 'Set a budget before launch', 'body' => 'Choose the daily advertising budget you want to fund. Your monthly subscription covers campaign management. Google advertising spend is additional and funded through prepaid credit.'],
+                    ['title' => 'Track enquiries and spend', 'body' => 'Choose what to measure, such as a completed booking or quote request. Once tracking is tested, your workspace shows spend, measured conversions and campaign changes.'],
+                ],
+                'links' => [
+                    ['href' => '/google-ads-management', 'label' => 'Google Ads management'],
+                    ['href' => '/pricing', 'label' => 'Pricing and ad spend'],
+                    ['href' => '/terms-of-service', 'label' => 'Subscription and account terms'],
+                    ['href' => '/blog', 'label' => 'Google Ads guides'],
+                ],
+            ];
+        }
 
         return [
             'type' => 'marketing',

@@ -29,20 +29,9 @@ class GenerateLlmsFull extends Command
     {
         $this->info('Generating llms-full.txt...');
 
-        $content = "# sitetospend.com - Full AI Knowledge Base\n\n";
-        $content .= "> This document is a complete text compilation of sitetospend.com's marketing pages, features, and blog articles. It is designed to be easily ingested by AI language models.\n\n";
-
-        // Section: Marketing Copy
-        $content .= "## 1. What We Do\n";
-        $content .= "sitetospend.com is an AI-powered Google Ads management platform that automates campaign creation, optimisation, and scaling for small businesses and agencies. We remove the complexity of paid advertising by deploying AI agents that continuously monitor, optimise, and improve your campaigns. Instead of spending hours managing bids, keywords, and ad copy, you connect your account and let our system work around the clock.\n\n";
-
-        $content .= "### Core Features\n";
-        $content .= "- **Automated Campaign Creation**: Build Search, Display, and Performance Max campaigns automatically.\n";
-        $content .= "- **Smart Bidding Optimisation**: 24/7 adjustment of bids to hit ROAS and CPA targets.\n";
-        $content .= "- **AI Ad Copy Strategy**: Our creative agents continuously test headlines, descriptions, and imagery against each other.\n";
-        $content .= "- **Cross-Platform**: Deploy to Google Ads, Meta (Facebook Ads), and Microsoft Ads from one central campaign goal.\n";
-        $content .= "- **Self-Optimising Agent**: Automatically catches sudden CPC spikes, underperforming ad groups, and broken links, and pauses or fixes them.\n";
-        $content .= "- **Competitor Intelligence**: Spies on competitor offers and dynamically adjusts your copy to counteract them.\n\n";
+        // The short index is the public offer. Use the same description in
+        // the expanded copy so crawler documents agree on scope and billing.
+        $content = File::get(public_path('llms.txt'))."\n\n";
 
         // Section: Blog Articles
         $content .= "## 2. Expert Guides & Blog Articles\n\n";

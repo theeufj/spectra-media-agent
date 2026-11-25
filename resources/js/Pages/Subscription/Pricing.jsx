@@ -5,19 +5,25 @@ import SubscriptionTierSelector from '@/Components/SubscriptionTierSelector';
 import { SetupStages } from '@/Components/SetupJourney';
 import SetupExpectations from '@/Components/SetupExpectations';
 
-export default function Pricing({ auth, plans, setupFee = null, journey = null, availableChannels, prequalification }) {
+export default function Pricing({ auth, plans, setupFee = null, journey = null, availableChannels, prequalification, singlePlan = false, manageSubscription = false, earlyExitMonths, earlyExitFee }) {
     const [processing, setProcessing] = useState(false);
     const checkout = () => {
         setProcessing(true);
         router.post(route('setup-fee.checkout'), {}, { onFinish: () => setProcessing(false) });
     };
     const ready = journey?.checkout_ready === true;
+    const tierSelector = <SubscriptionTierSelector plans={plans} availableChannels={availableChannels} prequalification={prequalification} singlePlan={singlePlan} earlyExitMonths={earlyExitMonths} earlyExitFee={earlyExitFee} />;
     return (
         <AuthenticatedLayout user={auth.user}>
             <Head title={setupFee?.intent ? 'Your Google Ads setup' : 'Pricing'} />
             <main className="mx-auto max-w-5xl px-4 py-10">
                 {setupFee?.intent && <SetupStages stage={1} />}
-                {!setupFee?.intent && <SubscriptionTierSelector plans={plans} availableChannels={availableChannels} prequalification={prequalification} />}
+                {manageSubscription && <section className="mx-auto max-w-xl rounded-xl border border-gray-200 bg-white p-6">
+                    <h1 className="text-xl font-semibold">Your subscription</h1>
+                    <p className="mt-2 text-gray-600">{auth.user.subscription_plan}</p>
+                    <a href={route('subscription.portal')} className="mt-4 inline-block font-semibold text-brand-dark underline">Manage billing</a>
+                </section>}
+                {!setupFee?.intent && !manageSubscription && tierSelector}
                 {setupFee && !setupFee.paid && <section className="my-8 rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
                     <p className="text-sm font-medium text-brand-dark">One payment · No subscription</p>
                     <h1 className="mt-2 text-2xl font-semibold text-gray-900">One-time Google Ads setup</h1>
@@ -41,7 +47,10 @@ export default function Pricing({ auth, plans, setupFee = null, journey = null, 
                     <p className="mt-2 text-sm">Your payment is recorded. Follow the build and see what remains in your setup checklist.</p>
                     <Link href={route('dashboard')} className="mt-5 inline-block rounded-lg bg-brand-dark px-5 py-3 font-medium text-white">Continue to your setup</Link>
                 </section>}
-                {setupFee?.intent && <details className="mt-8"><summary className="cursor-pointer text-sm text-gray-500">Compare ongoing management plans</summary><div className="mt-6"><SubscriptionTierSelector plans={plans} availableChannels={availableChannels} prequalification={prequalification} /></div></details>}
+                {setupFee?.intent && !manageSubscription && <details className="mt-8">
+                    <summary className="cursor-pointer text-sm text-gray-500">{singlePlan ? 'See managed Google Ads' : 'Compare ongoing management plans'}</summary>
+                    <div className="mt-6">{tierSelector}</div>
+                </details>}
             </main>
         </AuthenticatedLayout>
     );

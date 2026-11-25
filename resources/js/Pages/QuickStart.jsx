@@ -49,7 +49,7 @@ const SERVICES = [
     },
 ];
 
-export default function QuickStart({ auth, demoUrl = null }) {
+export default function QuickStart({ auth, demoUrl = null, setupAvailable = false }) {
     // No country field: the server derives it (and the currency) from the
     // timezone below, rather than assuming US for everyone.
     const { data, setData, post, processing, errors, transform } = useForm({
@@ -185,7 +185,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                 As two bare buttons, the selected one was
                                 announced identically to the unselected one.
                             */}
-                            <div
+                            {setupAvailable && <div
                                 role="radiogroup"
                                 aria-label="How would you like us to work with you?"
                                 className="mx-auto mt-8 grid max-w-xl gap-3 text-left sm:grid-cols-2"
@@ -212,7 +212,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                         </button>
                                     );
                                 })}
-                            </div>
+                            </div>}
 
                             <ul className="mx-auto mt-10 grid max-w-lg grid-cols-3 gap-4 text-center">
                                 {STEPS.map((step) => (

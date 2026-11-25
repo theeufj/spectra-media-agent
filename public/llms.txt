@@ -1,28 +1,17 @@
-# sitetospend.com
+# Site to Spend
 
-> AI-powered Google Ads management platform that automates campaign creation, optimisation, and scaling for small businesses and agencies.
+> Google Ads management for small businesses.
 
-sitetospend.com removes the complexity of paid advertising by deploying AI agents that continuously monitor, optimise, and improve your Google Ads, Facebook Ads, and Microsoft Ads campaigns. Instead of spending hours managing bids, keywords, negative keywords, and ad copy, you connect your account and let the platform work around the clock. The platform is built specifically for small and medium-sized businesses that don't have an in-house PPC specialist.
+Enter your business website to preview Google ads. Review your offer, service area, ads and budget before launch. Each subscription covers one business workspace. The workspace reports Google ad spend, tracked conversions and campaign changes.
 
-Key capabilities: automated campaign creation, smart bidding optimisation, AI-generated and tested ad copy, conversion tracking setup, competitor analysis, multi-platform campaign management (Google, Facebook, Microsoft, LinkedIn), and a self-healing agent that catches and fixes underperforming campaigns automatically.
+## Core pages
 
-## Core Pages
-
-- [Home](https://sitetospend.com): Overview of the platform, value proposition, and social proof.
-- [Features](https://sitetospend.com/features): Full list of platform capabilities — AI agents, smart bidding, ad copy generation, conversion tracking, multi-platform management, competitor intelligence.
-- [How It Works](https://sitetospend.com/how-it-works): Step-by-step explanation of how AI agents take over campaign management, from onboarding to ongoing optimisation.
-- [Pricing](https://sitetospend.com/pricing): Plans and pricing. Includes free sandbox mode for testing with realistic campaigns and no real ad spend.
-- [Register](https://sitetospend.com/register): Create a free account. No credit card required to start.
-
-## Pricing
-
-Two ways to buy. See https://sitetospend.com/pricing for the authoritative, current figures.
-
-- **Managed subscription** — Starter US$99/month, Growth US$249/month, Agency priced on application. Flat monthly fee for the platform and the AI agents. Ad spend is separate and goes directly to Google, Facebook, Microsoft and LinkedIn on the customer's own billing; sitetospend never marks it up and takes no percentage of it.
-- **One-time Google Ads setup** — US$999, charged once, nothing recurring. sitetospend builds the Google Ads account, campaigns, ad copy and conversion tracking, then hands the account over paused for the customer to add their own Google billing and run themselves. No ongoing management. Chosen at signup as an alternative to a subscription.
-- **Free tier** — 3 website or file sources for brand matching, 4 watermarked AI images per campaign, 3 landing page audits, unlimited ad copy. Going live on Google or Facebook requires a paid plan or the one-time setup.
-
-No lock-in contract and no notice period on any option. Customers keep their own ad accounts, spend history, conversion data and audience lists.
+- [Home](https://sitetospend.com/) offers a website-based ad preview.
+- [Google Ads management](https://sitetospend.com/google-ads-management) explains campaign preparation and ongoing management.
+- [Features](https://sitetospend.com/features) covers ad creation, budget monitoring, tracking and reporting.
+- [How it works](https://sitetospend.com/how-it-works) explains the steps from website review to campaign approval.
+- [Pricing](https://sitetospend.com/pricing) lists the available monthly subscription in US dollars. The customer chooses a separate advertising budget. Prepaid credits fund Google advertising spend.
+- [Terms](https://sitetospend.com/terms-of-service) explain billing and early exit provisions for customer-owned advertising accounts.
 
 ## Blog — Google Ads & Digital Advertising Guides
 

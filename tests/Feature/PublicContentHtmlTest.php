@@ -61,7 +61,7 @@ class PublicContentHtmlTest extends TestCase
     public function test_google_management_price_and_actions_are_visible_before_the_article_and_match_react_props(): void
     {
         Plan::query()->update(['is_active' => false]);
-        $starting = $this->heroPlan('hero-monthly', 19_875);
+        $starting = $this->heroPlan('starter', 9_900, ['stripe_price_id' => 'price_starter']);
         $this->heroPlan('hero-growth', 28_800);
         $this->heroPlan('hero-inactive', 100, ['is_active' => false]);
         $this->heroPlan('hero-annual', 200, ['billing_interval' => 'year']);
@@ -73,7 +73,7 @@ class PublicContentHtmlTest extends TestCase
         $props = $response->viewData('page')['props'];
         $hero = $props['publicContent']['hero'];
         $this->assertSame(['href' => '/#build-my-ads', 'label' => 'Build my ads'], $hero['primaryCta']);
-        $this->assertSame('Google Ads management from US$198.75/month', $hero['headline']);
+        $this->assertSame('Google Ads management for US$99/month', $hero['headline']);
         $this->assertSame('Advertising spend is additional. Subscription prices are in US dollars.', $hero['note']);
         $this->assertStringContainsString('researches keywords, prepares Google Ads copy and monitors your campaign', $hero['intro']);
         $this->assertSame('Small Business Google Ads Management | sitetospend', $props['meta']['title']);
@@ -93,7 +93,8 @@ class PublicContentHtmlTest extends TestCase
 
         $starting->update(['price_cents' => 21_901]);
         $updated = $this->get('https://sitetospend.com/google-ads-management')->assertOk()->viewData('page')['props'];
-        $this->assertSame('Google Ads management from US$219.01/month', $updated['publicContent']['hero']['headline']);
+        $this->assertSame($updated['service']['headline'], $updated['publicContent']['hero']['headline']);
+        $this->assertEmpty($updated['plans']);
     }
 
     public function test_google_management_hero_does_not_invent_a_price_without_a_paid_monthly_plan(): void
@@ -107,13 +108,16 @@ class PublicContentHtmlTest extends TestCase
         $this->assertSame($props['service']['headline'], $props['publicContent']['hero']['headline']);
         $this->assertStringNotContainsString('US$', $props['publicContent']['hero']['headline']);
         $this->assertSame('/pricing', $props['publicContent']['hero']['secondaryCta']['href']);
+        $this->get('https://sitetospend.com/pricing')->assertOk()
+            ->assertSee('Paid signup is currently unavailable')
+            ->assertSee('href="/terms-of-service#early-exit"', false);
     }
 
     public function test_other_service_pages_keep_their_original_hero_and_one_time_fee(): void
     {
         config(['services.stripe.setup_fee_usd_cents' => 147_550]);
         foreach (['google-ads-setup', 'ai-ads-management'] as $slug) {
-            $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
+            $response = $this->get('https://realpropertyads.com/'.$slug)->assertOk();
             $props = $response->viewData('page')['props'];
             $service = MarketingPages::find($slug, '1,475.50');
             $response->assertSee('href="/#build-my-ads"', false);
@@ -129,7 +133,7 @@ class PublicContentHtmlTest extends TestCase
 
     public function test_every_service_fallback_links_to_the_homepage_preview_before_registration(): void
     {
-        foreach (['google-ads-management', 'ai-ads-management', 'google-ads-setup'] as $slug) {
+        foreach (['google-ads-management', 'ai-ads-management'] as $slug) {
             $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
             $document = new \DOMDocument;
             @$document->loadHTML($response->getContent());
@@ -138,6 +142,8 @@ class PublicContentHtmlTest extends TestCase
             $this->assertSame(0, $xpath->query('//*[@id="app"]//a[starts-with(@href, "/register")] | //*[@id="app"]//form')->length);
         }
 
+        $this->get('https://sitetospend.com/google-ads-setup?gclid=sample')->assertStatus(301)
+            ->assertRedirect('https://sitetospend.com/google-ads-management?gclid=sample');
         $this->get('https://sitetospend.com/')->assertOk()->assertSee('id="build-my-ads"', false);
     }
 

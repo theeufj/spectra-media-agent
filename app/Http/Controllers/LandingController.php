@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\RendersPageMeta;
 use App\Models\Plan;
 use App\Support\PublicMarketingContent;
+use App\Support\PublicSeo;
+use App\Support\Tenant;
 use Illuminate\Http\Request;
 
 class LandingController extends Controller
@@ -13,14 +15,11 @@ class LandingController extends Controller
 
     public function index(Request $request)
     {
-        $plans = Plan::active()->ordered()->where('is_free', false)->get();
         $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
+        $plans = Plan::offeredTo($tenant['key'])->where('is_free', false)->ordered()->get();
         $isRealEstate = ($tenant['key'] ?? '') === 'realpropertyads';
         $page = $isRealEstate ? 'RealEstateLanding' : 'Landing';
-
-        $setupFeeUsd = $this->setupFeeUsd();
-        $faqs = $this->faqs('landing', $setupFeeUsd);
 
         // The vertical skin renders a different component with different copy,
         // so it needs its own metadata. It used to inherit this method's, which
@@ -37,28 +36,22 @@ class LandingController extends Controller
                 ),
             ]);
         }
-        $paidPrices = $plans->pluck('price_cents')->filter()->map(fn ($cents) => (int) round($cents / 100));
+        $plan = $plans->first();
+        $faqs = config('faqs.google_management');
 
         return $this->renderPublic($page, [
             'plans' => $plans,
             'faqs' => $faqs,
-            'setupFeeUsd' => $setupFeeUsd,
             'meta' => $this->meta(
-                'AI Google & Meta Ads Management Software | sitetospend',
-                'Prepare, review and manage Google and Meta campaigns with AI. Confirm your business profile, keyword plan, creative and budget before launch.',
-                'sitetospend — Your AI Marketing Team',
-                'Build a campaign from your website and review the ads before launch. Compare ongoing management and a one-time Google Ads setup.',
-                // The offer range is read off the plans actually on sale rather
-                // than the "149" and "249" that used to be written into the JSX,
-                // where a price change in the database left the rich result
-                // advertising a number the pricing page no longer showed.
-                [
+                'Google Ads Management for Small Businesses | Site to Spend',
+                'Preview Google ads written for your website. Review your campaign and budget before launch, then track spend, enquiries and campaign changes.',
+                schema: [
                     [
                         '@type' => 'Organization',
                         'name' => 'sitetospend',
                         'url' => 'https://sitetospend.com',
                         'logo' => 'https://sitetospend.com/og-image.png',
-                        'description' => 'AI-powered digital advertising platform with autonomous agents that manage and optimize ad campaigns across Google, Facebook, Microsoft, and LinkedIn.',
+                        'description' => 'Google Ads campaign preparation, monitoring and reporting for small businesses.',
                         'sameAs' => ['https://www.linkedin.com/company/sitetospend'],
                     ],
                     [
@@ -67,25 +60,20 @@ class LandingController extends Controller
                         'applicationCategory' => 'BusinessApplication',
                         'operatingSystem' => 'Web',
                         'url' => 'https://sitetospend.com',
-                        'description' => 'Autonomous AI agents that create, manage, and optimize digital ad campaigns across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn Ads.',
-                        'offers' => [
-                            '@type' => 'AggregateOffer',
-                            'lowPrice' => $paidPrices->min() ?? 99,
-                            // The one-time setup sits above every monthly plan,
-                            // so it sets the ceiling of the range rather than
-                            // being left out of it.
-                            'highPrice' => max($paidPrices->max() ?? 249, $setupFeeUsd),
+                        'description' => 'Google Ads management for one business workspace. Review your campaign before launch and follow its spend and measured results.',
+                        ...($plan ? ['offers' => [
+                            '@type' => 'Offer',
+                            'url' => PublicSeo::sharedUrl('/pricing'),
+                            'price' => number_format($plan->price_cents / 100, 2, '.', ''),
                             'priceCurrency' => 'USD',
-                            'offerCount' => $paidPrices->count() + 1,
-                        ],
-                        'featureList' => [
-                            'AI Competitor Discovery',
-                            'Self-Optimising Campaigns',
-                            'Budget Intelligence',
-                            'Creative A/B Testing',
-                            'Audience Intelligence',
-                            'Vision AI Brand Extraction',
-                        ],
+                            'priceSpecification' => [
+                                '@type' => 'UnitPriceSpecification',
+                                'price' => number_format($plan->price_cents / 100, 2, '.', ''),
+                                'priceCurrency' => 'USD',
+                                'billingDuration' => 'P1M',
+                            ],
+                        ]] : []),
+                        'featureList' => ['Google Ads campaign preparation', 'Campaign review', 'Budget monitoring', 'Conversion tracking', 'Campaign reporting'],
                     ],
                     $this->faqSchema($faqs),
                 ],
@@ -95,6 +83,26 @@ class LandingController extends Controller
 
     public function features()
     {
+        if (Tenant::singlePlan(request()->attributes->get('tenant')['key'])) {
+            $features = [
+                ['Keyword research', 'Review search terms and the services and areas your campaign will target.'],
+                ['Ad preparation', 'Preview Google ads and creative based on your website and confirmed offer.'],
+                ['Budget monitoring', 'Set a budget and track Google advertising spend.'],
+                ['Conversion tracking and reports', 'Measure enquiries or sales and review campaign changes in your workspace.'],
+            ];
+
+            return $this->renderPublic('Features', [
+                'meta' => $this->meta('Google Ads Management Features | Site to Spend',
+                    'Review Google Ads keywords and creative, choose a budget and follow spend and measured enquiries in one business workspace.',
+                    schema: [[
+                        '@type' => 'ItemList',
+                        'name' => 'Google Ads management features',
+                        'numberOfItems' => count($features),
+                        'itemListElement' => $this->listItems($features),
+                    ]]),
+            ]);
+        }
+
         return $this->renderPublic('Features', [
             'meta' => $this->meta(
                 'Features — Automated Campaign Management | sitetospend',
@@ -186,17 +194,18 @@ class LandingController extends Controller
             ]);
         }
 
-        $plans = Plan::active()->ordered()->where('is_free', false)->get();
-        $faqs = $this->faqs('pricing', $this->setupFeeUsd());
+        $plans = Plan::offeredTo($tenant['key'])->where('is_free', false)->ordered()->get();
+        $faqs = config('faqs.google_management');
         $lowestPrice = $plans->where('billing_interval', 'month')->where('price_cents', '>', 0)->min('price_cents');
 
         return $this->renderPublic('Pricing', [
             'plans' => $plans,
+            'earlyExitMonths' => (int) config('billing.early_exit.minimum_months', 3),
+            'earlyExitFeeUsd' => (int) config('services.stripe.setup_fee_usd_cents') / 100,
             'faqs' => $faqs,
-            'setupFeeUsd' => $this->setupFeeUsd(),
             'meta' => $this->meta(
-                'Pricing — Google Ads Management'.($lowestPrice ? ' from US$'.number_format($lowestPrice / 100, 0).'/mo' : '').' | sitetospend',
-                'Compare managed Google and Meta ads with a one-time Google Ads setup. Service fees and ad spend are separate. Review your campaign before launch.',
+                'Pricing — Google Ads Management'.($lowestPrice ? ' US$'.number_format($lowestPrice / 100, $lowestPrice % 100 === 0 ? 0 : 2).'/mo' : '').' | sitetospend',
+                'Google Ads management for one business workspace. See the monthly management fee, how advertising spend is billed and what you review before launch.',
                 null,
                 null,
                 [$this->faqSchema($faqs)],
@@ -206,6 +215,19 @@ class LandingController extends Controller
 
     public function about()
     {
+        if (Tenant::singlePlan(request()->attributes->get('tenant')['key'])) {
+            return $this->renderPublic('About', [
+                'meta' => $this->meta('About Site to Spend | Google Ads for Small Businesses',
+                    'Site to Spend helps small business owners review Google ads, control their advertising budget and see which enquiries their campaign generates.',
+                    schema: [[
+                        '@type' => 'AboutPage',
+                        'name' => 'About Site to Spend',
+                        'url' => PublicSeo::sharedUrl('/about'),
+                        'mainEntity' => ['@type' => 'Organization', 'name' => 'Site to Spend', 'url' => PublicSeo::sharedUrl('/')],
+                    ]]),
+            ]);
+        }
+
         return $this->renderPublic('About', [
             'meta' => $this->meta(
                 'About sitetospend — Ads Management Without an Agency',
@@ -236,7 +258,7 @@ class LandingController extends Controller
     {
         return \Inertia\Inertia::render($component, [
             ...$props,
-            'publicContent' => PublicMarketingContent::forComponent($component),
+            'publicContent' => PublicMarketingContent::forComponent($component, Tenant::singlePlan(request()->attributes->get('tenant')['key']), $props['plans'][0] ?? null),
         ]);
     }
 

@@ -4,9 +4,11 @@ import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import Hero, { AD_PREVIEW_CTA } from '@/Components/Marketing/Hero';
 import CtaBand from '@/Components/Marketing/CtaBand';
+import GoogleManagementPlan from '@/Components/Marketing/GoogleManagementPlan';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
 
-export default function MarketingService({ auth, service, publicContent = {}, plans = [] }) {
+export default function MarketingService({ auth, tenant, service, publicContent = {}, plans = [] }) {
+    const propertySite = tenant?.key === 'realpropertyads';
     const setupOnly = service.slug === 'google-ads-setup';
     const managementHero = service.slug === 'google-ads-management' ? publicContent.hero : null;
     const previewCta = managementHero?.primaryCta ?? AD_PREVIEW_CTA;
@@ -41,10 +43,11 @@ export default function MarketingService({ auth, service, publicContent = {}, pl
                         <nav aria-label="Related services" className="mt-10 flex flex-wrap gap-4 text-sm font-semibold text-brand-darker">
                             <Link href="/google-ads-management" className="py-3 hover:underline">Google Ads management</Link>
                             <Link href="/ai-ads-management" className="py-3 hover:underline">AI ads management</Link>
-                            <Link href="/google-ads-setup" className="py-3 hover:underline">One-time Google Ads setup</Link>
+                            {propertySite && <Link href="/google-ads-setup" className="py-3 hover:underline">One-time Google Ads setup</Link>}
                         </nav>
                     </div>
-                    {!setupOnly && plans.length > 0 && (
+                    {!propertySite && !setupOnly && <GoogleManagementPlan plans={plans} />}
+                    {propertySite && !setupOnly && plans.length > 0 && (
                         <PricingTable
                             title="Current management plans"
                             sub="Subscription prices are in USD. Advertising spend is additional."
@@ -58,9 +61,9 @@ export default function MarketingService({ auth, service, publicContent = {}, pl
                     )}
                     <CtaBand
                         title={setupOnly ? 'Prepare your business for a one-time build' : 'Start with your business, offer and goal'}
-                        body="Enter your website to see sample ad copy before you choose a plan."
+                        body="Enter your website to see sample ad copy before you start."
                         primaryCta={previewCta}
-                        secondaryCta={{ href: '/pricing', label: 'Compare pricing' }}
+                        secondaryCta={{ href: '/pricing', label: 'View pricing' }}
                     />
                 </main>
                 <Footer guestCta={previewCta} />

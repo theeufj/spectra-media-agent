@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Support\Tenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /** @property list<string>|null $legacy_stripe_price_ids */
 class Plan extends Model
 {
+    public const int STARTER_MONTHLY_PRICE_CENTS = 9900;
+
     protected $fillable = [
         'name',
         'slug',
@@ -83,7 +86,7 @@ class Plan extends Model
      * and saw platforms greyed out with "upgrade to unlock" and no way to know
      * which upgrade.
      */
-    public static function cheapestFor(array $platforms): ?self
+    public static function cheapestFor(array $platforms, ?string $tenantKey = null): ?self
     {
         $wanted = array_values(array_unique(array_map('strtolower', array_filter($platforms))));
 
@@ -91,8 +94,7 @@ class Plan extends Model
             return null;
         }
 
-        $candidates = static::query()
-            ->where('is_active', true)
+        $candidates = static::offeredTo($tenantKey)
             // Self-serve only. Agency is "Contact Us" and cannot be bought from
             // a wizard, so offering it as the answer would be a dead end.
             ->whereNotNull('stripe_price_id')
@@ -124,6 +126,22 @@ class Plan extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /** New purchases only. Existing subscriptions resolve against their original prices. */
+    public function scopeOfferedTo(Builder $query, ?string $tenantKey): Builder
+    {
+        $query->where('is_active', true);
+
+        if (Tenant::singlePlan($tenantKey)) {
+            $query->where('slug', 'starter')
+                ->where('price_cents', self::STARTER_MONTHLY_PRICE_CENTS)
+                ->where('billing_interval', 'month')
+                ->where('stripe_price_id', '<>', '')
+                ->where('is_free', false);
+        }
+
+        return $query;
     }
 
     public function scopeOrdered($query)

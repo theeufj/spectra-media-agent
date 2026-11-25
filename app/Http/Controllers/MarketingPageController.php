@@ -6,6 +6,9 @@ use App\Http\Controllers\Concerns\RendersPageMeta;
 use App\Models\Plan;
 use App\Support\MarketingPages;
 use App\Support\PublicSeo;
+use App\Support\Tenant;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,8 +26,12 @@ class MarketingPageController extends Controller
         return $this->show('ai-ads-management');
     }
 
-    public function googleAdsSetup(): Response
+    public function googleAdsSetup(Request $request): Response|RedirectResponse
     {
+        if (Tenant::singlePlan($request->attributes->get('tenant')['key'])) {
+            return redirect()->route('google-ads-management', $request->query(), 301);
+        }
+
         return $this->show('google-ads-setup');
     }
 
@@ -32,9 +39,11 @@ class MarketingPageController extends Controller
     {
         $setupFee = number_format((int) config('services.stripe.setup_fee_usd_cents') / 100, 2, '.', ',');
         $setupFee = str_ends_with($setupFee, '.00') ? substr($setupFee, 0, -3) : $setupFee;
-        $service = MarketingPages::find($slug, $setupFee);
+        $tenantKey = request()->attributes->get('tenant')['key'];
+        $singlePlan = Tenant::singlePlan($tenantKey);
+        $service = MarketingPages::find($slug, $setupFee, $singlePlan);
         abort_if($service === null, 404);
-        $plans = Plan::active()->ordered()->where('is_free', false)->get();
+        $plans = Plan::offeredTo($tenantKey)->ordered()->where('is_free', false)->get();
         $hero = null;
         if ($slug === 'google-ads-management') {
             $startingPlan = $plans->filter(fn (Plan $plan) => $plan->slug !== 'setup_only'
@@ -46,10 +55,10 @@ class MarketingPageController extends Controller
                 ? 'US$'.number_format($startingPlan->price_cents / 100, $startingPlan->price_cents % 100 === 0 ? 0 : 2, '.', ',').'/month'
                 : null;
             $hero = [
-                'headline' => $price ? 'Google Ads management from '.$price : $service['headline'],
+                'headline' => $price ? ($singlePlan ? 'Google Ads management for ' : 'Google Ads management from ').$price : $service['headline'],
                 'intro' => 'Site to Spend researches keywords, prepares Google Ads copy and monitors your campaign on a managed plan. Review your business information and ads before launch.',
                 'primaryCta' => ['href' => '/#build-my-ads', 'label' => 'Build my ads'],
-                'secondaryCta' => ['href' => '/pricing', 'label' => 'Compare plans'],
+                'secondaryCta' => ['href' => '/pricing', 'label' => $singlePlan ? 'See pricing' : 'Compare plans'],
                 'note' => 'Advertising spend is additional. Subscription prices are in US dollars.',
             ];
         }
@@ -62,7 +71,7 @@ class MarketingPageController extends Controller
                 '@type' => 'Service',
                 'name' => $service['headline'],
                 'description' => $service['description'],
-                'url' => PublicSeo::sharedUrl('/'.$slug),
+                'url' => PublicSeo::canonicalUrl(request()),
                 'provider' => [
                     '@type' => 'Organization',
                     'name' => 'sitetospend',

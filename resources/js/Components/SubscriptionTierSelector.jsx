@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import Card from './Card';
 import PrimaryButton from './PrimaryButton';
 import SecondaryButton from './SecondaryButton';
 
-const SubscriptionTierSelector = ({ plans = [], availableChannels: offeredChannels, prequalification: storedReadiness }) => {
+const SubscriptionTierSelector = ({ plans = [], availableChannels: offeredChannels, prequalification: storedReadiness, singlePlan = false, earlyExitMonths, earlyExitFee }) => {
     const { post, processing } = useForm();
     const { auth } = usePage().props;
     const availableChannels = offeredChannels ?? ['google', 'facebook'];
@@ -20,12 +20,17 @@ const SubscriptionTierSelector = ({ plans = [], availableChannels: offeredChanne
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-center mb-6">Our Plans</h2>
-            <fieldset className="mx-auto mb-6 max-w-4xl">
+            <h2 className="text-2xl font-bold text-center mb-6">{singlePlan ? 'Google Ads management' : 'Our Plans'}</h2>
+            {singlePlan && plans.length === 0 && <p className="text-center text-gray-600">Starter checkout is currently unavailable.</p>}
+            {!singlePlan && <fieldset className="mx-auto mb-6 max-w-4xl">
                 <legend>Where do you want to advertise?</legend>
                 {availableChannels.map(channel => <label key={channel} className="mr-5"><input type="checkbox" checked={channels.includes(channel)} onChange={event => setChannels(event.target.checked ? [...channels, channel] : channels.filter(item => item !== channel))} /> {channel === 'google' ? 'Google Ads' : 'Meta Ads'}</label>)}
-                {prequalification && <ul aria-live="polite">{Object.values(prequalification.channels).map(channel => <li key={channel.platform}>{channel.platform === 'google' ? 'Google' : 'Meta'} — {channel.message}</li>)}</ul>}
-            </fieldset>
+            </fieldset>}
+            {prequalification && <ul className="mx-auto mb-6 max-w-4xl" aria-live="polite">
+                {Object.values(prequalification.channels).filter(channel => !singlePlan || channel.platform === 'google').map(channel => (
+                    <li key={channel.platform}>{channel.platform === 'google' ? 'Google' : 'Meta'} — {channel.message}</li>
+                ))}
+            </ul>}
             <p className="mx-auto mb-4 max-w-4xl text-sm text-gray-700">We save your checkout card for ad spend you approve separately. Each ready channel reserves up to seven days of its approved budget.</p>
             <div className={`grid grid-cols-1 ${plans.length > 1 ? 'md:grid-cols-2' : ''} ${plans.length > 2 ? 'lg:grid-cols-3' : ''} gap-8 max-w-4xl mx-auto`}>
                 {plans.map(plan => (
@@ -43,6 +48,10 @@ const SubscriptionTierSelector = ({ plans = [], availableChannels: offeredChanne
                                 </li>
                             ))}
                         </ul>
+                        {singlePlan && <div className="mb-5 space-y-2 text-sm text-gray-600">
+                            <p>Advertising spend is separate from your subscription.</p>
+                            {earlyExitMonths > 0 && <p>If we build campaigns in a Google Ads account you own, cancelling or removing our access in your first {earlyExitMonths === 1 ? 'paid month' : `${earlyExitMonths} paid months`} can trigger a {earlyExitFee} setup fee, less subscription fees already paid. <Link href={route('terms') + '#early-exit'} className="font-medium text-brand-dark underline">Read the early-exit terms</Link>.</p>}
+                        </div>}
                         <div className="mt-auto text-center">
                             {plan.is_free ? (
                                 <SecondaryButton disabled={true} className="w-full justify-center">
@@ -60,7 +69,7 @@ const SubscriptionTierSelector = ({ plans = [], availableChannels: offeredChanne
                                         <PrimaryButton disabled={true} className="w-full justify-center">Your Current Plan</PrimaryButton>
                                     ) : (
                                         <PrimaryButton disabled={processing} className="w-full justify-center">
-                                            Upgrade to {plan.name}
+                                            {singlePlan ? 'Choose ' + plan.name : 'Upgrade to ' + plan.name}
                                         </PrimaryButton>
                                     )}
                                 </form>

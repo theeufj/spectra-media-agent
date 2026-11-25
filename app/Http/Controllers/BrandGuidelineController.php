@@ -212,7 +212,9 @@ class BrandGuidelineController extends Controller
         if ($request->boolean('continue')) {
             if ($owner->service_type === 'setup_only' && ! $owner->isPaidSetupOnly()) {
                 return redirect()->route('subscription.pricing')
-                    ->with('success', 'Brand profile confirmed — your one-time setup payment starts the campaign build.');
+                    ->with('success', \App\Support\Tenant::singlePlan($this->salesTenantKey($request, $owner))
+                        ? 'Brand profile confirmed. Choose Starter to get managed Google Ads.'
+                        : 'Brand profile confirmed — your one-time setup payment starts the campaign build.');
             }
 
             $autoCampaign = $owner->campaigns()

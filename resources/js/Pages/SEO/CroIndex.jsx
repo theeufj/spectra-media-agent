@@ -11,7 +11,7 @@ function ScoreBadge({ score }) {
     return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${color}`}>{score}/100</span>;
 }
 
-function UpgradePrompt() {
+function UpgradePrompt({ singlePlan }) {
     return (
         <div
             className="rounded-lg border p-6 text-center mb-6"
@@ -21,16 +21,18 @@ function UpgradePrompt() {
             }}
         >
             <h3 className="text-lg font-semibold text-gray-900">Audit Limit Reached</h3>
+            {singlePlan ? <p className="text-sm text-gray-600 mt-1">You've used all 3 CRO audits for this workspace.</p> : <>
             <p className="text-sm text-gray-600 mt-1">You've used all 3 free CRO audits. Upgrade to unlock unlimited audits.</p>
             <p className="text-xs text-gray-500 mt-3">Available on Growth and Agency plans</p>
             <Link href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
                 View Plans
             </Link>
+            </>}
         </div>
     );
 }
 
-export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudit, domain, auditRun = null }) {
+export default function CroIndex({ auth, audits, auditsUsed = 0, maxAudits, canRunAudit, domain, auditRun = null }) {
     const { flash } = usePage().props;
     const form = useForm({ url: auditRun?.context?.url || (domain ? `https://${domain}` : '') });
     const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(auditRun?.status));
@@ -84,7 +86,7 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                             </form>
                         </div>
                     ) : (
-                        <UpgradePrompt />
+                        <UpgradePrompt singlePlan={auth?.user?.single_plan} />
                     )}
 
                     {/* Success Toast */}

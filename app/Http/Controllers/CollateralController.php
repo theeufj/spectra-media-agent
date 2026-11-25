@@ -11,6 +11,8 @@ use App\Models\VideoCollateral;
 use App\Services\Creative\CreativeRelease;
 use App\Services\Creative\GoogleCreativeCta;
 use App\Services\CreativeQuotaService;
+use App\Support\Tenant;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
@@ -37,7 +39,7 @@ class CollateralController extends Controller
      * @param  Strategy  $strategy  The strategy model instance.
      * @return \Inertia\Response
      */
-    public function show(Campaign $campaign, Strategy $strategy)
+    public function show(Request $request, Campaign $campaign, Strategy $strategy)
     {
         // Ensure the campaign belongs to a customer that the authenticated user is part of.
         $user = Auth::user();
@@ -72,6 +74,7 @@ class CollateralController extends Controller
         // Get the customer's ad spend credit status
         $customer = $campaign->customer;
         $adSpendCredit = $customer->adSpendCredit;
+        $singlePlan = Tenant::singlePlan($this->salesTenantKey($request, $customer));
 
         // Harvested assets count for this customer
         $harvestedAssetCount = HarvestedAsset::where('customer_id', $customer->id)
@@ -128,7 +131,8 @@ class CollateralController extends Controller
                campaign is paused as it deploys — so the page says Create, and
                says where the ads land and who turns them on.
             */
-            'setupOnly' => $campaign->customer->service_type === 'setup_only',
+            'setupOnly' => $customer->isPaidSetupOnly() || (! $singlePlan && $customer->service_type === 'setup_only'),
+            'singlePlan' => $singlePlan,
             /*
                Whether work is still arriving, so the page knows to poll.
 

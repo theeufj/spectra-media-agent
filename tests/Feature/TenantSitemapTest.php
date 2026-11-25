@@ -36,6 +36,7 @@ class TenantSitemapTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'https://realpropertyads.com/',
             'https://realpropertyads.com/pricing',
+            'https://realpropertyads.com/google-ads-setup',
             'https://realpropertyads.com/how-it-works',
         ], $urls);
     }
@@ -51,6 +52,7 @@ class TenantSitemapTest extends TestCase
         foreach (HelpArticles::index() as $article) {
             $this->assertStringContainsString('<loc>https://sitetospend.com/blog/'.$article['slug'].'</loc>', $response->getContent());
         }
+        $this->assertStringNotContainsString('/google-ads-setup</loc>', $response->getContent());
         $this->assertStringNotContainsString('/login</loc>', $response->getContent());
         $this->assertStringNotContainsString('/register</loc>', $response->getContent());
         $this->assertStringContainsString('<lastmod>2026-09-20T09:00:00+10:00</lastmod>', $response->getContent());

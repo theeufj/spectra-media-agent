@@ -56,15 +56,13 @@ class CustomerController extends Controller
 
         $user = $request->user();
 
-        $tenant = $request->attributes->get('tenant');
+        $tenantKey = $this->salesTenantKey($request, $this->getActiveCustomer($request));
+        $tenant = \App\Support\Tenant::config($tenantKey);
         if ($tenant && ($tenant['locked_vertical'] ?? false) && ! empty($tenant['vertical'])) {
             $validated['industry'] = $tenant['vertical'];
         }
 
-        // The skin the customer is created ON wins — the live host beats the
-        // user's stored key, which OAuth signups can carry wrong (the
-        // provider callback lands on the canonical domain).
-        $validated['tenant_key'] = $tenant['key'] ?? $user->tenant_key;
+        $validated['tenant_key'] = $tenantKey;
 
         $customer = app(\App\Services\Customers\CreateBusinessWorkspace::class)->create($user, $validated);
 

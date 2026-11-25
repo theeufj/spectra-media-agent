@@ -18,7 +18,9 @@ class PolicyVisibilityJourneyTest extends TestCase
     private function workspace(string $serviceType = 'managed'): Customer
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
-        $customer = Customer::factory()->create(['website' => null, 'service_type' => $serviceType]);
+        $customer = Customer::factory()->create([
+            'website' => null, 'service_type' => $serviceType, 'setup_fee_paid_at' => $serviceType === 'setup_only' ? now() : null,
+        ]);
         $customer->users()->attach($user, ['role' => 'owner']);
         $this->actingAs($user)->withSession(['active_customer_id' => $customer->id]);
         $this->withoutVite();

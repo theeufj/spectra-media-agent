@@ -18,15 +18,20 @@ class PublicSitemap
 
         $host = PublicSeo::normalizedHost($request);
         $shared = $host === config('public_seo.shared_host');
+        $tenantKey = config('tenants')[$host]['key'];
         $pages = [];
         foreach (config('public_seo.pages') as $path => $sources) {
+            if ($path === '/google-ads-setup' && Tenant::singlePlan($tenantKey)) {
+                continue;
+            }
+
             if (! $shared && ! in_array($path, config('public_seo.tenant_specific_paths'), true)) {
                 continue;
             }
 
             $lastmod = $this->modifiedAt->forSources($sources);
             if (in_array($path, ['/', '/pricing'], true)) {
-                $planModified = Plan::active()->max('updated_at');
+                $planModified = Plan::offeredTo($tenantKey)->where('is_free', false)->max('updated_at');
                 if ($planModified && ($lastmod === null || strtotime($planModified) > strtotime($lastmod))) {
                     $lastmod = date(DATE_ATOM, strtotime($planModified));
                 }
