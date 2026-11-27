@@ -86,8 +86,10 @@ export default function AuthenticatedLayout({ header, children, contained = true
     const { flash } = usePage().props;
     const user = usePage().props.auth.user;
     const activeCustomer = user.active_customer;
-    const setupOnly = activeCustomer?.service_type === 'setup_only';
+    const setupOnly = activeCustomer?.service_type === 'setup_only' && (!user.single_plan || Boolean(activeCustomer.setup_fee_paid_at));
     const canViewProposals = user.can_view_proposals;
+    const canViewCompetitors = user.can_view_competitors !== false;
+    const canViewWarRoom = user.can_view_war_room !== false;
     const customers = user.customers || [];
     const toast = useToast();
     // One slot per flash channel. A single shared slot would let a response
@@ -238,14 +240,14 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         <Dropdown.Header>Keywords</Dropdown.Header>
                                         <Dropdown.Link href={route('keywords.index')}>Portfolio</Dropdown.Link>
                                         <Dropdown.Link href={route('keywords.research')}>Research</Dropdown.Link>
-                                        <Dropdown.Link href={route('keywords.competitor-gap')}>Competitor Gap</Dropdown.Link>
+                                        {canViewCompetitors && <Dropdown.Link href={route('keywords.competitor-gap')}>Competitor Gap</Dropdown.Link>}
                                         <Dropdown.Link href={route('keywords.negative-lists')}>Negative Lists</Dropdown.Link>
                                         <Dropdown.Divider />
                                         <Dropdown.Header>SEO</Dropdown.Header>
                                         <Dropdown.Link href={route('seo.index')}>SEO Audit</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.rankings')}>Rankings</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.backlinks')}>Backlinks</Dropdown.Link>
-                                        <Dropdown.Link href={route('seo.competitors')}>Competitors</Dropdown.Link>
+                                        {canViewCompetitors && <Dropdown.Link href={route('seo.competitors')}>Competitors</Dropdown.Link>}
                                         <Dropdown.Link href={route('seo.cro')}>CRO Audit</Dropdown.Link>
                                         <Dropdown.Divider />
                                         <Dropdown.Header>Performance</Dropdown.Header>
@@ -272,7 +274,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                 )}
 
                                 {/* Strategy Dropdown */}
-                                <Dropdown>
+                                {(canViewWarRoom || canViewProposals) && <Dropdown>
                                     <Dropdown.Trigger>
                                         <span data-tour="strategy">
                                         <NavDropdownButton active={route().current('strategy.*') || route().current('proposals.*')}>
@@ -281,10 +283,10 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                         </span>
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
-                                        <Dropdown.Link href={route('strategy.war-room')}>Activity &amp; competitors</Dropdown.Link>
+                                        {canViewWarRoom && <Dropdown.Link href={route('strategy.war-room')}>Activity &amp; competitors</Dropdown.Link>}
                                         {canViewProposals && <Dropdown.Link href={route('proposals.index')}>Proposals</Dropdown.Link>}
                                     </Dropdown.Content>
-                                </Dropdown>
+                                </Dropdown>}
                             </div>
                         </div>
 
@@ -674,14 +676,14 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                 </MobileNavSection>
                                 )}
 
-                                <MobileNavSection title="Activity">
-                                    <MobileNavLink
+                                {(canViewWarRoom || canViewProposals) && <MobileNavSection title="Activity">
+                                    {canViewWarRoom && <MobileNavLink
                                         href={route('strategy.war-room')}
                                         active={route().current('strategy.war-room')}
                                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                                     >
                                         Activity &amp; competitors
-                                    </MobileNavLink>
+                                    </MobileNavLink>}
                                     {canViewProposals && <MobileNavLink
                                         href={route('proposals.index')}
                                         active={route().current('proposals.*')}
@@ -689,7 +691,7 @@ export default function AuthenticatedLayout({ header, children, contained = true
                                     >
                                         Proposals
                                     </MobileNavLink>}
-                                </MobileNavSection>
+                                </MobileNavSection>}
 
                                 <MobileNavSection title="Account & support">
                                     <MobileNavLink

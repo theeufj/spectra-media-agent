@@ -33,6 +33,7 @@ class BrandGuidelineController extends Controller
 
         return Inertia::render('BrandGuidelines/Index', [
             'brandGuideline' => $brandGuideline,
+            'savedAdPreview' => $customer->saved_ad_preview,
             'customer' => $customer->only(['id', 'uuid', 'name', 'website', 'service_type', 'country', 'currency_code', 'timezone']),
             'canEdit' => $request->user()->can('update', $brandGuideline ?? $customer),
         ]);
@@ -212,7 +213,9 @@ class BrandGuidelineController extends Controller
         if ($request->boolean('continue')) {
             if ($owner->service_type === 'setup_only' && ! $owner->isPaidSetupOnly()) {
                 return redirect()->route('subscription.pricing')
-                    ->with('success', 'Brand profile confirmed — your one-time setup payment starts the campaign build.');
+                    ->with('success', \App\Support\Tenant::singlePlan($this->salesTenantKey($request, $owner))
+                        ? 'Brand profile confirmed. Choose Starter to get managed Google Ads.'
+                        : 'Brand profile confirmed — your one-time setup payment starts the campaign build.');
             }
 
             $autoCampaign = $owner->campaigns()

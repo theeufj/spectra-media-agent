@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { brandTint } from '@/Components/Marketing/Hero';
 import CompetitiveCampaignActions from '@/Components/CompetitiveCampaignActions';
 
-function UpgradePrompt() {
+function UpgradePrompt({ singlePlan }) {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
             <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: brandTint(20) }}>
@@ -17,7 +17,7 @@ function UpgradePrompt() {
             <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
                 Discover who your competitors are, analyze their messaging and pricing, and find keyword gaps — all powered by AI.
             </p>
-            <div className="flex flex-col items-center gap-3">
+            {singlePlan ? <p className="text-sm text-gray-600">This tool is unavailable for your workspace.</p> : <div className="flex flex-col items-center gap-3">
                 <Link
                     href={route('subscription.pricing')}
                     className="inline-flex items-center px-5 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
@@ -25,7 +25,7 @@ function UpgradePrompt() {
                     Upgrade to Growth Plan
                 </Link>
                 <p className="text-xs text-gray-500">Available on Growth (US$249/mo) and Agency plans</p>
-            </div>
+            </div>}
         </div>
     );
 }
@@ -305,7 +305,7 @@ function StrategySection({ strategy, updatedAt }) {
     );
 }
 
-export default function Competitors({ domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null, campaignActions = null, competitorRun = null }) {
+export default function Competitors({ auth, domain, competitors = [], canAccessCompetitors = true, competitiveStrategy = null, strategyUpdatedAt = null, lastAnalyzedAt = null, campaignActions = null, competitorRun = null }) {
     const [workBusy, setWorkBusy] = useState(['queued', 'running'].includes(competitorRun?.status));
     const [refreshing, setRefreshing] = useState(false);
 
@@ -347,7 +347,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
 
                     {canAccessCompetitors && <WorkStatusBanner initialRun={competitorRun} url={route('seo.work-status')} task="competitors" label="Competitor analysis" reloadOnly={['competitors', 'competitiveStrategy', 'strategyUpdatedAt', 'lastAnalyzedAt', 'campaignActions', 'competitorRun']} onBusyChange={setWorkBusy} />}
                     {!canAccessCompetitors ? (
-                        <UpgradePrompt />
+                        <UpgradePrompt singlePlan={auth?.user?.single_plan} />
                     ) : (
                         <div className="space-y-6">
                             <CompetitiveCampaignActions initial={campaignActions} />

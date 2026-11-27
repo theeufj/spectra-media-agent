@@ -48,13 +48,15 @@ describe('Quick Start onboarding', () => {
         expect(screen.getByRole('heading', { name: 'Let’s start with your business' })).toBeVisible();
         expect(screen.getByLabelText('Your website address')).toHaveValue('');
         expect(screen.getByRole('button', { name: 'Go' })).toBeDisabled();
-        expect(screen.getByRole('radio', { name: /Manage it for me/ })).toHaveAttribute('aria-checked', 'true');
+        expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'set it up manually' })).toHaveAttribute('href', '/__route__/customers.create');
         expect(transport.post).not.toHaveBeenCalled();
     });
 
     it('submits the edited website and selected service through the form transform', () => {
-        render(<QuickStart auth={auth} />);
+        render(<QuickStart auth={auth} setupAvailable />);
+
+        expect(screen.getByRole('radio', { name: /Manage it for me/ })).toHaveAttribute('aria-checked', 'true');
 
         fireEvent.change(screen.getByLabelText('Your website address'), { target: { value: ' example.test ' } });
         fireEvent.click(screen.getByRole('radio', { name: /Set it up once/ }));

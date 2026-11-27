@@ -8,23 +8,26 @@ use App\Models\Customer;
 use App\Services\ActivityLogger;
 use App\Services\KnowledgeBase\KnowledgeBaseIndexer;
 use App\Services\Onboarding\WebsiteIdentity;
+use App\Support\Tenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class QuickStartController extends Controller
 {
-    public function show()
+    public function show(Request $request)
     {
-        $user = Auth::user();
+        $customer = $this->getActiveCustomer($request);
 
         // If the user came from the landing page demo, prefill their URL and
         // let them check it and choose their service. Processing directly here was a GET with
         // no browser timezone, so every demo signup was created as UTC/US —
         // the round-trip through the form is what carries the real locale.
         return Inertia::render('QuickStart', [
-            'demoUrl' => $user->customers()->doesntExist() ? $user->demo_url : null,
+            'demoUrl' => $customer === null ? $request->user()->demo_url : null,
+            'savedAdPreview' => $customer === null ? $request->user()->saved_ad_preview : $customer->saved_ad_preview,
+            'setupAvailable' => ! Tenant::singlePlan($this->salesTenantKey($request, $customer)),
         ]);
     }
 
@@ -52,6 +55,7 @@ class QuickStartController extends Controller
             'setupOnly' => $customer->service_type === 'setup_only',
             'manualEntry' => $request->boolean('manual'),
             'baselineUpdatedAt' => $baseline,
+            'savedAdPreview' => $customer->saved_ad_preview,
         ]);
     }
 
@@ -95,20 +99,24 @@ class QuickStartController extends Controller
 
     public function process(Request $request)
     {
+        $tenantKey = $this->salesTenantKey($request, $this->getActiveCustomer($request));
         $validated = $request->validate([
             'website_url' => ['required', 'url', 'max:255', new \App\Rules\SafePublicUrl],
             // The fork: ongoing management (default) or the one-time US$999
             // setup. Intent only — payment is collected at the plan step.
-            'service_type' => 'nullable|in:managed,setup_only',
+            'service_type' => ['nullable', Rule::in(Tenant::singlePlan($tenantKey) ? ['managed'] : ['managed', 'setup_only'])],
             'timezone' => 'nullable|timezone',
             'country' => 'nullable|string|size:2|regex:/^[A-Z]{2}$/',
         ]);
 
-        return $this->doProcess($validated['website_url'], Auth::user(), $request);
+        return $this->doProcess($validated['website_url'], $tenantKey, $request);
     }
 
-    private function doProcess(string $url, $user, Request $request): RedirectResponse
+    private function doProcess(string $url, string $tenantKey, Request $request): RedirectResponse
     {
+        $user = $request->user();
+        $savedPreview = $user->saved_ad_preview;
+        $useSavedPreview = Tenant::singlePlan($tenantKey) && ($savedPreview['url'] ?? null) === $url;
         /*
            A shortener is not the customer's website, it is a redirect to it.
            This used to take the host as typed, so a signup who pasted a bit.ly
@@ -131,19 +139,10 @@ class QuickStartController extends Controller
         // timezone instead, which is the one regional signal we actually have.
         $country = $request->input('country') ?: self::countryFromTimezone($timezone);
 
-        // The skin the customer is being created ON wins — every lifecycle
-        // email brands itself from this. The live host beats the user's
-        // stored key because OAuth signups can carry the wrong tenant: the
-        // provider redirects to one registered callback URI, so a skin-domain
-        // signup gets stamped with the canonical domain's tenant.
-        $tenantKey = $request->attributes->get('tenant')['key'] ?? $user->tenant_key;
-        if ($tenantKey && ! $user->tenant_key) {
-            $user->forceFill(['tenant_key' => $tenantKey])->save();
-        }
-
         $customer = app(\App\Services\Customers\CreateBusinessWorkspace::class)->create($user, [
             'name' => $businessName,
             'website' => $url,
+            'saved_ad_preview' => $useSavedPreview ? $savedPreview : null,
             'tenant_key' => $tenantKey,
             'service_type' => $request->input('service_type') === 'setup_only' ? 'setup_only' : 'managed',
             'country' => $country,

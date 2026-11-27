@@ -71,7 +71,7 @@ class VideoCollateralController extends Controller
             if (! $quotaService->canGenerate($user, 'video', $campaign->customer)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
+                    'message' => 'Monthly video generation limit reached. Check Creative Usage for your remaining allowance.',
                 ]);
             }
 
@@ -150,7 +150,7 @@ class VideoCollateralController extends Controller
             if (! $quotaService->canGenerate($user, 'video', $campaign->customer)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
+                    'message' => 'Monthly video generation limit reached. Check Creative Usage for your remaining allowance.',
                 ]);
             }
 

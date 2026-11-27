@@ -68,7 +68,9 @@ class SetupFeeService
 
         $session = $this->retrieveSession($sessionId);
 
-        $belongsHere = ($session->metadata['customer_id'] ?? null) === (string) $customer->id
+        $belongsHere = ($session->mode ?? null) === 'payment'
+            && ($session->metadata['purpose'] ?? null) === 'setup_fee'
+            && ($session->metadata['customer_id'] ?? null) === (string) $customer->id
             && $session->customer === $user->stripe_id;
 
         /*

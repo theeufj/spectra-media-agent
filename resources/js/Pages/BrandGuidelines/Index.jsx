@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import SavedAdPreview from '@/Components/SavedAdPreview';
 import { SetupStages } from '@/Components/SetupJourney';
 import BrandExtractionStatus from '@/Components/BrandExtractionStatus';
 import ConfirmationModal from '@/Components/ConfirmationModal';
@@ -52,7 +53,7 @@ function ProfileField({ path, label, type = 'text', data, update, editing, error
     </div>;
 }
 
-export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
+export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit, savedAdPreview = null }) {
     const page = usePage();
     const reviewParams = new URLSearchParams((page.url || '').split('?')[1] || '');
     const onboarding = reviewParams.get('review') === '1';
@@ -111,6 +112,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
         <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
             {customer?.service_type === 'setup_only' && <SetupStages stage={0} />}
             <header><h1 className="text-2xl font-bold text-gray-900">{customer?.name} — Business profile</h1><p className="mt-2 text-sm text-gray-600">Your approved offer, audience, brand voice and boundaries guide new ads. Changes require your approval; existing ads stay as they are.</p></header>
+            <SavedAdPreview preview={savedAdPreview} />
             <BrandExtractionStatus watching={extracting} baselineUpdatedAt={baseline.current} onSettled={() => setExtracting(false)} />
             <FormErrorSummary errors={form.errors} labels={{ profile_version: 'Profile version' }} />
             {!brandGuideline ? <section className="rounded-xl border border-gray-200 bg-white p-6"><h2 className="text-xl font-semibold">Building your business profile</h2><p className="mt-2 text-gray-600">We use the included sources in your knowledge base. If the scan failed, add readable content and try again.</p><div className="mt-5 flex flex-wrap gap-3"><Link href={route('knowledge-base.index')} className={SECONDARY}>Review knowledge sources</Link><button onClick={extract} disabled={extracting || busy} className={ACTION}>Build profile</button></div></section> : <>

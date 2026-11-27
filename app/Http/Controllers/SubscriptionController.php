@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Services\Billing\ManagedSubscriptionCheckout;
 use App\Services\Billing\PlatformFunding;
 use App\Services\FacebookAds\CreateFacebookAdsAccount;
+use App\Support\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -25,24 +26,32 @@ class SubscriptionController extends Controller
      */
     public function pricing(Request $request)
     {
-        $plans = Plan::active()->ordered()->get();
-
-        $customer = $request->user()?->customers()->find(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+        $tenantKey = $this->salesTenantKey($request, $customer);
+        $singlePlan = Tenant::singlePlan($tenantKey);
+        $paidSetup = (bool) $customer?->isPaidSetupOnly();
+        $manageSubscription = $singlePlan && app(ManagedSubscriptionCheckout::class)->hasSubscription($request->user());
+        $plans = Plan::offeredTo($tenantKey)->ordered()->get();
+        $feeCents = (int) config('services.stripe.setup_fee_usd_cents', 99900);
+        $channels = $singlePlan ? ['google'] : ['google', 'facebook'];
 
         $latest = $customer ? \Illuminate\Support\Facades\DB::table('channel_checkout_readiness')->where('customer_id', $customer->id)
-            ->where('user_id', $request->user()->id)->latest('updated_at')->first() : null;
+            ->where('user_id', $request->user()->id)->whereIn('plan_id', $plans->modelKeys())->latest('updated_at')->first() : null;
 
         return Inertia::render('Subscription/Pricing', [
             'plans' => $plans,
-            'availableChannels' => array_values(array_filter(['google', 'facebook'], fn ($channel) => EnabledPlatform::isEnabled($channel))),
+            'availableChannels' => array_values(array_filter($channels, fn ($channel) => EnabledPlatform::isEnabled($channel))),
             'prequalification' => $latest ? ['ready' => (bool) $latest->ready, 'channels' => json_decode($latest->channels, true), 'checked_at' => $latest->updated_at] : null,
-            'journey' => $customer ? app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($customer) : null,
-            // The one-and-done alternative: a single USD fee instead of a plan.
-            'setupFee' => [
-                'price_usd' => (int) round(config('services.stripe.setup_fee_usd_cents', 99900) / 100),
+            'manageSubscription' => $manageSubscription,
+            'singlePlan' => $singlePlan,
+            'earlyExitMonths' => (int) config('billing.early_exit.minimum_months', 3),
+            'earlyExitFee' => 'US$'.number_format($feeCents / 100, $feeCents % 100 === 0 ? 0 : 2),
+            'journey' => $customer && (! $singlePlan || $paidSetup) ? app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($customer) : null,
+            'setupFee' => ! $singlePlan || $paidSetup ? [
+                'price_usd' => (int) round($feeCents / 100),
                 'intent' => $customer?->service_type === 'setup_only',
-                'paid' => (bool) $customer?->isPaidSetupOnly(),
-            ],
+                'paid' => $paidSetup,
+            ] : null,
         ]);
     }
 
@@ -55,13 +64,19 @@ class SubscriptionController extends Controller
      */
     public function checkout(Request $request)
     {
-        // Get the currently authenticated user.
-        $user = Auth::user();
+        $user = $request->user();
+        $workspace = $user->customers()->find(session('active_customer_id'));
+        $tenantKey = $this->salesTenantKey($request, $workspace);
+        $singlePlan = Tenant::singlePlan($tenantKey);
+        $managed = app(ManagedSubscriptionCheckout::class);
 
-        // Look up the plan from the database to get the Stripe price ID
-        $plan = Plan::active()
-            ->where('stripe_price_id', $request->input('price_id'))
-            ->first();
+        if ($singlePlan && $managed->hasSubscription($user)) {
+            return redirect()->route('subscription.portal');
+        }
+
+        $requestedPriceId = $request->input('price_id');
+        $plan = is_string($requestedPriceId) ? Plan::offeredTo($tenantKey)
+            ->where('stripe_price_id', $requestedPriceId)->first() : null;
 
         if (! $plan || ! $plan->stripe_price_id) {
             return redirect()->route('subscription.pricing')->with('flash', [
@@ -78,16 +93,15 @@ class SubscriptionController extends Controller
         // Check if deployment is enabled to determine checkout mode
         $deploymentEnabled = \App\Models\Setting::get('deployment_enabled', true);
 
-        $workspace = $user->customers()->find(session('active_customer_id'));
         if ($deploymentEnabled) {
             $request->validate(['platforms' => 'sometimes|array|min:1|max:2', 'platforms.*' => 'required|string|distinct|in:google,facebook']);
-            if (! $workspace || $workspace->is_sandbox || $workspace->service_type === 'setup_only') {
+            $resumeAsManaged = $singlePlan && $workspace?->service_type === 'setup_only' && ! $workspace->isPaidSetupOnly();
+            if (! $workspace || $workspace->is_sandbox || ($workspace->service_type === 'setup_only' && ! $resumeAsManaged)) {
                 return back()->with('flash', ['type' => 'error', 'message' => 'Choose a managed workspace before starting a monthly subscription.']);
             }
             if ($workspace->adSpendPayer(allowWithoutPaymentMethod: true)?->id !== $user->id) {
                 return back()->with('flash', ['type' => 'error', 'message' => 'The workspace billing contact must start its monthly subscription.']);
             }
-            $managed = app(ManagedSubscriptionCheckout::class);
             if ($managed->hasSubscription($user)) {
                 return redirect()->route('subscription.portal');
             }
@@ -97,6 +111,15 @@ class SubscriptionController extends Controller
             $wanted = $request->input('platforms', $plan->slug === 'starter' ? ['google'] : []);
             if ($wanted === [] || array_diff($wanted, Plan::platformsFor($plan->slug)) !== []) {
                 return back()->with('flash', ['type' => 'error', 'message' => 'Choose at least one advertising channel included in this plan.']);
+            }
+            if ($resumeAsManaged) {
+                // The billing contact explicitly chose Starter for an old unpaid setup draft.
+                // A completed one-time payment still takes precedence, even if it settles later.
+                $workspace->newQuery()->whereKey($workspace->id)->where('service_type', 'setup_only')
+                    ->whereNull('setup_fee_paid_at')->update(['service_type' => 'managed']);
+                if ($workspace->refresh()->service_type === 'setup_only') {
+                    return redirect()->route('dashboard');
+                }
             }
             // Checking a specific paid plan is the provisioning intent. No subscription or ads are created here.
             if (in_array('google', $wanted, true) && EnabledPlatform::isEnabled('google')) {

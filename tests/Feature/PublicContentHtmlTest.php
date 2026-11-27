@@ -61,7 +61,7 @@ class PublicContentHtmlTest extends TestCase
     public function test_google_management_price_and_actions_are_visible_before_the_article_and_match_react_props(): void
     {
         Plan::query()->update(['is_active' => false]);
-        $starting = $this->heroPlan('hero-monthly', 19_875);
+        $starting = $this->heroPlan('starter', 9_900, ['stripe_price_id' => 'price_starter']);
         $this->heroPlan('hero-growth', 28_800);
         $this->heroPlan('hero-inactive', 100, ['is_active' => false]);
         $this->heroPlan('hero-annual', 200, ['billing_interval' => 'year']);
@@ -73,15 +73,33 @@ class PublicContentHtmlTest extends TestCase
         $props = $response->viewData('page')['props'];
         $hero = $props['publicContent']['hero'];
         $this->assertSame(['href' => '/#build-my-ads', 'label' => 'Build my ads'], $hero['primaryCta']);
-        $this->assertSame('Google Ads management from US$198.75/month', $hero['headline']);
+        $this->assertSame('Google Ads management for US$99/month', $hero['headline']);
         $this->assertSame('Advertising spend is additional. Subscription prices are in US dollars.', $hero['note']);
-        $this->assertStringContainsString('researches keywords, prepares Google Ads copy and monitors your campaign', $hero['intro']);
-        $this->assertSame('Small Business Google Ads Management | sitetospend', $props['meta']['title']);
+        $this->assertStringContainsString('one small business website', $hero['intro']);
+        $this->assertStringContainsString('approve the campaign and set a separate advertising budget before launch', $hero['intro']);
+        $this->assertSame('Google Ads Management for US$99/month | Site to Spend', $props['meta']['title']);
 
         $document = new \DOMDocument;
         @$document->loadHTML($response->getContent());
         $xpath = new \DOMXPath($document);
         $this->assertSame($hero['headline'], trim($xpath->evaluate('string(//*[@id="app"]//main//h1)')));
+        $this->assertSame($hero['intro'], trim($xpath->evaluate('string(//*[@id="app"]//main//h1/following-sibling::p[1])')));
+        $this->assertSame(1, $xpath->query('//*[@id="app"]//article//a[@href="/#sample-report"]')->length);
+        $this->assertSame(1, $xpath->query('//*[@id="app"]//article//a[@href="/terms-of-service#early-exit"]')->length);
+        $this->assertStringContainsString('fictional leak-repair campaign report', $xpath->evaluate('string(//*[@id="app"]//article)'));
+
+        $graph = json_decode($xpath->evaluate('string(//script[@type="application/ld+json"])'), true, 512, JSON_THROW_ON_ERROR)['@graph'];
+        $service = collect($graph)->firstWhere('@type', 'Service');
+        $this->assertSame($hero['headline'], $service['name']);
+        $this->assertSame($props['meta']['description'], $service['description']);
+        $this->assertSame('Offer', $service['offers']['@type']);
+        $this->assertSame('99.00', $service['offers']['price']);
+        $this->assertSame('USD', $service['offers']['priceCurrency']);
+        $this->assertSame('P1M', $service['offers']['priceSpecification']['billingDuration']);
+        $questions = collect($graph)->firstWhere('@type', 'FAQPage')['mainEntity'];
+        foreach ($questions as $question) {
+            $this->assertStringContainsString($question['acceptedAnswer']['text'], $xpath->evaluate('string(//*[@id="app"]//main//dl)'));
+        }
         $this->assertGreaterThan(0, $xpath->query('//*[@id="app"]//main//p[normalize-space(.)="'.$hero['note'].'" and following::article]')->length);
         foreach (['primaryCta', 'secondaryCta'] as $key) {
             $action = $hero[$key];
@@ -93,7 +111,11 @@ class PublicContentHtmlTest extends TestCase
 
         $starting->update(['price_cents' => 21_901]);
         $updated = $this->get('https://sitetospend.com/google-ads-management')->assertOk()->viewData('page')['props'];
-        $this->assertSame('Google Ads management from US$219.01/month', $updated['publicContent']['hero']['headline']);
+        $this->assertSame($updated['service']['headline'], $updated['publicContent']['hero']['headline']);
+        $this->assertEmpty($updated['plans']);
+        $this->assertArrayNotHasKey('offers', collect($updated['meta']['schema'])->firstWhere('@type', 'Service'));
+        $this->assertStringNotContainsString('US$99/month', $updated['meta']['description']);
+        $this->assertStringContainsString('Paid signup is currently unavailable', $updated['service']['faqs'][0]['answer']);
     }
 
     public function test_google_management_hero_does_not_invent_a_price_without_a_paid_monthly_plan(): void
@@ -107,13 +129,41 @@ class PublicContentHtmlTest extends TestCase
         $this->assertSame($props['service']['headline'], $props['publicContent']['hero']['headline']);
         $this->assertStringNotContainsString('US$', $props['publicContent']['hero']['headline']);
         $this->assertSame('/pricing', $props['publicContent']['hero']['secondaryCta']['href']);
+        $this->get('https://sitetospend.com/pricing')->assertOk()
+            ->assertSee('Paid signup is currently unavailable')
+            ->assertSee('href="/terms-of-service#early-exit"', false);
+    }
+
+    public function test_crawler_summaries_describe_the_same_flagship_offer_and_link_to_its_current_availability(): void
+    {
+        $summary = file_get_contents(public_path('llms.txt'));
+        $expanded = file_get_contents(public_path('llms-full.txt'));
+        $this->assertStringStartsWith($summary, $expanded);
+        $this->assertStringContainsString('US$'.number_format(Plan::STARTER_MONTHLY_PRICE_CENTS / 100).'/month', $summary);
+        $this->assertStringContainsString('https://sitetospend.com/pricing', $summary);
+        $this->assertStringContainsString('https://sitetospend.com/google-ads-management', $summary);
+        $this->assertStringContainsString('https://sitetospend.com/terms-of-service#early-exit', $summary);
+        $this->assertStringNotContainsString('https://sitetospend.com/google-ads-setup', $expanded);
+    }
+
+    public function test_service_explains_the_existing_account_exception_with_current_checkout_terms(): void
+    {
+        config(['services.stripe.setup_fee_usd_cents' => 120_550, 'billing.early_exit.minimum_months' => 1]);
+        $service = $this->get('https://sitetospend.com/google-ads-management')->assertOk();
+        $service->assertSeeText('within your first paid month')
+            ->assertSeeText('US$1,205.50 setup fee can apply, less subscription fees already paid')
+            ->assertSeeText('Accounts we provision and operate for you are exempt');
+        config(['billing.early_exit.minimum_months' => 5]);
+        $this->get('https://sitetospend.com/google-ads-management')->assertOk()->assertSeeText('within your first 5 paid months');
+        config(['billing.early_exit.minimum_months' => 0]);
+        $this->get('https://sitetospend.com/google-ads-management')->assertOk()->assertDontSeeText('US$1,205.50');
     }
 
     public function test_other_service_pages_keep_their_original_hero_and_one_time_fee(): void
     {
         config(['services.stripe.setup_fee_usd_cents' => 147_550]);
         foreach (['google-ads-setup', 'ai-ads-management'] as $slug) {
-            $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
+            $response = $this->get('https://realpropertyads.com/'.$slug)->assertOk();
             $props = $response->viewData('page')['props'];
             $service = MarketingPages::find($slug, '1,475.50');
             $response->assertSee('href="/#build-my-ads"', false);
@@ -129,7 +179,7 @@ class PublicContentHtmlTest extends TestCase
 
     public function test_every_service_fallback_links_to_the_homepage_preview_before_registration(): void
     {
-        foreach (['google-ads-management', 'ai-ads-management', 'google-ads-setup'] as $slug) {
+        foreach (['google-ads-management', 'ai-ads-management'] as $slug) {
             $response = $this->get('https://sitetospend.com/'.$slug)->assertOk();
             $document = new \DOMDocument;
             @$document->loadHTML($response->getContent());
@@ -138,7 +188,12 @@ class PublicContentHtmlTest extends TestCase
             $this->assertSame(0, $xpath->query('//*[@id="app"]//a[starts-with(@href, "/register")] | //*[@id="app"]//form')->length);
         }
 
-        $this->get('https://sitetospend.com/')->assertOk()->assertSee('id="build-my-ads"', false);
+        $this->get('https://sitetospend.com/google-ads-setup?gclid=sample')->assertStatus(301)
+            ->assertRedirect('https://sitetospend.com/google-ads-management?gclid=sample');
+        $this->get('https://sitetospend.com/')->assertOk()
+            ->assertSee('id="build-my-ads"', false)
+            ->assertSee('id="sample-report"', false)
+            ->assertSee('Illustrative report · Fictional campaign');
     }
 
     private function heroPlan(string $slug, int $priceCents, array $overrides = []): Plan

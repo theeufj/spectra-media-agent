@@ -6,8 +6,12 @@ namespace App\Support;
 class MarketingPages
 {
     /** @return array<string, mixed>|null */
-    public static function find(string $slug, string $setupFee): ?array
+    public static function find(string $slug, string $setupFee, bool $singlePlan = false, ?string $monthlyPrice = null): ?array
     {
+        if ($singlePlan && $slug === 'google-ads-management') {
+            return self::smallBusinessGoogleAds($monthlyPrice, $setupFee);
+        }
+
         $pages = [
             'google-ads-management' => [
                 'title' => 'Small Business Google Ads Management | sitetospend',
@@ -62,7 +66,7 @@ HTML,
 <h2>How generation and optimisation differ</h2>
 <p><strong>Generation</strong> prepares a strategy, copy and relevant assets from the brief. <strong>Optimisation</strong> uses delivery and performance data after deployment to decide what may need changing. A persuasive generated headline is not evidence of a successful campaign.</p>
 <ul><li>Creative work uses the confirmed offer and brand information.</li><li>Keyword decisions should match the business and the searcher's intent.</li><li>Delivery checks distinguish an enabled campaign from one that is actually getting impressions.</li><li>Performance decisions depend on reliable conversions and enough relevant observations.</li></ul>
-<p>You review the proposed campaign and budget before launch. The dashboard records agent activity and the reason for changes. If you choose <a href="/google-ads-setup">one-time setup</a>, the engagement ends with a paused handover; ongoing agent management belongs to the subscription plans.</p>
+<p>You review the proposed campaign and budget before launch. The dashboard records agent activity and the reason for changes.:setup_scope</p>
 <h2>Worked example: diagnosing a campaign with no conversions</h2>
 <p><strong>Hypothetical example, not a performance claim.</strong> Imagine a campaign spent A$120 across 24 clicks but reports no enquiries. The right response depends on the cause:</p>
 <ol><li>Confirm that the enquiry form works and that its success event is measured once.</li><li>Check whether the searches and location targeting match the actual service.</li><li>Compare the promise in the ad with the page visitors see.</li><li>Check how long customers usually take to enquire before judging recent clicks.</li></ol>
@@ -71,7 +75,7 @@ HTML,
 <p>Agents can make supported API changes, monitor delivery and report problems. They cannot bypass an advertising platform's account verification, policy decisions or billing requirements. Your business must still provide truthful claims, fulfil the offer and give visitors a working place to enquire or buy.</p>
 <p>Conversion setup can require a website change, tag-manager access or testing of a form or checkout event. An installed GTM snippet is only the container; it does not prove the intended conversion is being recorded.</p>
 <h2>Choose the scope that fits your business</h2>
-<p>Start with the channel and goal you can measure. A limited budget spread across too many channels can make each experiment hard to judge. Current plan prices and platform coverage are on the <a href="/pricing">pricing page</a>.</p>
+<p>Start with the channel and goal you can measure. A limited budget spread across too many channels can make each experiment hard to judge. :pricing_summary</p>
 <p>For a search-focused starting point, see <a href="/google-ads-management">small business Google Ads management</a>. For the practical checks behind automation, read <a href="/blog/why-your-google-ads-stop-working">why Google Ads stops delivering</a> and <a href="/blog/how-conversion-tracking-works">how to verify conversion tracking</a>.</p>
 HTML,
                 'faqs' => [
@@ -124,6 +128,10 @@ HTML,
             return null;
         }
 
+        $page['content'] = strtr($page['content'], [
+            ':pricing_summary' => $singlePlan ? 'The <a href="/pricing">monthly Google Ads management fee</a> covers one business workspace. Choose your ad budget separately.' : 'Current plan prices and platform coverage are on the <a href="/pricing">pricing page</a>.',
+            ':setup_scope' => $singlePlan ? '' : ' If you choose <a href="/google-ads-setup">one-time setup</a>, the engagement ends with a paused handover; ongoing agent management belongs to the subscription plans.',
+        ]);
         foreach (['headline', 'content'] as $field) {
             $page[$field] = str_replace(':setup_fee', $setupFee, $page[$field]);
         }
@@ -134,5 +142,54 @@ HTML,
         $page['slug'] = $slug;
 
         return $page;
+    }
+
+    /** @return array<string, mixed> */
+    private static function smallBusinessGoogleAds(?string $monthlyPrice, string $setupFee): array
+    {
+        $headline = $monthlyPrice ? 'Google Ads management for '.$monthlyPrice : 'Google Ads management for small businesses';
+        $months = (int) config('billing.early_exit.minimum_months', 3);
+        $faqs = [
+            ['question' => 'What does Google Ads management cost?', 'answer' => $monthlyPrice
+                ? "Site to Spend charges {$monthlyPrice} for Google Ads management in one business workspace. You choose and fund your advertising budget separately."
+                : 'Paid signup is currently unavailable. You can still preview Google ads for your website.'],
+            ['question' => 'Who approves the campaign?', 'answer' => 'You confirm the offer, locations, ads and daily budget before Site to Spend launches the campaign. Google reviews ads for policy compliance and controls delivery.'],
+            ['question' => 'What can I measure after launch?', 'answer' => 'Your workspace shows Google ad spend, campaign changes and conversions recorded by your tracking. Compare enquiries with your booking or sales records to see which ones became customers.'],
+        ];
+        if ($months > 0) {
+            $period = $months === 1 ? 'first paid month' : "first {$months} paid months";
+            $faqs[] = [
+                'question' => 'Is there a setup fee if I cancel?',
+                'answer' => "Setup is included in the management subscription. If we build campaigns inside a Google Ads account you own or control and you cancel or revoke our manager access within your {$period}, a US\${$setupFee} setup fee can apply, less subscription fees already paid. We notify you before collection. Accounts we provision and operate for you are exempt.",
+            ];
+        }
+
+        return [
+            'slug' => 'google-ads-management',
+            'eyebrow' => 'For small businesses',
+            'title' => $monthlyPrice ? "Google Ads Management for {$monthlyPrice} | Site to Spend" : 'Small Business Google Ads Management | Site to Spend',
+            'description' => $monthlyPrice
+                ? "Site to Spend manages Google Ads for one small business at {$monthlyPrice}. Ad spend is separate. Review keywords, ads and your budget before launch."
+                : 'Preview Google ads written for your business website. Review the keywords, campaign and budget before launch. Check pricing for signup availability.',
+            'headline' => $headline,
+            'intro' => 'Site to Spend manages Google Ads for one small business website. We research keywords, write your ads and monitor campaign spend and tracked enquiries. You approve the campaign and set a separate advertising budget before launch.',
+            'content' => <<<'HTML'
+<h2>Who is this service for?</h2>
+<p>It fits a small business with a website, a product or service people search for, and a way to track an enquiry, booking or sale. A local plumber, for example, can target the suburbs they serve and count completed quote requests. You need someone who can follow up on those enquiries.</p>
+<h2>What does the monthly management fee cover?</h2>
+<ul>
+<li><strong>Before launch</strong> we use your website and confirmed business details to research keywords, write ad copy and prepare a Google Ads campaign. You check the service, locations, ads, destination and budget before approving launch.</li>
+<li><strong>After launch</strong> we monitor delivery, policy status, search terms and spend. Your workspace records campaign changes and their reasons.</li>
+<li><strong>Reporting</strong> shows spend and recorded conversions. Tracking an enquiry may require a website tag and a test of the completed form. Our <a href="/blog/how-conversion-tracking-works">conversion tracking guide</a> shows what to check.</li>
+</ul>
+<h2>How much goes to Google?</h2>
+<p>You choose a daily ad budget in addition to the monthly management fee. On an account we manage with prepaid ad credit, the first credit covers seven days of estimated spend. A US$20 daily budget would require US$140 in initial ad credit. Actual spend draws down that balance and low balances trigger top-ups. See <a href="/pricing">pricing and ad-credit details</a>.</p>
+<h2>What does a campaign report show?</h2>
+<p>In this <a href="/#sample-report">fictional leak-repair campaign report</a>, US$280 in Google ad spend produced seven tracked enquiry forms. That works out to US$40 in ad spend per enquiry, before the management fee. The plumber can check which enquiries became booked jobs before deciding whether to raise the budget.</p>
+<h2>Can I bring an existing Google Ads account?</h2>
+<p>We can manage campaigns in your existing Google Ads account after you grant manager access. Review the <a href="/terms-of-service#early-exit">terms for campaigns built in an account you own</a>.</p>
+HTML,
+            'faqs' => $faqs,
+        ];
     }
 }

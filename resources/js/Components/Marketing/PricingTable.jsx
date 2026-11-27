@@ -27,6 +27,10 @@ const GRID_COLUMNS = {
  * which describes the pricing without naming the next action, while the pricing
  * page said "Contact us". One of them was always going to be missed.
  */
+export function formatUsdCents(cents) {
+    return 'US$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 });
+}
+
 export function PlanPrice({ plan }) {
     /*
      * Explicitly US$, everywhere.
@@ -40,7 +44,7 @@ export function PlanPrice({ plan }) {
     if (plan.price_cents > 0) {
         return (
             <>
-                <span className="text-4xl font-extrabold">US${Math.round(plan.price_cents / 100)}</span>
+                <span className="text-4xl font-extrabold">{formatUsdCents(plan.price_cents)}</span>
                 <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
             </>
         );

@@ -44,7 +44,7 @@ const HEALTH_COLORS = {
 };
 
 /* ─── Upgrade Prompt ─── */
-function UpgradePrompt() {
+function UpgradePrompt({ singlePlan }) {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center max-w-lg mx-auto mt-12">
             <div className="mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ backgroundColor: brandTint(20) }}>
@@ -55,6 +55,7 @@ function UpgradePrompt() {
                 Live agent activity, campaign health monitoring,
                 AI optimization recommendations, and cross-platform performance — all in one view.
             </p>
+            {singlePlan ? <p className="text-sm text-gray-600">This tool is unavailable for your workspace.</p> : <>
             <Link
                 href={route('subscription.pricing')}
                 className="inline-flex items-center px-6 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
@@ -62,6 +63,7 @@ function UpgradePrompt() {
                 Upgrade to Growth Plan
             </Link>
             <p className="text-xs text-gray-500 mt-3">Available on Growth (US$249/mo) and Agency plans</p>
+            </>}
         </div>
     );
 }
@@ -727,6 +729,7 @@ function CounterStrategiesTab({ strategies }) {
 
 /* ─── Main Page ─── */
 export default function WarRoom({
+    auth,
     canAccessWarRoom = false,
     health,
     activities = [],
@@ -773,7 +776,7 @@ export default function WarRoom({
                     </div>
 
                     {!canAccessWarRoom ? (
-                        <UpgradePrompt />
+                        <UpgradePrompt singlePlan={auth?.user?.single_plan} />
                     ) : (
                         <div className="space-y-6">
                             {/* Health Status — full width */}

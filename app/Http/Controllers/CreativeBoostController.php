@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\CreativeBoostPurchase;
 use App\Models\Setting;
 use App\Services\CreativeQuotaService;
+use App\Support\Tenant;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -18,12 +18,15 @@ class CreativeBoostController extends Controller
      */
     public function checkout(Request $request)
     {
-        $user = Auth::user();
+        $user = $request->user();
+        $customer = $this->getActiveCustomer($request);
+        abort_if(Tenant::singlePlan($this->salesTenantKey($request, $customer)), 404);
+
         $quotaService = app(CreativeQuotaService::class);
         // Follows the account's own bucket: a boost bought by a one-time setup
         // customer has to land on the allocation they are actually spending
         // from, not on a Y-m row nothing reads.
-        $period = $quotaService->periodFor($this->getActiveCustomer($request));
+        $period = $quotaService->periodFor($customer);
 
         // Read configurable boost pack settings
         $priceCents = (int) Setting::get('creative_boost_price_cents', 2900);
@@ -95,14 +98,16 @@ class CreativeBoostController extends Controller
     /**
      * Show the creative usage page.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $user = Auth::user();
+        $user = $request->user();
+        $customer = $this->getActiveCustomer($request);
+        $singlePlan = Tenant::singlePlan($this->salesTenantKey($request, $customer));
         $quotaService = app(CreativeQuotaService::class);
 
         return Inertia::render('CreativeUsage', [
-            'creativeUsage' => $quotaService->getUsageSummary($user),
-            'boostConfig' => [
+            'creativeUsage' => $quotaService->getUsageSummary($user, $customer),
+            'boostConfig' => $singlePlan ? null : [
                 'price_cents' => (int) Setting::get('creative_boost_price_cents', 2900),
                 'image_generations' => (int) Setting::get('creative_boost_image_generations', 25),
                 'video_generations' => (int) Setting::get('creative_boost_video_generations', 5),

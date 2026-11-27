@@ -87,7 +87,7 @@ class HelpArticles
             'category' => 'Google Ads',
             'read_time' => '7 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-08',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Track the outcome you would pay for</h2>
 <p>Conversion tracking connects an ad interaction with a useful business action: a purchase, completed enquiry or qualified phone call. A loaded page or a clicked button can help diagnose a journey, but neither proves that a customer finished it.</p>
@@ -107,7 +107,7 @@ class HelpArticles
 <p>Tag Assistant confirms implementation behaviour. A direct test visit without an attributable ad interaction does not prove a paid-ad conversion will appear in reports. “No recent conversions” can also reflect low volume; distinguish it from a tag failing to fire.</p>
 <h2>Keep website analytics and Google Ads reporting separate</h2>
 <p>Your website can count a successful enquiry even when Google Ads has no eligible ad interaction to attribute it to. Different attribution windows and reporting delays can also produce different totals. Reconcile a small sample of actual leads rather than demanding that every dashboard agree instantly.</p>
-<p>Once the signal is trustworthy, use it to assess <a href="/blog/how-budget-pacing-works">budget pacing</a> and <a href="/blog/why-your-google-ads-stop-working">campaign delivery problems</a>. If you want help preparing a campaign, compare <a href="/google-ads-management">ongoing management</a> with a <a href="/google-ads-setup">one-time setup and handover</a>.</p>
+<p>Once the signal is trustworthy, use it to assess <a href="/blog/how-budget-pacing-works">budget pacing</a> and <a href="/blog/why-your-google-ads-stop-working">campaign delivery problems</a>. See how we <a href="/google-ads-management">manage and monitor a Google Ads campaign</a> after launch.</p>
 HTML,
         ];
     }
@@ -123,11 +123,11 @@ HTML,
             'category' => 'Platform',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-09',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>An agent needs a goal, evidence and a supported action</h2>
 <p>Generating a campaign and managing it are different jobs. Generation prepares a proposal from your business sources. Ongoing management reads platform status and performance, decides whether a change is justified and checks the outcome. More automated changes do not necessarily mean better advertising.</p>
-<p>Site to Spend's agents work with your confirmed business profile, campaign goal, available reporting and the permissions of the customer advertising account. Their roles include competitor research, delivery and policy monitoring, budget review, creative testing and audience work. The managed plan keeps this work running after deployment; one-time setup ends with a paused handover.</p>
+<p>Site to Spend's agents work with your confirmed business profile, campaign goal, available reporting and the permissions of the customer advertising account. Their roles include competitor research, delivery and policy monitoring, budget review, creative testing and audience work. This work continues after launch on the managed Google Ads plan.</p>
 <h2>What each part contributes</h2>
 <ul><li><strong>Business context:</strong> the service, offer, audience, locations and claims the campaign may use.</li><li><strong>Platform evidence:</strong> account restrictions, campaign and ad eligibility, spend, search terms and conversion signals.</li><li><strong>A change:</strong> a supported edit such as correcting copy, excluding unsuitable intent or adjusting a campaign setting.</li><li><strong>Verification:</strong> a later platform check showing whether the problem is resolved.</li></ul>
 <p>These are separate checkpoints. A successful API response means Google accepted a request; it does not prove that an ad is approved, has served or produced a useful lead.</p>
@@ -140,7 +140,7 @@ HTML,
 <p>A few clicks can produce large percentage swings. A lead that becomes a sale several days later also changes the interpretation of recent results. Reliable <a href="/blog/how-conversion-tracking-works">conversion tracking</a> and a sensible review period are prerequisites for performance decisions.</p>
 <h2>What still needs you</h2>
 <p>You must confirm accurate business facts, choose a budget and complete required billing, identity or website steps. Google controls advertising review and auctions. Its <a href="https://support.google.com/google-ads/answer/9208915?hl=en">Search delivery guidance</a> is useful when diagnosing restrictions.</p>
-<p>Use <a href="/blog/why-your-google-ads-stop-working">our repair checklist</a> to judge whether an outcome was verified. Compare <a href="/ai-ads-management">AI management</a> and <a href="/google-ads-setup">one-time setup</a> before deciding who should own the ongoing work.</p>
+<p>Use <a href="/blog/why-your-google-ads-stop-working">our repair checklist</a> to judge whether an outcome was verified. Read <a href="/ai-ads-management">how campaign management works</a> to see which changes the system can make.</p>
 HTML,
         ];
     }
@@ -221,25 +221,25 @@ HTML,
         return [
             'slug' => 'getting-started',
             'title' => 'Getting Started: Profile to Reviewed Ads',
-            'description' => 'Prepare your website, confirm business facts and choose a goal before deploying. Follow the managed and one-time Google Ads paths without surprises.',
+            'description' => 'Prepare your website, confirm business facts and choose a goal before deploying. Review the Google Ads management fee, advertising budget and launch steps.',
             'category' => 'Getting Started',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-09',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Prepare the facts before the campaign</h2>
 <p>Site to Spend starts from your business website and supplied sources. The campaign can only be as useful as the offer, audience and destination it has to work with. A page that says “we help businesses grow” gives less direction than one describing a specific service, service area and next action.</p>
 <p>Before signing up, have a readable website, an email you can verify and someone able to handle account and website tasks. Creating the platform account is separate from completing Google advertiser verification or installing website tracking.</p>
 <h2>Your onboarding checklist</h2>
-<ol><li><strong>Verify your email:</strong> use an address you can access, with the correct spelling.</li><li><strong>Enter the website:</strong> include useful source pages for the offer you want to advertise.</li><li><strong>Review the business profile:</strong> confirm services, locations, tone and any extracted prices.</li><li><strong>Choose the goal:</strong> describe the useful enquiry, signup or sale.</li><li><strong>Choose the service:</strong> ongoing management or a one-time Google Ads build.</li><li><strong>Review the campaign and budget:</strong> check ads, search intent and destination before deployment.</li></ol>
+<ol><li><strong>Verify your email:</strong> use an address you can access, with the correct spelling.</li><li><strong>Enter the website:</strong> include useful source pages for the offer you want to advertise.</li><li><strong>Review the business profile:</strong> confirm services, locations, tone and any extracted prices.</li><li><strong>Choose the goal:</strong> describe the useful enquiry, signup or sale.</li><li><strong>Check the cost:</strong> review your monthly management fee and your separate media budget.</li><li><strong>Review the campaign and budget:</strong> check ads, search intent and destination before deployment.</li></ol>
 <p>A generated draft does not authorise spending. The campaign budget must be confirmed, and deployment remains subject to payment, account readiness and platform eligibility.</p>
 <h2>Worked example: a narrow first offer</h2>
 <p><strong>Hypothetical onboarding example.</strong> An accountant serves small retail businesses and wants enquiries about bookkeeping. Its website also mentions tax returns and payroll.</p>
 <p>For the first campaign, confirm bookkeeping as the offer, choose the actual service area and point ads to a bookkeeping page. Check that keyword suggestions concern buying that service rather than accounting jobs or software tutorials. Define a successful enquiry before choosing a bidding goal.</p>
 <p>This gives the draft a concrete brief. You can add another campaign later when a different service needs its own message or budget.</p>
-<h2>Managed plans and one-time setup have different endings</h2>
-<p>A managed plan includes ongoing monitoring and supported changes after launch. Its subscription fee and advertising budget are separate; managed delivery uses ad-spend credits reconciled against actual spend.</p>
-<p>The <a href="/google-ads-setup">one-time Google Ads package</a> commissions a build after payment is confirmed. Account provisioning triggers an administrator invitation to the signup email. The campaign is handed over paused, without recurring management, so you can inspect it, complete your own Google billing and decide when to enable it.</p>
+<h2>What happens after launch</h2>
+<p>We monitor Google Ads delivery and record campaign changes. Your subscription covers management. Your separate ad-spend credit pays for advertising and is reconciled against actual spend.</p>
+<p>In your dashboard, review delivery status, spend and tracked conversions alongside the activity history. Check measured enquiries against your own records before increasing your budget.</p>
 <h2>Complete the website measurement step</h2>
 <p>An installed tag-manager snippet is not a finished conversion setup. The intended success event needs to fire once and use the right account and action. Website access or container permissions may be required.</p>
 <p>Test the real enquiry or checkout path using our <a href="/blog/how-conversion-tracking-works">conversion checklist</a>. Google's <a href="https://support.google.com/google-ads/answer/1722022?hl=en">conversion measurement guide</a> explains the available measurement approaches.</p>
@@ -335,13 +335,13 @@ HTML,
             'category' => 'Getting Started',
             'read_time' => '6 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-08',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Compare the total cost, using the same scope</h2>
 <p>Google Ads management cost has three parts: the fee for the service, the money paid for advertising and the time your team contributes. Tracking, landing-page work or creative production may be extra. Ask what is included before comparing two prices.</p>
 <p>An inexpensive quote can still exclude work you need. A higher fee is not evidence of better results. Compare the proposed responsibilities, who owns access, what gets measured and how you will judge the campaign after launch.</p>
 <h2>Four management models</h2>
-<ul><li><strong>Do it yourself:</strong> no external management fee, but you own setup, monitoring, reporting and changes.</li><li><strong>Flat fee:</strong> a stated recurring charge for an agreed scope. Site to Spend's managed plan prices are published on the <a href="/pricing">pricing page</a>.</li><li><strong>Percentage of spend:</strong> the fee changes as media spend changes; confirm any minimum charge and extra services.</li><li><strong>One-time setup:</strong> pay for a build and handover, then take responsibility for ongoing work. See <a href="/google-ads-setup">our one-time package</a>.</li></ul>
+<ul><li><strong>Do it yourself:</strong> no external management fee, but you own setup, monitoring, reporting and changes.</li><li><strong>Flat fee:</strong> a stated recurring charge for an agreed scope. See the <a href="/pricing">Site to Spend management fee</a>.</li><li><strong>Percentage of spend:</strong> the fee changes as media spend changes; confirm any minimum charge and extra services.</li><li><strong>One-time setup:</strong> pay for a build and handover, then take responsibility for ongoing work.</li></ul>
 <p>No model guarantees profitable traffic. The useful question is whether the scope and total cost fit your business, rather than which headline fee looks smallest.</p>
 <h2>Worked example: valuing DIY time</h2>
 <p><strong>Hypothetical comparison in USD, not an agency-price benchmark.</strong> A business plans US$1,000 of media spend per month and expects to spend four hours managing the account. It values that time at US$40 per hour.</p>
@@ -355,7 +355,7 @@ HTML,
 <ol><li>Is this setup only or ongoing management?</li><li>Who holds administrator access to the advertising account?</li><li>Is media spend billed separately, in which currency, and through which process?</li><li>Does tracking cover the actual successful form or purchase event?</li><li>How are account restrictions and ads that stop delivering surfaced?</li><li>What evidence will support keyword, creative or budget changes?</li></ol>
 <p>Use <a href="/blog/how-conversion-tracking-works">conversion testing</a> and the <a href="/blog/why-your-google-ads-stop-working">delivery checklist</a> to make those questions concrete.</p>
 <h2>Know what Site to Spend offers</h2>
-<p>The subscription plans cover ongoing AI campaign management with a separate advertising budget. The one-time Google Ads product covers preparation and a paused handover, without recurring management. Prices and plan coverage should be taken from the <a href="/pricing">current pricing page</a>, not an old article.</p>
+<p>Site to Spend manages Google Ads for one business workspace. The <a href="/pricing">pricing page</a> explains the monthly fee, how ad-spend credit works and which account terms apply.</p>
 <p>Google's <a href="https://support.google.com/google-ads/answer/1704424?hl=en">guide to managing spend</a> explains platform budget limits. Our <a href="/google-ads-management">small business management overview</a> explains the practical work around those limits.</p>
 HTML,
         ];
@@ -483,7 +483,7 @@ HTML,
             'category' => 'Getting Started',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-09',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Give a browsing audience a clear reason to act</h2>
 <p>A Meta ad can introduce an offer while someone browses Facebook or Instagram. It needs to explain what is offered, who it suits and what happens next. A visually polished image with no clear offer can attract attention without producing a useful customer.</p>
@@ -503,7 +503,7 @@ HTML,
 <p>Use your real records and conversion delay. This is a way to compare definitions, not an expected result for garden maintenance or Meta advertising.</p>
 <h2>Review a test before expanding it</h2>
 <p>Check whether the audience, offer and response process fit. Change a specific element with a documented reason, then observe qualified outcomes. A few days of low-volume results do not justify replacing every asset or assuming all audiences are exhausted.</p>
-<p>Read <a href="/blog/how-ai-writes-your-ad-copy">the creative brief checklist</a>, <a href="/blog/landing-page-conversion-rate-optimisation">destination checks</a> and <a href="/blog/multi-platform-advertising">cross-channel measurement</a>. Site to Spend's <a href="/pricing">current managed plans</a> describe platform coverage; the one-time Google Ads product does not include an ongoing Meta campaign service.</p>
+<p>Read <a href="/blog/how-ai-writes-your-ad-copy">the creative brief checklist</a>, <a href="/blog/landing-page-conversion-rate-optimisation">destination checks</a> and <a href="/blog/multi-platform-advertising">cross-channel measurement</a>. See the <a href="/pricing">Google Ads management plan</a> for the services Site to Spend offers new customers.</p>
 HTML,
         ];
     }
@@ -696,7 +696,7 @@ HTML,
             'category' => 'Google Ads',
             'read_time' => '6 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-08',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Your daily budget is an average, not a fixed daily invoice</h2>
 <p>For most Google Ads campaigns, actual daily spend can reach twice the average daily budget. With an unchanged average daily budget through a full month, the usual monthly charging limit is 30.4 times that budget. Different budget types and changes during the month need separate treatment. See Google's <a href="https://support.google.com/google-ads/answer/1704424?hl=en">spending limits guidance</a>.</p>
@@ -715,7 +715,7 @@ HTML,
 <p>If someone must answer a phone call immediately, operating hours are a practical constraint. A business that accepts enquiries online may still value evening traffic. Use the lead-handling process and a meaningful amount of outcome data rather than assuming overnight clicks are wasted.</p>
 <p>Smart Bidding already uses auction signals. Manual bid adjustments are not universally supported across automated strategies. Before adding a time, device or location modifier, check the <a href="https://support.google.com/google-ads/answer/2732132?hl=en">bid adjustment rules for the selected strategy</a>. An ad schedule can restrict eligibility even where a bid modifier is ignored.</p>
 <h2>Management fees and media spend are different budgets</h2>
-<p>Your Site to Spend subscription covers management. Managed campaign delivery uses ad-spend credits reconciled against actual advertising spend. A one-time setup is instead handed over paused for the customer to add Google billing and manage. Do not add the subscription fee to Google Ads' conversion value.</p>
+<p>Your Site to Spend subscription covers management. Managed campaign delivery uses ad-spend credits reconciled against actual advertising spend. Do not add the subscription fee to Google Ads' conversion value.</p>
 <p>Review your <a href="/pricing">current plan</a> and keep the management fee, media budget and business margin visible when assessing total acquisition cost. Before using conversion data to adjust budgets, follow the <a href="/blog/how-conversion-tracking-works">tracking checklist</a>.</p>
 HTML,
         ];
@@ -732,7 +732,7 @@ HTML,
             'category' => 'Getting Started',
             'read_time' => '5 min read',
             'published' => '2026-05-03',
-            'modified' => '2026-10-09',
+            'modified' => '2026-11-25',
             'content' => <<<'HTML'
 <h2>Add a channel to answer a business question</h2>
 <p>More platforms create more possible reach and more measurement work. A small business should choose a channel because its customers and offer fit the placement, not because a dashboard supports four networks.</p>
@@ -751,7 +751,7 @@ HTML,
 <p>Two platforms may both attribute influence to the same purchase under their own windows and rules. Summing those counts can overstate the number of customers acquired. Compare platform reports with unique orders or qualified leads in your business system.</p>
 <p>Keep spend by channel, platform-attributed results and deduplicated business outcomes as separate views. They answer different questions. A universal “ROAS” score can conceal a mix of estimated leads and actual revenue.</p>
 <h2>Choose the service and budget deliberately</h2>
-<p>Site to Spend supports Google, Meta, Microsoft and LinkedIn, with platform coverage determined by the current plan. The <a href="/google-ads-setup">one-time product</a> is specifically a Google Ads build; it is not ongoing management across four channels.</p>
+<p>Site to Spend offers Google Ads management for one business workspace. Use the channel comparisons above when evaluating the rest of your marketing budget.</p>
 <p>Compare <a href="/pricing">plan coverage</a>, use the <a href="/blog/how-conversion-tracking-works">conversion checklist</a> and read <a href="/blog/understanding-roas">ROAS versus profit</a>. Add channels when they improve a measurable customer journey, rather than assuming that wider distribution alone improves results.</p>
 HTML,
         ];

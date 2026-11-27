@@ -2,144 +2,87 @@ import React from 'react';
 import { Link } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
+function copyLines(lines) {
+    return Array.isArray(lines) ? lines.filter(line => typeof line === 'string' && line.trim()) : [];
+}
+
+export function hasUsableAd(copy) {
+    return copyLines(copy?.headlines).length > 0 && copyLines(copy?.descriptions).length > 0;
+}
+
 export default function DemoResultsPanel({ result }) {
     if (!result) return null;
 
-    const { url, ad_copy, visuals, forecast, notes = [] } = result;
+    const { url, ad_copy, visuals, forecast, notes = [], preview_token: previewToken } = result;
 
-    /*
-     * Nothing on this panel is invented.
-     *
-     * Each of these fields used to end in `|| "…"`, so when generation returned
-     * nothing the page wrote its own ad — "Transform Your Business | Sign Up
-     * Today", "Discover why thousands trust our platform" — under a heading
-     * reading "Your AI-Generated Ad Package". A stranger's first contact with
-     * the product was boilerplate presented as a reading of their website. An
-     * empty result now says it is empty.
-     */
-    const headlines = ad_copy?.headlines?.filter(Boolean) ?? [];
-    const descriptions = ad_copy?.descriptions?.filter(Boolean) ?? [];
-    const hasAdCopy = headlines.length > 0;
+    const headlines = copyLines(ad_copy?.headlines);
+    const descriptions = copyLines(ad_copy?.descriptions);
+    const hasDraft = headlines.length > 0 && descriptions.length > 0;
+    const canSave = hasDraft && typeof previewToken === 'string' && previewToken.trim().length > 0;
 
     const num = (n) => n == null ? '—' : Number(n).toLocaleString();
     const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
         <div className="w-full max-w-5xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden mt-8 border border-gray-100">
-            <div className="p-8">
-                <div className="text-center mb-10">
-                    <h2 className="text-3xl font-extrabold text-gray-900">Your AI-Generated Ad Package</h2>
-                    <p className="mt-2 text-gray-600">Extracted from <span className="font-semibold">{url}</span></p>
-                </div>
+            <div className="p-5 sm:p-8">
+                <h2 className="text-3xl font-bold tracking-tight text-gray-900">Your Google Search ad draft</h2>
+                <p className="mt-2 break-words text-sm text-gray-600">Based on {url}</p>
 
-                {/* What we could not read, before what we did. */}
-                {notes.length > 0 && (
-                    <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 p-4">
-                        <ul className="space-y-1">
-                            {notes.map((note, i) => (
-                                <li key={i} className="text-sm text-amber-900">{note}</li>
-                            ))}
-                        </ul>
-                    </div>
+                {hasDraft ? (
+                    <article aria-label="Draft Google Search ad" className="mt-6 rounded-lg border border-gray-200 bg-white p-5 sm:p-6">
+                        <p className="break-all text-sm text-gray-700">{url}</p>
+                        <h3 className="mt-2 break-words text-xl font-medium leading-tight text-blue-800">{headlines.slice(0, 3).join(' | ')}</h3>
+                        <p className="mt-2 break-words text-sm leading-relaxed text-gray-700">{descriptions.slice(0, 2).join(' ')}</p>
+                    </article>
+                ) : (
+                    <p className="mt-4 text-gray-700">We could not create a complete ad from this page.</p>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    {/* Brand Identity / Visuals */}
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <span className="text-2xl mr-2">🎨</span> Extracted Brand Identity
-                        </h3>
-                        <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 h-full">
-                            <div className="mb-6">
-                                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Color Palette</h4>
-                                <div className="flex flex-wrap gap-3">
-                                    {visuals?.colors?.length > 0 ? (
-                                        visuals.colors.map((color, idx) => (
-                                            <div key={idx} className="flex flex-col items-center">
-                                                <div
-                                                    className="w-12 h-12 rounded-full border border-gray-300 shadow-sm"
-                                                    style={{ backgroundColor: color }}
-                                                ></div>
-                                                <span className="text-xs mt-1 text-gray-600 uppercase">{color}</span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p className="text-sm text-gray-500">No specific colors extracted.</p>
-                                    )}
-                                </div>
-                            </div>
+                {notes.length > 0 && (
+                    <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                        {notes.map((note, i) => <li key={i}>{note}</li>)}
+                    </ul>
+                )}
 
-                            <div className="mb-6">
-                                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Typography</h4>
-                                {visuals?.fonts?.length > 0 ? (
-                                    <ul className="list-disc pl-5 text-gray-800">
-                                        {visuals.fonts.map((font, idx) => (
-                                            <li key={idx}>{font}</li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-sm text-gray-500">No typeface of its own — the page renders in the browser default.</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Visual Vibe</h4>
-                                <p className="text-gray-800 text-sm leading-relaxed">
-                                    {visuals?.style_description || <span className="text-gray-500">Nothing distinctive enough to name.</span>}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Google Ad Preview */}
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                            <span className="text-2xl mr-2">🔍</span> Google Ad Preview
-                        </h3>
-                        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm h-full">
-                            {hasAdCopy ? (
-                                <>
-                                    <div className="flex items-center text-sm text-gray-600 mb-1">
-                                        <span className="font-bold text-black mr-2">Ad</span> · {url}
-                                    </div>
-                                    <div className="text-blue-700 text-xl font-medium hover:underline cursor-pointer leading-tight mb-2">
-                                        {headlines.slice(0, 3).join(' | ')}
-                                    </div>
-                                    <div className="text-gray-600 text-sm">
-                                        {descriptions.slice(0, 2).join(' ')}
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-sm text-gray-600">
-                                    There wasn't enough on that page for us to write an ad worth showing you.
-                                    That is usually a site that builds itself in the browser, or one that
-                                    hasn't launched — the numbers below come from Google either way.
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    className="mt-12 text-center rounded-lg border p-8"
-                    style={{ backgroundColor: brandTint(10), borderColor: brandTint(20) }}
-                >
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to review your business profile?</h3>
-                    <p className="text-gray-600 mb-6">Save your website, check your business profile and choose how we build your campaigns. You review budget and ads before anything goes live.</p>
-                    <Link
-                        href={`/register?demo_url=${encodeURIComponent(url)}`}
-                        className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors w-full sm:w-auto"
-                    >
-                        Create an account — free to explore
+                <div className="mt-6 rounded-lg border p-5 sm:p-6" style={{ backgroundColor: brandTint(5), borderColor: brandTint(20) }}>
+                    <p className="mb-3 text-sm text-gray-700">
+                        {canSave
+                            ? 'Create a free account to keep this draft. You review the campaign and budget before launch.'
+                            : 'This preview is unavailable to save. You can still start a free workspace.'}
+                    </p>
+                    <Link href={canSave ? `/register?preview_token=${encodeURIComponent(previewToken)}` : '/register'}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-dark px-6 py-3 font-semibold text-white hover:bg-brand-darker">
+                        {canSave ? 'Save this ad draft' : 'Create a free account'}
                     </Link>
                 </div>
+
+                {(visuals?.colors?.length > 0 || visuals?.fonts?.length > 0 || visuals?.style_description) && (
+                    <details className="mt-6 rounded-lg border border-gray-200 p-4">
+                        <summary className="cursor-pointer font-semibold text-gray-800">Brand details from your website</summary>
+                        <div className="mt-4 space-y-3 text-sm text-gray-700">
+                            {visuals?.colors?.length > 0 && (
+                                <ul className="flex flex-wrap gap-4" aria-label="Brand colours">
+                                    {visuals.colors.map((color, i) => (
+                                        <li key={i} className="flex items-center gap-2">
+                                            <span aria-hidden="true" className="h-5 w-5 rounded-full border border-gray-200" style={{ backgroundColor: color }} />
+                                            {color}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {visuals?.fonts?.length > 0 && <dl><dt className="font-medium">Typefaces</dt><dd>{visuals.fonts.join(', ')}</dd></dl>}
+                            {visuals?.style_description && <p>{visuals.style_description}</p>}
+                        </div>
+                    </details>
+                )}
 
                 {/* Google's own numbers for this market. Everything here is measured
                     by Google except the conversion rate, which is labelled as ours. */}
                 {forecast && (
                     <div className="mt-12">
                         <h3 className="text-xl font-bold text-gray-800 mb-1 flex items-center">
-                            <span className="text-2xl mr-2">📊</span> What this actually buys you
+                            Google Keyword Planner forecast
                         </h3>
                         <p className="text-sm text-gray-500 mb-4">
                             {forecast.budget_capped

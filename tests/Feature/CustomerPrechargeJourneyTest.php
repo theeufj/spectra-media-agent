@@ -28,7 +28,8 @@ class CustomerPrechargeJourneyTest extends TestCase
             'stripe_price_id' => 'price_qa_'.$slug, 'billing_interval' => 'month', 'is_active' => true]);
         Setting::set('deployment_enabled', true);
         $user = User::factory()->create(['stripe_id' => null]);
-        $customer = Customer::factory()->create(['website' => 'https://example.org', 'google_ads_customer_id' => null,
+        $customer = Customer::factory()->create(['tenant_key' => $slug === 'growth' ? 'realpropertyads' : 'sitetospend',
+            'website' => 'https://example.org', 'google_ads_customer_id' => null,
             'facebook_ads_account_id' => null, 'facebook_page_id' => null]);
         $user->customers()->attach($customer, ['role' => 'owner']);
         $this->assertFalse($user->hasRole('admin'));

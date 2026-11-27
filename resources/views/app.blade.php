@@ -31,8 +31,9 @@
             // page must not fall back to a sitetospend title.
             $tenantCfg = request()->attributes->get('tenant', config('tenants.'.config('tenants.default'), []));
             $tenantBrand = ($tenantCfg['logo_text'] ?? 'sitetospend').' — '.($tenantCfg['tagline'] ?? 'AI-Powered Ad Campaign Management');
+            $singlePlan = \App\Support\Tenant::singlePlan($tenantCfg['key'] ?? null);
             $metaTitle = $meta['title'] ?? $tenantBrand;
-            $metaDescription = $meta['description'] ?? 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.';
+            $metaDescription = $meta['description'] ?? ($singlePlan ? 'Google Ads management for one small business workspace. Review your ads and budget before launch and track your campaign results.' : 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.');
             $metaCanonical = $meta['canonical'] ?? str_replace('http://', 'https://', url()->current());
             $metaBrand = parse_url($metaCanonical, PHP_URL_HOST) === config('public_seo.shared_host')
                 ? 'sitetospend' : ($tenantCfg['logo_text'] ?? 'sitetospend');
@@ -54,7 +55,7 @@
 
         <!-- SEO Meta Tags -->
         <meta name="description" content="{{ $metaDescription }}">
-        <meta name="keywords" content="AI ad management, AI marketing platform, Google Ads automation, Facebook Ads AI, automated ad campaigns, digital advertising AI, campaign optimization, ad spend management">
+        <meta name="keywords" content="{{ $singlePlan ? 'Google Ads management, small business advertising, Google Ads automation, conversion tracking' : 'AI ad management, AI marketing platform, Google Ads automation, Facebook Ads AI, automated ad campaigns, digital advertising AI, campaign optimization, ad spend management' }}">
         <meta name="author" content="{{ $metaBrand }}">
 
         <!-- Open Graph Meta Tags (for social sharing) -->

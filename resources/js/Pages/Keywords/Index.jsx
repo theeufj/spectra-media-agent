@@ -39,7 +39,7 @@ function StatCard({ label, value, color = 'gray' }) {
     );
 }
 
-export default function Index({ keywords, stats, qsTrends }) {
+export default function Index({ auth, keywords, stats, qsTrends }) {
     const [selected, setSelected] = useState([]);
     const [bulkAction, setBulkAction] = useState('');
 
@@ -74,9 +74,9 @@ export default function Index({ keywords, stats, qsTrends }) {
                             <a href={route('keywords.research')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
                                 Research Keywords
                             </a>
-                            <a href={route('keywords.competitor-gap')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            {auth?.user?.can_view_competitors !== false && <a href={route('keywords.competitor-gap')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                                 Competitor Gap
-                            </a>
+                            </a>}
                         </div>
                     </div>
 

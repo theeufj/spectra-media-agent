@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
-function UpgradePrompt() {
+function UpgradePrompt({ singlePlan }) {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
             <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: brandTint(20) }}>
@@ -14,7 +14,7 @@ function UpgradePrompt() {
             <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
                 Discover keywords your competitors rank for that you're missing. Find untapped opportunities to grow your traffic.
             </p>
-            <div className="flex flex-col items-center gap-3">
+            {singlePlan ? <p className="text-sm text-gray-600">This tool is unavailable for your workspace.</p> : <div className="flex flex-col items-center gap-3">
                 <Link
                     href={route('subscription.pricing')}
                     className="inline-flex items-center px-5 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
@@ -22,12 +22,12 @@ function UpgradePrompt() {
                     Upgrade to Growth Plan
                 </Link>
                 <p className="text-xs text-gray-500">Available on Growth (US$249/mo) and Agency plans</p>
-            </div>
+            </div>}
         </div>
     );
 }
 
-export default function CompetitorGap({ gaps = [], competitors = [], ourKeywordCount, canAccessCompetitors = true }) {
+export default function CompetitorGap({ auth, gaps = [], competitors = [], ourKeywordCount, canAccessCompetitors = true }) {
     const handleAdd = (keyword) => {
         router.post(route('keywords.add-to-campaign'), {
             keywords: [{ text: keyword, match_type: 'PHRASE' }],
@@ -51,7 +51,7 @@ export default function CompetitorGap({ gaps = [], competitors = [], ourKeywordC
                     </div>
 
                     {!canAccessCompetitors ? (
-                        <UpgradePrompt />
+                        <UpgradePrompt singlePlan={auth?.user?.single_plan} />
                     ) : (<>
 
                     {competitors.length > 0 && (

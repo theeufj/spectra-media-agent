@@ -1,11 +1,11 @@
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { previewContactFor } from '@/utils/previewContact';
 
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('@inertiajs/react', () => ({
+    usePage: () => ({ props: { tenant: { key: 'realpropertyads', name: 'Real Property Ads' } } }),
     Link: ({ children, ...props }) => <a {...props}>{children}</a>,
 }));
 vi.mock('@/Components/PageTitle', () => ({ default: () => null }));
@@ -14,6 +14,8 @@ vi.mock('@/Components/Footer', () => ({ default: () => <footer /> }));
 
 import MarketingService from '@/Pages/MarketingService';
 import Landing from '@/Pages/Landing';
+import Pricing from '@/Pages/Pricing';
+import RealEstatePricing from '@/Pages/RealEstatePricing';
 
 const homeContent = { headline: 'Preview your ads', intro: 'Explore your business profile free.', sections: [], links: [] };
 
@@ -144,8 +146,8 @@ describe('Homepage ad preview', () => {
             const card = container.querySelector('#build-my-ads');
             expect(scroll.mock.contexts).toContain(card);
             expect(card).toHaveClass('scroll-mt-20');
-            expect(within(card).getByText(/See sample ad copy for your website/)).toBeVisible();
-            expect(within(card).getByRole('form', { name: 'Build my ads' })).toBeVisible();
+            expect(within(card).getByText(/Enter your website to see a Google Search ad/)).toBeVisible();
+            expect(within(card).getByRole('form', { name: 'Preview my Google ad' })).toBeVisible();
             expect(window.location.search).toBe('?utm_source=google');
             expect(within(card).getByRole('link', { name: 'Create a free account without a preview' })).toHaveAttribute('href', '/register');
         } finally {
@@ -155,24 +157,22 @@ describe('Homepage ad preview', () => {
         }
     });
 
-    it('submits a single preview in place, keeps the contact and website on retry, and continues to registration', async () => {
+    it('submits only the website, keeps it on retry, shows the usable ad and carries its token to registration', async () => {
         const website = 'https://example.test/offer';
         const fetch = vi.fn()
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ errors: { url: ['Check your website address.'] } }), { status: 422 }))
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({
-                success: true, url: website, ad_copy: { headlines: ['Example offer'], descriptions: ['Built for the example site.'] },
+                success: true, url: website, preview_token: 'fixture-token', ad_copy: { headlines: ['Example offer'], descriptions: ['Built for the example site.'] },
             })))
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ ok: true })));
         vi.stubGlobal('fetch', fetch);
         render(<Landing publicContent={homeContent} />);
-        const form = screen.getByRole('form', { name: 'Build my ads' });
+        const form = screen.getByRole('form', { name: 'Preview my Google ad' });
         const inputs = within(form);
-        fireEvent.change(inputs.getByLabelText('First name'), { target: { value: 'Jordan' } });
-        fireEvent.change(inputs.getByLabelText('Your email address'), { target: { value: 'jordan@example.test' } });
+        expect(inputs.getAllByRole('textbox')).toHaveLength(1);
         fireEvent.change(inputs.getByLabelText('Your website URL'), { target: { value: 'example.test/offer' } });
         fireEvent.submit(form);
         expect(await screen.findByRole('alert')).toHaveTextContent('Check your website address.');
-        expect(inputs.getByLabelText('Your email address')).toHaveValue('jordan@example.test');
         fireEvent.submit(form);
         const preview = await screen.findByRole('region', { name: 'Your ad preview' });
         expect(within(preview).getByText('Example offer', { exact: false })).toBeVisible();
@@ -182,11 +182,28 @@ describe('Homepage ad preview', () => {
         expect(JSON.parse(telemetry[0][1].body)).toEqual({ event: 'try_now' });
         expect(preview).toHaveFocus();
         expect(fetch.mock.calls[1][0]).toBe('/api/demo/generate-full');
-        expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: website, first_name: 'Jordan', email: 'jordan@example.test' });
-        expect(within(preview).getByRole('link').getAttribute('href')).toBe('/register?demo_url=' + encodeURIComponent(website));
-        expect(previewContactFor(website)).toEqual({ name: 'Jordan', email: 'jordan@example.test' });
-        expect(previewContactFor('https://unrelated.test')).toEqual({});
-        expect(screen.queryByRole('form', { name: 'Build my ads' })).toBeNull();
+        expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: website });
+        expect(within(preview).getByRole('link', { name: 'Save this ad draft' })).toHaveAttribute('href', '/register?preview_token=fixture-token');
+        expect(screen.queryByRole('form', { name: 'Preview my Google ad' })).toBeNull();
+    });
+
+    it.each([
+        { headlines: [' '], descriptions: ['A real description'] },
+        { headlines: ['A real headline'], descriptions: [] },
+    ])('keeps the URL editable for incomplete ad copy without recording a completed preview', async (copy) => {
+        const fetch = vi.fn().mockResolvedValueOnce(new globalThis.Response(JSON.stringify({
+            success: true, url: 'https://example.test', ad_copy: copy,
+        })));
+        vi.stubGlobal('fetch', fetch);
+        render(<Landing publicContent={homeContent} />);
+        const website = screen.getByLabelText('Your website URL');
+        fireEvent.change(website, { target: { value: 'example.test' } });
+        fireEvent.submit(screen.getByRole('form', { name: 'Preview my Google ad' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not create a complete ad');
+        expect(website).toHaveValue('example.test');
+        expect(screen.getByRole('link', { name: 'Create a free account without a preview' })).toBeVisible();
+        expect(screen.queryByRole('link', { name: 'Save this ad draft' })).toBeNull();
+        expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('announces progress during generation and preserves the form after a network failure', async () => {
@@ -194,9 +211,7 @@ describe('Homepage ad preview', () => {
         const fetch = vi.fn(() => new Promise((resolve, rejectRequest) => { reject = rejectRequest; }));
         vi.stubGlobal('fetch', fetch);
         render(<Landing publicContent={homeContent} />);
-        const form = screen.getByRole('form', { name: 'Build my ads' });
-        fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Lee' } });
-        fireEvent.change(screen.getByLabelText('Your email address'), { target: { value: 'lee@example.test' } });
+        const form = screen.getByRole('form', { name: 'Preview my Google ad' });
         fireEvent.change(screen.getByLabelText('Your website URL'), { target: { value: 'example.test' } });
         fireEvent.submit(form);
         fireEvent.submit(form);
@@ -208,9 +223,60 @@ describe('Homepage ad preview', () => {
         reject(new TypeError('Network failure'));
         expect(await screen.findByRole('alert')).toHaveTextContent('Please retry.');
         expect(screen.getByLabelText('Your website URL')).toHaveValue('example.test');
-        expect(screen.getByLabelText('First name')).toHaveValue('Lee');
-        expect(screen.getByLabelText('Your email address')).toHaveValue('lee@example.test');
-        expect(screen.getByRole('button', { name: 'Build my ads' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Preview my Google ad' })).toBeEnabled();
     });
 
+});
+
+describe('Site to Spend public offer', () => {
+    beforeEach(() => {
+        vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new globalThis.Response(JSON.stringify({ ok: true }))));
+    });
+
+    it('shows one Google plan and an ungated illustrative report', () => {
+        const { container } = render(<Landing publicContent={homeContent} plans={[
+            plan({ price_cents: 9900 }), plan({ id: 2, name: 'Growth', slug: 'growth', price_cents: 24900 }),
+        ]} />);
+        expect(screen.getByRole('heading', { name: 'Starter' })).toBeVisible();
+        expect(screen.getByText('US$99')).toBeVisible();
+        expect(screen.queryByText('Growth')).toBeNull();
+        const report = within(container.querySelector('#sample-report'));
+        expect(report.getByText(/fictional campaign/i)).toBeVisible();
+        expect(report.getByText(/plumbing courses.*negative keyword/i)).toBeVisible();
+        expect(report.getByText(/US\$280 in media spend ÷ 7 tracked forms = US\$40/)).toBeVisible();
+        expect(screen.getByRole('link', { name: 'See an example report' })).toHaveAttribute('href', '#sample-report');
+    });
+
+    it('explains actual billing terms before signup and sends signed-in customers to workspace billing', () => {
+        const plans = [plan({ price_cents: 9900 })];
+        const page = render(<Pricing publicContent={homeContent} plans={plans} earlyExitFeeUsd={999} />);
+        const pricingVisits = globalThis.fetch.mock.calls.filter(([url]) => url === '/spectra/conversion');
+        expect(pricingVisits).toHaveLength(1);
+        expect(JSON.parse(pricingVisits[0][1].body)).toEqual({ event: 'pricing_visit' });
+        expect(screen.getByText(/first 3 paid months/)).toBeVisible();
+        expect(screen.getByText(/After one US\$99 payment, the remaining fee would be US\$900/)).toBeVisible();
+        expect(screen.getByText(/US\$140 in ad credit/)).toBeVisible();
+        expect(screen.getByRole('link', { name: 'Read the early-exit terms' })).toHaveAttribute('href', '/terms-of-service#early-exit');
+        expect(screen.getByRole('link', { name: 'Create your workspace' })).toHaveAttribute('href', '/register');
+        page.rerender(<Pricing publicContent={homeContent} plans={plans} earlyExitFeeUsd={999} earlyExitMonths={1} auth={{ user: { id: 1 } }} />);
+        expect(screen.getByText(/your first paid month can trigger/)).toBeVisible();
+        expect(screen.queryByText(/remaining fee would be/)).toBeNull();
+        expect(screen.getByRole('link', { name: 'View workspace billing' })).toHaveAttribute('href', '/subscription/pricing');
+    });
+
+    it('leaves the free preview accessible when the paid plan is unavailable', () => {
+        render(<Pricing publicContent={homeContent} earlyExitFeeUsd={999} earlyExitMonths={5} />);
+        expect(screen.getByText(/first 5 paid months/)).toBeVisible();
+        expect(screen.queryByText(/remaining fee would be/)).toBeNull();
+        expect(screen.getByRole('link', { name: 'Build my ads' })).toHaveAttribute('href', '/#build-my-ads');
+        expect(screen.queryByRole('link', { name: 'Create your workspace' })).toBeNull();
+    });
+
+    it('keeps the property site’s additional plans and standalone setup', () => {
+        render(<RealEstatePricing publicContent={homeContent} plans={[
+            plan({ price_cents: 9900 }), plan({ id: 2, name: 'Growth', slug: 'growth', price_cents: 24900 }),
+        ]} setupFeeUsd={999} />);
+        expect(screen.getByRole('heading', { name: 'Growth' })).toBeVisible();
+        expect(screen.getByText('US$999')).toBeVisible();
+    });
 });

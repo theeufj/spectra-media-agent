@@ -63,7 +63,7 @@ function approvalToggle({ checked, onToggle, label, enabled = true, saving = fal
  * did not want, and hides the one they did. The $999 card is on that page, but
  * being on the page is not the same as being what was asked for.
  */
-export function UnlockAction({ setupOnly, label, className }) {
+export function UnlockAction({ setupOnly, singlePlan = false, label, className }) {
     if (setupOnly) {
         return (
             <button
@@ -77,12 +77,12 @@ export function UnlockAction({ setupOnly, label, className }) {
 
     return (
         <a href={route('subscription.pricing')} onClick={(e) => e.stopPropagation()} className={className}>
-            🔒 Upgrade to {label.toLowerCase()}
+            🔒 {singlePlan ? 'See Starter' : 'Upgrade to ' + label.toLowerCase()}
         </a>
     );
 }
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null, creativeRelease = null, brandVerified = true, googleNeedsSetup = false, googleLinkNeedsApproval = false }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0, setupOnly = false, singlePlan = false, generationPending = false, supportsVideo = true, reviewSummary = {}, creativeReview = null, creativeRelease = null, brandVerified = true, googleNeedsSetup = false, googleLinkNeedsApproval = false }) {
     const currency = useCurrency();
     const searchOffers = currentStrategy.bidding_strategy?.search_offer_groups || [];
     const { auth } = usePage().props;
@@ -513,6 +513,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             <Head title="Review your ads" />
 
             <SubscriptionRequiredModal 
+                singlePlan={singlePlan}
                 show={showSubscriptionModal} 
                 onClose={() => setShowSubscriptionModal(false)} 
             />
@@ -775,6 +776,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             ) : (
                                                                 <UnlockAction
                                                                     setupOnly={setupOnly}
+                                                                    singlePlan={singlePlan}
                                                                     label="Export"
                                                                     className="px-3 py-1 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                 />
@@ -845,7 +847,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     {creativeUsage.image_generations.remaining} image generation{creativeUsage.image_generations.remaining !== 1 ? 's' : ''} remaining
                                                 </span>
                                                 {creativeUsage.image_generations.remaining <= 0 && (
-                                                    <a href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">Buy Boost →</a>
+                                                    <Link href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">{singlePlan ? 'View allowance' : 'Buy Boost →'}</Link>
                                                 )}
                                             </div>
                                         )}
@@ -1126,7 +1128,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         </div>
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                                                                <p className="text-white text-xs font-medium">{setupOnly ? 'Preview — unlocks when your US$999 is paid' : 'Preview - Upgrade to download'}</p>
+                                                                <p className="text-white text-xs font-medium">{setupOnly ? 'Preview — unlocks when your US$999 is paid' : singlePlan ? 'Preview' : 'Preview - Upgrade to download'}</p>
                                                             </div>
                                                         )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-100 transition-opacity">
@@ -1155,6 +1157,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                             return (
                                                                                 <UnlockAction
                                                                                     setupOnly={setupOnly}
+                                                                                    singlePlan={singlePlan}
                                                                                     label="Edit"
                                                                                     className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                                 />
@@ -1190,6 +1193,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             ) : (
                                                                 <UnlockAction
                                                                     setupOnly={setupOnly}
+                                                                    singlePlan={singlePlan}
                                                                     label="Download"
                                                                     className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                 />
@@ -1279,7 +1283,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     {creativeUsage.video_generations.remaining} video generation{creativeUsage.video_generations.remaining !== 1 ? 's' : ''} remaining
                                                 </span>
                                                 {creativeUsage.video_generations.remaining <= 0 && (
-                                                    <a href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">Buy Boost →</a>
+                                                    <Link href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">{singlePlan ? 'View allowance' : 'Buy Boost →'}</Link>
                                                 )}
                                             </div>
                                         )}

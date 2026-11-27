@@ -43,6 +43,7 @@ class SetupJourneyReadinessTest extends TestCase
     public function test_checkout_cannot_charge_before_confirmed_readable_business_information(): void
     {
         $customer = $this->customer();
+        $customer->update(['tenant_key' => 'realpropertyads']);
         $this->mock(SetupFeeService::class)->shouldNotReceive('checkoutUrl');
         $this->post(route('setup-fee.checkout'))->assertRedirect();
         $this->brand($customer);

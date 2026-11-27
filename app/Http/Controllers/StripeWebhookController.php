@@ -198,7 +198,7 @@ class StripeWebhookController extends CashierController
             */
             $settled = in_array($session['payment_status'] ?? null, ['paid', 'no_payment_required'], true);
 
-            if (($metadata['purpose'] ?? null) === 'setup_fee' && $settled) {
+            if ($mode === 'payment' && ($metadata['purpose'] ?? null) === 'setup_fee' && $settled) {
                 $customer = \App\Models\Customer::find($metadata['customer_id'] ?? null);
 
                 if ($customer && $user->customers()->where('customers.id', $customer->id)->exists()) {

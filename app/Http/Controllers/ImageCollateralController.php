@@ -43,7 +43,7 @@ class ImageCollateralController extends Controller
         if (! $quotaService->canGenerate($user, 'image', $campaign->customer)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Monthly image generation limit reached. Purchase a Creative Boost pack for more.',
+                'message' => 'Monthly image generation limit reached. Check Creative Usage for your remaining allowance.',
             ]);
         }
 
@@ -125,7 +125,7 @@ class ImageCollateralController extends Controller
         if (! $quotaService->canGenerate($user, 'refinement', $imageCollateral->campaign->customer)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Monthly refinement limit reached. Purchase a Creative Boost pack for more.',
+                'message' => 'Monthly refinement limit reached. Check Creative Usage for your remaining allowance.',
             ]);
         }
 
