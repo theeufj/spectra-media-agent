@@ -63,7 +63,7 @@ class PublicContentDiscoveryTest extends TestCase
         config(['services.stripe.setup_fee_usd_cents' => 123456]);
         $headings = [];
         foreach (['/google-ads-management', '/ai-ads-management', '/google-ads-setup'] as $url) {
-            $dom = $this->document($this->get($url)->assertOk()->getContent());
+            $dom = $this->document($this->get(($url === '/google-ads-setup' ? 'https://realpropertyads.com' : 'https://sitetospend.com').$url)->assertOk()->getContent());
             $this->assertSame(1, $dom->query('//*[@id="app"]//h1')->length);
             $this->assertGreaterThanOrEqual(5, $dom->query('//*[@id="app"]//main//article/h2')->length);
             $this->assertGreaterThan(0, $dom->query('//*[@id="app"]//a[@href="/blog/how-conversion-tracking-works"]')->length);

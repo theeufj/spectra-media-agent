@@ -18,6 +18,7 @@ use Laravel\Cashier\Billable;
  * the truth rather than every usage site working around a wrong inference.
  *
  * @property bool|null $ad_measurement_consent
+ * @property array{url: string, ad_copy: array{headlines: list<string>, descriptions: list<string>}}|null $saved_ad_preview
  * @property array<string, mixed>|null $notification_preferences
  */
 class User extends Authenticatable implements MustVerifyEmail
@@ -58,6 +59,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'msclid',
         'demo_url',
         'tenant_key',
+        'saved_ad_preview',
         'ad_measurement_consent',
         // Both of these are written through update()/fill() and were silently
         // dropped for being absent here: banning a user (Admin\UserController)
@@ -75,6 +77,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $hidden = [
         'signup_funnel_journey_id',
+        'saved_ad_preview',
         'password',
         'remember_token',
     ];
@@ -88,6 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'saved_ad_preview' => 'array',
             'banned_at' => 'datetime',
             'ad_measurement_consent' => 'boolean',
             'password' => 'hashed',

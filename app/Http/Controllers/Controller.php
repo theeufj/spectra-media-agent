@@ -3,12 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Support\Tenant;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 
 abstract class Controller
 {
     use AuthorizesRequests;
+
+    protected function salesTenantKey(Request $request, ?Customer $customer = null): string
+    {
+        return Tenant::salesKey($request->user()->tenant_key, $customer?->tenant_key, $request->attributes->get('tenant')['key'] ?? null);
+    }
 
     protected function getActiveCustomer(Request $request): ?Customer
     {

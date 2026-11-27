@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Models\Plan;
 use App\Support\PublicSeo;
 
 /**
@@ -55,6 +56,25 @@ trait RendersPageMeta
             'type' => $type,
             'schema' => $schema,
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    protected function monthlyOfferSchema(Plan $plan): array
+    {
+        $price = number_format($plan->price_cents / 100, 2, '.', '');
+
+        return [
+            '@type' => 'Offer',
+            'url' => PublicSeo::sharedUrl('/pricing'),
+            'price' => $price,
+            'priceCurrency' => 'USD',
+            'priceSpecification' => [
+                '@type' => 'UnitPriceSpecification',
+                'price' => $price,
+                'priceCurrency' => 'USD',
+                'billingDuration' => 'P1M',
+            ],
+        ];
     }
 
     /**

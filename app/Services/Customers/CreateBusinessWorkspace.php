@@ -4,6 +4,7 @@ namespace App\Services\Customers;
 
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\Tenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -31,8 +32,21 @@ class CreateBusinessWorkspace
                 ]);
             }
 
+            $tenantKey = $user->tenant_key;
+            if ($tenantKey !== null && Tenant::singlePlan($tenantKey)) {
+                $attributes['tenant_key'] = $tenantKey;
+            }
+
+            $tenantKey = $attributes['tenant_key'] ?? null;
+            if ($tenantKey !== null && Tenant::singlePlan($tenantKey) && ($attributes['service_type'] ?? null) === 'setup_only') {
+                throw ValidationException::withMessages(['service_type' => 'Choose managed Google Ads to continue.']);
+            }
+
             $customer = Customer::create($attributes);
             $user->customers()->attach($customer->id, ['role' => 'owner']);
+            if ($tenantKey !== null && $user->tenant_key === null) {
+                $user->forceFill(['tenant_key' => $tenantKey])->save();
+            }
 
             return $customer;
         });

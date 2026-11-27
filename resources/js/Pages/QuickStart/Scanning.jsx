@@ -1,6 +1,7 @@
 import React from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import SavedAdPreview from '@/Components/SavedAdPreview';
 import { useJobWatch } from '@/hooks/useJobWatch';
 import ForecastPanel from '@/Components/ForecastPanel';
 import { SetupStages } from '@/Components/SetupJourney';
@@ -130,7 +131,7 @@ function BusinessBrief({ customerName }) {
     </form>;
 }
 
-export default function Scanning({ customerName, website, setupOnly = false, manualEntry = false, baselineUpdatedAt = null }) {
+export default function Scanning({ customerName, website, setupOnly = false, manualEntry = false, baselineUpdatedAt = null, savedAdPreview = null }) {
     const { phase, data } = useJobWatch(route('brand-guidelines.status'), {
         enabled: !manualEntry,
         interval: 4000,
@@ -146,6 +147,7 @@ export default function Scanning({ customerName, website, setupOnly = false, man
                 <div className="w-full max-w-2xl bg-white shadow-sm rounded-lg p-10">
                     {setupOnly && <SetupStages stage={0} />}
                     <ScanningProgress phase={manualEntry ? 'failed' : phase} data={manualEntry ? { failure_reason: 'We need a little more information about your offer.' } : data} website={website} recovery={<BusinessBrief customerName={customerName} />} />
+                    {savedAdPreview && <div className="mt-6"><SavedAdPreview preview={savedAdPreview} /></div>}
                     {phase === 'watching' && <details className="mt-8"><summary className="cursor-pointer text-sm text-brand-dark">Prefer to describe your business yourself?</summary><BusinessBrief customerName={customerName} /></details>}
                 </div>
             </div>

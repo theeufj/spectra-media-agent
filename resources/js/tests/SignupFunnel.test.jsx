@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebsiteAdPreview from '@/Components/Marketing/WebsiteAdPreview';
 import MarketingService from '@/Pages/MarketingService';
 import Register from '@/Pages/Auth/Register';
+import Landing from '@/Pages/Landing';
+import Pricing from '@/Pages/Pricing';
+import HowItWorks from '@/Pages/HowItWorks';
+import Features from '@/Pages/Features';
+import About from '@/Pages/About';
+import Guides from '@/Pages/Blog/Index';
+import Guide from '@/Pages/Blog/Article';
 import { initConversions } from '@/utils/conversions';
 
 const { submit, oauth } = vi.hoisted(() => ({ submit: vi.fn(), oauth: vi.fn() }));
@@ -27,7 +34,10 @@ vi.mock('@/Components/Footer', () => ({ default: () => null }));
 
 const tenant = { key: 'sitetospend' };
 const website = 'https://business.example/private-offer';
-const completed = { success: true, url: website, ad_copy: { headlines: ['Sample creative'] } };
+const completed = {
+    success: true, url: website, preview_token: 'private-token',
+    ad_copy: { headlines: ['Local roof inspections'], descriptions: ['Book a visit to check leaking tiles.'] },
+};
 let preview;
 let events;
 
@@ -54,10 +64,8 @@ afterEach(() => {
 });
 
 function fillPreview() {
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Private name' } });
-    fireEvent.change(screen.getByLabelText('Your email address'), { target: { value: 'private@example.test' } });
     fireEvent.change(screen.getByLabelText('Your website URL'), { target: { value: website } });
-    return screen.getByRole('form', { name: 'Build my ads' });
+    return screen.getByRole('form', { name: 'Preview my Google ad' });
 }
 
 describe('owned first-party signup funnel', () => {
@@ -75,6 +83,19 @@ describe('owned first-party signup funnel', () => {
         expect(events).toEqual([{ stage: 'landing_visible' }]);
     });
 
+    it.each([
+        ['home', Landing], ['pricing', Pricing], ['features', Features], ['how it works', HowItWorks],
+        ['about', About], ['guide index', Guides], ['guide article', Guide], ['AI service', MarketingService],
+    ])('recognizes a visible %s entry for flagship guests only', (_, Component) => {
+        const props = { publicContent: { sections: [], links: [] }, article: { title: 'A guide', content: '' },
+            service: { slug: 'ai-ads-management', faqs: [], content: '' } };
+        const page = render(<Component {...props} tenant={{ key: 'realpropertyads' }} />);
+        page.rerender(<Component {...props} tenant={tenant} auth={{ user: { id: 5 } }} />);
+        expect(events).toEqual([]);
+        page.rerender(<Component {...props} tenant={tenant} />);
+        expect(events).toEqual([{ stage: 'landing_visible' }]);
+    });
+
     it('tracks only real preview interactions and visible results, keeping the website and contact details out of telemetry', async () => {
         let resolve;
         preview.mockImplementation(() => new Promise(r => { resolve = r; }));
@@ -86,14 +107,46 @@ describe('owned first-party signup funnel', () => {
         fireEvent.submit(form);
         expect(preview).toHaveBeenCalledTimes(1);
         expect(events).toEqual(['landing_visible', 'preview_started', 'preview_submitted'].map(stage => ({ stage })));
+        let state = 'hidden';
+        vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => state);
         await act(async () => resolve(new globalThis.Response(JSON.stringify(completed))));
         expect(screen.getByRole('region', { name: 'Your ad preview' })).toBeVisible();
-        fireEvent.click(screen.getByRole('link', { name: /create|continue|account/i }));
-        expect(events).toEqual(['landing_visible', 'preview_started', 'preview_submitted', 'preview_succeeded', 'signup_cta_clicked'].map(stage => ({ stage })));
+        expect(events.some(event => event.stage === 'preview_succeeded')).toBe(false);
+        state = 'visible';
+        fireEvent(document, new Event('visibilitychange'));
+        fireEvent(document, new Event('visibilitychange'));
+        const save = screen.getByRole('link', { name: 'Save this ad draft' });
+        expect(save.getAttribute('href')).toBe('/register?preview_token=private-token');
+        expect(events).not.toContainEqual({ stage: 'save_clicked' });
+        fireEvent.click(save);
+        fireEvent.click(save);
+        expect(events).toEqual(['landing_visible', 'preview_started', 'preview_submitted', 'preview_succeeded', 'save_clicked'].map(stage => ({ stage })));
         for (const [, options] of fetch.mock.calls.filter(([path]) => path === '/funnel/stages')) {
             expect(options).toMatchObject({ method: 'POST', keepalive: true, credentials: 'same-origin', referrerPolicy: 'no-referrer' });
         }
         expect(gtag).not.toHaveBeenCalled();
+    });
+
+    it('excludes incomplete results and displays without a server-issued draft token', async () => {
+        preview.mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ ...completed, ad_copy: { headlines: ['One headline'] } })))
+            .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ ...completed, preview_token: null })));
+        render(<WebsiteAdPreview measureFunnel />);
+        fireEvent.submit(fillPreview());
+        await screen.findByRole('alert');
+        fireEvent.submit(fillPreview());
+        const account = await screen.findByRole('link', { name: 'Create a free account' });
+        expect(events).not.toContainEqual({ stage: 'preview_succeeded' });
+        fireEvent.click(account);
+        expect(events).toContainEqual({ stage: 'signup_cta_clicked' });
+        expect(events).not.toContainEqual({ stage: 'save_clicked' });
+    });
+
+    it('records the pricing page signup link without requiring a preview', () => {
+        render(<Pricing tenant={tenant} publicContent={{ sections: [], links: [] }} plans={[{
+            id: 1, slug: 'starter', price_cents: 9900, is_active: true, billing_interval: 'month',
+        }]} />);
+        fireEvent.click(screen.getByRole('link', { name: 'Create your workspace' }));
+        expect(events).toEqual([{ stage: 'landing_visible' }, { stage: 'signup_cta_clicked' }]);
     });
 
     it.each([
@@ -136,7 +189,7 @@ describe('owned first-party signup funnel', () => {
     it('leaves auditing password and Google submissions to their server endpoints without transmitting form values', () => {
         window.history.replaceState(null, '', '/register?demo_url=' + encodeURIComponent(website));
         render(<Register tenant={tenant} enabledPlatforms={[{ slug: 'google', name: 'Google' }]} />);
-        expect(events).toEqual([]);
+        expect(events).toEqual([{ stage: 'landing_visible' }]);
         fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Private name' } });
         fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'private@example.test' } });
         const consent = screen.getByRole('checkbox', { name: /hashed version/i });
@@ -149,7 +202,7 @@ describe('owned first-party signup funnel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
         expect(oauth).toHaveBeenCalledOnce();
         expect(events).toEqual([
-            { stage: 'signup_started' }, { stage: 'signup_failed', reason: 'validation' },
+            { stage: 'landing_visible' }, { stage: 'signup_started' }, { stage: 'signup_failed', reason: 'validation' },
         ]);
         expect(gtag).not.toHaveBeenCalled();
     });

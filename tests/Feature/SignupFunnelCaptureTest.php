@@ -72,7 +72,7 @@ class SignupFunnelCaptureTest extends TestCase
         $this->visit('/register?utm_source=google&utm_medium=cpc&utm_campaign=abc%40private.example')->assertOk();
         $id = $this->currentJourneyId();
         $this->assertDatabaseHas('signup_funnel_journeys', ['id' => $id, 'source' => 'google', 'campaign_key' => null]);
-        foreach (['signup_completed', 'email_verified', 'signup_submitted', 'landing_view', 'signup_viewed'] as $serverStage) {
+        foreach (['signup_completed', 'signup_saved_draft', 'paid_subscription', 'email_verified', 'signup_submitted', 'landing_view', 'signup_viewed'] as $serverStage) {
             $this->stage($serverStage)->assertUnprocessable();
         }
         $this->stage('signup_started', ['email' => 'private@example.test'])->assertUnprocessable();
@@ -81,6 +81,19 @@ class SignupFunnelCaptureTest extends TestCase
         $this->stage('preview_started')->assertNoContent();
         $this->assertSame(['signup_viewed'], DB::table('signup_funnel_stages')->where('journey_id', $id)->pluck('stage')->all());
         $this->withHeader('Origin', 'https://outside.example')->stage('signup_started')->assertForbidden();
+    }
+
+    public function test_browser_save_click_requires_a_displayed_preview_and_counts_once_even_after_draft_expiry(): void
+    {
+        $this->visit('/')->assertOk();
+        $id = $this->currentJourneyId();
+        $this->stage('save_clicked')->assertNoContent();
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'save_clicked']);
+        $this->stage('preview_succeeded')->assertNoContent();
+        $this->travel(3)->hours();
+        $this->stage('save_clicked')->assertNoContent();
+        $this->stage('save_clicked')->assertNoContent();
+        $this->assertSame(1, DB::table('signup_funnel_stages')->where('journey_id', $id)->where('stage', 'save_clicked')->count());
     }
 
     public function test_password_registration_and_signed_verification_in_separate_session_are_observed_once_without_ad_consent(): void
@@ -113,8 +126,11 @@ class SignupFunnelCaptureTest extends TestCase
         $signed = URL::temporarySignedRoute('verification.verify', now()->addMinutes(30), ['id' => $user->id, 'hash' => sha1($user->email)], false);
         $this->get(self::SITE.$signed)->assertRedirect();
         $this->get(self::SITE.$signed)->assertRedirect();
-        $this->assertNull($user->fresh()->signup_funnel_journey_id);
+        $this->assertSame($cohort->id, $user->fresh()->signup_funnel_journey_id);
         $this->assertSame(1, DB::table('signup_funnel_stages')->where('journey_id', $cohort->id)->where('stage', 'email_verified')->count());
+        $this->withHeader('Sec-GPC', '1')->visit('/pricing')->assertOk();
+        $this->assertDatabaseMissing('signup_funnel_journeys', ['id' => $cohort->id]);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'signup_funnel_journey_id' => null]);
     }
 
     public function test_stage_post_requires_valid_legacy_session_csrf_and_cannot_refresh_its_cookie(): void
@@ -128,6 +144,23 @@ class SignupFunnelCaptureTest extends TestCase
         $res->assertNoContent();
         $this->assertSame([], $res->headers->getCookies());
         $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $this->currentJourneyId(), 'stage' => 'landing_visible']);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('additionalEntryPages')]
+    public function test_public_entry_pages_accept_visible_visits(string $path, string $surface): void
+    {
+        $this->visit($path)->assertOk();
+        $id = $this->currentJourneyId();
+        $this->stage('landing_visible')->assertNoContent();
+        $this->assertDatabaseHas('signup_funnel_journeys', ['id' => $id, 'entry_surface' => $surface]);
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'landing_visible']);
+    }
+
+    public static function additionalEntryPages(): array
+    {
+        return [['/pricing', 'pricing'], ['/register', 'register'], ['/features', 'other_marketing'],
+            ['/how-it-works', 'other_marketing'], ['/about', 'other_marketing'], ['/ai-ads-management', 'other_marketing'],
+            ['/blog', 'guides']];
     }
 
     public function test_supported_meta_and_service_entry_are_classified_without_recording_other_utm_values(): void
@@ -167,7 +200,7 @@ class SignupFunnelCaptureTest extends TestCase
         $this->visit('/auth/google/callback')->assertRedirect();
         $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'signup_completed']);
         $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $id, 'stage' => 'email_verified']);
-        $this->assertNull(User::where('email', 'fresh-oauth@example.test')->sole()->signup_funnel_journey_id);
+        $this->assertSame($id, User::where('email', 'fresh-oauth@example.test')->sole()->signup_funnel_journey_id);
     }
 
     public function test_missing_diagnostics_table_cannot_abort_an_outer_application_transaction(): void

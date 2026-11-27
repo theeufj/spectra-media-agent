@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from '@inertiajs/react';
 import { brandTint } from '@/Components/Marketing/Hero';
 
-export default function SubscriptionRequiredModal({ show, onClose }) {
+export default function SubscriptionRequiredModal({ show, onClose, singlePlan = false }) {
     if (!show) return null;
 
     return (
@@ -30,7 +30,7 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                                 </h3>
                                 <div className="mt-4">
                                     <p className="text-sm text-gray-600 mb-4">
-                                        You need an active subscription to deploy campaigns to advertising platforms.
+                                        {singlePlan ? 'Choose Starter to launch and manage your Google Ads campaigns.' : 'You need an active subscription to deploy campaigns to advertising platforms.'}
                                     </p>
                                     
                                     <div
@@ -43,7 +43,7 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                                                 <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                 </svg>
-                                                <span>Deploy campaigns to Google Ads, Facebook, and more</span>
+                                                <span>{singlePlan ? 'Deploy campaigns to Google Ads' : 'Deploy campaigns to Google Ads, Facebook, and more'}</span>
                                             </li>
                                             <li className="flex items-start">
                                                 <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,13 +61,13 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                                                 <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                 </svg>
-                                                <span>Generate unlimited creative collateral</span>
+                                                <span>{singlePlan ? 'Create images and videos within your monthly allowance' : 'Generate unlimited creative collateral'}</span>
                                             </li>
                                         </ul>
                                     </div>
 
                                     <p className="text-xs text-gray-500">
-                                        Choose a plan that fits your advertising budget and business goals.
+                                        {singlePlan ? 'Advertising spend is separate from the subscription.' : 'Choose a plan that fits your advertising budget and business goals.'}
                                     </p>
                                 </div>
                             </div>
@@ -78,7 +78,7 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                             href={route('subscription.pricing')}
                             className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-purple-600 to-brand-dark text-base font-medium text-white hover:from-purple-700 hover:to-brand-darker focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:w-auto sm:text-sm transition-all"
                         >
-                            View Pricing Plans
+                            {singlePlan ? 'See Starter' : 'View Pricing Plans'}
                         </Link>
                         <button
                             type="button"

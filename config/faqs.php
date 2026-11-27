@@ -4,42 +4,22 @@
 // Stripe configuration as checkout; management fees and media spend are separate.
 
 return [
-    'landing' => [
-        0 => [
-            'question' => 'How does sitetospend work?',
-            'answer' => 'Start with your website address. We prepare a business profile, research your market and generate a campaign plan. You confirm the business facts, review the ads and choose a budget before launch. Managed plans include ongoing agent monitoring; one-time setup ends with a paused handover.',
+    'google_management' => [
+        [
+            'question' => 'What does the subscription cover?',
+            'answer' => 'Google Ads management for one business workspace, including keyword research, ad creation, conversion tracking and reporting. You can review the campaign and budget before launch.',
         ],
-        1 => [
-            'question' => 'Which ad platforms does sitetospend support?',
-            'answer' => 'Google Ads, Meta across Facebook and Instagram, Microsoft Ads and LinkedIn Ads are supported. Available platforms depend on your plan. We manage campaigns through customer ad accounts under our platform management account.',
+        [
+            'question' => 'Can I preview my ads before I subscribe?',
+            'answer' => 'Enter your business website to generate an ad preview. You can review the draft before creating an account or paying for management.',
         ],
-        2 => [
-            'question' => 'Do I need a credit card to start?',
-            'answer' => 'No card is required to create an account and explore the free experience. A paid service and an advertising budget are required to deploy real campaigns. The one-time package is commissioned when its setup payment is confirmed.',
+        [
+            'question' => 'How much do I pay for advertising?',
+            'answer' => 'You choose a daily ad budget. The monthly subscription pays for management. At deployment, an initial prepaid credit covers seven days of estimated advertising spend. We reconcile the balance against actual spend and replenish it when it runs low.',
         ],
-        3 => [
-            'question' => 'Can I pay once instead of subscribing?',
-            'answer' => 'Yes. One-time Google Ads setup is US$:setup_fee for an account and campaign build, ad copy and conversion-tracking configuration. It is handed over paused so you can complete your own Google billing and run it. Website access or tag installation may be required. Ongoing management and ad spend are separate.',
-        ],
-        4 => [
-            'question' => 'Will I still own my ad accounts and data?',
-            'answer' => 'Customer campaigns run in customer advertising accounts under our management account. The one-time package includes a Google Ads administrator invitation and paused handover. Access and billing arrangements depend on the service you choose; review them before launch. Your business information and generated assets remain available in your workspace.',
-        ],
-        5 => [
-            'question' => 'How is this different from hiring an agency?',
-            'answer' => 'Site to Spend charges a published plan fee for supported campaign preparation and management. Agency scopes and fees vary, so compare what each service includes. The agents record changes and their reasons, but campaign results still depend on your offer, destination, budget, measurement and platform eligibility.',
-        ],
-        6 => [
-            'question' => 'What happens when an ad gets disapproved?',
-            'answer' => 'Agents check policy and delivery issues, attempt supported repairs and verify the outcome. Google still controls review and approval. Account verification, billing or website changes may require your input rather than an automatic copy rewrite.',
-        ],
-        7 => [
-            'question' => 'How quickly will I see results?',
-            'answer' => 'Campaign preparation and ad review happen before delivery. Google review, billing, account verification and auction eligibility can delay serving. Performance needs reliable conversion data and enough observations; there is no guaranteed launch time or result in the first week.',
-        ],
-        8 => [
-            'question' => 'Do I need to know anything about Google Ads?',
-            'answer' => 'The flow explains the business profile, goal, budget and ad review in plain language. You still need to confirm accurate business facts and complete any required account, billing or website steps. The dashboard records activity so you can inspect what changed and why.',
+        [
+            'question' => 'How do I know which enquiries came from Google Ads?',
+            'answer' => 'Choose an action to measure, such as a completed enquiry or sale. Tracking can require a tag on your website. Once it is installed and tested, you can review spend and recorded conversions in your campaign reports.',
         ],
     ],
     'pricing' => [

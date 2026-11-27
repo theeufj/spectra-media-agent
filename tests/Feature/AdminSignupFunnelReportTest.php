@@ -20,7 +20,7 @@ class AdminSignupFunnelReportTest extends TestCase
     {
         $id = (string) Str::uuid();
         DB::table('signup_funnel_journeys')->insert([
-            'id' => $id, 'source' => $source, 'campaign_key' => $campaign, 'started_at' => $entry, 'entry_surface' => $surface,
+            'id' => $id, 'source' => $source, 'campaign_key' => $campaign, 'started_at' => CarbonImmutable::parse($entry, 'UTC')->toIso8601String(), 'entry_surface' => $surface,
         ]);
 
         return $id;
@@ -30,7 +30,7 @@ class AdminSignupFunnelReportTest extends TestCase
     {
         foreach ($stages as $stage) {
             DB::table('signup_funnel_stages')->insert([
-                'journey_id' => $id, 'stage' => $stage, 'reason' => $reason, 'occurred_at' => $at,
+                'journey_id' => $id, 'stage' => $stage, 'reason' => $reason, 'occurred_at' => CarbonImmutable::parse($at, 'UTC')->toIso8601String(),
             ]);
         }
     }
@@ -112,6 +112,69 @@ class AdminSignupFunnelReportTest extends TestCase
         $this->assertSame(4, app(SignupFunnelReport::class)->summary($filters)['journeys']);
     }
 
+    public function test_preview_path_is_nested_in_time_and_separates_direct_entry_and_later_payment(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T14:00:00Z'));
+        $newJourney = fn (string $surface) => $this->journey(campaign: 'spectra_820025', surface: $surface);
+        $paid = $newJourney('home_preview');
+        $pending = $newJourney('pricing');
+        $outOfOrderPayment = $newJourney('home_preview');
+        foreach ([$paid, $pending, $outOfOrderPayment] as $id) {
+            $this->stages($id, ['landing_visible', 'preview_succeeded', 'save_clicked']);
+            $this->stages($id, ['signup_completed'], '2026-11-16 13:00:00');
+        }
+        $this->stages($paid, ['paid_subscription'], '2026-11-19 13:00:00');
+        $this->stages($pending, ['paid_subscription'], '2026-11-21 13:00:00');
+        $this->stages($outOfOrderPayment, ['paid_subscription'], '2026-11-15 14:00:00');
+        DB::table('signup_funnel_stages')->insertOrIgnore([
+            'journey_id' => $paid, 'stage' => 'paid_subscription', 'occurred_at' => '2026-11-20T12:00:00+00:00',
+        ]);
+
+        $skippedSave = $newJourney('guides');
+        $this->stages($skippedSave, ['landing_visible', 'preview_succeeded', 'signup_completed', 'paid_subscription']);
+        $earlySave = $newJourney('google_ads_service');
+        $this->stages($earlySave, ['landing_visible', 'save_clicked']);
+        // Both browser signals arrived within the same timestamp second.
+        $this->stages($earlySave, ['preview_succeeded', 'signup_completed', 'paid_subscription']);
+        $earlyPreview = $newJourney('home_preview');
+        $this->stages($earlyPreview, ['preview_succeeded']);
+        $this->stages($earlyPreview, ['landing_visible', 'save_clicked', 'signup_completed', 'paid_subscription'], '2026-11-15 14:00:00');
+        $this->stages($newJourney('register'), ['landing_visible', 'signup_viewed', 'signup_completed', 'paid_subscription']);
+        $this->stages($newJourney('other_marketing'), ['landing_visible']);
+        $this->stages($newJourney('pricing'), ['landing_view']);
+
+        $filters = ['funnel_campaign' => 'spectra_820025', 'funnel_from' => '2026-11-15', 'funnel_to' => '2026-11-15'];
+        $report = app(SignupFunnelReport::class)->summary($filters);
+        $this->assertSame(9, $report['journeys']);
+        $this->assertSame([8, 5, 3, 3, 1], array_column($report['preview_path'], 'reached'));
+        $this->assertSame([null, 8, 5, 3, 3], array_column($report['preview_path'], 'previous'));
+        $this->assertSame([null, 3, 2, 0, 2], array_column($report['preview_path'], 'missing'));
+        $this->assertSame([null, 37.5, 40.0, 0.0, 66.7], array_column($report['preview_path'], 'dropoff_percent'));
+        $this->assertSame(['registrations' => 4, 'paid' => 4], $report['other_paths']);
+        $this->assertSame(['journeys' => 1, 'registrations' => 1, 'paid' => 1], $report['direct_entry']);
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-22T14:00:00Z'));
+        $later = app(SignupFunnelReport::class)->summary($filters);
+        $this->assertSame(2, $later['preview_path']['paid_subscription']['reached']);
+        $this->assertSame(4, $later['other_paths']['paid']);
+    }
+
+    public function test_utc_entry_window_and_observation_cutoff_survive_a_local_database_timezone(): void
+    {
+        DB::statement("SET LOCAL TIME ZONE 'Australia/Sydney'");
+        $this->travelTo(CarbonImmutable::parse('2026-11-20T00:05:00Z'));
+        $this->journey(campaign: 'spectra_820026', entry: '2026-11-19T23:59:59Z');
+        $id = $this->journey(campaign: 'spectra_820026', entry: '2026-11-20T00:00:01Z');
+        $this->stages($id, ['landing_visible', 'preview_succeeded'], '2026-11-20T00:04:59Z');
+        $this->stages($id, ['save_clicked'], '2026-11-20T00:05:01Z');
+
+        $report = app(SignupFunnelReport::class)->summary([
+            'funnel_from' => '2026-11-20', 'funnel_to' => '2026-11-20', 'funnel_campaign' => 'spectra_820026',
+        ]);
+        $this->assertSame(1, $report['journeys']);
+        $this->assertSame([1, 1, 0, 0, 0], array_column($report['preview_path'], 'reached'));
+    }
+
     public function test_admin_filter_is_validated_and_empty_intersections_do_not_imply_zero_percent_loss(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-20T14:00:00Z'));
@@ -119,16 +182,23 @@ class AdminSignupFunnelReportTest extends TestCase
         $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
         $this->actingAs($admin)->get(route('admin.conversions.index', ['funnel_source' => 'invalid', 'funnel_campaign' => 'raw-entry-value', 'funnel_entry_surface' => 'unknown-url']))
             ->assertSessionHasErrors(['funnel_source', 'funnel_campaign', 'funnel_entry_surface']);
+        foreach (['pricing', 'other_marketing', 'guides'] as $surface) {
+            $this->get(route('admin.conversions.index', ['funnel_entry_surface' => $surface]))->assertSuccessful()
+                ->assertInertia(fn (Assert $page) => $page->where('signup_funnel.filters.funnel_entry_surface', $surface));
+        }
         $this->get(route('admin.conversions.index', ['funnel_from' => '2026-11-18', 'funnel_to' => '2026-11-17']))
             ->assertSessionHasErrors('funnel_to');
         // An empty selected cohort can still have measurement history outside it.
         $this->journey(source: 'unattributed', campaign: null, entry: '2026-09-20 12:00:00');
-        $earliest = DB::table('signup_funnel_journeys')->min('started_at');
+        $earliest = CarbonImmutable::parse(DB::table('signup_funnel_journeys')->min('started_at'))->utc()->toIso8601String();
         $this->get(route('admin.conversions.index', ['funnel_source' => 'meta', 'funnel_campaign' => 'spectra_820022']))
             ->assertSuccessful()->assertInertia(fn (Assert $page) => $page->component('Admin/ConversionTracking')
             ->where('signup_funnel.journeys', 0)
             ->where('signup_funnel.first_observed_at', $earliest)
             ->where('signup_funnel.steps.signup_completed.dropoff_percent', null)
+            ->where('signup_funnel.preview_path.landing_visible.reached', 0)
+            ->where('signup_funnel.preview_path.paid_subscription.previous', 0)
+            ->where('signup_funnel.preview_path.paid_subscription.dropoff_percent', null)
             ->where('signup_funnel.filters.funnel_source', 'meta')
             ->where('signup_funnel.filters.funnel_from', '2026-10-22')
             ->missing('signup_funnel.users')->missing('signup_funnel.events'));

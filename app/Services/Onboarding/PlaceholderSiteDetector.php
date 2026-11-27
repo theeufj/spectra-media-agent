@@ -82,7 +82,7 @@ class PlaceholderSiteDetector
      * @return string|null a sentence for the customer, or null if the content
      *                     looks like a real business
      */
-    public function warningFor(string $content, ?string $website = null): ?string
+    public function warningFor(string $content, ?string $website = null, bool $warnOnThinContent = true): ?string
     {
         $haystack = Str::of($content)->lower()->squish()->toString();
 
@@ -111,7 +111,7 @@ class PlaceholderSiteDetector
             );
         }
 
-        if (mb_strlen($haystack) < self::THIN_CONTENT_CHARS) {
+        if ($warnOnThinContent && mb_strlen($haystack) < self::THIN_CONTENT_CHARS) {
             return $this->sentence(
                 'There was very little text at %s, so what we found may not describe your business well.',
                 $website,

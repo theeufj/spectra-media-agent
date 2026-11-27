@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\SetupFeeService;
+use App\Support\Tenant;
 use Illuminate\Http\Request;
 
 /**
@@ -14,19 +15,26 @@ class SetupFeeController extends Controller
     public function checkout(Request $request, SetupFeeService $service)
     {
         $user = $request->user();
-        $customer = $user->customers()->find(session('active_customer_id'));
+        $customer = $this->getActiveCustomer($request);
+
+        if ($customer?->isPaidSetupOnly()) {
+            return redirect()->route('dashboard')->with('flash', [
+                'type' => 'info',
+                'message' => 'Your one-time setup is already paid — we\'re on it.',
+            ]);
+        }
+
+        if (Tenant::singlePlan($this->salesTenantKey($request, $customer))) {
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'info',
+                'message' => 'Choose Starter to get managed Google Ads.',
+            ]);
+        }
 
         if (! $customer) {
             return redirect()->route('quick-start')->with('flash', [
                 'type' => 'error',
                 'message' => 'Tell us about your business first — then you can choose the one-time setup.',
-            ]);
-        }
-
-        if ($customer->isPaidSetupOnly()) {
-            return redirect()->route('dashboard')->with('flash', [
-                'type' => 'info',
-                'message' => 'Your one-time setup is already paid — we\'re on it.',
             ]);
         }
 

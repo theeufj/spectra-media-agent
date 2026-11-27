@@ -9,12 +9,14 @@ use App\Jobs\GenerateStrategyCollateral;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\ImageCollateral;
+use App\Models\Plan;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\ActivityLogger;
 use App\Services\Campaigns\CampaignBudgetConfirmation;
 use App\Services\Deployment\DeploymentStatusPresenter;
 use App\Services\StorageHelper;
+use App\Support\Tenant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -65,7 +67,7 @@ class CampaignController extends Controller
      * not enough on its own — a bookmark, the onboarding tour or a typed URL
      * all land here.
      */
-    private function setupOnlyDetour(Customer $customer): ?RedirectResponse
+    private function setupOnlyDetour(Request $request, Customer $customer): ?RedirectResponse
     {
         if ($customer->service_type !== 'setup_only') {
             return null;
@@ -76,7 +78,9 @@ class CampaignController extends Controller
             // a POST and cannot be redirected to.
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'info',
-                'message' => 'We build the campaign for you — that is what the one-time setup covers. It starts as soon as the fee is paid.',
+                'message' => Tenant::singlePlan($this->salesTenantKey($request, $customer))
+                    ? 'Choose Starter to get managed Google Ads.'
+                    : 'We build the campaign for you — that is what the one-time setup covers. It starts as soon as the fee is paid.',
             ]);
         }
 
@@ -106,7 +110,7 @@ class CampaignController extends Controller
             return redirect()->route('quick-start');
         }
 
-        if ($redirect = $this->setupOnlyDetour($customer)) {
+        if ($redirect = $this->setupOnlyDetour($request, $customer)) {
             return $redirect;
         }
 
@@ -152,6 +156,7 @@ class CampaignController extends Controller
         // platforms that customer cannot deploy to.
         $allowedPlatforms = $customer->allowedPlatforms();
         $configuredPlatforms = $customer->configuredPlatforms();
+        $tenantKey = $this->salesTenantKey($request, $customer);
 
         /*
            Selectable is what the product supports, not what this plan has
@@ -193,7 +198,7 @@ class CampaignController extends Controller
            check on infrastructure we create later anyway.
         */
         $selectablePlatforms = array_values(array_map('strtolower', $enabledPlatforms));
-        if ($customer->resolvePlan()->slug === 'starter') {
+        if (Tenant::singlePlan($tenantKey) || $customer->resolvePlan()->slug === 'starter') {
             $selectablePlatforms = array_values(array_intersect($selectablePlatforms, $allowedPlatforms));
         }
 
@@ -213,9 +218,9 @@ class CampaignController extends Controller
                can. The two reasons need telling apart wherever they are shown.
             */
             'enabledPlatforms' => array_map('strtolower', $enabledPlatforms),
-            'platformPlans' => \App\Models\Plan::active()->whereNotNull('stripe_price_id')->orderBy('price_cents')->get()
+            'platformPlans' => Plan::offeredTo($tenantKey)->whereNotNull('stripe_price_id')->orderBy('price_cents')->get()
                 ->map(fn ($plan) => ['name' => $plan->name, 'price' => $plan->price_cents / 100, 'interval' => $plan->billing_interval,
-                    'platforms' => \App\Models\Plan::platformsFor($plan->slug)])->values()->all(),
+                    'platforms' => Plan::platformsFor($plan->slug)])->values()->all(),
             /*
                Why a platform is unavailable, so the page can say something
                true instead of guessing.
@@ -375,8 +380,11 @@ class CampaignController extends Controller
         }
 
         $validated = $request->validated();
-        if ($customer->resolvePlan()->slug === 'starter' && array_diff($validated['platforms'], $customer->allowedPlatforms())) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['platforms' => 'Starter includes Google Ads. Choose Google or upgrade your plan.']);
+        $singlePlan = Tenant::singlePlan($this->salesTenantKey($request, $customer));
+        if (($singlePlan || $customer->resolvePlan()->slug === 'starter') && array_diff($validated['platforms'], $customer->allowedPlatforms())) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'platforms' => $singlePlan ? 'Choose a platform included in your account plan.' : 'Starter includes Google Ads. Choose Google or upgrade your plan.',
+            ]);
         }
 
         // Extract keywords and files before creating campaign (not campaign columns)

@@ -90,6 +90,7 @@ class ManagedSubscriptionCheckoutTest extends TestCase
 
     public function test_cancelled_or_expired_checkout_can_be_retried_and_switching_plans_expires_only_the_previous_session(): void
     {
+        $this->workspace->update(['tenant_key' => 'realpropertyads']);
         $this->checkout()->assertRedirect();
         $state = $this->stripe->state();
         $this->get($state['creates'][0]['parameters']['cancel_url'])->assertRedirect(route('subscription.pricing'));

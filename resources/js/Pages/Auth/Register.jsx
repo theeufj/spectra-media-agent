@@ -1,3 +1,4 @@
+import { useSignupFunnel } from '@/hooks/useSignupFunnel';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import PlatformIcon from '@/Components/PlatformIcon';
@@ -6,7 +7,6 @@ import { Field, OrDivider, OAUTH_BUTTON, SUBMIT } from '@/Components/Forms';
 import { brandTint } from '@/Components/Marketing/Hero';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { previewContactFor } from '@/utils/previewContact';
-import { useSignupFunnel } from '@/hooks/useSignupFunnel';
 
 function getDemoUrl() {
     try {
@@ -26,13 +26,13 @@ function getDemoUrl() {
  * tenant skin entirely: a realpropertyads.com signup showed a violet panel
  * under a navy header.
  */
-export default function Register({ enabledPlatforms = [], tenant }) {
-    const recordStage = useSignupFunnel(tenant?.key === 'sitetospend');
+export default function Register({ tenant, enabledPlatforms = [], previewUrl = null, previewReference = null, previewUnavailable = false }) {
+    const recordStage = useSignupFunnel(tenant?.key === 'sitetospend', { landing: true });
     const demoUrl = getDemoUrl();
     let demoDomain = '';
     try { demoDomain = demoUrl ? new URL(demoUrl).hostname.replace(/^www\./, '') : ''; } catch { /* Ignore malformed demo links; registration still works. */ }
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, setError } = useForm({
         name: '',
         email: '',
         ...previewContactFor(demoDomain ? demoUrl : ''),
@@ -42,6 +42,7 @@ export default function Register({ enabledPlatforms = [], tenant }) {
         password_confirmation: '',
         cf_turnstile_response: '',
         demo_url: demoDomain ? demoUrl : '',
+        ...(previewUrl && previewReference ? { save_preview: true, preview_reference: previewReference } : {}),
     });
 
     const submit = (e) => {
@@ -62,19 +63,34 @@ export default function Register({ enabledPlatforms = [], tenant }) {
             <div className="mb-6 text-center">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900">Create your account</h1>
                 <p className="mt-1.5 text-sm text-gray-600">
-                    Free to explore. No credit card until you go live.
+                    Create your account free. You review your ads and advertising budget before launch.
                 </p>
             </div>
 
-            {demoDomain && (
+            {(previewUrl || previewUnavailable || errors.save_preview) && (
+                <section className="mb-4 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+                    {previewUnavailable || errors.save_preview ? (
+                        <p role="alert">{errors.save_preview || 'That preview is unavailable in this browser. Build a new preview or create your account without it.'}</p>
+                    ) : (
+                        <p>
+                            Create your account to save the Google Search ad you previewed for <strong className="break-all">{previewUrl}</strong>.
+                        </p>
+                    )}
+                    <Link href={route('register', { without_preview: 1 })} className="mt-2 inline-block font-medium text-brand-darker underline">
+                        Continue without this preview
+                    </Link>
+                </section>
+            )}
+
+            {demoDomain && !previewUrl && (
                 <div
                     className="mb-4 flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm text-gray-700"
                     style={{ backgroundColor: brandTint(8), borderColor: brandTint(30) }}
                 >
                     <SparklesIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-darker" aria-hidden="true" />
                     <span>
-                        We'll analyse <strong className="font-semibold">{demoDomain}</strong> and set up your
-                        brand guidelines automatically.
+                        Your website is <strong className="font-semibold">{demoDomain}</strong>.
+                        {' '}Confirm it after signup to start building your business profile.
                     </span>
                 </div>
             )}
@@ -172,8 +188,11 @@ export default function Register({ enabledPlatforms = [], tenant }) {
                                     type="button"
                                     onClick={() => router.post(route(`register.${platform.slug}.redirect`), {
                                         ...(demoDomain ? { demo_url: demoUrl } : {}),
+                                        ...(data.save_preview ? { save_preview: true, preview_reference: data.preview_reference } : {}),
                                         ad_measurement_consent: data.ad_measurement_consent,
                                         ad_measurement_consent_version: data.ad_measurement_consent_version,
+                                    }, {
+                                        onError: (validation) => validation.save_preview && setError('save_preview', validation.save_preview),
                                     })}
                                     className={OAUTH_BUTTON}
                                 >

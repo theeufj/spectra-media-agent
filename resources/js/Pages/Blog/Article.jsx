@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import { Link } from '@inertiajs/react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -16,7 +17,8 @@ const CATEGORY_COLORS = {
  * Shared guides have one preferred publishing domain, chosen server-side.
  * React must not append a second canonical that conflicts with that policy.
  */
-export default function HelpArticle({ auth, article, relatedArticles = [] }) {
+export default function HelpArticle({ tenant, auth, article, relatedArticles = [] }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
     return (
         <>
             <PageTitle />

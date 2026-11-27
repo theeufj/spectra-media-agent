@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/** @property array{url: string, ad_copy: array{headlines: list<string>, descriptions: list<string>}}|null $saved_ad_preview */
 class Customer extends Model
 {
     use HasEncryptedAttributes, HasFactory, HasPublicUuid, SoftDeletes;
@@ -33,6 +34,7 @@ class Customer extends Model
         'currency_code',
         'website',
         'tenant_key',
+        'saved_ad_preview',
         'service_type',
         'plan_id',
         'starter_platform',
@@ -83,6 +85,7 @@ class Customer extends Model
 
     protected $casts = [
         'setup_fee_paid_at' => 'datetime',
+        'saved_ad_preview' => 'array',
         'setup_handover' => 'array',
         'handover_at' => 'datetime',
         'early_exit_assessed_at' => 'datetime',
@@ -113,6 +116,7 @@ class Customer extends Model
     ];
 
     protected $hidden = [
+        'saved_ad_preview',
         'tracking_signing_secret',
         'google_ads_refresh_token',
     ];

@@ -38,7 +38,7 @@ class OneTimeSetupTest extends TestCase
 
     public function test_quick_start_records_the_one_and_done_choice(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['tenant_key' => 'realpropertyads']);
 
         $this->actingAs($user)->post('/quick-start', [
             'website_url' => 'https://example.org',
@@ -126,11 +126,13 @@ class OneTimeSetupTest extends TestCase
         Mail::fake();
         [$user, $customer] = $this->setupOnlyCustomer(paid: false);
         $user->forceFill(['stripe_id' => 'cus_once'])->save();
+        $customer->update(['tenant_key' => 'sitetospend', 'service_type' => 'managed']);
 
         // Real service, stubbed Stripe read — the acceptance rules and the
         // one-send guarantee both run for real.
         $session = (object) [
-            'metadata' => ['customer_id' => (string) $customer->id],
+            'mode' => 'payment',
+            'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
             'customer' => 'cus_once',
             'payment_status' => 'paid',
         ];
@@ -149,6 +151,7 @@ class OneTimeSetupTest extends TestCase
             ->get(route('setup-fee.success', ['session_id' => 'cs_test_123']))
             ->assertRedirect(route('dashboard', absolute: false));
 
+        $this->assertTrue($customer->fresh()->isPaidSetupOnly());
         Mail::assertSent(SetupFeeReceived::class, 1);
 
         // The success URL can be revisited; the receipt must not resend.
@@ -168,6 +171,7 @@ class OneTimeSetupTest extends TestCase
         $this->withoutMiddleware(\Laravel\Cashier\Http\Middleware\VerifyWebhookSignature::class);
         [$user, $customer] = $this->setupOnlyCustomer(paid: false);
         $user->forceFill(['stripe_id' => 'cus_webhook'])->save();
+        $customer->update(['tenant_key' => 'sitetospend', 'service_type' => 'managed']);
 
         $payload = [
             'type' => 'checkout.session.completed',
@@ -208,7 +212,8 @@ class OneTimeSetupTest extends TestCase
            succeeds, and they land back on a page that says they have not paid.
         */
         $session = (object) [
-            'metadata' => ['customer_id' => (string) $customer->id],
+            'mode' => 'payment',
+            'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
             'customer' => 'cus_free',
             'payment_status' => 'no_payment_required',
         ];
@@ -239,7 +244,8 @@ class OneTimeSetupTest extends TestCase
         // Widening the accepted set for coupons must not let a genuinely
         // unpaid session through.
         $session = (object) [
-            'metadata' => ['customer_id' => (string) $customer->id],
+            'mode' => 'payment',
+            'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
             'customer' => 'cus_unpaid',
             'payment_status' => 'unpaid',
         ];

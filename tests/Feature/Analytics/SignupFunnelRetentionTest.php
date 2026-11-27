@@ -19,7 +19,7 @@ class SignupFunnelRetentionTest extends TestCase
         $expired = (string) Str::uuid();
         $recent = (string) Str::uuid();
         foreach ([$expired => 91, $recent => 89] as $id => $days) {
-            $started = now()->subDays($days);
+            $started = now()->subDays($days)->toIso8601String();
             DB::table('signup_funnel_journeys')->insert(['id' => $id, 'source' => 'unattributed', 'started_at' => $started]);
             DB::table('signup_funnel_stages')->insert(['journey_id' => $id, 'stage' => 'signup_completed', 'occurred_at' => $started]);
         }

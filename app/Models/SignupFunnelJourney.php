@@ -18,6 +18,6 @@ class SignupFunnelJourney extends Model
 
     public function prunable(): Builder
     {
-        return static::where('started_at', '<', now()->subDays(90));
+        return static::where('started_at', '<', now()->subDays(90)->toIso8601String());
     }
 }

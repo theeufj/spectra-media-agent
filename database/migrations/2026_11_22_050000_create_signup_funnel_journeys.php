@@ -25,8 +25,8 @@ return new class extends Migration
             $table->unique(['journey_id', 'stage']);
         });
         Schema::table('users', function (Blueprint $table) {
-            // Temporary private association so a signed verification in another session
-            // can finish the same registration. Cleared on verification or retention.
+            // Links later verification and the first payment to this new signup.
+            // Retiring the journey also clears the private association.
             $table->foreignUuid('signup_funnel_journey_id')->nullable()->unique()->constrained('signup_funnel_journeys')->nullOnDelete();
         });
     }

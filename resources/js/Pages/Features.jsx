@@ -1,9 +1,10 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
-import Hero, { brandTint, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE } from '@/Components/Marketing/Hero';
+import Hero, { AD_PREVIEW_CTA, brandTint, CtaLink, CTA_PRIMARY, CTA_SECONDARY, CTA_SIZE } from '@/Components/Marketing/Hero';
 import FeatureGrid from '@/Components/Marketing/FeatureGrid';
 import CtaBand from '@/Components/Marketing/CtaBand';
 import {
@@ -168,7 +169,18 @@ function Platform({ name, live }) {
     );
 }
 
-export default function Features({ auth, publicContent }) {
+const googleFeatures = [
+    { icon: MagnifyingGlassIcon, title: 'Keyword research', body: 'Review search terms that match what you sell, the people you serve and the places you work.' },
+    { icon: PaintBrushIcon, title: 'Ad copy and creative', body: 'Prepare headlines, descriptions and visual assets from your business profile. Review the offer and destination before launch.' },
+    { icon: BanknotesIcon, title: 'Budget and delivery', body: 'Choose your Google Ads budget and follow actual spend. Campaign checks look for delivery and policy issues that need attention.' },
+    { icon: ChartPieIcon, title: 'Conversion tracking', body: 'Choose an enquiry or purchase to measure. Tracking can require website access and a test of the actual form or checkout.' },
+    { icon: ChartBarIcon, title: 'Campaign reporting', body: 'Compare clicks, spend and tracked conversions, then check the results against enquiries and sales in your own records.' },
+    { icon: WrenchScrewdriverIcon, title: 'Activity history', body: 'Inspect the reasons recorded for campaign changes and see which issues need your input.' },
+];
+
+export default function Features({ auth, publicContent, tenant }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
+    const propertySite = tenant?.key === 'realpropertyads';
     return (
         <>
             <PageTitle />
@@ -182,66 +194,73 @@ export default function Features({ auth, publicContent }) {
                         sub={publicContent.intro}
                     />
 
-                    {/* Platforms */}
-                    <section className="border-b border-gray-200 bg-white py-12 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl text-center">
-                                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-                                    One-click deployment to all your platforms
-                                </h2>
-                                <p className="mt-3 text-base leading-relaxed text-gray-600 sm:mt-4 sm:text-lg">
-                                    We set up and manage the ad accounts; the agents handle the rest.
-                                </p>
-                            </div>
-                            {/*
-                                A list, because that is what it is — six items a
-                                screen reader should announce as six, not as six
-                                loose divs. Three across on a phone rather than
-                                one, which is what a 96px circle per row cost.
-                            */}
-                            <ul className="mx-auto mt-8 grid max-w-3xl grid-cols-3 gap-x-4 gap-y-8 sm:mt-16 sm:grid-cols-6 sm:gap-x-8">
-                                {LIVE_PLATFORMS.map((name) => (
-                                    <Platform key={name} name={name} live />
-                                ))}
-                                {PLANNED_PLATFORMS.map((name) => (
-                                    <Platform key={name} name={name} live={false} />
-                                ))}
-                            </ul>
-                        </div>
-                    </section>
+                    {propertySite ? (
+                        <>
+                            {/* Platforms */}
+                            <section className="border-b border-gray-200 bg-white py-12 sm:py-24">
+                                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                    <div className="mx-auto max-w-2xl text-center">
+                                        <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                                            One-click deployment to all your platforms
+                                        </h2>
+                                        <p className="mt-3 text-base leading-relaxed text-gray-600 sm:mt-4 sm:text-lg">
+                                            We set up and manage the ad accounts; the agents handle the rest.
+                                        </p>
+                                    </div>
+                                    {/*
+                                        A list, because that is what it is — six items a
+                                        screen reader should announce as six, not as six
+                                        loose divs. Three across on a phone rather than
+                                        one, which is what a 96px circle per row cost.
+                                    */}
+                                    <ul className="mx-auto mt-8 grid max-w-3xl grid-cols-3 gap-x-4 gap-y-8 sm:mt-16 sm:grid-cols-6 sm:gap-x-8">
+                                        {LIVE_PLATFORMS.map((name) => (
+                                            <Platform key={name} name={name} live />
+                                        ))}
+                                        {PLANNED_PLATFORMS.map((name) => (
+                                            <Platform key={name} name={name} live={false} />
+                                        ))}
+                                    </ul>
+                                </div>
+                            </section>
 
-                    <FeatureGrid
-                        eyebrow="Always working for you"
-                        title="Your 24/7 marketing team"
-                        sub="Six AI specialists, each focused on a different part of your advertising."
-                        items={agents}
-                        footer={
-                            <CtaLink href="/register" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
-                                Put these agents to work
-                            </CtaLink>
-                        }
-                    />
+                            <FeatureGrid
+                                eyebrow="Always working for you"
+                                title="Your 24/7 marketing team"
+                                sub="Six AI specialists, each focused on a different part of your advertising."
+                                items={agents}
+                                footer={
+                                    <CtaLink href="/register" className={`${CTA_PRIMARY} ${CTA_SIZE}`}>
+                                        Put these agents to work
+                                    </CtaLink>
+                                }
+                            />
 
-                    <FeatureGrid
-                        eyebrow="Built for real businesses"
-                        title="Everything you need to launch great ads and keep them running"
-                        sub="From writing the ads to tracking what works, so you can get on with the business."
-                        items={capabilities}
-                        background="white"
-                        footer={
-                            <CtaLink href="/pricing" className={`${CTA_SECONDARY} ${CTA_SIZE}`}>
-                                See pricing
-                            </CtaLink>
-                        }
-                    />
+                            <FeatureGrid
+                                eyebrow="Built for real businesses"
+                                title="Everything you need to launch great ads and keep them running"
+                                sub="From writing the ads to tracking what works, so you can get on with the business."
+                                items={capabilities}
+                                background="white"
+                                footer={
+                                    <CtaLink href="/pricing" className={`${CTA_SECONDARY} ${CTA_SIZE}`}>
+                                        See pricing
+                                    </CtaLink>
+                                }
+                            />
 
-                    <CtaBand
-                        title="See all features in action"
-                        body="Sign up free and explore everything sitetospend does. No credit card required."
-                        primaryCta={{ href: '/register', label: 'Get started free' }}
-                        secondaryCta={{ href: '/pricing', label: 'View pricing' }}
-                    />
-                <PublicMarketingResources content={publicContent} />
+                            <CtaBand
+                                title="See all features in action"
+                                body="Sign up free and explore everything sitetospend does. No credit card required."
+                                primaryCta={{ href: '/register', label: 'Get started free' }}
+                                secondaryCta={{ href: '/pricing', label: 'View pricing' }}
+                            />
+                        </>
+                    ) : (
+                        <FeatureGrid title="Inside your Google Ads workspace" items={googleFeatures} background="white"
+                            footer={<CtaLink href={AD_PREVIEW_CTA.href} className={`${CTA_PRIMARY} ${CTA_SIZE}`}>{AD_PREVIEW_CTA.label}</CtaLink>} />
+                    )}
+                    <PublicMarketingResources content={publicContent} />
                 </main>
 
                 <Footer />

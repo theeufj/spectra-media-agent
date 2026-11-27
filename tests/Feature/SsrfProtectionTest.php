@@ -95,7 +95,7 @@ class SsrfProtectionTest extends TestCase
             '*' => Http::response('', 404),
         ]);
 
-        $this->postJson('/api/demo/generate-full', ['url' => 'https://93.184.216.34/'])
+        $this->postJson('https://realpropertyads.com/api/demo/generate-full', ['url' => 'https://93.184.216.34/'])
             ->assertOk()
             ->assertJson(['success' => true, 'url' => 'https://93.184.216.34/']);
 

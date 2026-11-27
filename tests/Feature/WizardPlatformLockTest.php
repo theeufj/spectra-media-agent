@@ -76,9 +76,10 @@ class WizardPlatformLockTest extends TestCase
         $this->assertSame([], $props['configuredPlatforms']);
     }
 
-    public function test_a_platform_above_the_current_plan_is_pickable_and_priced(): void
+    public function test_a_platform_above_the_current_plan_is_pickable_and_priced_on_real_property_ads(): void
     {
         [$user, $customer] = $this->subscriberWithNoAccountYet();
+        $customer->update(['tenant_key' => 'realpropertyads']);
         EnabledPlatform::updateOrCreate(['slug' => 'facebook'], ['name' => 'Facebook', 'is_enabled' => true]);
         \App\Models\Plan::updateOrCreate(['slug' => 'growth'], [
             'name' => 'Growth', 'price_cents' => 24900, 'billing_interval' => 'month',

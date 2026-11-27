@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class SignupFunnelReport
 {
+    private const PREVIEW_PATH = ['landing_visible', 'preview_succeeded', 'save_clicked', 'signup_completed', 'paid_subscription'];
+
     /**
      * These denominators describe observable routes. A visitor can skip the preview or
      * complete registration without the browser reporting every intermediate step.
@@ -19,11 +21,14 @@ class SignupFunnelReport
         'preview_started' => 'landing_visible',
         'preview_submitted' => 'preview_started',
         'preview_succeeded' => 'preview_submitted',
+        'save_clicked' => 'preview_succeeded',
         'signup_viewed' => null,
         'signup_started' => 'signup_viewed',
         'signup_submitted' => 'signup_started',
         'signup_completed' => 'signup_submitted',
+        'signup_saved_draft' => 'signup_completed',
         'email_verified' => 'signup_completed',
+        'paid_subscription' => 'signup_completed',
     ];
 
     public function summary(array $filters = []): array
@@ -36,32 +41,63 @@ class SignupFunnelReport
         $entrySurface = $filters['funnel_entry_surface'] ?? null;
 
         $cohort = DB::table('signup_funnel_journeys')
-            ->where('started_at', '>=', $start->startOfDay())
-            ->where('started_at', '<', $end->startOfDay()->addDay())
-            ->where('started_at', '<=', $asOf)
+            ->where('started_at', '>=', $start->startOfDay()->toIso8601String())
+            ->where('started_at', '<', $end->startOfDay()->addDay()->toIso8601String())
+            ->where('started_at', '<=', $asOf->toIso8601String())
             ->when($source, fn ($query) => $query->where('source', $source))
             ->when($campaign, fn ($query) => $query->where('campaign_key', $campaign))
-            ->select('id');
+            ->select('id', 'entry_surface', 'started_at');
         if ($entrySurface !== null) {
             $cohort->where('entry_surface', $entrySurface === 'unspecified' ? null : $entrySurface);
         }
 
-        $stages = DB::table('signup_funnel_stages as s')->where('s.occurred_at', '<=', $asOf);
-        $journeys = DB::query()->fromSub($cohort, 'j')
-            ->leftJoinSub(clone $stages, 's', 's.journey_id', '=', 'j.id')
-            ->groupBy('j.id')->select('j.id');
+        $stages = DB::table('signup_funnel_stages as s')->where('s.occurred_at', '<=', $asOf->toIso8601String());
+        // Stage times have second precision. Use recording order to resolve ties
+        // so a Save observed before a preview cannot complete the preview path.
+        $orderedStages = DB::query()->fromSub($cohort, 'j')
+            ->leftJoinSub(clone $stages, 's', fn ($join) => $join
+                ->on('s.journey_id', '=', 'j.id')->on('s.occurred_at', '>=', 'j.started_at'))
+            ->select('j.id', 'j.entry_surface', 's.stage')
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY j.id ORDER BY s.occurred_at, s.id) AS step_order');
+        $journeys = DB::query()->fromSub($orderedStages, 's')
+            ->groupBy('s.id', 's.entry_surface')->select('s.id', 's.entry_surface');
         $totals = ['COUNT(*) AS journeys'];
         foreach (self::TRANSITIONS as $stage => $baseline) {
-            $journeys->selectRaw("MAX(CASE WHEN s.stage = ? THEN 1 ELSE 0 END) AS {$stage}", [$stage]);
-            $totals[] = "COUNT(*) FILTER (WHERE {$stage} = 1) AS {$stage}";
+            $journeys->selectRaw("MIN(s.step_order) FILTER (WHERE s.stage = ?) AS {$stage}", [$stage]);
+            $totals[] = "COUNT({$stage}) AS {$stage}";
             if ($baseline !== null) {
-                $totals[] = "COUNT(*) FILTER (WHERE {$baseline} = 1 AND {$stage} = 1) AS paired_{$stage}";
+                $totals[] = "COUNT(*) FILTER (WHERE {$baseline} <= {$stage}) AS paired_{$stage}";
             }
         }
-        $journeys->selectRaw("MIN(CASE WHEN s.stage = 'preview_succeeded' THEN s.occurred_at END) AS preview_at")
-            ->selectRaw("MIN(CASE WHEN s.stage = 'signup_completed' THEN s.occurred_at END) AS signup_at");
-        $totals[] = 'COUNT(*) FILTER (WHERE preview_at <= signup_at) AS signups_with_preview';
+        // A later event only advances the preview path if every prior event
+        // was observed in order for that same session. Direct entry is independent.
+        $sequence = 'landing_visible IS NOT NULL';
+        foreach (self::PREVIEW_PATH as $index => $stage) {
+            if ($index > 0) {
+                $previous = self::PREVIEW_PATH[$index - 1];
+                $sequence .= " AND {$previous} <= {$stage}";
+            }
+            $totals[] = "COUNT(*) FILTER (WHERE {$sequence}) AS path_{$stage}";
+        }
+        $totals[] = 'COUNT(*) FILTER (WHERE preview_succeeded <= signup_completed) AS signups_with_preview';
+        $totals[] = "COUNT(*) FILTER (WHERE entry_surface = 'register') AS direct_entries";
+        $totals[] = "COUNT(signup_completed) FILTER (WHERE entry_surface = 'register') AS direct_signups";
+        $totals[] = "COUNT(*) FILTER (WHERE entry_surface = 'register' AND signup_completed <= paid_subscription) AS direct_paid";
         $counts = (array) DB::query()->fromSub($journeys, 'observed')->selectRaw(implode(', ', $totals))->first();
+
+        $previewPath = [];
+        $previousCount = null;
+        foreach (self::PREVIEW_PATH as $stage) {
+            $reached = (int) $counts['path_'.$stage];
+            $missing = $previousCount === null ? null : $previousCount - $reached;
+            $previewPath[$stage] = [
+                'reached' => $reached,
+                'previous' => $previousCount,
+                'missing' => $missing,
+                'dropoff_percent' => $previousCount > 0 ? round(100 * $missing / $previousCount, 1) : null,
+            ];
+            $previousCount = $reached;
+        }
         $steps = [];
         foreach (self::TRANSITIONS as $stage => $baseline) {
             $base = (int) $counts[$baseline ?? 'journeys'];
@@ -80,6 +116,7 @@ class SignupFunnelReport
         $reasons = [...SignupFunnel::CLIENT_REASONS, 'email_taken', 'captcha'];
         $placeholders = implode(', ', array_fill(0, count($reasons), '?'));
         $failures = $stages->joinSub($cohort, 'j', 'j.id', '=', 's.journey_id')
+            ->whereColumn('s.occurred_at', '>=', 'j.started_at')
             ->whereIn('s.stage', ['preview_failed', 'signup_failed'])
             ->select('s.stage')
             ->selectRaw("CASE WHEN s.reason IN ({$placeholders}) THEN s.reason ELSE 'unknown' END AS safe_reason", $reasons)
@@ -95,6 +132,8 @@ class SignupFunnelReport
             ->where('campaign_key', '~', '^spectra_[1-9][0-9]{0,17}$')
             ->distinct()->orderBy('campaign_key')->pluck('campaign_key')->all();
 
+        $firstObserved = DB::table('signup_funnel_journeys')->min('started_at');
+
         return [
             'filters' => [
                 'funnel_from' => $start->toDateString(),
@@ -103,10 +142,20 @@ class SignupFunnelReport
                 'funnel_campaign' => $campaign,
                 'funnel_entry_surface' => $entrySurface,
             ],
-            'first_observed_at' => DB::table('signup_funnel_journeys')->min('started_at'),
+            'first_observed_at' => $firstObserved ? CarbonImmutable::parse($firstObserved)->utc()->toIso8601String() : null,
             'as_of' => $asOf->toIso8601String(),
             'campaigns' => $campaigns,
             'journeys' => (int) $counts['journeys'],
+            'preview_path' => $previewPath,
+            'direct_entry' => [
+                'journeys' => (int) $counts['direct_entries'],
+                'registrations' => (int) $counts['direct_signups'],
+                'paid' => (int) $counts['direct_paid'],
+            ],
+            'other_paths' => [
+                'registrations' => $steps['signup_completed']['reached'] - $previewPath['signup_completed']['reached'],
+                'paid' => $steps['paid_subscription']['both'] - $previewPath['paid_subscription']['reached'],
+            ],
             'steps' => $steps,
             'signups_with_preview' => (int) $counts['signups_with_preview'],
             'signups_without_observed_preview' => $steps['signup_completed']['reached'] - (int) $counts['signups_with_preview'],

@@ -27,7 +27,7 @@ export default function Footer({ guestCta }) {
                             {tenant.key === 'sitetospend' && <>
                                 <li><Link href="/google-ads-management" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Google Ads Management</Link></li>
                                 <li><Link href="/ai-ads-management" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">AI Ads Management</Link></li>
-                                <li><Link href="/google-ads-setup" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">One-Time Google Ads Setup</Link></li>
+                                <li><a href="/#sample-report" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Sample campaign report</a></li>
                             </>}
                         </ul>
                     </div>
@@ -48,6 +48,7 @@ export default function Footer({ guestCta }) {
                         <h3 className="text-sm font-semibold uppercase tracking-wider text-white">Company</h3>
                         <ul className="mt-2 sm:mt-3">
                             <li><Link href="/about" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">About</Link></li>
+                            {tenant.key === 'sitetospend' && <li><a href="mailto:support@sitetospend.com" className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Email support</a></li>}
                             <li><Link href={route('terms')} className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Terms of Service</Link></li>
                             <li><Link href={route('privacy')} className="block py-3 text-sm text-gray-300 transition-colors hover:text-white">Privacy Policy</Link></li>
                         </ul>

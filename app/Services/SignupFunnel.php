@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +14,7 @@ use Ramsey\Uuid\Uuid;
 
 class SignupFunnel
 {
-    public const CLIENT_STAGES = ['landing_visible', 'preview_started', 'preview_submitted', 'preview_succeeded', 'preview_failed', 'signup_cta_clicked', 'signup_started', 'signup_failed'];
+    public const CLIENT_STAGES = ['landing_visible', 'preview_started', 'preview_submitted', 'preview_succeeded', 'preview_failed', 'save_clicked', 'signup_cta_clicked', 'signup_started', 'signup_failed'];
 
     public const CLIENT_REASONS = ['validation', 'rate_limited', 'timeout', 'network', 'unavailable', 'oauth_cancelled', 'unknown'];
 
@@ -65,13 +66,7 @@ class SignupFunnel
                 $opaque = hash_hmac('sha256', 'sitetospend/signup-funnel:'.$request->session()->getId(), (string) config('app.key'));
                 $id = Uuid::uuid5(Uuid::NAMESPACE_URL, $opaque)->toString();
                 [$source, $campaign] = $this->acquisition($request);
-                $surface = match ($request->route()?->getName()) {
-                    'landing' => 'home_preview',
-                    'google-ads-management' => 'google_ads_service',
-                    'register' => 'register',
-                    default => null,
-                };
-                DB::table('signup_funnel_journeys')->insertOrIgnore(['id' => $id, 'source' => $source, 'campaign_key' => $campaign, 'entry_surface' => $surface, 'started_at' => now()]);
+                DB::table('signup_funnel_journeys')->insertOrIgnore(['id' => $id, 'source' => $source, 'campaign_key' => $campaign, 'entry_surface' => $this->entrySurface($request), 'started_at' => now()->toIso8601String()]);
                 $this->write($id, $stage);
                 $request->session()->put(self::SESSION_KEY, $id);
 
@@ -83,6 +78,44 @@ class SignupFunnel
                 // The old session can still be in flight after opt-out or pruning.
                 $request->session()->put(self::SESSION_KEY, false);
             }
+        });
+    }
+
+    public function entrySurface(Request $request): ?string
+    {
+        return match ($request->route()?->getName()) {
+            'landing' => 'home_preview',
+            'google-ads-management' => 'google_ads_service',
+            'pricing' => 'pricing',
+            'features', 'how-it-works', 'about', 'ai-ads-management' => 'other_marketing',
+            'blog.index', 'blog.show' => 'guides',
+            'register' => 'register',
+            default => null,
+        };
+    }
+
+    public function isPageNavigation(Request $request): bool
+    {
+        return $request->getMethod() === 'GET'
+            && ($request->acceptsHtml() || $request->header('X-Inertia') === 'true')
+            && ! $request->prefetch() && ! $request->hasHeader('X-Inertia-Partial-Component')
+            && ! preg_match('/prefetch|prerender/i', $request->header('Sec-Purpose', '').' '.$request->header('Purpose', ''))
+            && ! preg_match('/bot\b|crawler|spider|facebookexternalhit|headlesschrome|lighthouse|previewbot|curl\/|wget\//i', (string) $request->userAgent());
+    }
+
+    /** Called only after the save link's draft and browser session have been verified. */
+    public function saveClicked(Request $request): void
+    {
+        $id = $this->sessionId($request);
+        if (! $id || $request->user() || ! $this->isPageNavigation($request)) {
+            return;
+        }
+        $this->observe(function () use ($id) {
+            // Following the rendered draft's Save link also confirms its display,
+            // even if navigation overtook the browser's visibility beacon.
+            $this->write($id, 'landing_visible');
+            $this->write($id, 'preview_succeeded');
+            $this->write($id, 'save_clicked');
         });
     }
 
@@ -98,9 +131,17 @@ class SignupFunnel
         if (! $id || ! self::validClientStage($stage, $reason)) {
             return;
         }
-        $surface = in_array($stage, ['signup_started', 'signup_failed'], true) ? 'signup_viewed' : 'landing_view';
-        $this->observe(function () use ($id, $stage, $reason, $surface) {
-            if (DB::table('signup_funnel_stages')->where('journey_id', $id)->where('stage', $surface)->exists()) {
+        $views = match ($stage) {
+            'landing_visible' => ['signup_viewed', 'landing_view'],
+            'save_clicked' => ['preview_succeeded'],
+            'signup_started', 'signup_failed' => ['signup_viewed'],
+            default => ['landing_view'],
+        };
+        $this->observe(function () use ($id, $stage, $reason, $views) {
+            if (DB::table('signup_funnel_stages')->where('journey_id', $id)->whereIn('stage', $views)->exists()) {
+                if ($stage === 'preview_succeeded') {
+                    $this->write($id, 'landing_visible');
+                }
                 $this->write($id, $stage, $reason);
             }
         });
@@ -148,10 +189,12 @@ class SignupFunnel
                 return;
             }
             $this->write($id, 'signup_completed');
+            DB::table('users')->where('id', $user->id)->whereNull('signup_funnel_journey_id')->update(['signup_funnel_journey_id' => $id]);
+            if ($user->saved_ad_preview !== null) {
+                $this->write($id, 'signup_saved_draft');
+            }
             if ($user->email_verified_at) {
                 $this->write($id, 'email_verified');
-            } else {
-                DB::table('users')->where('id', $user->id)->whereNull('signup_funnel_journey_id')->update(['signup_funnel_journey_id' => $id]);
             }
         });
     }
@@ -166,8 +209,27 @@ class SignupFunnel
                 ->lockForUpdate()->value('signup_funnel_journey_id');
             if ($id) {
                 $this->write($id, 'email_verified');
-                DB::table('users')->where('id', $user->id)->update(['signup_funnel_journey_id' => null]);
             }
+        });
+    }
+
+    public function paid(User $user, CarbonInterface $paidAt): void
+    {
+        $id = $user->signup_funnel_journey_id;
+        if (! $id || $user->tenant_key !== 'sitetospend') {
+            return;
+        }
+        $this->observe(function () use ($id, $paidAt) {
+            $signup = DB::table('signup_funnel_stages')->where('journey_id', $id)->where('stage', 'signup_completed')->lockForUpdate()->first();
+            if (! $signup || $paidAt->getTimestamp() < strtotime($signup->occurred_at)) {
+                return;
+            }
+            $payment = DB::table('signup_funnel_stages')->where('journey_id', $id)->where('stage', 'paid_subscription');
+            // A bare datetime is interpreted in the database session's timezone.
+            $settledAt = $paidAt->toIso8601String();
+            $payment->insertOrIgnore(['journey_id' => $id, 'stage' => 'paid_subscription', 'occurred_at' => $settledAt]);
+            // Stripe may deliver the first invoice after a later renewal.
+            $payment->where('occurred_at', '>', $settledAt)->update(['occurred_at' => $settledAt]);
         });
     }
 
@@ -203,7 +265,7 @@ class SignupFunnel
 
     private function write(string $id, string $stage, ?string $reason = null): void
     {
-        DB::table('signup_funnel_stages')->insertOrIgnore(['journey_id' => $id, 'stage' => $stage, 'reason' => $reason, 'occurred_at' => now()]);
+        DB::table('signup_funnel_stages')->insertOrIgnore(['journey_id' => $id, 'stage' => $stage, 'reason' => $reason, 'occurred_at' => now()->toIso8601String()]);
     }
 
     private function observe(callable $record): void

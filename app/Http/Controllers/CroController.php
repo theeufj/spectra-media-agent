@@ -74,7 +74,9 @@ class CroController extends Controller
 
         if (! $isUnlimited && ($customer->cro_audits_used ?? 0) >= 3) {
             return redirect()->back()->withErrors([
-                'url' => 'You\'ve used all 3 free CRO audits. Upgrade to Growth for unlimited audits.',
+                'url' => \App\Support\Tenant::singlePlan($this->salesTenantKey($request, $customer))
+                    ? 'You\'ve used all 3 CRO audits for this workspace.'
+                    : 'You\'ve used all 3 free CRO audits. Upgrade to Growth for unlimited audits.',
             ]);
         }
 

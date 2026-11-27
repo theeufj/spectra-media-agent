@@ -70,7 +70,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
             <Head title="Conversion Tracking — Admin" />
             <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="min-w-0 flex-1 p-8 space-y-8">
+                <div className="min-w-0 flex-1 space-y-8 p-3 sm:p-8">
 
                     {/* Summary bar */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Tenant;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -38,6 +39,8 @@ class HandleInertiaRequests extends Middleware
         $activeCustomerId = $request->session()->get('active_customer_id');
         $activeCustomer = $user ? $user->customers()->find($activeCustomerId) : null;
 
+        $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
+        $singlePlan = Tenant::singlePlan(Tenant::salesKey($user?->tenant_key, $activeCustomer?->tenant_key, $tenant['key'] ?? null));
         $stripeKey = config('services.stripe.key');
 
         return [
@@ -51,6 +54,9 @@ class HandleInertiaRequests extends Middleware
                     'subscription_plan' => $user->subscription_plan,
                     'subscription_status' => $user->subscription_status,
                     'isAdmin' => $user->hasRole('admin'),
+                    'single_plan' => $singlePlan,
+                    'can_view_competitors' => ! $singlePlan || $user->hasFeature('competitor_analysis'),
+                    'can_view_war_room' => ! $singlePlan || $user->hasFeature('war_room'),
                     'can_view_proposals' => $user->resolveCurrentPlan()?->slug === 'agency'
                         || $activeCustomer?->resolvePlan()->slug === 'agency',
                     'has_inbox' => $user->emailInbox()->exists(),
@@ -81,7 +87,7 @@ class HandleInertiaRequests extends Middleware
             'turnstileSiteKey' => \App\Rules\CloudflareTurnstile::enabled()
                 ? config('services.cloudflare.turnstile_site_key')
                 : null,
-            'tenant' => $request->attributes->get('tenant', config('tenants.'.config('tenants.default'))),
+            'tenant' => $tenant,
             // Client-side (gtag) conversion targets served to the frontend.
             // Ships the complete "AW-XXXX/label" send_to rather than the bare
             // label: the frontend used to pair these labels with a hardcoded

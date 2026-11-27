@@ -40,7 +40,8 @@ class CoverageGapsTest extends TestCase
     private function stripeSession(Customer $customer, User $user, array $overrides = []): object
     {
         return (object) array_merge([
-            'metadata' => ['customer_id' => (string) $customer->id],
+            'mode' => 'payment',
+            'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
             'customer' => $user->stripe_id,
             'payment_status' => 'paid',
         ], $overrides);

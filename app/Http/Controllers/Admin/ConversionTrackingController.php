@@ -25,7 +25,7 @@ class ConversionTrackingController extends Controller
             'funnel_from' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
             'funnel_to' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today', Rule::when($request->filled('funnel_from'), 'after_or_equal:funnel_from')],
             'funnel_source' => ['nullable', Rule::in(['google', 'meta', 'unattributed'])],
-            'funnel_entry_surface' => ['nullable', Rule::in(['home_preview', 'google_ads_service', 'register', 'unspecified'])],
+            'funnel_entry_surface' => ['nullable', Rule::in(['home_preview', 'google_ads_service', 'pricing', 'other_marketing', 'guides', 'register', 'unspecified'])],
             'funnel_campaign' => ['nullable', 'string', 'max:32', 'regex:/^spectra_[1-9][0-9]{0,17}$/D'],
         ]);
 

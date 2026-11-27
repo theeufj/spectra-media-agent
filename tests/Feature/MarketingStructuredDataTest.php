@@ -73,36 +73,53 @@ class MarketingStructuredDataTest extends TestCase
         $this->assertNotEmpty($marked);
     }
 
-    public function test_the_offer_range_comes_from_the_plans_on_sale(): void
+    public function test_the_homepage_advertises_only_the_available_google_subscription(): void
     {
-        // Deliberately not 149 or 249 — the numbers the JSX used to hardcode.
-        // A price change in the database left the rich result advertising a
-        // figure the pricing page had stopped showing, and the only way to
-        // catch that is to assert against a price nobody would type by hand.
-        $this->makePlan('Test Starter', 7_700);
+        $this->withoutExceptionHandling();
+        $starter = Plan::updateOrCreate(['slug' => 'starter'], [
+            'name' => 'Starter', 'price_cents' => 9900, 'is_active' => true,
+            'is_free' => false, 'billing_interval' => 'month', 'stripe_price_id' => 'price_google_starter',
+        ]);
         $this->makePlan('Test Growth', 18_300);
 
         $graph = $this->schemaBlocks($this->get('/')->assertOk()->getContent())[0]['@graph'];
-        $offers = collect($graph)->firstWhere('@type', 'SoftwareApplication')['offers'];
+        $offer = collect($graph)->firstWhere('@type', 'SoftwareApplication')['offers'];
+        $this->assertSame('Offer', $offer['@type']);
+        $this->assertSame('99.00', $offer['price']);
+        $this->assertSame('USD', $offer['priceCurrency']);
+        $this->assertSame('P1M', $offer['priceSpecification']['billingDuration']);
 
-        $this->assertSame(77, $offers['lowPrice']);
-        // The one-time setup is dearer than any monthly plan, so it is the top
-        // of the range rather than something left out of it.
-        $this->assertSame($this->setupFee(), $offers['highPrice']);
-        $this->assertSame(Plan::active()->where('is_free', false)->count() + 1, $offers['offerCount']);
+        config(['services.stripe.setup_fee_usd_cents' => 100_123, 'billing.early_exit.minimum_months' => 5]);
+        $this->get('/pricing')->assertOk()
+            ->assertSee('first 5 paid months')
+            ->assertSee('US$1,001.23 setup fee')
+            ->assertSee('that leaves US$902.23')
+            ->assertSee('href="/terms-of-service#early-exit"', false);
+
+        config(['billing.early_exit.minimum_months' => 1]);
+        $this->get('/pricing')->assertOk()
+            ->assertSee('your first paid month can trigger')
+            ->assertDontSee('After one paid month');
+
+        $starter->update(['is_active' => false]);
+        config(['billing.early_exit.minimum_months' => 3]);
+        $this->get('/pricing')->assertOk()
+            ->assertSee('Paid signup is currently unavailable')
+            ->assertSee('first 3 paid months')
+            ->assertDontSee('After one paid month');
+        $graph = $this->schemaBlocks($this->get('/')->assertOk()->getContent())[0]['@graph'];
+        $this->assertArrayNotHasKey('offers', collect($graph)->firstWhere('@type', 'SoftwareApplication'));
     }
 
-    public function test_the_advertised_setup_fee_is_the_one_stripe_charges(): void
+    public function test_the_setup_offer_remains_available_only_on_property_pricing(): void
     {
         foreach (['/', '/pricing'] as $url) {
-            $faqs = $this->get($url)->assertOk()->viewData('page')['props']['faqs'];
-            $answers = implode(' ', array_column($faqs, 'answer'));
-
-            // config/faqs.php writes `:setup_fee`, never a number — the copy and
-            // SetupFeeService read the same key, so they cannot disagree.
-            $this->assertStringNotContainsString(':setup_fee', $answers, "$url left a placeholder unresolved.");
-            $this->assertStringContainsString('US$'.$this->setupFee(), $answers, "$url does not quote the setup fee.");
+            $response = $this->get('https://sitetospend.com'.$url)->assertOk();
+            $response->assertDontSee('one-time', false);
+            $this->assertArrayNotHasKey('setupFeeUsd', $response->viewData('page')['props']);
         }
+        $faqs = $this->get('https://realpropertyads.com/pricing')->assertOk()->viewData('page')['props']['faqs'];
+        $this->assertStringContainsString('US$'.$this->setupFee(), implode(' ', array_column($faqs, 'answer')));
     }
 
     public function test_the_pricing_page_serves_its_faq_schema_server_side(): void

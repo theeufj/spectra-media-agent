@@ -83,6 +83,10 @@ class DashboardController extends Controller
             ]);
 
         if ($activeCustomer->service_type === 'setup_only') {
+            if (! $activeCustomer->isPaidSetupOnly() && \App\Support\Tenant::singlePlan($this->salesTenantKey($request, $activeCustomer))) {
+                return redirect()->route('subscription.pricing');
+            }
+
             return Inertia::render('Setup/Index', [
                 'journey' => app(\App\Services\Onboarding\SetupJourney::class)->forCustomer($activeCustomer),
                 'policyCampaigns' => $policyCampaigns,

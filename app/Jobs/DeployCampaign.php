@@ -262,11 +262,9 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                     'customer_id' => $customer->id,
                 ]);
 
-                $this->failPendingStrategies('Your media allowance is used up. Add a creative boost or upgrade before trying again.');
-                $this->notifyUsers(new \App\Notifications\DeploymentFailed(
-                    $this->campaign,
-                    'Your media allowance for this period is used up. Upgrade your plan or add a creative boost to publish more ads.'
-                ));
+                $message = 'Your media allowance for this period is used up. Check Creative Usage before trying again.';
+                $this->failPendingStrategies($message);
+                $this->notifyUsers(new \App\Notifications\DeploymentFailed($this->campaign, $message));
 
                 return;
             }

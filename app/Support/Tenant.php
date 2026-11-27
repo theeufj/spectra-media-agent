@@ -34,6 +34,23 @@ class Tenant
         return self::config($key)['name'] ?? 'Site to Spend';
     }
 
+    public static function singlePlan(?string $key): bool
+    {
+        return self::config($key)['key'] === 'sitetospend';
+    }
+
+    public static function salesKey(?string $userKey, ?string $customerKey, ?string $hostKey): string
+    {
+        // Changing hosts or switching workspaces cannot broaden an established catalog.
+        foreach ([$userKey, $customerKey] as $key) {
+            if ($key !== null && self::singlePlan($key)) {
+                return $key;
+            }
+        }
+
+        return self::config($customerKey ?? $userKey ?? $hostKey)['key'];
+    }
+
     public static function mailFrom(?string $key): ?Address
     {
         $tenant = self::config($key);
