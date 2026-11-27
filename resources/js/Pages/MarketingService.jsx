@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import { Link } from '@inertiajs/react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -8,6 +9,7 @@ import GoogleManagementPlan from '@/Components/Marketing/GoogleManagementPlan';
 import PricingTable, { PlanPrice } from '@/Components/Marketing/PricingTable';
 
 export default function MarketingService({ auth, tenant, service, publicContent = {}, plans = [] }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: ['google-ads-management', 'ai-ads-management'].includes(service.slug) });
     const propertySite = tenant?.key === 'realpropertyads';
     const setupOnly = service.slug === 'google-ads-setup';
     const managementHero = service.slug === 'google-ads-management' ? publicContent.hero : null;

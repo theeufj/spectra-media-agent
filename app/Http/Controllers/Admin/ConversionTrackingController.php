@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Jobs\RecordSiteGoogleConversion;
 use App\Models\Setting;
+use App\Services\Analytics\SignupFunnelReport;
 use App\Services\GoogleAds\OwnSiteConversionDelivery;
 use App\Support\ConversionTargets;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 /**
@@ -16,8 +19,16 @@ use Inertia\Inertia;
  */
 class ConversionTrackingController extends Controller
 {
-    public function conversionTrackingIndex()
+    public function conversionTrackingIndex(Request $request, SignupFunnelReport $funnel)
     {
+        $filters = $request->validate([
+            'funnel_from' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'funnel_to' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today', Rule::when($request->filled('funnel_from'), 'after_or_equal:funnel_from')],
+            'funnel_source' => ['nullable', Rule::in(['google', 'meta', 'unattributed'])],
+            'funnel_entry_surface' => ['nullable', Rule::in(['home_preview', 'google_ads_service', 'pricing', 'other_marketing', 'guides', 'register', 'unspecified'])],
+            'funnel_campaign' => ['nullable', 'string', 'max:32', 'regex:/^spectra_[1-9][0-9]{0,17}$/D'],
+        ]);
+
         // Fallback matches config/conversions.php. It previously defaulted to
         // AW-16797144138, which owns none of this account's conversion actions —
         // so an unset config would have silently reintroduced the mismatch that
@@ -93,6 +104,7 @@ class ConversionTrackingController extends Controller
             ->first();
 
         return Inertia::render('Admin/ConversionTracking', [
+            'signup_funnel' => fn () => $funnel->summary($filters),
             'aw_id' => $awId,
             'actions' => $actions,
             'attribution' => $attributionCounts,

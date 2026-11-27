@@ -10,7 +10,7 @@ export function hasUsableAd(copy) {
     return copyLines(copy?.headlines).length > 0 && copyLines(copy?.descriptions).length > 0;
 }
 
-export default function DemoResultsPanel({ result }) {
+export default function DemoResultsPanel({ result, onSaveClick }) {
     if (!result) return null;
 
     const { url, ad_copy, visuals, forecast, notes = [], preview_token: previewToken } = result;
@@ -52,6 +52,7 @@ export default function DemoResultsPanel({ result }) {
                             : 'This preview is unavailable to save. You can still start a free workspace.'}
                     </p>
                     <Link href={canSave ? `/register?preview_token=${encodeURIComponent(previewToken)}` : '/register'}
+                        onClick={canSave ? onSaveClick : undefined}
                         className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-dark px-6 py-3 font-semibold text-white hover:bg-brand-darker">
                         {canSave ? 'Save this ad draft' : 'Create a free account'}
                     </Link>

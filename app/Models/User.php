@@ -76,6 +76,7 @@ class User extends Authenticatable implements MustVerifyEmail
      * @var list<string>
      */
     protected $hidden = [
+        'signup_funnel_journey_id',
         'saved_ad_preview',
         'password',
         'remember_token',

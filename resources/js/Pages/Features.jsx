@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import React from 'react';
 import PageTitle from '@/Components/PageTitle';
@@ -178,6 +179,7 @@ const googleFeatures = [
 ];
 
 export default function Features({ auth, publicContent, tenant }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
     const propertySite = tenant?.key === 'realpropertyads';
     return (
         <>

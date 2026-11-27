@@ -9,6 +9,7 @@ use App\Services\Demo\CampaignForecastPreview;
 use App\Services\GeminiService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
@@ -24,6 +25,8 @@ class SaveWebsiteAdPreviewTest extends TestCase
     use DatabaseTransactions;
 
     private const WEBSITE = 'https://93.184.216.34/plumbing';
+
+    private const FLAGSHIP = 'https://sitetospend.com';
 
     private const COPY = [
         'headlines' => ['Brisbane Leak Repairs', 'Book a Licensed Plumber'],
@@ -108,19 +111,64 @@ class SaveWebsiteAdPreviewTest extends TestCase
 
     public function test_the_draft_can_expire_in_the_original_browser(): void
     {
-        $this->fakePreview();
-        $response = $this->postJson('/api/demo/generate-full', ['url' => self::WEBSITE])->assertOk();
-        $this->continueInBrowser($response);
-        $token = $response->json('preview_token');
+        [$token, $journey] = $this->startTrackedPreview();
         $this->travel(3)->hours();
-        $this->get('/register?preview_token='.$token)->assertRedirect(route('register'));
-        $this->get(route('register'))->assertInertia(fn (AssertableInertia $page) => $page
+        $this->get(self::FLAGSHIP.'/register?preview_token='.$token)->assertRedirect(route('register'));
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $journey, 'stage' => 'save_clicked']);
+        $this->get(self::FLAGSHIP.'/register')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('previewUnavailable', true)->where('previewUrl', null));
-        $this->post(route('register'), [
+        $this->post(self::FLAGSHIP.'/register', [
             'name' => 'Direct signup', 'email' => 'expired-ad@example.com', 'save_preview' => true,
             'password' => 'use-a-good-password', 'password_confirmation' => 'use-a-good-password',
         ])->assertSessionHasErrors('save_preview');
         $this->assertDatabaseMissing('users', ['email' => 'expired-ad@example.com']);
+    }
+
+    public function test_only_actual_navigation_from_a_valid_save_link_records_a_click(): void
+    {
+        [$token, $journey] = $this->startTrackedPreview();
+        $link = self::FLAGSHIP.'/register?preview_token=';
+
+        $this->get($link.str_repeat('a', 64))->assertRedirect(route('register'));
+        $this->get($link.$token, ['Sec-Purpose' => 'prefetch;prerender'])->assertRedirect(route('register'));
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $journey, 'stage' => 'save_clicked']);
+
+        $this->get($link.$token)->assertRedirect(route('register'));
+        $this->get($link.$token)->assertRedirect(route('register'));
+        $this->assertSame(1, DB::table('signup_funnel_stages')->where('journey_id', $journey)->where('stage', 'save_clicked')->count());
+    }
+
+    public function test_only_signup_with_a_persisted_flagship_draft_records_it_as_saved(): void
+    {
+        [$token, $journey] = $this->startTrackedPreview();
+        $this->get(self::FLAGSHIP.'/register?preview_token='.$token)->assertRedirect(route('register'));
+        $this->assertDatabaseMissing('signup_funnel_stages', ['journey_id' => $journey, 'stage' => 'signup_saved_draft']);
+
+        $register = $this->get(self::FLAGSHIP.'/register')->assertOk();
+        $this->post(self::FLAGSHIP.'/register', [
+            'name' => 'Preview owner', 'email' => 'tracked-ad@example.com', 'save_preview' => true,
+            'preview_reference' => $register->viewData('page')['props']['previewReference'],
+            'password' => 'use-a-good-password', 'password_confirmation' => 'use-a-good-password',
+        ])->assertRedirect(route('verification.notice'));
+
+        $this->assertDatabaseHas('signup_funnel_stages', ['journey_id' => $journey, 'stage' => 'signup_saved_draft']);
+        $user = User::where('email', 'tracked-ad@example.com')->firstOrFail();
+        $this->assertSame($journey, $user->signup_funnel_journey_id);
+        $this->assertEquals(['url' => self::WEBSITE, 'ad_copy' => self::COPY], $user->saved_ad_preview);
+    }
+
+    private function startTrackedPreview(): array
+    {
+        $landing = $this->get(self::FLAGSHIP.'/')->assertOk();
+        $journey = session('sitetospend_signup_journey');
+        $this->assertIsString($journey);
+        $this->continueInBrowser($landing);
+
+        $this->fakePreview();
+        $preview = $this->withCredentials()->postJson(self::FLAGSHIP.'/api/demo/generate-full', ['url' => self::WEBSITE])->assertOk();
+        $this->continueInBrowser($preview);
+
+        return [$preview->json('preview_token'), $journey];
     }
 
     public function test_a_copied_token_does_not_share_the_draft_with_another_browser(): void

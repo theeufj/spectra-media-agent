@@ -9,6 +9,7 @@ use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\User;
 use App\Rules\CloudflareTurnstile;
 use App\Services\Demo\SavedAdPreview;
+use App\Services\SignupFunnel;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,8 +28,15 @@ class RegisteredUserController extends Controller
     public function create(Request $request, SavedAdPreview $previews): Response|RedirectResponse
     {
         if ($request->has('preview_token')) {
-            $token = $request->query('preview_token');
-            $request->session()->put(SavedAdPreview::SESSION_KEY, $previews->get($request, $token) === null ? 'unavailable' : $token);
+            $funnel = app(SignupFunnel::class);
+            if ($funnel->isPageNavigation($request)) {
+                $token = $request->query('preview_token');
+                $draft = $previews->get($request, $token);
+                $request->session()->put(SavedAdPreview::SESSION_KEY, $draft === null ? 'unavailable' : $token);
+                if ($draft !== null) {
+                    $funnel->saveClicked($request);
+                }
+            }
 
             // Keep the one-time token out of the rendered page and analytics.
             return redirect()->route('register');
@@ -82,7 +90,15 @@ class RegisteredUserController extends Controller
             $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
         }
 
-        $request->validate($rules);
+        $funnel = app(SignupFunnel::class);
+        $funnel->registrationSubmitted($request);
+        try {
+            $request->validate($rules);
+        } catch (ValidationException $exception) {
+            $funnel->registrationFailed($request, $exception);
+
+            throw $exception;
+        }
 
         $demoUrl = $request->input('demo_url');
 
@@ -103,14 +119,18 @@ class RegisteredUserController extends Controller
                 ...$attributes, 'demo_url' => $draft['url'], 'saved_ad_preview' => $draft,
             ])) : null;
             if ($user === null) {
-                throw ValidationException::withMessages([
+                $exception = ValidationException::withMessages([
                     'save_preview' => 'This preview is unavailable. Generate a new preview or continue without saving it.',
                 ]);
+                $funnel->registrationFailed($request, $exception);
+
+                throw $exception;
             }
         } else {
             $user = User::create($attributes);
         }
         $request->session()->forget(SavedAdPreview::SESSION_KEY);
+        $funnel->registered($request, $user);
 
         // A lead who registers stops being a lead. Without this both chains
         // run and they get told what they are missing after they have joined.

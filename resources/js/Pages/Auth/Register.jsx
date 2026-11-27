@@ -1,3 +1,4 @@
+import { useSignupFunnel } from '@/hooks/useSignupFunnel';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import PlatformIcon from '@/Components/PlatformIcon';
@@ -25,7 +26,8 @@ function getDemoUrl() {
  * tenant skin entirely: a realpropertyads.com signup showed a violet panel
  * under a navy header.
  */
-export default function Register({ enabledPlatforms = [], previewUrl = null, previewReference = null, previewUnavailable = false }) {
+export default function Register({ tenant, enabledPlatforms = [], previewUrl = null, previewReference = null, previewUnavailable = false }) {
+    const recordStage = useSignupFunnel(tenant?.key === 'sitetospend', { landing: true });
     const demoUrl = getDemoUrl();
     let demoDomain = '';
     try { demoDomain = demoUrl ? new URL(demoUrl).hostname.replace(/^www\./, '') : ''; } catch { /* Ignore malformed demo links; registration still works. */ }
@@ -94,7 +96,12 @@ export default function Register({ enabledPlatforms = [], previewUrl = null, pre
             )}
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <form onSubmit={submit} className="space-y-4">
+                <form onChange={() => recordStage('signup_started')}
+                    onInvalidCapture={() => {
+                        recordStage('signup_started');
+                        recordStage('signup_failed', 'validation');
+                    }}
+                    onSubmit={submit} className="space-y-4">
                     <input type="hidden" name="demo_url" value={data.demo_url} />
 
                     <Field

@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import { useEffect } from 'react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -8,7 +9,8 @@ import FaqAccordion from '@/Components/Marketing/FaqAccordion';
 import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import { trackConversion } from '@/utils/conversions';
 
-export default function Pricing({ auth, publicContent, plans = [], faqs = [], earlyExitFeeUsd, earlyExitMonths }) {
+export default function Pricing({ tenant, auth, publicContent, plans = [], faqs = [], earlyExitFeeUsd, earlyExitMonths }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
     useEffect(() => { trackConversion('pricing_visit'); }, []);
 
     return (

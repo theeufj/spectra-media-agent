@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import PublicMarketingResources from '@/Components/Marketing/PublicMarketingResources';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -30,7 +31,8 @@ const steps = [
     },
 ];
 
-export default function HowItWorks({ auth, publicContent }) {
+export default function HowItWorks({ tenant, auth, publicContent }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
     return (
         <>
             <PageTitle />

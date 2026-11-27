@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Services\Customers\SetupGoogleIdentity;
 use App\Services\Demo\SavedAdPreview;
+use App\Services\SignupFunnel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -28,15 +29,23 @@ class GoogleController extends Controller
         // A login link carries no signup choice. Replace any abandoned OAuth attempt.
         $request->session()->forget(['oauth_signup_measurement', 'oauth_signup_ad_preview', 'oauth_demo_url']);
         if ($request->isMethod('post')) {
-            $request->validate(['ad_measurement_consent' => 'required|boolean', 'ad_measurement_consent_version' => 'nullable|string|max:40', 'save_preview' => 'sometimes|boolean', 'preview_reference' => 'sometimes|string|size:64']);
-            if ($request->boolean('save_preview')) {
-                $token = $previews->registrationToken($request);
-                if ($previews->get($request, $token) === null) {
-                    throw ValidationException::withMessages([
-                        'save_preview' => 'This preview is unavailable. Generate a new preview or continue without saving it.',
-                    ]);
+            $funnel = app(SignupFunnel::class);
+            $funnel->registrationSubmitted($request);
+            try {
+                $request->validate(['ad_measurement_consent' => 'required|boolean', 'ad_measurement_consent_version' => 'nullable|string|max:40', 'save_preview' => 'sometimes|boolean', 'preview_reference' => 'sometimes|string|size:64']);
+                if ($request->boolean('save_preview')) {
+                    $token = $previews->registrationToken($request);
+                    if ($previews->get($request, $token) === null) {
+                        throw ValidationException::withMessages([
+                            'save_preview' => 'This preview is unavailable. Generate a new preview or continue without saving it.',
+                        ]);
+                    }
+                    $request->session()->put('oauth_signup_ad_preview', $token);
                 }
-                $request->session()->put('oauth_signup_ad_preview', $token);
+            } catch (ValidationException $exception) {
+                $funnel->registrationFailed($request, $exception);
+
+                throw $exception;
             }
             $request->session()->put('oauth_signup_measurement', [
                 'consent' => $request->boolean('ad_measurement_consent'),
@@ -74,6 +83,10 @@ class GoogleController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (InvalidStateException $e) {
+            if ($request->session()->has('oauth_signup_measurement')) {
+                app(SignupFunnel::class)->clientStage($request, 'signup_failed', $request->query('error') === 'access_denied' ? 'oauth_cancelled' : 'unavailable');
+            }
+
             return redirect()->route('login')->withErrors([
                 'email' => 'Login session expired. Please try again.',
             ]);
@@ -84,6 +97,10 @@ class GoogleController extends Controller
         $token = $request->session()->pull('oauth_signup_ad_preview');
         if (! $googleUser instanceof \Laravel\Socialite\Two\User || ! in_array($googleUser->getRaw()['email_verified'] ?? null, [true, 'true'], true)
             || ! filter_var($googleUser->getEmail(), FILTER_VALIDATE_EMAIL)) {
+            if ($choice !== []) {
+                app(SignupFunnel::class)->clientStage($request, 'signup_failed', 'validation');
+            }
+
             return redirect()->route('login')->withErrors(['email' => 'Google must verify your email before you can sign in with it.']);
         }
 
@@ -122,6 +139,12 @@ class GoogleController extends Controller
         if (! $user->email_verified_at) {
             $user->email_verified_at = now();
             $user->save();
+            if (! $user->wasRecentlyCreated) {
+                app(SignupFunnel::class)->verified($request, $user);
+            }
+        }
+        if ($user->wasRecentlyCreated) {
+            app(SignupFunnel::class)->registered($request, $user);
         }
 
         Auth::login($user, true);

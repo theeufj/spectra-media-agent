@@ -22,14 +22,21 @@ class PaidSubscriptionConversionService
         $subscriptionId = is_array($subscription) ? ($subscription['id'] ?? null) : $subscription;
         $amount = $invoice['amount_paid'] ?? 0;
 
-        // A renewal, upgrade, zero-value invoice, credit top-up or setup fee is
-        // not a newly acquired paying subscriber. Checkout currently has no trial.
-        if (! $subscriptionId || ($invoice['billing_reason'] ?? null) !== 'subscription_create'
-            || ($invoice['status'] ?? null) !== 'paid' || ! is_int($amount) || $amount <= 0) {
+        if (! $subscriptionId || ($invoice['status'] ?? null) !== 'paid' || ! is_int($amount) || $amount <= 0) {
             return;
         }
 
-        $prices = collect(data_get($invoice, 'lines.data', []))
+        $lines = data_get($invoice, 'lines.data', []);
+        if (($payload['livemode'] ?? null) === true) {
+            $this->measureStarterSettlement($invoice, $lines);
+        }
+
+        // The advertising event remains restricted to the first acquisition invoice.
+        if (($invoice['billing_reason'] ?? null) !== 'subscription_create') {
+            return;
+        }
+
+        $prices = collect($lines)
             ->map(fn ($line) => data_get($line, 'pricing.price_details.price') ?? data_get($line, 'price.id'))
             ->filter()->all();
         if (! Plan::forStripePrices($prices)->where('is_free', false)->exists()) {
@@ -76,6 +83,42 @@ class PaidSubscriptionConversionService
         }
         if ($event->ad_identifiers && ! $event->uploaded_to_google) {
             RecordSiteGoogleConversion::dispatch($user, 'paid_subscription', $event->occurred_at, $event->id)->afterCommit();
+        }
+    }
+
+    private function measureStarterSettlement(array $invoice, array $lines): void
+    {
+        if (strtoupper($invoice['currency'] ?? '') !== 'USD'
+            || ! in_array($invoice['billing_reason'] ?? null, ['subscription_create', 'subscription_cycle'], true)
+            || ($invoice['paid_out_of_band'] ?? false) === true) {
+            return;
+        }
+
+        $paidAt = data_get($invoice, 'status_transitions.paid_at');
+        $price = config('services.stripe.starter_price_id');
+        if (! is_int($paidAt) || $paidAt <= 0 || ! is_string($price) || $price === '') {
+            return;
+        }
+
+        // Require a positive recurring Starter line after discounts and credits.
+        // Newer Stripe versions include discounts in pre-tax credit amounts.
+        $includesPaidStarter = collect($lines)->contains(function ($line) use ($price): bool {
+            $linePrice = data_get($line, 'pricing.price_details.price') ?? data_get($line, 'price.id');
+            $lineAmount = $line['amount'] ?? null;
+            $proration = data_get($line, 'parent.subscription_item_details.proration') ?? ($line['proration'] ?? false);
+            $deductions = max(collect($line['discount_amounts'] ?? [])->sum('amount'), collect($line['pretax_credit_amounts'] ?? [])->sum('amount'));
+
+            return $linePrice === $price && $proration === false && is_int($lineAmount) && $lineAmount > $deductions;
+        });
+        if (! $includesPaidStarter || ! Plan::offeredTo('sitetospend')->where('stripe_price_id', $price)->exists()) {
+            return;
+        }
+
+        // A cycle can be the first paid month after a fully discounted first
+        // invoice. The funnel records a single earliest settlement per signup.
+        $user = User::where('stripe_id', $invoice['customer'])->first();
+        if ($user) {
+            app(SignupFunnel::class)->paid($user, Carbon::createFromTimestampUTC($paidAt));
         }
     }
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import SideNav from './SideNav';
+import SignupFunnel from './SignupFunnel';
 import { money } from '@/utils/format';
 
 const Badge = ({ children, color = 'gray' }) => {
@@ -61,7 +62,7 @@ const deliveryEventLabels = {
     paid_setup: 'One-time setup payments',
 };
 
-export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform, delivery }) {
+export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform, delivery, signup_funnel }) {
     const provisioned = actions.filter(a => a.provisioned).length;
 
     return (
@@ -69,7 +70,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
             <Head title="Conversion Tracking — Admin" />
             <div className="flex flex-col lg:flex-row">
                 <SideNav />
-                <div className="min-w-0 flex-1 p-8 space-y-8">
+                <div className="min-w-0 flex-1 space-y-8 p-3 sm:p-8">
 
                     {/* Summary bar */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -78,6 +79,8 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <StatCard label="Signups (7d)" value={signups_7d} />
                         <StatCard label="Signups (30d)" value={signups_30d} />
                     </div>
+
+                    {signup_funnel && <SignupFunnel report={signup_funnel} />}
 
                     {delivery && (
                         <div className="bg-white rounded-lg shadow p-6">

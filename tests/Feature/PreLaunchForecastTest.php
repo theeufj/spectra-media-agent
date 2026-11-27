@@ -436,6 +436,8 @@ class PreLaunchForecastTest extends TestCase
 
     public function test_trial_forecast_uses_the_remaining_reported_spend_envelope_and_an_explicit_short_horizon(): void
     {
+        // The planner checks the exact spend-inspection timestamp written at preflight.
+        $this->freezeSecond();
         $trial = ['enabled' => true, 'baseline_cost_micros' => 100_000_000, 'max_spend_micros' => 50_000_000,
             'max_daily_budget_micros' => 10_000_000, 'max_cpc_bid_micros' => 3_000_000];
         [$allowed, $result] = $this->runPreflight(['success' => true, 'auto_repair_safe' => true, 'clicks' => 40, 'impressions' => 100,

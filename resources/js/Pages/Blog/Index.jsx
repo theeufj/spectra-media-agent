@@ -1,3 +1,4 @@
+import { isFunnelGuest, useSignupFunnel } from '@/hooks/useSignupFunnel';
 import { Link } from '@inertiajs/react';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
@@ -17,7 +18,8 @@ const CATEGORY_COLORS = {
  * Blog/Article.jsx. The title written here was "Blog — sitetospend.com", 22
  * characters against the controller's 47, and it was the one Google saw.
  */
-export default function HelpIndex({ auth, articles = [], categories = [], articleCount = 0, activeCategory = null, pagination }) {
+export default function HelpIndex({ tenant, auth, articles = [], categories = [], articleCount = 0, activeCategory = null, pagination }) {
+    useSignupFunnel(isFunnelGuest(tenant, auth), { landing: true });
     const filters = [{ name: 'All', count: articleCount }, ...categories];
     const categoryUrl = name => name === 'All' ? '/blog' : `/blog?category=${encodeURIComponent(name)}`;
 

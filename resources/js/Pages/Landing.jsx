@@ -1,3 +1,4 @@
+import { isFunnelGuest } from '@/hooks/useSignupFunnel';
 import PageTitle from '@/Components/PageTitle';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
@@ -17,14 +18,14 @@ const steps = [
     { icon: ChartBarIcon, title: 'Follow the enquiries', body: 'Test the action you want to track. After launch, review spend, tracked conversions and the activity history explaining changes to your campaign.' },
 ];
 
-export default function Landing({ auth, publicContent, plans = [], faqs = [] }) {
+export default function Landing({ tenant, auth, publicContent, plans = [], faqs = [] }) {
     return (
         <>
             <PageTitle />
             <div className="min-h-screen bg-white">
                 <Header auth={auth} guestCta={previewCta} />
                 <main>
-                    <WebsiteAdPreview eyebrow={publicContent.eyebrow} headline={publicContent.headline} sub={publicContent.intro}
+                    <WebsiteAdPreview measureFunnel={isFunnelGuest(tenant, auth)} eyebrow={publicContent.eyebrow} headline={publicContent.headline} sub={publicContent.intro}
                         secondaryCta={{ href: '#sample-report', label: 'See an example report' }} note="Free preview · No credit card required" />
                     <SampleCampaignReport />
                     <FeatureGrid title="What you control" items={steps} background="white" />

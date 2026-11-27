@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(replace: [
+            \Illuminate\Session\Middleware\StartSession::class => \App\Http\Middleware\FunnelAwareSession::class,
+        ]);
         $middleware->web(prepend: [
             \App\Http\Middleware\DetectTenant::class,
             \App\Http\Middleware\SecurityHeaders::class,
@@ -24,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // into the session for capture at registration. Prepended (pre-session) the
             // writes were silently discarded, so no user ever got a gclid.
             \App\Http\Middleware\CaptureClickIds::class,
+            \App\Http\Middleware\ObserveSignupFunnel::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
