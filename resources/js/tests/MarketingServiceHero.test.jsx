@@ -1,7 +1,6 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { previewContactFor } from '@/utils/previewContact';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -147,8 +146,8 @@ describe('Homepage ad preview', () => {
             const card = container.querySelector('#build-my-ads');
             expect(scroll.mock.contexts).toContain(card);
             expect(card).toHaveClass('scroll-mt-20');
-            expect(within(card).getByText(/See sample ad copy for your website/)).toBeVisible();
-            expect(within(card).getByRole('form', { name: 'Build my ads' })).toBeVisible();
+            expect(within(card).getByText(/Enter your website to see a Google Search ad/)).toBeVisible();
+            expect(within(card).getByRole('form', { name: 'Preview my Google ad' })).toBeVisible();
             expect(window.location.search).toBe('?utm_source=google');
             expect(within(card).getByRole('link', { name: 'Create a free account without a preview' })).toHaveAttribute('href', '/register');
         } finally {
@@ -158,24 +157,22 @@ describe('Homepage ad preview', () => {
         }
     });
 
-    it('submits a single preview in place, keeps the contact and website on retry, and continues to registration', async () => {
+    it('submits only the website, keeps it on retry, shows the usable ad and carries its token to registration', async () => {
         const website = 'https://example.test/offer';
         const fetch = vi.fn()
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ errors: { url: ['Check your website address.'] } }), { status: 422 }))
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({
-                success: true, url: website, ad_copy: { headlines: ['Example offer'], descriptions: ['Built for the example site.'] },
+                success: true, url: website, preview_token: 'fixture-token', ad_copy: { headlines: ['Example offer'], descriptions: ['Built for the example site.'] },
             })))
             .mockResolvedValueOnce(new globalThis.Response(JSON.stringify({ ok: true })));
         vi.stubGlobal('fetch', fetch);
         render(<Landing publicContent={homeContent} />);
-        const form = screen.getByRole('form', { name: 'Build my ads' });
+        const form = screen.getByRole('form', { name: 'Preview my Google ad' });
         const inputs = within(form);
-        fireEvent.change(inputs.getByLabelText('First name'), { target: { value: 'Jordan' } });
-        fireEvent.change(inputs.getByLabelText('Your email address'), { target: { value: 'jordan@example.test' } });
+        expect(inputs.getAllByRole('textbox')).toHaveLength(1);
         fireEvent.change(inputs.getByLabelText('Your website URL'), { target: { value: 'example.test/offer' } });
         fireEvent.submit(form);
         expect(await screen.findByRole('alert')).toHaveTextContent('Check your website address.');
-        expect(inputs.getByLabelText('Your email address')).toHaveValue('jordan@example.test');
         fireEvent.submit(form);
         const preview = await screen.findByRole('region', { name: 'Your ad preview' });
         expect(within(preview).getByText('Example offer', { exact: false })).toBeVisible();
@@ -185,11 +182,28 @@ describe('Homepage ad preview', () => {
         expect(JSON.parse(telemetry[0][1].body)).toEqual({ event: 'try_now' });
         expect(preview).toHaveFocus();
         expect(fetch.mock.calls[1][0]).toBe('/api/demo/generate-full');
-        expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: website, first_name: 'Jordan', email: 'jordan@example.test' });
-        expect(within(preview).getByRole('link').getAttribute('href')).toBe('/register?demo_url=' + encodeURIComponent(website));
-        expect(previewContactFor(website)).toEqual({ name: 'Jordan', email: 'jordan@example.test' });
-        expect(previewContactFor('https://unrelated.test')).toEqual({});
-        expect(screen.queryByRole('form', { name: 'Build my ads' })).toBeNull();
+        expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: website });
+        expect(within(preview).getByRole('link', { name: 'Save this ad draft' })).toHaveAttribute('href', '/register?preview_token=fixture-token');
+        expect(screen.queryByRole('form', { name: 'Preview my Google ad' })).toBeNull();
+    });
+
+    it.each([
+        { headlines: [' '], descriptions: ['A real description'] },
+        { headlines: ['A real headline'], descriptions: [] },
+    ])('keeps the URL editable for incomplete ad copy without recording a completed preview', async (copy) => {
+        const fetch = vi.fn().mockResolvedValueOnce(new globalThis.Response(JSON.stringify({
+            success: true, url: 'https://example.test', ad_copy: copy,
+        })));
+        vi.stubGlobal('fetch', fetch);
+        render(<Landing publicContent={homeContent} />);
+        const website = screen.getByLabelText('Your website URL');
+        fireEvent.change(website, { target: { value: 'example.test' } });
+        fireEvent.submit(screen.getByRole('form', { name: 'Preview my Google ad' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not create a complete ad');
+        expect(website).toHaveValue('example.test');
+        expect(screen.getByRole('link', { name: 'Create a free account without a preview' })).toBeVisible();
+        expect(screen.queryByRole('link', { name: 'Save this ad draft' })).toBeNull();
+        expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('announces progress during generation and preserves the form after a network failure', async () => {
@@ -197,9 +211,7 @@ describe('Homepage ad preview', () => {
         const fetch = vi.fn(() => new Promise((resolve, rejectRequest) => { reject = rejectRequest; }));
         vi.stubGlobal('fetch', fetch);
         render(<Landing publicContent={homeContent} />);
-        const form = screen.getByRole('form', { name: 'Build my ads' });
-        fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Lee' } });
-        fireEvent.change(screen.getByLabelText('Your email address'), { target: { value: 'lee@example.test' } });
+        const form = screen.getByRole('form', { name: 'Preview my Google ad' });
         fireEvent.change(screen.getByLabelText('Your website URL'), { target: { value: 'example.test' } });
         fireEvent.submit(form);
         fireEvent.submit(form);
@@ -211,9 +223,7 @@ describe('Homepage ad preview', () => {
         reject(new TypeError('Network failure'));
         expect(await screen.findByRole('alert')).toHaveTextContent('Please retry.');
         expect(screen.getByLabelText('Your website URL')).toHaveValue('example.test');
-        expect(screen.getByLabelText('First name')).toHaveValue('Lee');
-        expect(screen.getByLabelText('Your email address')).toHaveValue('lee@example.test');
-        expect(screen.getByRole('button', { name: 'Build my ads' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Preview my Google ad' })).toBeEnabled();
     });
 
 });

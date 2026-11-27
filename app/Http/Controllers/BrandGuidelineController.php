@@ -33,6 +33,7 @@ class BrandGuidelineController extends Controller
 
         return Inertia::render('BrandGuidelines/Index', [
             'brandGuideline' => $brandGuideline,
+            'savedAdPreview' => $customer->saved_ad_preview,
             'customer' => $customer->only(['id', 'uuid', 'name', 'website', 'service_type', 'country', 'currency_code', 'timezone']),
             'canEdit' => $request->user()->can('update', $brandGuideline ?? $customer),
         ]);

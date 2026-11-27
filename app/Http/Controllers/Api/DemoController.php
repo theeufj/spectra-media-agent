@@ -7,8 +7,11 @@ use App\Models\LandingLead;
 use App\Rules\SafePublicUrl;
 use App\Services\BrandGuidelineExtractorService;
 use App\Services\Demo\CampaignForecastPreview;
+use App\Services\Demo\SavedAdPreview;
 use App\Services\GeminiService;
 use App\Services\Onboarding\PlaceholderSiteDetector;
+use App\Support\Tenant;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +31,10 @@ class DemoController extends Controller
 
     public function generateFull(Request $request)
     {
+        if (Tenant::singlePlan($request->attributes->get('tenant')['key'] ?? null)) {
+            return $this->generateAdPreview($request);
+        }
+
         $request->validate([
             // This endpoint is unauthenticated and fetches whatever it is given
             // from the production box, so the host has to be a real public one:
@@ -397,6 +404,78 @@ HTML;
             // gaps with invented copy rather than admit to them.
             'notes' => $notes,
         ]);
+    }
+
+    private function generateAdPreview(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['url' => ['required', 'url', 'max:255', new SafePublicUrl]]);
+        $url = $validated['url'];
+        $unreadable = 'We could not read enough business information from that page. Try a public page that describes what you sell.';
+
+        try {
+            $response = $this->fetchPublicUrl($url, 8);
+            if (! $response?->successful()) {
+                return $this->previewFailure($unreadable);
+            }
+
+            $html = mb_substr($response->body(), 0, 500000);
+            preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $title);
+            preg_match('/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']/i', $html, $description);
+            $body = preg_replace('#<(script|style|noscript|svg|head)[^>]*>.*?</\1>#is', ' ', $html);
+            $text = trim(html_entity_decode((string) preg_replace('/\s+/u', ' ', strip_tags(str_replace('<', ' <', (string) $body))), ENT_QUOTES | ENT_HTML5));
+            $description = html_entity_decode($description[1] ?? '', ENT_QUOTES | ENT_HTML5);
+            if (mb_strlen($text) <= 40 && mb_strlen($description) < 40) {
+                return $this->previewFailure($unreadable);
+            }
+
+            $brief = self::describePage($url, $title[1] ?? '', $description, [], '', $text);
+            if ($warning = app(PlaceholderSiteDetector::class)->warningFor($brief, $url, warnOnThinContent: false)) {
+                return $this->previewFailure($warning);
+            }
+
+            $result = $this->geminiService->generateContent(
+                config('ai.models.default'),
+                self::adCopyPrompt($brief, false),
+                ['responseMimeType' => 'application/json'],
+            );
+            $copy = json_decode((string) preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($result['text'] ?? '')), true);
+            $headlines = $this->validPreviewAssets($copy['headlines'] ?? null, 30, 3);
+            $descriptions = $this->validPreviewAssets($copy['descriptions'] ?? null, 90, 2);
+            if ($headlines === [] || $descriptions === []) {
+                return $this->previewFailure('We could not write a usable ad from that page. Try again or use a more specific page.');
+            }
+
+            $adCopy = ['headlines' => $headlines, 'descriptions' => $descriptions];
+
+            return response()->json([
+                'success' => true,
+                'url' => $url,
+                'ad_copy' => $adCopy,
+                'preview_token' => app(SavedAdPreview::class)->create($request, $url, $adCopy),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->previewFailure('We could not finish the ad preview. Try again in a moment.');
+        }
+    }
+
+    /** @return list<string> */
+    private function validPreviewAssets(mixed $assets, int $maxLength, int $limit): array
+    {
+        if (! is_array($assets)) {
+            return [];
+        }
+
+        $copy = array_map('trim', array_filter($assets, 'is_string'));
+        $copy = array_filter($copy, fn (string $line) => $line !== '' && mb_strlen($line) <= $maxLength);
+
+        return array_slice(array_values(array_unique($copy)), 0, $limit);
+    }
+
+    private function previewFailure(string $message): JsonResponse
+    {
+        return response()->json(['success' => false, 'message' => $message, 'errors' => ['url' => [$message]]], 422);
     }
 
     /**

@@ -3,6 +3,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { SetupStages } from '@/Components/SetupJourney';
 import FormErrorSummary from '@/Components/FormErrorSummary';
+import SavedAdPreview from '@/Components/SavedAdPreview';
 import { brandTint } from '@/Components/Marketing/Hero';
 import {
     ArrowRightIcon,
@@ -49,7 +50,7 @@ const SERVICES = [
     },
 ];
 
-export default function QuickStart({ auth, demoUrl = null, setupAvailable = false }) {
+export default function QuickStart({ auth, demoUrl = null, setupAvailable = false, savedAdPreview = null }) {
     // No country field: the server derives it (and the currency) from the
     // timezone below, rather than assuming US for everyone.
     const { data, setData, post, processing, errors, transform } = useForm({
@@ -96,6 +97,7 @@ export default function QuickStart({ auth, demoUrl = null, setupAvailable = fals
             <div className="py-8 sm:py-12">
                 <div className="mx-auto max-w-2xl px-4 sm:px-0">
                     {data.service_type === 'setup_only' && <SetupStages stage={0} />}
+                    {savedAdPreview && <div className="mb-5"><SavedAdPreview preview={savedAdPreview} /></div>}
                     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                         <div className="p-6 text-center sm:p-8">
                             <span

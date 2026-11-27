@@ -53,12 +53,26 @@ describe('signup measurement choices', () => {
             fireEvent.click(google);
             expect(requests.inertia).toHaveBeenLastCalledWith('/register.google.redirect', {
                 ad_measurement_consent: choice, ad_measurement_consent_version: 'signup-email-v1', demo_url: website,
-            });
+            }, expect.objectContaining({ onError: expect.any(Function) }));
             fireEvent.submit(submit.closest('form'));
             expect(requests.register).toHaveBeenLastCalledWith(expect.objectContaining({
                 ad_measurement_consent: choice, ad_measurement_consent_version: 'signup-email-v1',
             }));
         }
+    });
+
+    it('carries the request to save a preview independently of ad measurement consent', () => {
+        render(<Register previewUrl="https://fixture.test" previewReference="browser-draft-reference" enabledPlatforms={[{ name: 'Google', slug: 'google' }]} />);
+        expect(screen.getByRole('checkbox', { name: /hashed version of my email address/i })).not.toBeChecked();
+        expect(screen.getByRole('link', { name: 'Continue without this preview' })).toHaveAttribute('href', '/register?without_preview=1');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
+        expect(requests.inertia).toHaveBeenLastCalledWith('/register.google.redirect', {
+            save_preview: true, preview_reference: 'browser-draft-reference', ad_measurement_consent: 0, ad_measurement_consent_version: 'signup-email-v1',
+        }, expect.objectContaining({ onError: expect.any(Function) }));
+
+        fireEvent.submit(screen.getByRole('button', { name: 'Create account' }).closest('form'));
+        expect(requests.register).toHaveBeenLastCalledWith(expect.objectContaining({ save_preview: true, ad_measurement_consent: 0 }));
     });
 
     it('records a completed preview locally even when no Google target exists', () => {

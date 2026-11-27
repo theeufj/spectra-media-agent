@@ -44,7 +44,7 @@ class LandingController extends Controller
             'faqs' => $faqs,
             'meta' => $this->meta(
                 'Google Ads Management for Small Businesses | Site to Spend',
-                'Preview Google ads written for your website. Review your campaign and budget before launch, then track spend, enquiries and campaign changes.',
+                'Preview a Google ad using just your website. Create a free account to save your draft, then choose whether to start monthly Google Ads management.',
                 schema: [
                     [
                         '@type' => 'Organization',
@@ -61,18 +61,7 @@ class LandingController extends Controller
                         'operatingSystem' => 'Web',
                         'url' => 'https://sitetospend.com',
                         'description' => 'Google Ads management for one business workspace. Review your campaign before launch and follow its spend and measured results.',
-                        ...($plan ? ['offers' => [
-                            '@type' => 'Offer',
-                            'url' => PublicSeo::sharedUrl('/pricing'),
-                            'price' => number_format($plan->price_cents / 100, 2, '.', ''),
-                            'priceCurrency' => 'USD',
-                            'priceSpecification' => [
-                                '@type' => 'UnitPriceSpecification',
-                                'price' => number_format($plan->price_cents / 100, 2, '.', ''),
-                                'priceCurrency' => 'USD',
-                                'billingDuration' => 'P1M',
-                            ],
-                        ]] : []),
+                        ...($plan ? ['offers' => $this->monthlyOfferSchema($plan)] : []),
                         'featureList' => ['Google Ads campaign preparation', 'Campaign review', 'Budget monitoring', 'Conversion tracking', 'Campaign reporting'],
                     ],
                     $this->faqSchema($faqs),

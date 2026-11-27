@@ -63,6 +63,10 @@ class CustomerController extends Controller
         }
 
         $validated['tenant_key'] = $tenantKey;
+        $savedPreview = $user->saved_ad_preview;
+        if (\App\Support\Tenant::singlePlan($tenantKey) && isset($savedPreview['url']) && $savedPreview['url'] === ($validated['website'] ?? null)) {
+            $validated['saved_ad_preview'] = $savedPreview;
+        }
 
         $customer = app(\App\Services\Customers\CreateBusinessWorkspace::class)->create($user, $validated);
 

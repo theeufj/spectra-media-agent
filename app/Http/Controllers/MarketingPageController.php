@@ -37,14 +37,13 @@ class MarketingPageController extends Controller
 
     private function show(string $slug): Response
     {
-        $setupFee = number_format((int) config('services.stripe.setup_fee_usd_cents') / 100, 2, '.', ',');
+        $setupFee = number_format((int) config('services.stripe.setup_fee_usd_cents', 99900) / 100, 2, '.', ',');
         $setupFee = str_ends_with($setupFee, '.00') ? substr($setupFee, 0, -3) : $setupFee;
         $tenantKey = request()->attributes->get('tenant')['key'];
         $singlePlan = Tenant::singlePlan($tenantKey);
-        $service = MarketingPages::find($slug, $setupFee, $singlePlan);
-        abort_if($service === null, 404);
         $plans = Plan::offeredTo($tenantKey)->ordered()->where('is_free', false)->get();
-        $hero = null;
+        $startingPlan = null;
+        $price = null;
         if ($slug === 'google-ads-management') {
             $startingPlan = $plans->filter(fn (Plan $plan) => $plan->slug !== 'setup_only'
                 && $plan->billing_interval === 'month'
@@ -54,9 +53,15 @@ class MarketingPageController extends Controller
             $price = $startingPlan
                 ? 'US$'.number_format($startingPlan->price_cents / 100, $startingPlan->price_cents % 100 === 0 ? 0 : 2, '.', ',').'/month'
                 : null;
+        }
+        $service = MarketingPages::find($slug, $setupFee, $singlePlan, $price);
+        abort_if($service === null, 404);
+
+        $hero = null;
+        if ($slug === 'google-ads-management') {
             $hero = [
-                'headline' => $price ? ($singlePlan ? 'Google Ads management for ' : 'Google Ads management from ').$price : $service['headline'],
-                'intro' => 'Site to Spend researches keywords, prepares Google Ads copy and monitors your campaign on a managed plan. Review your business information and ads before launch.',
+                'headline' => ! $singlePlan && $price ? 'Google Ads management from '.$price : $service['headline'],
+                'intro' => $singlePlan ? $service['intro'] : 'Site to Spend researches keywords, prepares Google Ads copy and monitors your campaign on a managed plan. Review your business information and ads before launch.',
                 'primaryCta' => ['href' => '/#build-my-ads', 'label' => 'Build my ads'],
                 'secondaryCta' => ['href' => '/pricing', 'label' => $singlePlan ? 'See pricing' : 'Compare plans'],
                 'note' => 'Advertising spend is additional. Subscription prices are in US dollars.',
@@ -74,9 +79,10 @@ class MarketingPageController extends Controller
                 'url' => PublicSeo::canonicalUrl(request()),
                 'provider' => [
                     '@type' => 'Organization',
-                    'name' => 'sitetospend',
+                    'name' => $singlePlan ? 'Site to Spend' : 'sitetospend',
                     'url' => PublicSeo::sharedUrl('/'),
                 ],
+                ...($singlePlan && $startingPlan ? ['offers' => $this->monthlyOfferSchema($startingPlan)] : []),
             ], $this->faqSchema($service['faqs'])]),
         ]);
     }

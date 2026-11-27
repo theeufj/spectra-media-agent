@@ -1,12 +1,13 @@
-# Standard crawlers
+# Public marketing pages are crawlable by default, including for ChatGPT search.
 User-agent: *
+User-agent: OAI-SearchBot
 Disallow: /dashboard
 Disallow: /profile
 Disallow: /campaigns
 Disallow: /admin
 Disallow: /subscription
 
-# OpenAI — ChatGPT search indexing and training
+# OpenAI model training
 User-agent: GPTBot
 Allow: /blog
 Allow: /features
@@ -20,7 +21,7 @@ Disallow: /campaigns
 Disallow: /admin
 Disallow: /subscription
 
-# OpenAI — ChatGPT browsing plugin
+# OpenAI user-initiated requests
 User-agent: ChatGPT-User
 Allow: /
 Disallow: /dashboard
@@ -55,7 +56,7 @@ Disallow: /campaigns
 Disallow: /admin
 Disallow: /subscription
 
-# Google — AI Overviews and Gemini training
+# Google controls for Gemini training and grounding
 User-agent: Google-Extended
 Allow: /blog
 Allow: /features

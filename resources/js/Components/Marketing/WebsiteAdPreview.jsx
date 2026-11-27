@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '@inertiajs/react';
-import DemoResultsPanel from '@/Components/DemoResultsPanel';
+import DemoResultsPanel, { hasUsableAd } from '@/Components/DemoResultsPanel';
 import Hero, { brandTint, CTA_PRIMARY, CTA_SIZE_COMPACT } from '@/Components/Marketing/Hero';
 import { trackConversion } from '@/utils/conversions';
 import { fetchJson, HttpError } from '@/utils/http';
-import { rememberPreviewContact } from '@/utils/previewContact';
 
 export default function WebsiteAdPreview(hero) {
     const [url, setUrl] = useState('');
-    const [firstName, setFirstName] = useState('');
-    const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -41,10 +38,12 @@ export default function WebsiteAdPreview(hero) {
         try {
             const data = await fetchJson('/api/demo/generate-full', {
                 method: 'POST', signal: controller.signal,
-                json: { url: website, first_name: firstName.trim(), email: email.trim() },
+                json: { url: website },
             });
-            if (data?.success !== true || !data.url) throw new Error('Missing preview');
-            rememberPreviewContact(data.url, firstName.trim(), email.trim());
+            if (data?.success !== true || !data.url || !hasUsableAd(data.ad_copy)) {
+                setError('We could not create a complete ad from this page. Try the page that describes your product or service.');
+                return;
+            }
             setResult(data);
             trackConversion('try_now');
         } catch (err) {
@@ -69,34 +68,8 @@ export default function WebsiteAdPreview(hero) {
     return (
         <Hero {...hero}>
             <div id="build-my-ads" ref={previewCard} className="scroll-mt-20 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-lg">
-                <p className="mb-3 text-sm text-gray-600">See sample ad copy for your website before you create an account. We use your email to follow up about the preview.</p>
-                <form aria-label="Build my ads" aria-busy={loading} onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                        <label htmlFor="demo-first-name" className="sr-only">First name</label>
-                        <input
-                            autoComplete="given-name" maxLength={100}
-                            id="demo-first-name"
-                            type="text"
-                            required
-                            value={firstName}
-                            onChange={e => setFirstName(e.target.value)}
-                            placeholder="First name"
-                            className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
-                            disabled={loading}
-                        />
-                        <label htmlFor="demo-email" className="sr-only">Your email address</label>
-                        <input
-                            autoComplete="email" maxLength={255}
-                            id="demo-email"
-                            type="email"
-                            required
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            placeholder="Your email address"
-                            className="flex-1 rounded-md border-gray-300 py-3 shadow-sm focus:border-brand-dark focus:ring-brand-dark"
-                            disabled={loading}
-                        />
-                    </div>
+                <p className="mb-3 text-sm text-gray-600">Enter your website to see a Google Search ad written for your business. You can save the draft after you read it.</p>
+                <form aria-label="Preview my Google ad" aria-busy={loading} onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <label htmlFor="demo-url" className="sr-only">Your website URL</label>
                         <input
@@ -115,7 +88,7 @@ export default function WebsiteAdPreview(hero) {
                             disabled={loading}
                             className={`${CTA_PRIMARY} ${CTA_SIZE_COMPACT} w-full whitespace-nowrap disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-600 sm:w-auto`}
                         >
-                            {loading ? 'Building your preview…' : 'Build my ads'}
+                            {loading ? 'Building your preview…' : 'Preview my Google ad'}
                         </button>
                     </div>
                 </form>

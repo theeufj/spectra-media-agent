@@ -10,24 +10,34 @@ use App\Mail\WelcomeEmail;
 use App\Models\Customer;
 use App\Models\User;
 use App\Services\Customers\SetupGoogleIdentity;
+use App\Services\Demo\SavedAdPreview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 
 class GoogleController extends Controller
 {
-    public function redirect()
+    public function redirect(Request $request, SavedAdPreview $previews)
     {
         session()->forget(SetupGoogleIdentity::SESSION_KEY);
         // A login link carries no signup choice. Replace any abandoned OAuth attempt.
-        $request = request();
-        $request->session()->forget('oauth_signup_measurement');
+        $request->session()->forget(['oauth_signup_measurement', 'oauth_signup_ad_preview', 'oauth_demo_url']);
         if ($request->isMethod('post')) {
-            $request->validate(['ad_measurement_consent' => 'required|boolean', 'ad_measurement_consent_version' => 'nullable|string|max:40']);
+            $request->validate(['ad_measurement_consent' => 'required|boolean', 'ad_measurement_consent_version' => 'nullable|string|max:40', 'save_preview' => 'sometimes|boolean', 'preview_reference' => 'sometimes|string|size:64']);
+            if ($request->boolean('save_preview')) {
+                $token = $previews->registrationToken($request);
+                if ($previews->get($request, $token) === null) {
+                    throw ValidationException::withMessages([
+                        'save_preview' => 'This preview is unavailable. Generate a new preview or continue without saving it.',
+                    ]);
+                }
+                $request->session()->put('oauth_signup_ad_preview', $token);
+            }
             $request->session()->put('oauth_signup_measurement', [
                 'consent' => $request->boolean('ad_measurement_consent'),
                 'version' => $request->input('ad_measurement_consent_version'),
@@ -53,7 +63,7 @@ class GoogleController extends Controller
         return $identity->start($request, $customer);
     }
 
-    public function callback(Request $request)
+    public function callback(Request $request, SavedAdPreview $previews)
     {
         // Confirming a handover identity must never sign the browser into a
         // different SiteToSpend account or create a new signup.
@@ -71,6 +81,7 @@ class GoogleController extends Controller
 
         $demoUrl = session()->pull('oauth_demo_url');
         $choice = $request->session()->pull('oauth_signup_measurement', []);
+        $token = $request->session()->pull('oauth_signup_ad_preview');
         if (! $googleUser instanceof \Laravel\Socialite\Two\User || ! in_array($googleUser->getRaw()['email_verified'] ?? null, [true, 'true'], true)
             || ! filter_var($googleUser->getEmail(), FILTER_VALIDATE_EMAIL)) {
             return redirect()->route('login')->withErrors(['email' => 'Google must verify your email before you can sign in with it.']);
@@ -82,15 +93,30 @@ class GoogleController extends Controller
         // customer's tenant from the request host to close that gap.
         $tenant = request()->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
-        $user = User::firstOrCreate([
+        $register = fn (?array $draft = null): User => User::firstOrCreate([
             'email' => $googleUser->getEmail(),
         ], [
             'name' => $googleUser->getName(),
             'password' => Hash::make(Str::random(24)),
-            'demo_url' => $demoUrl,
+            'demo_url' => $draft['url'] ?? $demoUrl,
+            'saved_ad_preview' => $draft,
             'tenant_key' => $tenant['key'] ?? null,
             'ad_measurement_consent' => $choice['consent'] ?? null,
         ]);
+
+        $user = is_string($token) ? $previews->claim($request, $token, $register) : null;
+        if ($token && (! $user || ! $user->wasRecentlyCreated)) {
+            $request->session()->flash('flash', [
+                'type' => 'warning',
+                'message' => $user
+                    ? 'That Google account already exists. Your existing workspace and saved ads are unchanged.'
+                    : 'Your preview expired before signup finished. Build a new preview whenever you are ready.',
+            ]);
+        }
+        $user ??= $register();
+        if ($token) {
+            $request->session()->forget(SavedAdPreview::SESSION_KEY);
+        }
 
         // Always mark email as verified when signing in via Google (Google has verified it)
         if (! $user->email_verified_at) {

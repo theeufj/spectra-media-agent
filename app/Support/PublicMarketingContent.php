@@ -13,8 +13,8 @@ class PublicMarketingContent
         $pages = [
             'Landing' => [
                 'eyebrow' => $plan ? 'US$'.number_format($plan->price_cents / 100).'/month · Ad spend separate' : 'Google Ads for small businesses',
-                'headline' => 'Google Ads management for your small business',
-                'intro' => 'Preview ads written for your website. Approve your campaign and budget before launch, then follow spend, enquiries and changes in your workspace.',
+                'headline' => 'See the Google ad we’d write for your business',
+                'intro' => 'Enter your website to get a free ad preview. Like the draft? Create an account to save it. You choose your budget and approve your campaign before launch.',
             ],
             'Features' => [
                 'eyebrow' => 'Platform features',

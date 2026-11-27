@@ -6,15 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\InvitationController;
 use App\Jobs\RecordSiteFacebookConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
-use App\Models\Customer;
 use App\Models\User;
 use App\Rules\CloudflareTurnstile;
+use App\Services\Demo\SavedAdPreview;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,8 +24,25 @@ class RegisteredUserController extends Controller
     /**
      * Display the registration view.
      */
-    public function create(): Response
+    public function create(Request $request, SavedAdPreview $previews): Response|RedirectResponse
     {
+        if ($request->has('preview_token')) {
+            $token = $request->query('preview_token');
+            $request->session()->put(SavedAdPreview::SESSION_KEY, $previews->get($request, $token) === null ? 'unavailable' : $token);
+
+            // Keep the one-time token out of the rendered page and analytics.
+            return redirect()->route('register');
+        }
+
+        if ($request->boolean('without_preview')) {
+            $request->session()->forget(SavedAdPreview::SESSION_KEY);
+
+            return redirect()->route('register');
+        }
+
+        $token = $request->session()->get(SavedAdPreview::SESSION_KEY);
+        $preview = $previews->get($request, $token);
+
         // OAuth login providers (separate from ad platform EnabledPlatform table)
         $oauthProviders = [
             ['name' => 'Google', 'slug' => 'google'],
@@ -32,6 +50,9 @@ class RegisteredUserController extends Controller
 
         return Inertia::render('Auth/Register', [
             'enabledPlatforms' => $oauthProviders,
+            'previewUrl' => $preview['url'] ?? null,
+            'previewReference' => $preview && is_string($token) ? $previews->reference($token) : null,
+            'previewUnavailable' => $token !== null && $preview === null,
         ]);
     }
 
@@ -40,7 +61,7 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, SavedAdPreview $previews): RedirectResponse
     {
         $rules = [
             'name' => 'required|string|max:255',
@@ -52,6 +73,8 @@ class RegisteredUserController extends Controller
             'ad_measurement_consent' => ['nullable', 'boolean'],
             'ad_measurement_consent_version' => ['nullable', 'string', 'max:40'],
             'invitation_token' => ['nullable', 'string', 'max:64'],
+            'save_preview' => ['sometimes', 'boolean'],
+            'preview_reference' => ['sometimes', 'string', 'size:64'],
         ];
 
         // Both keys, via the rule's own predicate — see CloudflareTurnstile::enabled().
@@ -65,14 +88,29 @@ class RegisteredUserController extends Controller
 
         $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
-        $user = User::create([
+        $attributes = [
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'demo_url' => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
             'tenant_key' => $tenant['key'] ?? null,
             'ad_measurement_consent' => $request->has('ad_measurement_consent') ? $request->boolean('ad_measurement_consent') : null,
-        ]);
+        ];
+
+        if ($request->boolean('save_preview')) {
+            $token = $previews->registrationToken($request);
+            $user = $token !== null ? $previews->claim($request, $token, fn (array $draft) => User::create([
+                ...$attributes, 'demo_url' => $draft['url'], 'saved_ad_preview' => $draft,
+            ])) : null;
+            if ($user === null) {
+                throw ValidationException::withMessages([
+                    'save_preview' => 'This preview is unavailable. Generate a new preview or continue without saving it.',
+                ]);
+            }
+        } else {
+            $user = User::create($attributes);
+        }
+        $request->session()->forget(SavedAdPreview::SESSION_KEY);
 
         // A lead who registers stops being a lead. Without this both chains
         // run and they get told what they are missing after they have joined.

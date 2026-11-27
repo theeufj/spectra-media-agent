@@ -10,6 +10,7 @@ import DemoResultsPanel from '@/Components/DemoResultsPanel';
 
 const result = {
     url: 'https://example.test',
+    preview_token: 'opaque-token',
     ad_copy: { headlines: ['A fixture offer'], descriptions: ['Fixture description'] },
     visuals: {},
     forecast: {
@@ -41,9 +42,21 @@ describe('demo forecast availability', () => {
         expect(within(screen.getByText('fixture keyword').closest('tr')).getByText('0')).toBeVisible();
     });
 
-    it('offers registration before the forecast table on a completed preview', () => {
+    it('shows useful copy before the save action and places the forecast below it', () => {
         render(<DemoResultsPanel result={result} />);
-        const signup = screen.getByRole('link', { name: /Create an account/ });
+        const signup = screen.getByRole('link', { name: 'Save this ad draft' });
+        const ad = screen.getByRole('article', { name: 'Draft Google Search ad' });
+        expect(ad).toHaveTextContent('A fixture offer');
+        expect(ad).toHaveTextContent('Fixture description');
+        expect(ad.compareDocumentPosition(signup) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(signup).toHaveAttribute('href', '/register?preview_token=opaque-token');
         expect(signup.compareDocumentPosition(screen.getByRole('table')) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('allows plain registration without promising to save a draft when its token is absent', () => {
+        render(<DemoResultsPanel result={{ ...result, preview_token: null }} />);
+        expect(screen.getByText('A fixture offer')).toBeVisible();
+        expect(screen.getByRole('link', { name: 'Create a free account' })).toHaveAttribute('href', '/register');
+        expect(screen.queryByRole('link', { name: 'Save this ad draft' })).toBeNull();
     });
 });

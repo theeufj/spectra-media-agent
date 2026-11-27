@@ -26,6 +26,7 @@ class QuickStartController extends Controller
         // the round-trip through the form is what carries the real locale.
         return Inertia::render('QuickStart', [
             'demoUrl' => $customer === null ? $request->user()->demo_url : null,
+            'savedAdPreview' => $customer === null ? $request->user()->saved_ad_preview : $customer->saved_ad_preview,
             'setupAvailable' => ! Tenant::singlePlan($this->salesTenantKey($request, $customer)),
         ]);
     }
@@ -54,6 +55,7 @@ class QuickStartController extends Controller
             'setupOnly' => $customer->service_type === 'setup_only',
             'manualEntry' => $request->boolean('manual'),
             'baselineUpdatedAt' => $baseline,
+            'savedAdPreview' => $customer->saved_ad_preview,
         ]);
     }
 
@@ -113,6 +115,8 @@ class QuickStartController extends Controller
     private function doProcess(string $url, string $tenantKey, Request $request): RedirectResponse
     {
         $user = $request->user();
+        $savedPreview = $user->saved_ad_preview;
+        $useSavedPreview = Tenant::singlePlan($tenantKey) && ($savedPreview['url'] ?? null) === $url;
         /*
            A shortener is not the customer's website, it is a redirect to it.
            This used to take the host as typed, so a signup who pasted a bit.ly
@@ -138,6 +142,7 @@ class QuickStartController extends Controller
         $customer = app(\App\Services\Customers\CreateBusinessWorkspace::class)->create($user, [
             'name' => $businessName,
             'website' => $url,
+            'saved_ad_preview' => $useSavedPreview ? $savedPreview : null,
             'tenant_key' => $tenantKey,
             'service_type' => $request->input('service_type') === 'setup_only' ? 'setup_only' : 'managed',
             'country' => $country,

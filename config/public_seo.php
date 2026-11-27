@@ -15,7 +15,7 @@ return [
         '/how-it-works' => ['resources/js/Pages/HowItWorks.jsx', 'resources/js/Pages/RealEstateHowItWorks.jsx', 'app/Support/PublicMarketingContent.php', 'resources/views/public-content.blade.php'],
         '/pricing' => ['resources/js/Pages/Pricing.jsx', 'resources/js/Pages/RealEstatePricing.jsx', 'config/faqs.php', 'app/Support/PublicMarketingContent.php', 'resources/views/public-content.blade.php'],
         '/about' => ['resources/js/Pages/About.jsx', 'app/Support/PublicMarketingContent.php', 'resources/views/public-content.blade.php'],
-        '/google-ads-management' => ['app/Support/MarketingPages.php', 'resources/views/public-content.blade.php'],
+        '/google-ads-management' => ['app/Support/MarketingPages.php', 'app/Http/Controllers/MarketingPageController.php', 'resources/js/Pages/MarketingService.jsx', 'resources/views/public-content.blade.php'],
         '/ai-ads-management' => ['app/Support/MarketingPages.php', 'resources/views/public-content.blade.php'],
         '/google-ads-setup' => ['app/Support/MarketingPages.php', 'resources/views/public-content.blade.php'],
         '/blog' => ['app/Support/HelpArticles.php', 'resources/js/Pages/Blog/Index.jsx', 'resources/views/public-content.blade.php'],

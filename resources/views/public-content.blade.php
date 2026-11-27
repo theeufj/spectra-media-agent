@@ -79,6 +79,14 @@
             <h1 class="text-3xl font-extrabold sm:text-4xl">{{ $marketing['headline'] }}</h1>
             <p class="mt-5 text-lg leading-relaxed text-gray-600">{{ $marketing['intro'] }}</p>
             @if($previewHomepage)<noscript><p id="build-my-ads" class="mt-5">Enable JavaScript to enter your website and generate your ad preview.</p></noscript>@endif
+            @if($previewHomepage)
+                <section id="sample-report" aria-labelledby="sample-report-title" class="mt-8 rounded-2xl border border-gray-200 p-6 sm:p-8">
+                    <h2 id="sample-report-title" class="text-2xl font-bold">What did the ads buy?</h2>
+                    <p class="mt-3 font-semibold">Illustrative report · Fictional campaign</p>
+                    <p class="mt-2 leading-relaxed text-gray-600">A residential leak repair campaign spent US$280 on Google Search for 56 clicks and 7 tracked enquiry forms. That works out to US$40 in ad spend per enquiry. The management fee is separate.</p>
+                    <p class="mt-2 leading-relaxed text-gray-600">After reviewing search terms, we excluded “plumbing courses” because the business sells repairs. The owner can check which enquiries turned into booked jobs before increasing the budget.</p>
+                </section>
+            @endif
             @foreach($marketing['sections'] ?? [] as $section)
                 <section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
                     <h2 class="text-2xl font-bold">{{ $section['title'] }}</h2>

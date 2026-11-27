@@ -41,7 +41,7 @@ class LeadCaptureAndUnsubscribeTest extends TestCase
         $this->app->instance(CampaignForecastPreview::class, $this->createStub(CampaignForecastPreview::class));
         $input = ['url' => 'https://93.184.216.34/', 'first_name' => 'Jordan', 'email' => 'Jordan@example.test'];
         foreach ([$input, $input, ['url' => $input['url'], 'first_name' => null, 'email' => null]] as $request) {
-            $this->postJson(route('demo.generate-full'), $request)->assertOk()
+            $this->postJson('https://realpropertyads.com/api/demo/generate-full', $request)->assertOk()
                 ->assertJsonPath('ad_copy.headlines.0', 'Example offer');
         }
         $lead = LandingLead::sole();
