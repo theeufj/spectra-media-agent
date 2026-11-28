@@ -17,7 +17,9 @@ use App\Services\Agents\Google\GoogleCampaignSchedule;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
 use App\Services\Campaigns\SearchOfferGroups;
+use App\Services\Campaigns\SingleGoogleSearchLandingPage;
 use App\Services\CampaignStatusHelper;
 use App\Services\Deployment\GoogleSearchConfigurationCheck;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
@@ -65,7 +67,21 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $customerId = $this->customer->cleanGoogleCustomerId();
         }
 
+        $totalBudget = GoogleSearchTotalBudget::forStrategy($strategy);
+        $dailyBudget = $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30);
+        if (SingleGoogleSearchLandingPage::required($strategy) && ! SingleGoogleSearchLandingPage::enabled($strategy)) {
+            $result->addError('single_landing_page_changed', 'Restore and review the approved Search destination before staging ads.');
+
+            return;
+        }
+        $singleLandingPage = SingleGoogleSearchLandingPage::enabled($strategy)
+            ? SingleGoogleSearchLandingPage::url($campaign, $strategy) : null;
         $offerGroups = $strategy->bidding_strategy['search_offer_groups'] ?? [];
+        if ($singleLandingPage !== null && $offerGroups !== []) {
+            $result->addError('single_landing_page_offer_groups', 'Review the single campaign destination before deploying offer-specific ad groups.');
+
+            return;
+        }
         if ($offerGroups !== []) {
             app(SearchOfferGroups::class)->assertCurrent($campaign, $offerGroups, $this->keywords->getKeywords($campaign, $strategy, $plan));
         }
@@ -100,12 +116,20 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         } else {
             $createCampaignService = app(CreateSearchCampaign::class, ['customer' => $this->customer]);
             $campaignName = $campaign->name.' - '.$timestamp;
+            $schedule = GoogleCampaignSchedule::for($campaign);
+            if ($totalBudget !== null && ($schedule['startDate'] !== $totalBudget['start_date'] || $schedule['endDate'] !== $totalBudget['end_date'])) {
+                $result->addError('search_total_budget_dates_changed', 'The approved Search dates can no longer be used. Review the new schedule and total budget before launch.');
+
+                return;
+            }
 
             $campaignData = [
                 'businessName' => \App\Services\Deployment\SubmittedCampaign::name($strategy, 'google', $customerId, $campaignName),
-                'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'budget' => $dailyBudget,
                 'status' => 'PAUSED',
-                ...GoogleCampaignSchedule::for($campaign),
+                ...$schedule,
+                ...($singleLandingPage === null ? [] : ['single_landing_page' => true]),
+                ...($totalBudget === null ? [] : ['google_total_budget' => $totalBudget]),
             ];
 
             $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
@@ -127,6 +151,12 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             return;
         }
         if (! $this->confirmPausedStage($customerId, $campaignResourceName, $result)) {
+            return;
+        }
+        if ($totalBudget !== null && ! app(ReadCampaignConfiguration::class, ['customer' => $this->customer])
+            ->hasVerifiedSearchTotalBudget($customerId, $campaignResourceName, $totalBudget)) {
+            $result->addError('search_total_budget_unverified', 'Google has not verified the approved Search total budget and schedule. Campaign changes are held for review.');
+
             return;
         }
         if ($setupOnlyStaging && ! $this->confirmSetupAuthorization($campaign, $customerId, $result)) {
@@ -327,7 +357,7 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             $expectedAds = [];
 
             if ($adCopies->isNotEmpty()) {
-                $finalUrl = $this->urls->getFinalUrl($campaign, $strategy, $plan);
+                $finalUrl = $singleLandingPage ?? $this->urls->getFinalUrl($campaign, $strategy, $plan);
 
                 if (! $finalUrl) {
                     $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
@@ -372,7 +402,9 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 6. Add Ad Extensions (Sitelinks, Callouts)
-        $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+        if ($singleLandingPage === null) {
+            $this->extensions->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+        }
 
         $resources = $result->metadata['platform_resources'] ?? [];
         $extensionTypes = ['sitelink_asset', 'callout_asset', 'structured_snippet_asset', 'call_asset', 'price_asset', 'promotion_asset'];
@@ -382,12 +414,14 @@ class SearchCampaignExecutor implements CampaignTypeExecutor
             'locations' => $result->metadata['expected_locations'] ?? [],
             'location_mode' => 'PRESENCE',
             'networks' => ['targetGoogleSearch' => true, 'targetSearchNetwork' => false, 'targetContentNetwork' => false],
-            'budget_micros' => (int) round(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100) * 10000,
+            'budget_micros' => $totalBudget === null ? (int) round($dailyBudget * 100) * 10_000 : CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget),
+            ...($totalBudget === null ? [] : ['google_total_budget' => $totalBudget]),
             'bidding' => $result->metadata['expected_bidding'] ?? 'MANUAL_CPC',
             'asset_resources' => array_merge(...array_map(fn ($type) => $resources[$type] ?? [], $extensionTypes)),
             'verified_offer_assets' => array_merge($resources['price_asset'] ?? [], $resources['promotion_asset'] ?? []),
             'verified_offer_details' => $result->metadata['verified_offer_details'] ?? [],
-            'sitelink_urls' => array_column(app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($this->customer,
+            ...($singleLandingPage === null ? [] : ['single_landing_page_url' => $singleLandingPage]),
+            'sitelink_urls' => $singleLandingPage !== null ? [] : array_column(app(\App\Services\Campaigns\AdvertisingEvidence::class)->sitelinks($this->customer,
                 $strategy->ad_extensions['sitelinks'] ?? $strategy->bidding_strategy['sitelinks'] ?? []), 'url'),
             'conversion_category' => ReconcileCampaignConversionGoals::categoryFor($strategy),
             'conversion_goal' => $goalReadiness['intent'] ?? null,

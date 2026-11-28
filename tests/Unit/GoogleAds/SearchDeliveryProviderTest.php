@@ -332,6 +332,22 @@ class SearchDeliveryProviderTest extends TestCase
         $this->assertSame('languageConstants/1000', $campaign->getLanguageConstants()[0]);
     }
 
+    public function test_google_forecast_uses_daily_pace_and_records_the_serving_cap_it_was_prepared_against(): void
+    {
+        CarbonImmutable::setTestNow('2026-11-28T01:00:00Z');
+        $forecast = $this->forecast();
+        $cap = ['budget_period' => 'CUSTOM_PERIOD', 'budget_explicitly_shared' => false, 'provider_daily_budget_micros' => 0,
+            'total_budget_micros' => 154_000_000, 'start_date_time' => '2026-11-29 00:00:00', 'end_date_time' => '2026-12-05 23:59:59'];
+        $context = $this->context() + $cap;
+        $context['daily_budget_micros'] = 22_000_000;
+        $result = $forecast('1234567890', [['text' => 'google ads management', 'match_type' => 'EXACT']], 3.00, null, 7, $context);
+        $this->assertTrue($result['success']);
+        $this->assertSame(22_000_000, $forecast->request->getCampaign()->getBiddingStrategy()->getMaximizeClicksBiddingStrategy()->getDailyTargetSpendMicros());
+        foreach ($cap as $field => $value) {
+            $this->assertSame($value, $result['context'][$field], $field);
+        }
+    }
+
     public function test_scheduled_forecast_uses_the_verified_future_launch_window_without_changing_spend_limits(): void
     {
         CarbonImmutable::setTestNow('2026-10-12T23:30:00Z');

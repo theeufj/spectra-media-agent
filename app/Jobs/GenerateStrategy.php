@@ -314,12 +314,24 @@ class GenerateStrategy implements ShouldQueue
                     googleDefault: \App\Services\Campaigns\StrategyDocument::preferredGoogleType($current)
                 );
                 $strategyData['strategies'] = $document->strategies;
-                $oldIds = $this->campaign->strategies()->pluck('id');
+                $oldStrategies = $current->strategies()->get(['id', 'platform', 'campaign_type', 'bidding_strategy']);
+                $oldIds = $oldStrategies->modelKeys();
+                $singleLandingPage = $oldStrategies->contains(fn ($prior) => \App\Services\Campaigns\SingleGoogleSearchLandingPage::enabled($prior));
                 $generationId = (string) \Illuminate\Support\Str::uuid();
                 // Step 4: Parse the response and save the platform-specific strategies.
                 Log::info("Creating strategy records for campaign {$this->campaign->id}");
                 foreach ($strategyData['strategies'] as $index => $strategy) {
                     Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
+
+                    // Budget mode is an operator choice. Preserve the campaign's fixed
+                    // limit across generation and discard any model-proposed envelope.
+                    unset($strategy['bidding_strategy']['google_total_budget'], $strategy['bidding_strategy']['single_landing_page']);
+                    if ($singleLandingPage && $strategy['campaign_type'] === 'search' && str_contains(strtolower($strategy['platform']), 'google')) {
+                        $strategy['bidding_strategy']['single_landing_page'] = true;
+                    }
+                    if (array_key_exists('google_total_budget', $current->spend_guardrails ?? [])) {
+                        $strategy['bidding_strategy']['google_total_budget'] = $current->spend_guardrails['google_total_budget'];
+                    }
 
                     // Inject landing_page_url into bidding_strategy to avoid schema changes
                     if (isset($strategy['landing_page_url'])) {

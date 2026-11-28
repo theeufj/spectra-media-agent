@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\SeasonalStrategyPrompt;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CreateSeasonalityAdjustment;
@@ -201,6 +202,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
 
     private function applyBudgetAdjustment(Campaign $campaign, array $strategyShift, array $baselineStrategy): void
     {
+        if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)) {
+            return;
+        }
         $budgetMultiplier = $this->computeSeasonalMultiplier($campaign, $this->season);
         $currentBudget = $campaign->daily_budget ?? $campaign->total_budget ?? 0;
 

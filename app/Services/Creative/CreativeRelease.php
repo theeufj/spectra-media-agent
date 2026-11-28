@@ -32,8 +32,8 @@ class CreativeRelease
                 ->where('is_active', true)->where('should_deploy', true)->whereIn('status', ['pending', 'generating', 'completed'])->orderBy('id')->get();
         $contents = [
             'strategy' => [$strategy->id, $strategy->platform, $strategy->campaign_type],
-            'destination' => ($strategy->bidding_strategy['landing_page_url'] ?? null)
-                ?: ($strategy->campaign->landing_page_url ?: $strategy->campaign->customer->website),
+            'destination' => \App\Services\Campaigns\SingleGoogleSearchLandingPage::enabled($strategy) ? $strategy->campaign->landing_page_url
+                : (($strategy->bidding_strategy['landing_page_url'] ?? null) ?: ($strategy->campaign->landing_page_url ?: $strategy->campaign->customer->website)),
             'search_offers' => $searchOffers,
             'copy' => $copy->map(fn (AdCopy $row) => [$row->id, $row->platform, $row->headlines, $row->long_headlines, $row->descriptions])->all(),
             'images' => $images->map(fn (ImageCollateral $row) => [$row->id, $row->s3_path, $row->cloudfront_url, $row->format])->all(),

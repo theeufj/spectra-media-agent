@@ -50,6 +50,47 @@ class InitialLaunchReachGateTest extends TestCase
         $this->assertSame([self::LIMITATION], $assessment['forecast']['caveats']);
     }
 
+    public function test_reach_uses_the_approved_pacing_only_with_a_proven_fixed_campaign_total(): void
+    {
+        [$campaign, $snapshot, $assessment] = $this->evidence();
+        $start = $snapshot['start_date'];
+        $end = now('UTC')->addDays(6)->toDateString();
+        $cap = ['total_micros' => 154_000_000, 'currency' => 'AUD', 'start_date' => $start, 'end_date' => $end];
+        $campaign->spend_guardrails = ['google_total_budget' => $cap];
+        $campaign->approved_daily_budget = '22.00';
+        $snapshot['daily_budget_micros'] = 22_000_000;
+        $snapshot += ['budget_period' => 'CUSTOM_PERIOD', 'budget_explicitly_shared' => false,
+            'provider_daily_budget_micros' => 0, 'total_budget_micros' => 154_000_000, 'end_date' => $end,
+            'start_date_time' => $start.' 00:00:00', 'end_date_time' => $end.' 23:59:59'];
+        $assessment['forecast']['context'] = $snapshot;
+        $gate = new GoogleSearchReachGate;
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $assessment);
+        $this->assertTrue($result['ready'], json_encode($result['issues']));
+        $this->assertSame($cap, $result['metadata']['google_total_budget']);
+        $this->assertSame(22_000_000, $result['metadata']['daily_planning_budget_micros']);
+
+        foreach (['budget_period' => 'DAILY', 'total_budget_micros' => 155_000_000, 'currency_code' => 'USD',
+            'provider_daily_budget_micros' => 22_000_000, 'budget_explicitly_shared' => true,
+            'end_date_time' => $end.' 01:00:00'] as $field => $value) {
+            $changed = array_replace($snapshot, [$field => $value]);
+            $this->assertNotSame($gate::settingsFingerprint($snapshot), $gate::settingsFingerprint($changed), $field);
+            $result = $gate->evaluateInitialLaunch($campaign, $changed, $assessment);
+            $this->assertFalse($result['ready'], $field);
+            $this->assertContains('search_reach_total_budget_unverified', array_column($result['issues'], 'code'));
+        }
+        $stale = $assessment;
+        unset($stale['forecast']['context']['budget_period']);
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $stale);
+        $this->assertFalse($result['ready']);
+
+        $assessment['forecast']['cost_micros'] = 155_000_000;
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $assessment);
+        $this->assertContains('search_reach_forecast_total_budget_exceeded', array_column($result['issues'], 'code'));
+        $campaign->spend_guardrails = [];
+        $result = $gate->evaluateInitialLaunch($campaign, $snapshot, $assessment);
+        $this->assertContains('search_reach_total_budget_unverified', array_column($result['issues'], 'code'));
+    }
+
     public function test_initial_launch_still_rejects_unknown_caveats_stale_mismatched_and_unsafe_evidence(): void
     {
         foreach (['unmarked', 'unknown_code', 'extra_caveat', 'stale', 'budget', 'context', 'zero', 'targeting', 'trial', 'conflict', 'scope', 'group', 'unknown_match'] as $case) {

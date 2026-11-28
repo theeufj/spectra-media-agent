@@ -5,6 +5,7 @@ namespace App\Services\Agents\Optimization;
 use App\Models\Campaign;
 use App\Models\Recommendation;
 use App\Services\Campaigns\CampaignResourceInventory;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CampaignService;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
@@ -45,7 +46,8 @@ class RecommendationReadback extends ReadCampaignConfiguration
             $locked->update(['status' => 'applied', 'execution' => $execution]);
             if ($type === 'BUDGET') {
                 $parent = Campaign::lockForUpdate()->findOrFail($campaign->id);
-                if (! $parent->last_budget_changed_at || $parent->last_budget_changed_at->lte($locked->created_at)) {
+                if (! CampaignSpendGuardrails::hasGoogleTotalBudget($parent)
+                    && (! $parent->last_budget_changed_at || $parent->last_budget_changed_at->lte($locked->created_at))) {
                     $parent->update(['daily_budget' => $receipt['budget_cents'] / 100]);
                 }
             }

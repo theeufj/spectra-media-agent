@@ -569,6 +569,9 @@ class RecommendationApplier
 
         $customerId = $customer->cleanGoogleCustomerId();
         $resource = $campaign->googleAdsResourceName();
+        if (\App\Services\Campaigns\SingleGoogleSearchLandingPage::protectsResource($campaign, $resource)) {
+            return ['applied' => false, 'requires_review' => true, 'message' => 'This Search campaign has one approved landing page and restricts additional extensions.', 'recommendation' => $rec];
+        }
         $type = $rec['sub_type'] ?? null;
 
         if (! $type) {

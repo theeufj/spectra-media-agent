@@ -2,6 +2,8 @@
 
 namespace App\Services\Deployment;
 
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
+
 /** Compares the intended deployment with read-back from Google. No API mutations. */
 class GoogleSearchConfigurationCheck
 {
@@ -89,7 +91,13 @@ class GoogleSearchConfigurationCheck
         if (isset($expected['bidding']) && ($campaign['biddingStrategyType'] ?? '') !== $expected['bidding']) {
             $issues[] = 'The intended bidding strategy was not applied.';
         }
-        if (isset($expected['budget_micros']) && (int) ($actual['campaign']['campaignBudget']['amountMicros'] ?? 0) !== (int) $expected['budget_micros']) {
+        $liveBudget = SearchBudgetReadback::fromRow($actual['campaign'] ?? []);
+        if (array_key_exists('google_total_budget', $expected)) {
+            if (! is_array($expected['google_total_budget']) || ! SearchBudgetReadback::matches($expected['google_total_budget'], $liveBudget)) {
+                $issues[] = 'Google did not confirm the reviewed private campaign total budget, currency and serving dates.';
+            }
+        } elseif ($liveBudget['budget_period'] === 'CUSTOM_PERIOD'
+            || (isset($expected['budget_micros']) && $liveBudget['provider_daily_budget_micros'] !== (int) $expected['budget_micros'])) {
             $issues[] = 'The deployed daily budget differs from the intended budget.';
         }
         $keywords = [];

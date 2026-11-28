@@ -6,17 +6,25 @@ use App\Jobs\CheckGoogleCampaignSpendSafety;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Setting;
+use App\Models\Strategy;
+use App\Services\Agents\ExecutionResult;
+use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Campaigns\GoogleCampaignSpendSafety;
+use App\Services\Campaigns\SettleDeployedCampaign;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsClient;
 use Google\Ads\GoogleAds\V26\Common\Metrics;
 use Google\Ads\GoogleAds\V26\Common\TargetSpend;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V26\Enums\BudgetPeriodEnum\BudgetPeriod;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Resources\AdGroupBidModifier;
 use Google\Ads\GoogleAds\V26\Resources\AdGroupCriterion;
@@ -47,6 +55,10 @@ class GoogleSpendSafetyV26TransportTest extends TestCase
 {
     use DatabaseTransactions;
 
+    private const FIXED_RESOURCE = 'customers/1234567890/campaigns/999';
+
+    private const FIXED_BUDGET = ['total_micros' => 154_000_000, 'currency' => 'AUD', 'start_date' => '2026-10-08', 'end_date' => '2026-10-14'];
+
     private MockTransport $transport;
 
     private GoogleAdsClient $client;
@@ -63,7 +75,7 @@ class GoogleSpendSafetyV26TransportTest extends TestCase
         $this->client->method('getGoogleAdsServiceClient')->willReturn($search);
         $this->client->method('getCampaignServiceClient')->willReturn($mutator);
 
-        foreach ([GetCampaignSpendSafety::class, GetCampaignStatus::class, UpdateCampaignStatus::class] as $class) {
+        foreach ([GetCampaignSpendSafety::class, GetCampaignStatus::class, ReadCampaignConfiguration::class, UpdateCampaignStatus::class] as $class) {
             $this->app->bind($class, fn ($app, $parameters) => $this->service($class, $parameters['customer']));
         }
     }
@@ -106,27 +118,32 @@ class GoogleSpendSafetyV26TransportTest extends TestCase
         return new GoogleAdsRow(['metrics' => new Metrics(['cost_micros' => $cost, 'conversions' => $conversions])]);
     }
 
-    private function snapshot(int $status = CampaignStatus::ENABLED, bool $pagination = false, bool $modifiers = false): void
+    private function snapshot(int $status = CampaignStatus::ENABLED, bool $pagination = false, bool $modifiers = false, ?int $fixedTotal = null): void
     {
-        $this->response(new SearchGoogleAdsResponse(['results' => [new GoogleAdsRow([
-            'customer' => new GoogleCustomer(['time_zone' => 'America/Los_Angeles', 'currency_code' => 'AUD']),
-            'campaign' => new GoogleCampaign([
-                'resource_name' => 'customers/1234567890/campaigns/999', 'start_date_time' => '2026-09-01 23:59:59',
-                'status' => $status, 'advertising_channel_type' => AdvertisingChannelType::SEARCH,
-                'bidding_strategy_type' => BiddingStrategyType::TARGET_SPEND,
-                'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
-            ]),
-            'campaign_budget' => new CampaignBudget(['amount_micros' => 10_000_000]),
-        ])]]));
+        if ($fixedTotal !== null) {
+            $this->fixedBudgetReadback($status, $fixedTotal);
+        } else {
+            $this->response(new SearchGoogleAdsResponse(['results' => [new GoogleAdsRow([
+                'customer' => new GoogleCustomer(['time_zone' => 'America/Los_Angeles', 'currency_code' => 'AUD']),
+                'campaign' => new GoogleCampaign([
+                    'resource_name' => 'customers/1234567890/campaigns/999', 'start_date_time' => '2026-09-01 23:59:59',
+                    'status' => $status, 'advertising_channel_type' => AdvertisingChannelType::SEARCH,
+                    'bidding_strategy_type' => BiddingStrategyType::TARGET_SPEND,
+                    'target_spend' => new TargetSpend(['cpc_bid_ceiling_micros' => 3_000_000]),
+                ]),
+                'campaign_budget' => new CampaignBudget(['amount_micros' => 10_000_000]),
+            ])]]));
+        }
+        $spend = $fixedTotal === null ? 60_000_001 : 20_000_000;
         if ($pagination) {
             $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics(2_147_483_648)], 'next_page_token' => 'lifetime-page-2']));
             $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics(2_147_483_649)]]));
         } else {
-            $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics(60_000_001)]]));
+            $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics($spend)]]));
         }
         // Lifetime matured, window matured, and recent conversion queries.
         for ($index = 0; $index < 3; $index++) {
-            $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics(60_000_001)]]));
+            $this->response(new SearchGoogleAdsResponse(['results' => [$this->metrics($spend)]]));
         }
         $this->response(new SearchGoogleAdsResponse(['results' => $modifiers ? [new GoogleAdsRow(['campaign_criterion' => new CampaignCriterion([
             'resource_name' => 'customers/1234567890/campaignCriteria/1', 'bid_modifier' => 1.1,
@@ -137,6 +154,142 @@ class GoogleSpendSafetyV26TransportTest extends TestCase
         $this->response(new SearchGoogleAdsResponse(['results' => $modifiers ? [new GoogleAdsRow(['ad_group_criterion' => new AdGroupCriterion([
             'resource_name' => 'customers/1234567890/adGroupCriteria/4~5', 'bid_modifier' => 1.3,
         ])])] : []]));
+    }
+
+    private function fixedBudgetReadback(int $status, int $totalMicros = self::FIXED_BUDGET['total_micros']): void
+    {
+        $this->response(new SearchGoogleAdsResponse(['results' => [new GoogleAdsRow([
+            'customer' => new GoogleCustomer(['time_zone' => 'Australia/Sydney', 'currency_code' => 'AUD']),
+            'campaign' => new GoogleCampaign(['resource_name' => self::FIXED_RESOURCE,
+                'start_date_time' => '2026-10-08 00:00:00', 'end_date_time' => '2026-10-14 23:59:59',
+                'status' => $status, 'advertising_channel_type' => AdvertisingChannelType::SEARCH]),
+            'campaign_budget' => new CampaignBudget(['period' => BudgetPeriod::CUSTOM_PERIOD,
+                'total_amount_micros' => $totalMicros, 'explicitly_shared' => false]),
+        ])]]));
+    }
+
+    private function fixedCampaign(string $status = 'active'): array
+    {
+        $campaign = $this->campaign(['status' => $status, 'platform_status' => 'PAUSED', 'platforms' => ['google'],
+            'start_date' => self::FIXED_BUDGET['start_date'], 'end_date' => self::FIXED_BUDGET['end_date'],
+            'daily_budget' => '22.00', 'approved_daily_budget' => '22.00', 'total_budget' => '154.00',
+            'spend_guardrails' => ['google_total_budget' => self::FIXED_BUDGET]]);
+        $campaign->customer->update(['timezone' => 'Australia/Sydney', 'currency_code' => 'AUD', 'google_ads_link_status' => 'active']);
+        Setting::set('campaign_testing_mode', false, 'boolean');
+        config(['campaigns.default_status' => 'ENABLED']);
+        $strategy = Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'Google Ads',
+            'campaign_type' => 'search', 'deployment_status' => 'deployed', 'google_ads_campaign_id' => self::FIXED_RESOURCE,
+            'daily_budget' => '22.00', 'bidding_strategy' => ['google_total_budget' => self::FIXED_BUDGET]]);
+
+        return [$campaign, $strategy];
+    }
+
+    private function recordFixedActivation(Strategy $strategy, bool $verified): void
+    {
+        $strategy->update(['execution_result' => ['metadata' => [
+            'google_search_staging' => ['campaign_resource' => self::FIXED_RESOURCE, 'enable_after_success' => true],
+            'google_search_baseline' => ['google_total_budget' => self::FIXED_BUDGET],
+            'search_reach_activation' => ['campaign_resource' => self::FIXED_RESOURCE, 'launch_id' => $strategy->launch_intent['id'] ?? null,
+                'status' => $verified ? 'enabled_verified' : 'activation_ready', 'enabled_verified' => $verified,
+                'enable_attempted_at' => now()->toIso8601String(),
+                'preflight' => ['validated_campaign_resource' => self::FIXED_RESOURCE, 'gate' => ['ready' => true]],
+                'activation_check' => ['ready' => true, 'metadata' => ['google_total_budget' => self::FIXED_BUDGET]]],
+        ]]]);
+    }
+
+    public function test_fixed_search_requires_the_normal_activation_journal_and_exact_google_readback(): void
+    {
+        [$campaign, $strategy] = $this->fixedCampaign();
+        $writer = $this->service(UpdateCampaignStatus::class, $campaign->customer);
+        $this->assertFalse($writer->enable('1234567890', self::FIXED_RESOURCE)['success']);
+        $this->assertSame([], $this->transport->popReceivedCalls());
+
+        $this->recordFixedActivation($strategy, false);
+        $this->assertFalse($writer->enable('1234567890', self::FIXED_RESOURCE, ownerApprovedRestart: true)['success']);
+        $this->assertSame([], $this->transport->popReceivedCalls());
+
+        $this->fixedBudgetReadback(CampaignStatus::PAUSED, 155_000_000);
+        $this->assertFalse($writer->enable('1234567890', self::FIXED_RESOURCE)['success']);
+        $this->assertCount(1, $this->transport->popReceivedCalls());
+
+        $this->fixedBudgetReadback(CampaignStatus::PAUSED);
+        $this->pauseAccepted();
+        $this->assertTrue($writer->enable('1234567890', self::FIXED_RESOURCE)['success']);
+        $calls = $this->transport->popReceivedCalls();
+        $this->assertCount(2, $calls);
+        $this->assertSame(CampaignStatus::ENABLED, $calls[1]->getRequestObject()->getOperations()[0]->getUpdate()->getStatus());
+    }
+
+    public function test_verified_fixed_search_restart_retains_its_previous_launch_authorization(): void
+    {
+        [$campaign, $strategy] = $this->fixedCampaign('paused');
+        $strategy->forceFill(['launch_intent' => ['id' => 'fixed-budget-launch']])->save();
+        $this->recordFixedActivation($strategy, true);
+        $approval = $this->createMock(CampaignLaunchIntent::class);
+        $approval->expects($this->once())->method('canPublish')->with($this->callback(fn (Strategy $current) => $current->id === $strategy->id), true)->willReturn(true);
+        $this->app->instance(CampaignLaunchIntent::class, $approval);
+
+        $this->fixedBudgetReadback(CampaignStatus::PAUSED);
+        $this->pauseAccepted();
+        $this->assertTrue($this->service(UpdateCampaignStatus::class, $campaign->customer)
+            ->enable('1234567890', self::FIXED_RESOURCE, ownerApprovedRestart: true)['success']);
+    }
+
+    public function test_normal_settlement_writes_the_fixed_activation_journal_and_enables_through_the_shared_gate(): void
+    {
+        [$campaign, $strategy] = $this->fixedCampaign('draft');
+        $strategy->update(['execution_result' => ['metadata' => [
+            'google_search_staging' => ['campaign_resource' => self::FIXED_RESOURCE, 'enable_after_success' => true],
+            'google_search_baseline' => ['google_total_budget' => self::FIXED_BUDGET],
+        ]]]);
+        $reach = $this->createMock(SearchKeywordBuilder::class);
+        $reach->expects($this->once())->method('preflightReach')->willReturnCallback(function ($campaign, $strategy, $account, $resource, ExecutionResult $result): bool {
+            $result->addMetadata('search_reach_preflight', ['validated_campaign_resource' => $resource, 'gate' => ['ready' => true]]);
+
+            return true;
+        });
+        $reach->expects($this->once())->method('confirmActivationProof')->willReturnCallback(function ($campaign, $account, $resource, $proof, ExecutionResult $result): bool {
+            $result->addMetadata('search_reach_activation_check', ['ready' => true, 'metadata' => ['google_total_budget' => self::FIXED_BUDGET]]);
+
+            return true;
+        });
+        $this->app->bind(SearchKeywordBuilder::class, fn () => $reach);
+        $this->readback(CampaignStatus::PAUSED);
+        $this->fixedBudgetReadback(CampaignStatus::PAUSED);
+        $this->pauseAccepted();
+        $this->readback(CampaignStatus::ENABLED);
+        $settler = new class($this->service(UpdateCampaignStatus::class, $campaign->customer)) extends SettleDeployedCampaign
+        {
+            public function __construct(private UpdateCampaignStatus $writer) {}
+
+            protected function campaignStatusService(Customer $customer): UpdateCampaignStatus
+            {
+                return $this->writer;
+            }
+        };
+
+        $this->assertTrue($settler->settle($campaign));
+        $activation = $strategy->fresh()->execution_result['metadata']['search_reach_activation'];
+        $this->assertTrue($activation['enabled_verified']);
+        $this->assertArrayHasKey('launch_id', $activation);
+        $this->assertCount(4, $this->transport->popReceivedCalls());
+    }
+
+    public function test_fixed_budget_monitor_pauses_verified_provider_drift_even_below_the_mature_spend_threshold(): void
+    {
+        [$campaign] = $this->fixedCampaign();
+        $safety = new GoogleCampaignSpendSafety;
+        $this->snapshot(fixedTotal: 154_000_000);
+        $this->assertSame('observed', $safety->check($campaign)['action']);
+        $calls = $this->transport->popReceivedCalls();
+        $this->assertStringContainsString('campaign_budget.total_amount_micros', $calls[0]->getRequestObject()->getQuery());
+
+        $this->snapshot(fixedTotal: 155_000_000);
+        $this->pauseAccepted();
+        $this->readback(CampaignStatus::PAUSED);
+        $this->assertSame('paused', $safety->check($campaign)['action']);
+        $this->assertSame('google_search_total_budget_changed', $campaign->fresh()->spend_safety_hold['reason']);
+        $this->assertNotEmpty($campaign->fresh()->spend_safety_hold['verified_at']);
     }
 
     private function pauseAccepted(): void

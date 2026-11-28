@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 /**
@@ -342,7 +345,15 @@ class CampaignController extends Controller
             'end_date' => 'sometimes|date|after:start_date',
         ]);
 
-        $campaign->update($validated);
+        DB::transaction(function () use ($campaign, $validated) {
+            $current = Campaign::lockForUpdate()->findOrFail($campaign->id);
+            $current->fill($validated);
+            if (CampaignSpendGuardrails::hasGoogleTotalBudget($current)
+                && $current->isDirty(['daily_budget', 'total_budget', 'start_date', 'end_date'])) {
+                throw ValidationException::withMessages(['total_budget' => 'The approved Google Search budget and campaign dates are fixed.']);
+            }
+            $current->save();
+        });
 
         Log::info("Admin updated campaign {$campaign->id}", $validated);
 

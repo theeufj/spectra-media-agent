@@ -8,8 +8,15 @@ use App\Models\Strategy;
 use App\Services\Deployment\DeploymentVerifier;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
+use App\Services\GoogleAds\Diagnostics\InspectSearchDelivery;
+use Google\Ads\GoogleAds\V26\Enums\BudgetPeriodEnum\BudgetPeriod;
+use Google\Ads\GoogleAds\V26\Resources\Campaign as GoogleCampaign;
+use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V26\Resources\Customer as GoogleCustomer;
+use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class GoogleDeploymentVerifierIntegrityTest extends TestCase
@@ -117,6 +124,75 @@ class GoogleDeploymentVerifierIntegrityTest extends TestCase
         $this->assertTrue($metadata['configuration_verification']['passed']);
         $this->assertEquals($baseline, $metadata['google_search_baseline']);
         Http::assertNothingSent();
+    }
+
+    public function test_typed_google_readback_exposes_only_the_current_approved_planning_pace(): void
+    {
+        $cap = ['total_micros' => 154_000_000, 'currency' => 'AUD', 'start_date' => '2026-11-29', 'end_date' => '2026-12-05'];
+        [$customer, $campaign, $strategy] = $this->workspace(['daily_budget' => '22.00', 'bidding_strategy' => ['google_total_budget' => $cap]]);
+        $customer->update(['currency_code' => 'AUD']);
+        $resource = 'customers/1234567890/campaigns/222';
+        $campaign->update(['google_ads_campaign_id' => $resource, 'start_date' => $cap['start_date'], 'end_date' => $cap['end_date'],
+            'total_budget' => '154.00', 'daily_budget' => '22.00', 'platforms' => ['google'], 'spend_guardrails' => ['google_total_budget' => $cap]]);
+        $reader = new class extends InspectSearchDelivery
+        {
+            public GoogleAdsRow $settings;
+
+            public function __construct() {}
+
+            protected function rows(string $customerId, string $query): iterable
+            {
+                return str_contains($query, 'customer.currency_code') ? [$this->settings] : [];
+            }
+        };
+        $reader->settings = new GoogleAdsRow(['customer' => new GoogleCustomer(['time_zone' => 'Australia/Sydney', 'currency_code' => 'AUD']),
+            'campaign' => new GoogleCampaign(['resource_name' => $resource, 'status' => 3, 'advertising_channel_type' => 2,
+                'start_date_time' => $cap['start_date'].' 00:00:00', 'end_date_time' => $cap['end_date'].' 23:59:59']),
+            'campaign_budget' => new CampaignBudget(['period' => BudgetPeriod::CUSTOM_PERIOD, 'explicitly_shared' => false,
+                'total_amount_micros' => $cap['total_micros']])]);
+        $observed = $reader->inspect($campaign->fresh());
+        $this->assertSame('CUSTOM_PERIOD', $observed['budget_period']);
+        $this->assertFalse($observed['budget_explicitly_shared']);
+        $this->assertSame(154_000_000, $observed['total_budget_micros']);
+        $this->assertSame(0, $observed['provider_daily_budget_micros']);
+        $this->assertSame(22_000_000, $observed['daily_budget_micros']);
+        $strategy->update(['bidding_strategy' => []]);
+        $this->assertSame(0, $reader->inspect($campaign->fresh())['daily_budget_micros']);
+        $strategy->forceFill(['bidding_strategy' => ['google_total_budget' => $cap], 'google_ads_campaign_id' => '444'])->save();
+        $this->assertSame(0, $reader->inspect($campaign->fresh())['daily_budget_micros']);
+        $campaign->update(['spend_guardrails' => []]);
+        $this->assertSame(0, $reader->inspect($campaign->fresh())['daily_budget_micros']);
+    }
+
+    #[TestWith([false])]
+    #[TestWith([true])]
+    public function test_verification_checks_live_total_against_current_approval(bool $changeApprovalDuringRead): void
+    {
+        [$baseline, $actual] = $this->configuration();
+        $cap = ['total_micros' => 154_000_000, 'currency' => 'AUD', 'start_date' => '2026-11-29', 'end_date' => '2026-12-05'];
+        $baseline['google_total_budget'] = $cap;
+        $baseline['budget_micros'] = 22_000_000;
+        $actual['campaign']['campaignBudget'] = ['period' => 'CUSTOM_PERIOD', 'explicitlyShared' => false, 'totalAmountMicros' => '154000000'];
+        $actual['campaign']['customer'] = ['currencyCode' => 'AUD'];
+        $actual['campaign']['campaign'] += ['startDateTime' => '2026-11-29 00:00:00', 'endDateTime' => '2026-12-05 23:59:59'];
+        [$customer, $campaign, $strategy] = $this->workspace(['daily_budget' => '22.00', 'bidding_strategy' => ['google_total_budget' => $cap],
+            'execution_result' => ['metadata' => ['google_search_baseline' => $baseline]]]);
+        $customer->update(['currency_code' => 'AUD']);
+        $campaign->update(['start_date' => $cap['start_date'], 'end_date' => $cap['end_date'], 'daily_budget' => '22.00',
+            'total_budget' => '154.00', 'platforms' => ['google'], 'budget_confirmed_at' => now(), 'approved_daily_budget' => '22.00',
+            'spend_guardrails' => ['google_total_budget' => $cap]]);
+        $this->statusService('customers/1234567890/campaigns/222');
+        $this->reader(function () use ($campaign, $actual, $changeApprovalDuringRead) {
+            if ($changeApprovalDuringRead) {
+                $campaign->update(['end_date' => '2026-12-09']);
+            }
+
+            return $actual;
+        });
+        $this->assertSame(! $changeApprovalDuringRead, (new DeploymentVerifier)->verify($strategy, $customer));
+        if ($changeApprovalDuringRead) {
+            $this->assertStringContainsString('total budget approval', $strategy->fresh()->deployment_error);
+        }
     }
 
     public function test_changed_baseline_during_api_read_cannot_be_marked_verified(): void

@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 
 /** Read-only configuration used for deployment checks and delayed creative verification. */
 class ReadCampaignConfiguration extends BaseGoogleAdsService
@@ -42,6 +43,53 @@ class ReadCampaignConfiguration extends BaseGoogleAdsService
         $status = $row['campaign']['status'] ?? 'UNKNOWN';
 
         return is_int($status) ? \Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus::name($status) : strtoupper((string) $status);
+    }
+
+    public function hasVerifiedSearchTotalBudget(string $customerId, string $resource, array $expected): bool
+    {
+        if ($this->customer?->cleanGoogleCustomerId() !== $customerId
+            || ! preg_match('#^customers/'.preg_quote($customerId, '#').'/campaigns/\d+$#D', $resource)) {
+            return false;
+        }
+        $row = $this->rows($customerId, 'SELECT customer.time_zone, campaign.resource_name, campaign.status, campaign.advertising_channel_type, '
+            .SearchBudgetReadback::FIELDS." FROM campaign WHERE campaign.resource_name = '{$resource}'")[0] ?? [];
+
+        return ($row['campaign']['resourceName'] ?? null) === $resource
+            && ($row['campaign']['status'] ?? null) === 'PAUSED'
+            && ($row['campaign']['advertisingChannelType'] ?? null) === 'SEARCH'
+            && ($row['customer']['timeZone'] ?? null) === ($this->customer->timezone ?: config('app.timezone'))
+            && SearchBudgetReadback::matches($expected, SearchBudgetReadback::fromRow($row));
+    }
+
+    /** Current destinations on the exact Search campaign, including inherited account assets. */
+    public function singleLandingPageState(string $account, string $resource): array
+    {
+        if ($this->customer?->cleanGoogleCustomerId() !== $account || ! ctype_digit($account)
+            || ! preg_match('#^customers/'.$account.'/campaigns/\d+$#D', $resource)) {
+            throw new \InvalidArgumentException('The Search campaign is outside the selected Google Ads account.');
+        }
+        $campaign = "campaign.resource_name = '{$resource}'";
+        $group = $campaign." AND ad_group.status = 'ENABLED'";
+        $assetUrls = 'asset.final_urls, asset.final_mobile_urls, asset.tracking_url_template, asset.final_url_suffix';
+        $locationTypes = "asset_set.status = 'ENABLED' AND asset_set.type IN ('LOCATION_SYNC', 'BUSINESS_PROFILE_DYNAMIC_LOCATION_GROUP', 'CHAIN_DYNAMIC_LOCATION_GROUP', 'STATIC_LOCATION_GROUP')";
+
+        return [
+            'settings' => $this->rows($account, "SELECT campaign.resource_name, campaign.status, campaign.advertising_channel_type,
+                campaign.asset_automation_settings, campaign.excluded_parent_asset_field_types, campaign.excluded_parent_asset_set_types,
+                campaign.tracking_url_template, campaign.final_url_suffix, customer.tracking_url_template, customer.final_url_suffix FROM campaign WHERE {$campaign}"),
+            'ads' => $this->rows($account, "SELECT campaign.resource_name, ad_group.status, ad_group.type, ad_group.tracking_url_template, ad_group.final_url_suffix,
+                ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ad_group_ad.ad.final_mobile_urls, ad_group_ad.ad.final_app_urls,
+                ad_group_ad.ad.tracking_url_template, ad_group_ad.ad.final_url_suffix FROM ad_group_ad WHERE {$group} AND ad_group_ad.status = 'ENABLED'"),
+            'keywords' => $this->rows($account, "SELECT campaign.resource_name, ad_group.status, ad_group_criterion.final_urls, ad_group_criterion.final_mobile_urls,
+                ad_group_criterion.tracking_url_template, ad_group_criterion.final_url_suffix FROM ad_group_criterion WHERE {$group}
+                AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.negative = FALSE AND ad_group_criterion.status = 'ENABLED'"),
+            'customer_assets' => $this->rows($account, "SELECT customer_asset.field_type, {$assetUrls} FROM customer_asset WHERE customer_asset.status = 'ENABLED'"),
+            'campaign_assets' => $this->rows($account, "SELECT campaign.resource_name, campaign_asset.field_type, {$assetUrls} FROM campaign_asset WHERE {$campaign} AND campaign_asset.status = 'ENABLED'"),
+            'group_assets' => $this->rows($account, "SELECT campaign.resource_name, ad_group.status, ad_group_asset.field_type, {$assetUrls} FROM ad_group_asset WHERE {$group} AND ad_group_asset.status = 'ENABLED'"),
+            'customer_locations' => $this->rows($account, "SELECT customer_asset_set.resource_name FROM customer_asset_set WHERE customer_asset_set.status = 'ENABLED' AND {$locationTypes} LIMIT 1"),
+            'campaign_locations' => $this->rows($account, "SELECT campaign_asset_set.resource_name FROM campaign_asset_set WHERE {$campaign} AND campaign_asset_set.status = 'ENABLED' AND {$locationTypes} LIMIT 1"),
+            'group_locations' => $this->rows($account, "SELECT ad_group_asset_set.resource_name FROM ad_group_asset_set WHERE {$group} AND ad_group_asset_set.status = 'ENABLED' AND {$locationTypes} LIMIT 1"),
+        ];
     }
 
     public function performanceMax(string $customerId, string $campaign): array
@@ -85,7 +133,7 @@ class ReadCampaignConfiguration extends BaseGoogleAdsService
         }
 
         return [
-            'campaign' => $this->rows($customerId, "SELECT campaign.resource_name, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.geo_target_type_setting.positive_geo_target_type, campaign_budget.amount_micros FROM campaign WHERE campaign.resource_name = '{$campaign}'")[0] ?? [],
+            'campaign' => $this->rows($customerId, 'SELECT campaign.resource_name, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.geo_target_type_setting.positive_geo_target_type, '.SearchBudgetReadback::FIELDS." FROM campaign WHERE campaign.resource_name = '{$campaign}'")[0] ?? [],
             'ads' => $this->ads($customerId, $campaign),
             'keywords' => $this->rows($customerId, "SELECT campaign.resource_name, ad_group_criterion.ad_group, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative FROM ad_group_criterion WHERE campaign.resource_name = '{$campaign}' AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status = 'ENABLED'"),
             'criteria' => $this->rows($customerId, "SELECT campaign.resource_name, campaign_criterion.type, campaign_criterion.negative, campaign_criterion.location.geo_target_constant, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.resource_name = '{$campaign}' AND campaign_criterion.status != 'REMOVED'"),

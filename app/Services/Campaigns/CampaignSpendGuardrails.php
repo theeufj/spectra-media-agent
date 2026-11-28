@@ -6,6 +6,7 @@ use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Setting;
+use App\Models\Strategy;
 use Carbon\CarbonImmutable;
 
 /** Shared mutation limits, so an optimiser cannot undo an approved bounded trial. */
@@ -33,6 +34,19 @@ class CampaignSpendGuardrails
             ->first();
 
         return $campaign instanceof Campaign ? $campaign : null;
+    }
+
+    /** A malformed or partially removed approval must still prevent budget writes. */
+    public static function hasGoogleTotalBudget(Campaign $campaign): bool
+    {
+        if (array_key_exists('google_total_budget', $campaign->spend_guardrails ?? [])) {
+            return true;
+        }
+        if ($campaign->relationLoaded('strategies')) {
+            return $campaign->strategies->contains(fn (Strategy $strategy) => array_key_exists('google_total_budget', $strategy->bidding_strategy ?? []));
+        }
+
+        return $campaign->exists && $campaign->strategies()->whereJsonContainsKey('bidding_strategy->google_total_budget')->exists();
     }
 
     public static function activeTrial(Campaign $campaign): ?array
@@ -180,7 +194,7 @@ class CampaignSpendGuardrails
     /** Compatibility at existing decimal/float budget boundaries; limits stay integer micros. */
     public static function permitsBudget(Campaign $campaign, float $amount): bool
     {
-        return self::permitsDailyBudget($campaign, self::moneyToMicros($amount));
+        return ! self::hasGoogleTotalBudget($campaign) && self::permitsDailyBudget($campaign, self::moneyToMicros($amount));
     }
 
     public static function moneyToMicros(mixed $amount): int

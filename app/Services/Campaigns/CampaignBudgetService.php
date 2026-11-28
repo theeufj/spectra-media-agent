@@ -80,6 +80,9 @@ class CampaignBudgetService
 
     public function automaticHoldReason(Campaign $campaign): ?string
     {
+        if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)) {
+            return 'The approved Google Search total budget is fixed for the campaign dates.';
+        }
         if (CampaignSpendGuardrails::automaticChangesSuspended($campaign)) {
             return 'A bounded restart trial or spending hold is in effect.';
         }
@@ -116,6 +119,9 @@ class CampaignBudgetService
             }
             if ($automatic && ($reason = $this->automaticHoldReason($campaign))) {
                 return ['success' => true, 'changes' => [], 'read_only_reason' => $reason];
+            }
+            if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)) {
+                return ['success' => false, 'changes' => [], 'errors' => ['This campaign has an approved Google Search total budget.']];
             }
             $attempted = false;
             $changes = [];

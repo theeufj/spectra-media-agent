@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Common\DateRange;
 use Google\Ads\GoogleAds\V26\Common\KeywordInfo;
@@ -160,7 +161,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                     'time_zone' => $timezone, 'keywords' => $keywords,
                     'geo_target_constants' => $this->constants($context['geo_target_constants'] ?? [], 'geoTargetConstants'),
                     'language_constants' => $this->constants($context['language_constants'] ?? [], 'languageConstants'),
-                    'negative_keywords' => $context['negative_keywords'] ?? []],
+                    'negative_keywords' => $context['negative_keywords'] ?? []] + SearchBudgetReadback::totalBudgetSettings($context),
             ];
             if ($conversionRate !== null) {
                 // This caller-supplied assumption is separate from Google's CPC

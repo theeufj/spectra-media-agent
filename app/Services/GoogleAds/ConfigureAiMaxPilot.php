@@ -243,7 +243,8 @@ class ConfigureAiMaxPilot extends BaseGoogleAdsService
         $fresh = $campaign->fresh(['customer']);
         if (! $fresh || ! $this->customer || $fresh->customer_id !== $this->customer->id
             || $fresh->customer->cleanGoogleCustomerId() !== $this->customer->cleanGoogleCustomerId()
-            || ! $fresh->googleCampaignNumericId() || $fresh->spend_safety_hold
+            || ! $fresh->googleCampaignNumericId() || $fresh->spend_safety_hold || CampaignSpendGuardrails::hasGoogleTotalBudget($fresh)
+            || \App\Services\Campaigns\SingleGoogleSearchLandingPage::protectsResource($fresh, (string) $fresh->googleAdsResourceName())
             || $fresh->customer->service_type !== 'managed' || $fresh->customer->google_ads_link_status === 'revoked'
             || ($status !== null && $fresh->status !== $status)
             || (auth()->check() && ! auth()->user()->hasRole('admin'))

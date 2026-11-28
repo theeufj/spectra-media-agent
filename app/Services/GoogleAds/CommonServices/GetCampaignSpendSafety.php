@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Services\Campaigns\RestartOwnedSignupCampaign;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 
 /** Fresh platform metrics. API failures propagate; stale local spend is not a stop signal. */
@@ -22,8 +23,8 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
         if ($resource !== "customers/{$customerId}/campaigns/{$campaign->googleCampaignNumericId()}") {
             throw new \RuntimeException('Spend safety campaign resource does not match its customer account.');
         }
-        $query = 'SELECT customer.id, customer.status, customer.manager, customer.test_account, customer.time_zone, customer.currency_code, campaign.resource_name, campaign.start_date_time, campaign.end_date_time, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
-            .'campaign_budget.amount_micros FROM campaign '
+        $query = 'SELECT customer.id, customer.status, customer.manager, customer.test_account, customer.time_zone, campaign.resource_name, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, '
+            .SearchBudgetReadback::FIELDS.' FROM campaign '
             ."WHERE campaign.resource_name = '{$resource}'";
         $snapshot = null;
         foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
@@ -35,7 +36,7 @@ class GetCampaignSpendSafety extends BaseGoogleAdsService
                 'resource' => $row->getCampaign()->getResourceName(),
                 'campaign_type' => $row->getCampaign()->getAdvertisingChannelType(),
                 'account_timezone' => $row->getCustomer()->getTimeZone(),
-                'currency_code' => $row->getCustomer()->getCurrencyCode(),
+                ...SearchBudgetReadback::fromRow(json_decode($row->serializeToJsonString(), true, flags: JSON_THROW_ON_ERROR)),
                 'campaign_start_date' => $row->getCampaign()->getStartDateTime(),
                 'starts_at_local' => $row->getCampaign()->getStartDateTime(),
                 'ends_at_local' => $row->getCampaign()->getEndDateTime(),

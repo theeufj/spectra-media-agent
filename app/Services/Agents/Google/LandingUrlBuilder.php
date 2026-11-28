@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Campaigns\CampaignTrackingUrl;
+use App\Services\Campaigns\SingleGoogleSearchLandingPage;
 
 /**
  * Builds the final landing-page URL for an ad, including UTM tagging.
@@ -17,6 +18,10 @@ class LandingUrlBuilder
 
     public function getFinalUrl(Campaign $campaign, Strategy $strategy, ExecutionPlan $plan): ?string
     {
+        if (SingleGoogleSearchLandingPage::enabled($strategy)) {
+            return SingleGoogleSearchLandingPage::url($campaign, $strategy);
+        }
+
         // 1. Check Strategy recommendation (most specific)
         if (isset($strategy->bidding_strategy['landing_page_url']) && ! empty($strategy->bidding_strategy['landing_page_url'])) {
             $url = $strategy->bidding_strategy['landing_page_url'];
@@ -45,6 +50,10 @@ class LandingUrlBuilder
 
     public function forOffer(string $url, Campaign $campaign, Strategy $strategy, string $offer): string
     {
+        if (SingleGoogleSearchLandingPage::enabled($strategy)) {
+            throw new \DomainException('A single-destination Search campaign cannot use offer-specific URLs.');
+        }
+
         return CampaignTrackingUrl::forStrategy($url, $campaign, $strategy, 'google', $offer);
     }
 }

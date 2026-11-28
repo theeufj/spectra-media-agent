@@ -4,6 +4,7 @@ namespace App\Services\Campaigns;
 
 use App\Enums\CampaignStatus;
 use App\Models\Customer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class BudgetAllocationService
@@ -15,28 +16,41 @@ class BudgetAllocationService
     public function __invoke(Customer $customer, float $totalBudget): bool
     {
         try {
-            $campaigns = $customer->campaigns()
-                ->where('status', CampaignStatus::Active)
-                ->with('strategies.performanceData')
-                ->get();
+            return DB::transaction(function () use ($customer, $totalBudget) {
+                $campaigns = $customer->campaigns()
+                    ->where('status', CampaignStatus::Active)
+                    ->with('strategies.performanceData')
+                    ->orderBy('id')->lockForUpdate()
+                    ->get();
 
-            if ($campaigns->isEmpty()) {
-                Log::warning("No active campaigns found for customer {$customer->id} to allocate budget to.");
+                if ($campaigns->isEmpty()) {
+                    Log::warning("No active campaigns found for customer {$customer->id} to allocate budget to.");
 
-                return false;
-            }
+                    return false;
+                }
 
-            $campaignPerformance = $this->calculateCampaignPerformance($campaigns);
-            $totalWeightedPerformance = array_sum($campaignPerformance);
+                // Reserve a fixed campaign's planning share before distributing the remainder.
+                [$fixed, $adjustable] = $campaigns->partition(CampaignSpendGuardrails::hasGoogleTotalBudget(...));
+                if ($fixed->isNotEmpty()) {
+                    $totalBudget -= $fixed->sum('daily_budget');
+                    if ($totalBudget <= 0 || $adjustable->isEmpty()) {
+                        return false;
+                    }
+                }
+                $campaigns = $adjustable;
 
-            if ($totalWeightedPerformance === 0) {
-                // If no performance data, distribute budget evenly
-                return $this->distributeEvenly($campaigns, $totalBudget);
-            }
+                $campaignPerformance = $this->calculateCampaignPerformance($campaigns);
+                $totalWeightedPerformance = array_sum($campaignPerformance);
 
-            $this->allocateBudgetByPerformance($campaigns, $campaignPerformance, $totalWeightedPerformance, $totalBudget);
+                if ($totalWeightedPerformance === 0) {
+                    // If no performance data, distribute budget evenly
+                    return $this->distributeEvenly($campaigns, $totalBudget);
+                }
 
-            return true;
+                $this->allocateBudgetByPerformance($campaigns, $campaignPerformance, $totalWeightedPerformance, $totalBudget);
+
+                return true;
+            });
         } catch (\Throwable $e) {
             report($e);
             Log::error("Error allocating budget for customer {$customer->id}: ".$e->getMessage(), [

@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
@@ -267,6 +268,9 @@ class PerformanceAnomalyAlertAgent
      */
     private function reduceDailyBudget(Campaign $campaign, float $reductionFraction, string $reason): ?array
     {
+        if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)) {
+            return null;
+        }
         $current = (float) ($campaign->daily_budget ?? 0);
         if ($current <= 0) {
             return null;

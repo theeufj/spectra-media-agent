@@ -29,6 +29,13 @@ class CampaignBudgetConfirmation
             if ($strategies->contains(fn (Strategy $strategy) => in_array($strategy->deployment_status, ['queued', 'deploying'], true))) {
                 throw ValidationException::withMessages(['daily_budget' => 'Wait for the current deployment to finish before changing its budget.']);
             }
+            $fixed = array_key_exists('google_total_budget', $current->spend_guardrails ?? []);
+            if ($fixed) {
+                if ($strategies->count() !== 1 || $dailyCents * 10_000 !== CampaignSpendGuardrails::moneyToMicros($current->daily_budget)) {
+                    throw ValidationException::withMessages(['daily_budget' => 'Keep the approved fixed budget and daily allocation for this Google Search campaign.']);
+                }
+                GoogleSearchTotalBudget::forStrategy($strategies->first()->setRelation('campaign', $current));
+            }
             $workflow = app(CampaignMarketResearchWorkflow::class);
             $proposal = $workflow->proposalForApproval($current, $dailyCents, $researchId, $acceptProposal, $researchFingerprint, $budgetOptionId);
 
@@ -62,7 +69,7 @@ class CampaignBudgetConfirmation
             $current->update([
                 'daily_budget' => $this->decimal($dailyCents),
                 'approved_daily_budget' => $this->decimal($dailyCents),
-                'total_budget' => $this->decimal($dailyCents * 7),
+                'total_budget' => $fixed ? $current->total_budget : $this->decimal($dailyCents * 7),
                 'budget_confirmed_at' => now(),
             ]);
             $workflow->applyApprovedProposal($current, $strategies, $proposal);

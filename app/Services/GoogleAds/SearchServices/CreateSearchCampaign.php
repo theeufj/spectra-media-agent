@@ -4,18 +4,25 @@ namespace App\Services\GoogleAds\SearchServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
 use Google\Ads\GoogleAds\Lib\V26\GoogleAdsException;
 use Google\Ads\GoogleAds\V26\Common\ManualCpc;
 use Google\Ads\GoogleAds\V26\Common\TargetCpa;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V26\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V26\Enums\AssetAutomationStatusEnum\AssetAutomationStatus;
+use Google\Ads\GoogleAds\V26\Enums\AssetAutomationTypeEnum\AssetAutomationType;
+use Google\Ads\GoogleAds\V26\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V26\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
+use Google\Ads\GoogleAds\V26\Enums\BudgetPeriodEnum\BudgetPeriod;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V26\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 use Google\Ads\GoogleAds\V26\Resources\Campaign;
 use Google\Ads\GoogleAds\V26\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V26\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V26\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V26\Services\MutateGoogleAdsRequest;
+use Google\Ads\GoogleAds\V26\Services\MutateOperation;
 
 class CreateSearchCampaign extends BaseGoogleAdsService
 {
@@ -33,20 +40,39 @@ class CreateSearchCampaign extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, array $campaignData): ?string
     {
+        $totalBudget = $campaignData['google_total_budget'] ?? null;
+        if (array_key_exists('google_total_budget', $campaignData) && (
+            ! is_array($totalBudget) || ! is_int($totalBudget['total_micros'] ?? null)
+            || $totalBudget['total_micros'] <= 0 || $totalBudget['total_micros'] % 10_000 !== 0
+            || ! is_string($campaignData['startDate'] ?? null) || ($totalBudget['start_date'] ?? null) !== $campaignData['startDate']
+            || ! is_string($campaignData['endDate'] ?? null) || ($totalBudget['end_date'] ?? null) !== $campaignData['endDate']
+            || ! is_string($totalBudget['currency'] ?? null) || ! preg_match('/^[A-Z]{3}$/D', $totalBudget['currency'])
+            || ! ctype_digit($customerId) || $this->customer?->cleanGoogleCustomerId() !== $customerId
+        )) {
+            throw new \InvalidArgumentException('A Search total budget requires approved amounts and dates in the same Google account.');
+        }
+
         // Ensure client is initialized before proceeding
         $this->ensureClient();
 
         // Check if a campaign with the same name already exists.
         $campaignName = $campaignData['businessName'].' Search Campaign';
-        $existingCampaign = $this->getCampaignByName($customerId, $campaignName);
+        $existingCampaign = $this->getCampaignByName($customerId, $campaignName, failOnReadError: $totalBudget !== null);
         if ($existingCampaign) {
+            $resource = $existingCampaign->getResourceName();
+            if ($totalBudget !== null && ! app(ReadCampaignConfiguration::class, ['customer' => $this->customer])
+                ->hasVerifiedSearchTotalBudget($customerId, $resource, $totalBudget)) {
+                throw new \RuntimeException('The existing Search campaign does not match the approved total budget and schedule.');
+            }
             $this->logInfo("Campaign '{$campaignName}' already exists. Skipping creation.");
 
-            return $existingCampaign->getResourceName();
+            return $resource;
         }
 
-        // 1. Create Campaign Budget
-        $campaignBudgetResourceName = $this->createCampaignBudget($customerId, $campaignData['budget']);
+        // A total budget and its campaign are created together using a temporary resource name.
+        $campaignBudgetResourceName = $totalBudget === null
+            ? $this->createCampaignBudget($customerId, $campaignData['budget'])
+            : "customers/{$customerId}/campaignBudgets/-1";
         if (is_null($campaignBudgetResourceName)) {
             $this->logError("Failed to create campaign budget for customer $customerId.");
 
@@ -75,6 +101,14 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
 
+        if (($campaignData['single_landing_page'] ?? false) === true) {
+            $campaign->setExcludedParentAssetFieldTypes([AssetFieldType::SITELINK]);
+            $campaign->setAssetAutomationSettings([new Campaign\AssetAutomationSetting([
+                'asset_automation_type' => AssetAutomationType::FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION,
+                'asset_automation_status' => AssetAutomationStatus::OPTED_OUT,
+            ])]);
+        }
+
         // Apply bidding strategy (example: TargetCpa)
         if (isset($campaignData['biddingStrategyType']) && $campaignData['biddingStrategyType'] === 'TARGET_CPA') {
             $campaign->setTargetCpa(new TargetCpa([
@@ -84,6 +118,10 @@ class CreateSearchCampaign extends BaseGoogleAdsService
 
         $campaignOperation = new CampaignOperation;
         $campaignOperation->setCreate($campaign);
+
+        if ($totalBudget !== null) {
+            return $this->createWithTotalBudget($customerId, $campaignOperation, $campaignBudgetResourceName, $campaignName, $totalBudget['total_micros']);
+        }
 
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
@@ -105,6 +143,32 @@ class CreateSearchCampaign extends BaseGoogleAdsService
         }
     }
 
+    private function createWithTotalBudget(string $customerId, CampaignOperation $campaign, string $budgetResource, string $name, int $totalMicros): ?string
+    {
+        $budget = new CampaignBudget([
+            'resource_name' => $budgetResource,
+            'name' => 'Budget for '.$name,
+            'period' => BudgetPeriod::CUSTOM_PERIOD,
+            'total_amount_micros' => $totalMicros,
+            'delivery_method' => BudgetDeliveryMethod::STANDARD,
+            'explicitly_shared' => false,
+        ]);
+        $response = $this->client->getGoogleAdsServiceClient()->mutate(new MutateGoogleAdsRequest([
+            'validate_only' => $this->dryRun,
+            'customer_id' => $customerId,
+            'partial_failure' => false,
+            'mutate_operations' => [
+                new MutateOperation(['campaign_budget_operation' => new CampaignBudgetOperation(['create' => $budget])]),
+                new MutateOperation(['campaign_operation' => $campaign]),
+            ],
+        ]));
+
+        $results = $response->getMutateOperationResponses();
+        $resource = count($results) === 2 ? $results[1]->getCampaignResult()?->getResourceName() : null;
+
+        return $resource && preg_match('#^customers/'.$customerId.'/campaigns/\d+$#D', $resource) ? $resource : null;
+    }
+
     /**
      * Creates a campaign budget for a new campaign.
      *
@@ -122,7 +186,7 @@ class CreateSearchCampaign extends BaseGoogleAdsService
         $campaignBudget = new CampaignBudget([
             'name' => 'Search Budget - '.uniqid(),
             'amount_micros' => $dailyBudgetMicros,
-            'delivery_method' => BudgetType::STANDARD,
+            'delivery_method' => BudgetDeliveryMethod::STANDARD,
             'explicitly_shared' => false,
         ]);
 
@@ -152,11 +216,12 @@ class CreateSearchCampaign extends BaseGoogleAdsService
     /**
      * Check if a campaign with the given name already exists
      */
-    private function getCampaignByName(string $customerId, string $campaignName): ?Campaign
+    private function getCampaignByName(string $customerId, string $campaignName, bool $failOnReadError = false): ?Campaign
     {
         $this->ensureClient();
 
-        $query = "SELECT campaign.resource_name, campaign.name FROM campaign WHERE campaign.name = '{$campaignName}'";
+        $escapedName = str_replace(['\\', "'"], ['\\\\', "\\'"], $campaignName);
+        $query = "SELECT campaign.resource_name, campaign.name FROM campaign WHERE campaign.name = '{$escapedName}'";
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
             // Fix: Use SearchGoogleAdsRequest object instead of passing arguments directly
@@ -170,6 +235,9 @@ class CreateSearchCampaign extends BaseGoogleAdsService
                 return $googleAdsRow->getCampaign();
             }
         } catch (GoogleAdsException $e) {
+            if ($failOnReadError) {
+                throw $e;
+            }
             $this->logError("Error fetching campaign by name for customer $customerId: ".$e->getMessage(), $e);
         }
 

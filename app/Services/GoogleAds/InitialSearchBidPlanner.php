@@ -10,6 +10,7 @@ use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
@@ -352,6 +353,7 @@ class InitialSearchBidPlanner
         $context = array_intersect_key($snapshot, array_flip(['currency_code', 'time_zone', 'geo_target_constants',
             'excluded_geo_target_constants', 'language_constants', 'negative_keywords', 'ad_schedule',
             'search_partners_enabled', 'device_bid_modifiers', 'unsupported_targeting']));
+        $context += SearchBudgetReadback::totalBudgetSettings($snapshot);
         $context['bidding_strategy'] = BiddingStrategyType::MANUAL_CPC;
         $context['daily_budget_micros'] = $budget;
         $today = CarbonImmutable::now($context['time_zone'])->startOfDay();
@@ -389,6 +391,9 @@ class InitialSearchBidPlanner
     private function matchesForecast(array $forecast, array $keywords, array $context): bool
     {
         $actual = $forecast['context'] ?? [];
+        if (SearchBudgetReadback::totalBudgetSettings($actual) != SearchBudgetReadback::totalBudgetSettings($context)) {
+            return false;
+        }
         foreach (['cpc_bid_ceiling_micros', 'daily_budget_micros', 'currency_code', 'time_zone',
             'geo_target_constants', 'language_constants', 'negative_keywords'] as $key) {
             if (! array_key_exists($key, $actual) || $actual[$key] !== $context[$key]) {
