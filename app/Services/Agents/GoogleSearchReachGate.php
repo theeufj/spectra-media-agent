@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 
@@ -22,6 +23,7 @@ class GoogleSearchReachGate
             'excluded_geo_target_constants', 'language_constants', 'ad_schedule', 'device_bid_modifiers',
             'unsupported_targeting', 'targeting_setting', 'ad_group_targeting_modes', 'audience_criteria',
         ]));
+        $settings += SearchBudgetReadback::totalBudgetSettings($snapshot);
         $manual = in_array($snapshot['bidding_strategy'] ?? null, [BiddingStrategyType::MANUAL_CPC, 'MANUAL_CPC', 'ManualCpc'], true);
         $settings['keywords'] = array_map(function (array $keyword) use ($manual): array {
             $row = array_intersect_key($keyword, array_flip(['resource_name', 'resource', 'text', 'match_type',
@@ -128,11 +130,23 @@ class GoogleSearchReachGate
             $add('search_demand_not_demonstrated', 'The selected keyword set has no verified positive search demand. Review the keyword theme before launching.');
         }
         $budget = $snapshot['daily_budget_micros'] ?? null;
+        $totalBudget = $campaign->spend_guardrails['google_total_budget'] ?? null;
+        $customPeriod = ($snapshot['budget_period'] ?? null) === 'CUSTOM_PERIOD';
+        if (array_key_exists('google_total_budget', $campaign->spend_guardrails ?? []) || $customPeriod) {
+            if (! is_array($totalBudget) || ! SearchBudgetReadback::matches($totalBudget, $snapshot)) {
+                $add('search_reach_total_budget_unverified', 'The live Google total budget, account currency and serving dates must match the reviewed campaign.', true);
+            } else {
+                $metadata['google_total_budget'] = $totalBudget;
+                $metadata['daily_planning_budget_micros'] = $budget;
+            }
+        }
         $cap = $metadata['cpc_bid_ceiling_micros'];
         $approved = CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget);
         $metadata['approved_daily_budget_micros'] = $approved;
         if (! $campaign->budget_confirmed_at || $approved <= 0 || ! is_int($budget) || $budget <= 0) {
-            $add('search_reach_approved_budget_unverified', 'A positive approved daily budget and its live Google setting must be verified.', true);
+            $add('search_reach_approved_budget_unverified', $customPeriod
+                ? 'The reviewed daily planning allocation for the verified Google total budget is unavailable.'
+                : 'A positive approved daily budget and its live Google setting must be verified.', true);
         } elseif ($budget > $approved) {
             $add('search_reach_approved_budget_exceeded', 'The live daily budget exceeds the customer-approved daily budget.');
         }
@@ -227,6 +241,9 @@ class GoogleSearchReachGate
             && $this->strategy($context['bidding_strategy'] ?? null) !== null
             && $this->strategy($context['bidding_strategy'] ?? null) === $this->strategy($snapshot['bidding_strategy'] ?? null)
             && $keywords !== [] && $this->keywords($context['keywords'] ?? [], $manual) === $keywords;
+        if ($customPeriod || ($context['budget_period'] ?? null) === 'CUSTOM_PERIOD') {
+            $matches = $matches && is_array($totalBudget) && SearchBudgetReadback::matches($totalBudget, $context);
+        }
         foreach (['geo_target_constants', 'language_constants', 'negative_keywords'] as $field) {
             $matches = $matches && array_key_exists($field, $context) && array_key_exists($field, $snapshot)
                 && $this->canonical($field === 'negative_keywords' ? $this->negatives($context[$field]) : $context[$field])
@@ -255,6 +272,9 @@ class GoogleSearchReachGate
                     $add('search_reach_below_useful_threshold', $message);
                 }
             }
+            if ($customPeriod && $cost > ($snapshot['total_budget_micros'] ?? 0)) {
+                $add('search_reach_forecast_total_budget_exceeded', 'Forecast spend exceeds the reviewed total for the full campaign.');
+            }
             if (is_int($budget) && $budget > 0 && $cost > $budget * $period) {
                 $add('search_reach_forecast_budget_exceeded', 'Forecast ad spend exceeds the approved daily-budget envelope for the stated period.');
             }
@@ -279,6 +299,9 @@ class GoogleSearchReachGate
         }
         $trial = CampaignSpendGuardrails::activeTrial($campaign);
         if ($trial) {
+            if ($customPeriod) {
+                $add('search_reach_trial_daily_budget_unverified', 'The controlled trial requires a daily budget setting on Google. A campaign total allows variable daily spend.');
+            }
             $total = $snapshot['reported_lifetime_cost_micros'] ?? null;
             $baseline = $trial['baseline_cost_micros'] ?? null;
             $stop = $trial['max_spend_micros'] ?? null;

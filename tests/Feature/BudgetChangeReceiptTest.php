@@ -7,11 +7,16 @@ use App\Contracts\Ads\ReportsBudgetChanges;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
+use App\Models\Role;
 use App\Models\Strategy;
+use App\Models\User;
 use App\Services\Ads\CustomerRoutedAdsServiceFactory;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Campaigns\BudgetAllocationService;
 use App\Services\Campaigns\CampaignBudgetService;
+use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Campaigns\GoogleBudgetPacingHistory;
+use App\Services\Campaigns\GoogleCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
@@ -35,6 +40,59 @@ class BudgetChangeReceiptTest extends TestCase
     {
         return ['campaign_resource' => $campaign->googleAdsResourceName(), 'budget_resource' => 'customers/3141592653/campaignBudgets/789',
             'daily_budget_micros' => $micros, 'currency_code' => 'AUD', 'account_timezone' => 'Australia/Sydney'];
+    }
+
+    public function test_fixed_search_budget_resists_reconciliation_and_keeps_its_daily_planning_allocation(): void
+    {
+        $campaign = $this->campaign(['status' => 'active', 'budget_confirmed_at' => now(), 'spend_guardrails' => ['google_total_budget' => null]]);
+        $legacy = Campaign::factory()->create(['customer_id' => $campaign->customer_id, 'status' => 'active', 'daily_budget' => 10]);
+        $writer = new ReceiptGoogleBudgetWriter($campaign->customer, []);
+        $this->assertFalse($writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000)['success']);
+        $this->assertSame([], $writer->writes);
+        $this->assertArrayHasKey('read_only_reason', app(BudgetIntelligenceAgent::class)->optimize($campaign));
+        $this->assertFalse(app(CampaignBudgetService::class)->apply($campaign, 25));
+        $this->assertFalse(CampaignSpendGuardrails::permitsBudget($campaign, 25));
+        $this->assertTrue(CampaignSpendGuardrails::permitsDailyBudget($campaign, 50_000_000));
+
+        $this->assertTrue(app(BudgetAllocationService::class)($campaign->customer, 70));
+        $this->assertEquals(50, $campaign->fresh()->daily_budget);
+        $this->assertEquals(20, $legacy->fresh()->daily_budget);
+    }
+
+    public function test_daily_budget_trial_cannot_replace_the_fixed_cap(): void
+    {
+        $campaign = $this->campaign(['spend_guardrails' => ['google_total_budget' => null]]);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('A daily-budget trial cannot replace');
+        app(GoogleCampaignSpendSafety::class)->configureBoundedTrial($campaign, 300_000_000, 50_000_000, 2_000_000, 4_000_000, 'Requested trial');
+    }
+
+    public function test_admin_cannot_change_dates_or_budget_after_total_budget_approval_even_if_the_campaign_marker_was_lost(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin'])));
+        $campaign = $this->campaign(['start_date' => '2026-11-21', 'end_date' => '2026-12-02']);
+        Strategy::factory()->create(['campaign_id' => $campaign->id, 'platform' => 'google', 'campaign_type' => 'search',
+            'bidding_strategy' => ['google_total_budget' => null]]);
+        $url = route('admin.campaigns.update', $campaign);
+        $this->actingAs($admin)->put($url, ['start_date' => '2026-11-21', 'end_date' => '2026-12-03', 'daily_budget' => 20])
+            ->assertSessionHasErrors('total_budget');
+        $this->assertSame('2026-12-02', $campaign->fresh()->end_date->toDateString());
+        $this->assertEquals(50, $campaign->fresh()->daily_budget);
+        $this->put($url, ['name' => 'Renamed safely'])->assertSessionHasNoErrors();
+        $this->assertSame('Renamed safely', $campaign->fresh()->name);
+    }
+
+    public function test_google_custom_period_or_total_amount_prevents_a_daily_write_even_without_a_local_marker(): void
+    {
+        $campaign = $this->campaign();
+        foreach ([['custom_period' => true], ['total_budget_micros' => 150_000_000]] as $remote) {
+            foreach ([false, true] as $automatic) {
+                $writer = new ReceiptGoogleBudgetWriter($campaign->customer, [$this->snapshot($campaign, 0) + $remote + ['platform_status' => 'ENABLED']]);
+                $this->assertFalse($writer->updateWithChanges('3141592653', $campaign->googleAdsResourceName(), 50_000_000, $automatic)['success']);
+                $this->assertSame([], $writer->writes);
+            }
+        }
     }
 
     public function test_google_matching_budget_is_confirmed_without_repeating_the_write(): void

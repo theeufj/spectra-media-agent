@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
 use App\Services\Deployment\GoogleSearchConfigurationCheck;
+use App\Services\GoogleAds\CommonServices\ReadCampaignConfiguration;
 use Tests\TestCase;
 
 class GoogleSearchConfigurationCheckTest extends TestCase
@@ -34,6 +36,91 @@ class GoogleSearchConfigurationCheckTest extends TestCase
     public function test_matching_campaign_passes_even_when_protobuf_omits_false_flags(): void
     {
         $this->assertSame([], app(GoogleSearchConfigurationCheck::class)->compare(...$this->fixture()));
+    }
+
+    private function totalBudgetFixture(): array
+    {
+        [$expected, $actual] = $this->fixture();
+        $expected['budget_micros'] = 22_000_000;
+        $expected['google_total_budget'] = ['total_micros' => 154_000_000, 'currency' => 'AUD', 'start_date' => '2026-11-29', 'end_date' => '2026-12-05'];
+        $actual['campaign']['campaign'] += ['resourceName' => 'customers/1234567890/campaigns/61', 'status' => 'PAUSED',
+            'startDateTime' => '2026-11-29 00:00:00', 'endDateTime' => '2026-12-05 23:59:59'];
+        $actual['campaign']['customer'] = ['currencyCode' => 'AUD'];
+        $actual['campaign']['campaignBudget'] = ['period' => 'CUSTOM_PERIOD', 'explicitlyShared' => false, 'totalAmountMicros' => '154000000'];
+
+        return [$expected, $actual];
+    }
+
+    public function test_paused_and_enabled_verification_require_exact_total_amount_currency_and_dates(): void
+    {
+        [$expected, $actual] = $this->totalBudgetFixture();
+        $check = new GoogleSearchConfigurationCheck;
+        $this->assertSame([], $check->comparePausedObjects($expected, $actual));
+        $actual['campaign']['campaign']['status'] = 'ENABLED';
+        $actual['campaign']['campaign']['startDateTime'] = '2026-11-29 07:46:05';
+        $this->assertSame([], $check->compare($expected, $actual));
+
+        foreach ([
+            'campaignBudget.period' => 'DAILY', 'campaignBudget.explicitlyShared' => true,
+            'campaignBudget.totalAmountMicros' => '154000001', 'campaignBudget.amountMicros' => '22000000',
+            'customer.currencyCode' => 'USD', 'campaign.startDateTime' => '2026-11-30 01:00:00',
+            'campaign.endDateTime' => '2026-12-06 23:59:59',
+        ] as $field => $value) {
+            $changed = $actual;
+            data_set($changed['campaign'], $field, $value);
+            $this->assertNotEmpty($check->compare($expected, $changed), $field);
+            $this->assertNotEmpty($check->comparePausedObjects($expected, $changed), $field);
+        }
+        foreach (['2026-11-28 23:59:59', '2026-11-29 24:00:00', '2026-11-29', '2026-11-29 00:00:00Z'] as $start) {
+            $changed = $actual;
+            $changed['campaign']['campaign']['startDateTime'] = $start;
+            $this->assertNotEmpty($check->compare($expected, $changed), $start);
+        }
+        $unproven = $actual;
+        unset($unproven['campaign']['campaignBudget']['explicitlyShared']);
+        $this->assertNotEmpty($check->compare($expected, $unproven));
+        unset($expected['google_total_budget']);
+        $actual['campaign']['campaignBudget']['amountMicros'] = '22000000';
+        $this->assertNotEmpty($check->compare($expected, $actual));
+    }
+
+    public function test_staging_checks_the_actual_paused_search_resource_in_the_bound_subaccount(): void
+    {
+        [$expected, $actual] = $this->totalBudgetFixture();
+        $reader = new class extends ReadCampaignConfiguration
+        {
+            public array $row = [];
+
+            public int $requests = 0;
+
+            public function __construct()
+            {
+                $this->customer = new Customer(['google_ads_customer_id' => '123-456-7890', 'timezone' => 'Australia/Sydney']);
+            }
+
+            protected function rows(string $customerId, string $query): array
+            {
+                $this->requests++;
+
+                return [$this->row];
+            }
+        };
+        $scope = '1234567890';
+        $resource = 'customers/1234567890/campaigns/61';
+        $cap = $expected['google_total_budget'];
+        $actual['campaign']['customer']['timeZone'] = 'Australia/Sydney';
+        $reader->row = $actual['campaign'];
+        $this->assertFalse($reader->hasVerifiedSearchTotalBudget('9999999999', 'customers/9999999999/campaigns/61', $cap));
+        $this->assertFalse($reader->hasVerifiedSearchTotalBudget($scope, 'customers/9999999999/campaigns/61', $cap));
+        $this->assertSame(0, $reader->requests);
+        $this->assertTrue($reader->hasVerifiedSearchTotalBudget($scope, $resource, $cap));
+        $reader->row['customer']['timeZone'] = 'America/New_York';
+        $this->assertFalse($reader->hasVerifiedSearchTotalBudget($scope, $resource, $cap));
+        foreach (['status' => 'ENABLED', 'resourceName' => 'customers/1234567890/campaigns/92', 'advertisingChannelType' => 'DISPLAY'] as $key => $value) {
+            $reader->row = $actual['campaign'];
+            $reader->row['campaign'][$key] = $value;
+            $this->assertFalse($reader->hasVerifiedSearchTotalBudget($scope, $resource, $cap), $key);
+        }
     }
 
     public function test_retrieving_a_campaign_does_not_prove_its_configuration(): void

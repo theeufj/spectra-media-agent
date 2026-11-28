@@ -75,6 +75,9 @@ class GoogleAdStrengthRepair
             \App\Services\Campaigns\CampaignSpendGuardrails::activeTrial($fresh) !== null
                 && (! $stagedRankCreative || ($fresh->spend_guardrails['allow_ad_rank_repairs'] ?? false) !== true) => 'approved_bounded_trial',
             $customer->service_type === 'setup_only' => 'setup_only',
+            // The copy-only updater masks headlines and descriptions. Extension and rank
+            // repairs can attach links or create entirely new ads with a different URL.
+            ! $rewritesSearchCopy && $approved && \App\Services\Campaigns\SingleGoogleSearchLandingPage::required($approved) => 'single_landing_page_restricts_extensions',
             ! $approved?->signed_off_at => 'strategy_not_approved',
             ($stagedRankCreative || $rewritesSearchCopy) && ! empty($approved->bidding_strategy['search_offer_groups']) => 'search_offer_copy_requires_group_review',
             basename((string) $approved->reusableGoogleCampaignId()) !== basename((string) $campaign->googleAdsResourceName()) => 'google_strategy_target_changed',

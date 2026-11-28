@@ -11,12 +11,14 @@ use App\Services\GoogleAds\CommonServices\GetCampaignSpendSafety;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignStatus;
 use App\Services\GoogleAds\InspectAiMaxPilot;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /** A stop is a verified platform pause, never an AI suggestion or a local status alone. */
 class GoogleCampaignSpendSafety
@@ -141,6 +143,9 @@ class GoogleCampaignSpendSafety
 
         return Cache::lock("campaign-spend-safety:{$campaign->id}", 180)->block(5, function () use ($campaign, $maxSpendMicros, $dailyBudgetMicros, $cpcBidMicros, $goalCpaMicros, $approval) {
             $campaign->refresh()->load('customer');
+            if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)) {
+                throw new \RuntimeException('A daily-budget trial cannot replace the approved Google Search total budget.');
+            }
             if (! $campaign->customer || ! $campaign->googleAdsResourceName()) {
                 throw new \RuntimeException('A bounded trial requires a valid Google customer and campaign.');
             }
@@ -169,6 +174,9 @@ class GoogleCampaignSpendSafety
                 $locked = Campaign::withoutCustomerScope()->lockForUpdate()->findOrFail($campaign->id);
                 if (! $locked instanceof Campaign) {
                     throw new \RuntimeException('Campaign was unavailable while saving trial limits.');
+                }
+                if (CampaignSpendGuardrails::hasGoogleTotalBudget($locked)) {
+                    throw new \RuntimeException('A daily-budget trial cannot replace the approved Google Search total budget.');
                 }
                 $locked->update(['spend_guardrails' => $trial]);
                 AgentActivity::record('spend_safety', 'bounded_trial_configured',
@@ -216,6 +224,9 @@ class GoogleCampaignSpendSafety
         if ($campaign->hasPassedEndDate()) {
             return 'approved_end_date_passed';
         }
+        if (CampaignSpendGuardrails::hasGoogleTotalBudget($campaign) && ! $this->fixedSearchBudgetMatches($campaign, $snapshot)) {
+            return 'google_search_total_budget_changed';
+        }
         if ($respectLocalPause && $campaign->status === CampaignStatus::Paused && $snapshot['status'] === GoogleStatus::ENABLED) {
             // Google can confirm the authorized enable before local lifecycle readback
             // is committed. This exact, short journalled handshake is not a new
@@ -260,6 +271,24 @@ class GoogleCampaignSpendSafety
         return $snapshot['window_conversions'] <= 0
             && $snapshot['window_matured_cost_micros'] >= (int) config('optimization.campaign_spend_safety.zero_conversion_spend_micros', 50_000_000)
             ? 'no_conversions_after_matured_spend' : null;
+    }
+
+    private function fixedSearchBudgetMatches(Campaign $campaign, array $snapshot): bool
+    {
+        $strategies = $campaign->strategies()->limit(2)->get();
+        if ($strategies->count() !== 1 || ($snapshot['campaign_type'] ?? null) !== AdvertisingChannelType::SEARCH) {
+            return false;
+        }
+        $strategy = $strategies->first()->setRelation('campaign', $campaign);
+        try {
+            $expected = GoogleSearchTotalBudget::forStrategy($strategy);
+        } catch (ValidationException) {
+            return false;
+        }
+
+        return $expected !== null && $strategy->google_ads_campaign_id === ($snapshot['resource'] ?? null)
+            && ($snapshot['account_timezone'] ?? null) === ($campaign->customer?->timezone ?: config('app.timezone'))
+            && SearchBudgetReadback::matches($expected, $snapshot);
     }
 
     private function pilotStopReason(Campaign $campaign, array &$snapshot, bool $allowPausedPreparation, ?array $activationReadiness = null): ?string

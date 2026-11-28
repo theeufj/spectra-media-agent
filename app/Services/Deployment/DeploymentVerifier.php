@@ -7,12 +7,16 @@ use App\Models\Customer;
 use App\Models\EnabledPlatform;
 use App\Models\Strategy;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
+use App\Services\Campaigns\SingleGoogleSearchLandingPage;
 use App\Services\FacebookAds\CampaignService;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
+use App\Services\GoogleAds\CommonServices\VerifySingleSearchLandingPage;
 use App\Services\LinkedInAds\CampaignService as LinkedInCampaignService;
 use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use Google\Ads\GoogleAds\V26\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Answers one question: do the platform objects this strategy claims to have
@@ -132,6 +136,14 @@ class DeploymentVerifier
         $pausedHandover = $this->isPausedHandover($strategy, $customer, $resourceName);
         $issues = $pausedHandover ? $check->comparePausedObjects($baseline, $snapshot) : $strictIssues;
         $goalIssues = array_values(array_diff($strictIssues, $issues));
+        $restricted = SingleGoogleSearchLandingPage::required($strategy);
+        $landingUrl = $restricted ? VerifySingleSearchLandingPage::reviewedUrl($strategy) : null;
+        if ($restricted && $landingUrl === null) {
+            $issues[] = 'The current single Search landing page differs from the deployment baseline.';
+        } elseif ($landingUrl !== null) {
+            $destination = app(VerifySingleSearchLandingPage::class, ['customer' => $customer]);
+            $issues = [...$issues, ...$destination->inspect($customerId, $resourceName, $landingUrl, $pausedHandover)];
+        }
         if ($pausedHandover) {
             // A marker only describes intent. Require a fresh platform read
             // after the configuration read before calling the handover paused.
@@ -141,7 +153,7 @@ class DeploymentVerifier
                 $issues[] = 'Google has not verified this handover campaign as paused. Review its live status.';
             }
         }
-        $issues = DB::transaction(function () use ($strategy, $customer, $resourceName, $baseline, $staging, $pausedHandover, $goalIssues, $issues) {
+        $issues = DB::transaction(function () use ($strategy, $customer, $resourceName, $baseline, $staging, $pausedHandover, $goalIssues, $issues, $restricted, $landingUrl) {
             // Use the approval writer's lock order. A changed budget must not
             // be certified against an earlier API snapshot.
             $campaign = Campaign::whereKey($strategy->campaign_id)->lockForUpdate()->firstOrFail();
@@ -150,6 +162,22 @@ class DeploymentVerifier
             if (($execution['metadata']['google_search_baseline'] ?? []) != $baseline
                 || $this->googleCampaignResource($locked, $customer) !== $resourceName) {
                 $issues[] = 'The reviewed Google configuration changed during verification. Check it again before marking the deployment verified.';
+            }
+            $locked->setRelation('campaign', $campaign);
+            if ($restricted !== SingleGoogleSearchLandingPage::required($locked)
+                || ($restricted && VerifySingleSearchLandingPage::reviewedUrl($locked) !== $landingUrl)) {
+                $issues[] = 'The reviewed Search destination changed during verification.';
+            }
+            try {
+                $currentTotal = GoogleSearchTotalBudget::forStrategy($locked);
+                $pace = CampaignSpendGuardrails::moneyToMicros($locked->daily_budget);
+                if ($currentTotal != ($baseline['google_total_budget'] ?? null)
+                    || ($currentTotal !== null && (($baseline['budget_micros'] ?? null) !== $pace || ! $campaign->budget_confirmed_at
+                        || CampaignSpendGuardrails::moneyToMicros($campaign->approved_daily_budget) < $pace))) {
+                    $issues[] = 'The current reviewed total budget and approved pacing differ from the verified Google Search baseline.';
+                }
+            } catch (ValidationException) {
+                $issues[] = 'The current Google Search total budget approval is incomplete or has changed.';
             }
             if ($pausedHandover) {
                 if (($execution['metadata']['google_search_staging'] ?? []) != $staging

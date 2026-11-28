@@ -611,7 +611,11 @@ export default function Show({ auth, campaign, policyStatus = campaign?.policy_c
                 <div className="mx-auto max-w-7xl mb-6">
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-5 py-3">
                         <p className="text-sm text-gray-700">
-                            <span className="font-semibold">Daily budget</span>{' '}
+                            {campaign.spend_guardrails?.google_total_budget && (
+                                <><strong>Campaign spending cap</strong>{' '}
+                                    {campaign.spend_guardrails.google_total_budget.currency} {Number(campaign.total_budget).toFixed(2)} · </>
+                            )}
+                            <span className="font-semibold">{campaign.spend_guardrails?.google_total_budget ? 'Daily average' : 'Daily budget'}</span>{' '}
                             {campaign.currency_code || 'USD'} {Number(campaign.daily_budget || 0).toFixed(2)}
                             {selfFunded && <span className="text-gray-500"> — billed to you by Google, not by us</span>}
                         </p>

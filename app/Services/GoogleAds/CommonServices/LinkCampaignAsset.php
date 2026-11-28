@@ -19,6 +19,12 @@ class LinkCampaignAsset extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $assetResourceName, int $fieldType): ?string
     {
+        if (! in_array($fieldType, [AssetFieldType::CALLOUT, AssetFieldType::STRUCTURED_SNIPPET], true)) {
+            $campaign = \App\Services\Campaigns\CampaignSpendGuardrails::forGoogleResource($customerId, $campaignResourceName);
+            if ($campaign && \App\Services\Campaigns\SingleGoogleSearchLandingPage::protectsResource($campaign, $campaignResourceName)) {
+                return null;
+            }
+        }
         $this->ensureClient();
 
         $campaignAsset = new CampaignAsset([

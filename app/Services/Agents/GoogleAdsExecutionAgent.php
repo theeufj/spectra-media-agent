@@ -27,6 +27,7 @@ use App\Services\Agents\Google\GeoTargetResolver;
 use App\Services\Agents\Google\LandingUrlBuilder;
 use App\Services\Agents\Google\SearchKeywordBuilder;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
@@ -421,7 +422,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             // redeployed was charged at the new rate while Google kept
             // spending at the old one. Sync it before executing; best-effort,
             // a failed budget write must not sink the deploy.
-            if ($reusedCampaignId = $strategy->reusableGoogleCampaignId()) {
+            // A total budget is fixed for its approved dates. The daily figure
+            // is only a planning allocation and cannot be written to Google.
+            if (($reusedCampaignId = $strategy->reusableGoogleCampaignId()) && GoogleSearchTotalBudget::forStrategy($current) === null) {
                 try {
                     $newDaily = (float) ($strategy->daily_budget ?: $campaign->daily_budget);
                     if ($newDaily > 0) {

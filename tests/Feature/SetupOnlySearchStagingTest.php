@@ -65,14 +65,14 @@ class SetupOnlySearchStagingTest extends TestCase
         return [$customer, $campaign, $strategy];
     }
 
-    private function executor(Customer $customer, ?AgentIssue $stepError = null, bool $goalsReady = false): SearchCampaignExecutor
+    private function executor(Customer $customer, ?AgentIssue $stepError = null, bool $goalsReady = false, ?bool $totalBudgetVerified = null): SearchCampaignExecutor
     {
         $goals = $this->createMock(ReconcileCampaignConversionGoals::class);
         $readiness = ['ready' => $goalsReady, 'status' => $goalsReady ? 'ready' : 'needs_review',
             'intent' => ['category' => 'SUBMIT_LEAD_FORM'],
             'issues' => $goalsReady ? [] : [new AgentIssue('conversion_action_missing', 'No eligible Lead conversion action matches this objective.')]];
         $goals->method('prepare')->willReturn($readiness);
-        $goals->expects($goalsReady ? $this->once() : $this->never())->method('reconcile')->willReturn($readiness);
+        $goals->expects($goalsReady && $totalBudgetVerified !== false ? $this->once() : $this->never())->method('reconcile')->willReturn($readiness);
         $this->app->bind(ReconcileCampaignConversionGoals::class, fn () => $goals);
         $reader = $this->createMock(GetCampaignStatus::class);
         $reader->method('__invoke')->willReturnCallback(function () {
@@ -83,6 +83,14 @@ class SetupOnlySearchStagingTest extends TestCase
         $this->app->bind(GetCampaignStatus::class, fn () => $reader);
         $configuration = $this->createMock(ReadCampaignConfiguration::class);
         $configuration->method('read')->willReturnCallback(fn () => ['campaign' => ['campaign' => ['biddingStrategyType' => $this->remoteBidding]]]);
+        $configuration->expects($totalBudgetVerified === null ? $this->never() : $this->once())
+            ->method('hasVerifiedSearchTotalBudget')->willReturnCallback(function (string $account, string $resource, array $expected) use ($totalBudgetVerified): bool {
+                $this->assertSame('123', $account);
+                $this->assertSame('customers/123/campaigns/456', $resource);
+                $this->writes['verified_total_budget'][] = $expected;
+
+                return $totalBudgetVerified === true;
+            });
         $this->app->bind(ReadCampaignConfiguration::class, fn () => $configuration);
         $creator = $this->createMock(CreateSearchCampaign::class);
         $creator->method('__invoke')->willReturnCallback(function ($id, $data) {
@@ -195,6 +203,71 @@ class SetupOnlySearchStagingTest extends TestCase
         $this->assertCount(1, $this->writes['initial_bid']);
         $keys = array_keys($this->writes);
         $this->assertLessThan(array_search('ad', $keys, true), array_search('initial_bid', $keys, true));
+    }
+
+    public function test_single_destination_stages_both_search_ads_at_the_reviewed_form_and_skips_all_extensions(): void
+    {
+        [$customer, $campaign, $strategy] = $this->fixture();
+        $campaign->update(['landing_page_url' => 'https://example.test/?utm_source=old#form']);
+        $strategy->update(['campaign_type' => 'search', 'bidding_strategy' => [
+            'single_landing_page' => true, 'landing_page_url' => 'https://example.test/off-form',
+        ], 'ad_extensions' => ['sitelinks' => [['url' => 'https://example.test/prices']]]]);
+        $strategy->adCopies()->firstOrFail()->update(['headlines' => ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth']]);
+        $result = ExecutionResult::success();
+        $this->executor($customer)->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $url = "https://example.test/?utm_source=google&utm_medium=search&utm_campaign=spectra_{$campaign->id}&utm_content=strategy_{$strategy->id}#form";
+        $this->assertTrue($result->success, $result->errorMessage());
+        $this->assertTrue($this->writes['campaign'][0]['single_landing_page']);
+        $this->assertSame([[$url], [$url]], array_column($this->writes['ad'], 'finalUrls'));
+        $this->assertArrayNotHasKey('extensions', $this->writes);
+        $this->assertSame([], $result->metadata['google_search_baseline']['sitelink_urls']);
+        $this->assertSame($url, $result->metadata['google_search_baseline']['single_landing_page_url']);
+    }
+
+    public function test_managed_search_stages_the_approved_total_and_retains_the_daily_planning_amount(): void
+    {
+        [$customer, $campaign, $strategy, $totalBudget] = $this->totalBudgetFixture();
+        $result = ExecutionResult::success();
+
+        $this->executor($customer, goalsReady: true, totalBudgetVerified: true)
+            ->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $this->assertTrue($result->success, $result->errorMessage());
+        $this->assertSame($totalBudget, $this->writes['campaign'][0]['google_total_budget']);
+        $this->assertSame($totalBudget, $this->writes['verified_total_budget'][0]);
+        $this->assertSame($totalBudget, $result->metadata['google_search_baseline']['google_total_budget']);
+        $this->assertSame(22_000_000, $result->metadata['google_search_baseline']['budget_micros']);
+    }
+
+    public function test_reused_search_with_unverified_total_receives_no_staging_writes(): void
+    {
+        [$customer, $campaign, $strategy, $totalBudget] = $this->totalBudgetFixture('customers/123/campaigns/456');
+        $result = ExecutionResult::success();
+
+        $this->executor($customer, goalsReady: true, totalBudgetVerified: false)
+            ->execute('123', $campaign, $strategy, new ExecutionPlan([]), $result);
+
+        $this->assertFalse($result->success);
+        $this->assertSame(['verified_total_budget' => [$totalBudget]], $this->writes);
+        $this->assertSame('search_total_budget_unverified', $result->errors[0]->code);
+    }
+
+    private function totalBudgetFixture(?string $resource = null): array
+    {
+        [$customer, $campaign, $strategy] = $this->fixture([
+            'service_type' => 'managed', 'currency_code' => 'AUD', 'timezone' => 'Australia/Sydney',
+        ], $resource);
+        $start = now('Australia/Sydney')->addDay();
+        $totalBudget = ['total_micros' => 154_000_000, 'currency' => 'AUD',
+            'start_date' => $start->toDateString(), 'end_date' => $start->copy()->addDays(6)->toDateString()];
+        $campaign->update(['platforms' => ['google'], 'start_date' => $totalBudget['start_date'], 'end_date' => $totalBudget['end_date'],
+            'daily_budget' => '22.00', 'approved_daily_budget' => '22.00', 'total_budget' => '154.00',
+            'spend_guardrails' => ['google_total_budget' => $totalBudget]]);
+        $strategy->update(['campaign_type' => 'search', 'daily_budget' => '22.00',
+            'bidding_strategy' => ['name' => 'ManualCpc', 'google_total_budget' => $totalBudget]]);
+
+        return [$customer, $campaign, $strategy->fresh(), $totalBudget];
     }
 
     #[DataProvider('bidCustomers')]

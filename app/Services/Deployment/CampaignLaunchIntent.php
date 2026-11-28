@@ -17,6 +17,7 @@ use App\Services\Billing\PlatformFunding;
 use App\Services\Campaigns\CampaignMarketResearch;
 use App\Services\Campaigns\CampaignMarketResearchWorkflow;
 use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
 use App\Services\Conversions\CampaignOutcomeEvidence;
 use App\Services\Creative\CreativeRelease;
 use App\Services\DeploymentService;
@@ -77,6 +78,12 @@ class CampaignLaunchIntent
             }
             if ($strategies->contains(fn (Strategy $strategy) => ! $this->platformAllowed($customer, $strategy))) {
                 throw ValidationException::withMessages(['campaign_id' => 'Choose enabled ad platforms that are included in your current plan.']);
+            }
+            foreach ($strategies as $strategy) {
+                $cap = GoogleSearchTotalBudget::forStrategy($strategy->setRelation('campaign', $current));
+                if ($cap !== null && $current->strategies()->count() !== 1) {
+                    throw ValidationException::withMessages(['daily_budget' => 'A fixed Google Search budget requires a dedicated campaign with one strategy.']);
+                }
             }
             $needsResearch = $strategies->contains(function (Strategy $strategy) use ($current): bool {
                 $strategy->setRelation('campaign', $current);
@@ -320,16 +327,25 @@ class CampaignLaunchIntent
         return $current && $current->campaign?->customer && $this->isCurrent($current->campaign, $current->campaign->customer, $current);
     }
 
-    public function canPublish(Strategy $strategy): bool
+    public function canPublish(Strategy $strategy, bool $ownerApprovedRestart = false): bool
     {
         $current = $strategy->fresh(['campaign.customer']);
         if (! $current || ! $current->launch_intent) {
-            return $current !== null; // Existing deployment/repair paths predate customer launch intents.
+            return $current !== null && ! $ownerApprovedRestart; // Existing deployment/repair paths predate customer launch intents.
         }
         $campaign = $current->campaign;
         $customer = $campaign?->customer;
+        if ($ownerApprovedRestart) {
+            $activation = $current->execution_result['metadata']['search_reach_activation'] ?? [];
+            if (! $campaign || ! CampaignSpendGuardrails::hasGoogleTotalBudget($campaign)
+                || ($activation['enabled_verified'] ?? null) !== true || ($activation['status'] ?? null) !== 'enabled_verified'
+                || ! is_string($current->launch_intent['id'] ?? null)
+                || ($activation['launch_id'] ?? null) !== $current->launch_intent['id']) {
+                return false;
+            }
+        }
 
-        return $campaign && $customer && $this->isCurrent($campaign, $customer, $current)
+        return $campaign && $customer && $this->isCurrent($campaign, $customer, $current, ownerApprovedRestart: $ownerApprovedRestart)
             && $this->accountsReady($customer, $current->launch_intent['platforms'])
             && $this->funded($customer, $current) && $this->publicationReady($customer, $current);
     }
@@ -433,19 +449,29 @@ class CampaignLaunchIntent
         }
     }
 
-    private function isCurrent(Campaign $campaign, Customer $customer, Strategy $strategy, bool $attachingMeta = false): bool
+    private function isCurrent(Campaign $campaign, Customer $customer, Strategy $strategy, bool $attachingMeta = false, bool $ownerApprovedRestart = false): bool
     {
         $intent = $strategy->launch_intent;
         $approver = User::find($intent['user_id']);
         // Require workspace membership as on the customer action. The admin
         // portal's global policy override does not authorize a deferred launch.
         if ($intent['customer_id'] !== $customer->id || ! $approver || ! app(CampaignPolicy::class)->deploy($approver, $campaign)
-            || ! $this->canPrepare($campaign, $customer) || ! $this->platformAllowed($customer, $strategy)
+            || ! $this->canPrepare($campaign, $customer, $ownerApprovedRestart) || ! $this->platformAllowed($customer, $strategy)
             || $campaign->budget_confirmed_at?->toIso8601String() !== $intent['budget_approved_at']
             || $strategy->signed_off_at?->toIso8601String() !== $intent['signed_off_at']
             || ($strategy->creative_approval['fingerprint'] ?? null) !== $intent['creative_fingerprint']
             || ! $this->accountsMatch($customer, $intent, $attachingMeta)
             || ! $this->creative->isApproved($strategy)) {
+            return false;
+        }
+
+        try {
+            $fixed = GoogleSearchTotalBudget::forStrategy($strategy->setRelation('campaign', $campaign));
+        } catch (ValidationException) {
+            return false;
+        }
+        if ($fixed !== null && ! $strategy->google_ads_campaign_id
+            && $fixed['start_date'] < now($customer->timezone ?: config('app.timezone'))->toDateString()) {
             return false;
         }
 
@@ -459,14 +485,15 @@ class CampaignLaunchIntent
                 && ($research['approved_fingerprint'] ?? null) === $intent['research_approval']);
     }
 
-    private function canPrepare(Campaign $campaign, Customer $customer): bool
+    private function canPrepare(Campaign $campaign, Customer $customer, bool $ownerApprovedRestart = false): bool
     {
         $brand = $customer->brandGuideline;
 
         return ! $customer->is_sandbox && $customer->hasPaidDeploymentAccess() && Setting::get('deployment_enabled', true)
             && $brand?->user_verified && ($brand->approved_version === null || $brand->approved_version === $brand->profile_version)
             && ! $campaign->hasPassedEndDate() && ! $campaign->spend_safety_hold
-            && ! in_array($campaign->status, [CampaignStatus::Paused, CampaignStatus::Completed, CampaignStatus::Ended], true);
+            && ! in_array($campaign->status, [CampaignStatus::Completed, CampaignStatus::Ended], true)
+            && ($ownerApprovedRestart || $campaign->status !== CampaignStatus::Paused);
     }
 
     private function platformAllowed(Customer $customer, Strategy $strategy): bool

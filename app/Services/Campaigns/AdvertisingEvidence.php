@@ -17,6 +17,9 @@ class AdvertisingEvidence
             return [];
         }
         $landingPage = ($strategy?->bidding_strategy['landing_page_url'] ?? null) ?: ($campaign->landing_page_url ?: $customer->website);
+        if ($strategy && SingleGoogleSearchLandingPage::enabled($strategy)) {
+            $landingPage = $campaign->landing_page_url;
+        }
         $sources = $this->pages($customer);
         $landing = $this->url((string) $landingPage);
         if ($landing && $this->sameSite($landing, (string) $customer->website)) {

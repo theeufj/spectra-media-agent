@@ -422,7 +422,7 @@ class CampaignMarketResearch
             $chosen = InitialSearchBidPlanner::bestForecast($eligible);
             $estimate = $chosen['estimate'];
             $keywords = $sets[$chosen['set']];
-            if (! $this->hasFootprint($campaign, $strategy)) {
+            if (! SingleGoogleSearchLandingPage::enabled($strategy) && ! $this->hasFootprint($campaign, $strategy)) {
                 try {
                     $groups = app(SearchOfferGroups::class)->propose($campaign, $keywords);
                     if ($groups !== []) {

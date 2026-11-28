@@ -4,8 +4,11 @@ namespace App\Services\GoogleAds\Diagnostics;
 
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Services\Campaigns\CampaignSpendGuardrails;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Google\Ads\GoogleAds\V26\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
@@ -27,6 +30,7 @@ use Google\Ads\GoogleAds\V26\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus
 use Google\Ads\GoogleAds\V26\Enums\PositiveGeoTargetTypeEnum\PositiveGeoTargetType;
 use Google\Ads\GoogleAds\V26\Enums\TargetingDimensionEnum\TargetingDimension;
 use Google\Ads\GoogleAds\V26\Services\GoogleAdsRow;
+use Illuminate\Validation\ValidationException;
 
 /** Read-only, network-specific evidence for a Google Search delivery incident. */
 class InspectSearchDelivery extends BaseGoogleAdsService
@@ -40,12 +44,12 @@ class InspectSearchDelivery extends BaseGoogleAdsService
         }
 
         $settings = null;
-        $query = "SELECT customer.time_zone, customer.currency_code, campaign.status, campaign.start_date_time, campaign.end_date_time,
+        $query = 'SELECT customer.time_zone, campaign.resource_name, campaign.status,
                          campaign.advertising_channel_type, campaign.bidding_strategy_type,
                          campaign.maximize_conversions.target_cpa_micros, campaign.target_spend.cpc_bid_ceiling_micros,
                          campaign.bidding_strategy, campaign.geo_target_type_setting.positive_geo_target_type,
                          campaign.network_settings.target_google_search, campaign.network_settings.target_search_network,
-                         campaign.network_settings.target_content_network, campaign_budget.amount_micros
+                         campaign.network_settings.target_content_network, '.SearchBudgetReadback::FIELDS."
                   FROM campaign WHERE campaign.id = {$campaignId}";
         foreach ($this->rows($customerId, $query) as $row) {
             $value = $row->getCampaign();
@@ -53,12 +57,11 @@ class InspectSearchDelivery extends BaseGoogleAdsService
             $settings = [
                 'time_zone' => $row->getCustomer()->getTimeZone() ?: ($campaign->customer->timezone ?: config('app.timezone', 'UTC')),
                 'account_time_zone_verified' => in_array($row->getCustomer()->getTimeZone(), timezone_identifiers_list(\DateTimeZone::ALL_WITH_BC), true),
-                'currency_code' => $row->getCustomer()->getCurrencyCode(),
+                ...SearchBudgetReadback::fromRow(json_decode($row->serializeToJsonString(), true, flags: JSON_THROW_ON_ERROR)),
                 'status' => $value->getStatus(),
+                'campaign_resource' => $value->getResourceName(),
                 'start_date' => CampaignDateTimes::calendarDate($value->getStartDateTime()),
-                'start_date_time' => $value->getStartDateTime(),
                 'end_date' => CampaignDateTimes::calendarDate($value->getEndDateTime()),
-                'end_date_time' => $value->getEndDateTime(),
                 'channel' => $value->getAdvertisingChannelType(),
                 'bidding_strategy' => $value->getBiddingStrategyType(),
                 'target_cpa_micros' => (int) ($value->getMaximizeConversions()?->getTargetCpaMicros() ?? 0),
@@ -76,6 +79,11 @@ class InspectSearchDelivery extends BaseGoogleAdsService
 
         if (! $settings || $settings['channel'] !== AdvertisingChannelType::SEARCH) {
             return null;
+        }
+        if (array_key_exists('google_total_budget', $campaign->spend_guardrails ?? []) || $settings['budget_period'] === 'CUSTOM_PERIOD') {
+            $resource = "customers/{$customerId}/campaigns/{$campaignId}";
+            $settings['daily_budget_micros'] = $settings['campaign_resource'] === $resource && $campaign->googleAdsResourceName() === $resource
+                ? $this->verifiedPlanningBudget($campaign, $campaignId, $resource, $settings) : 0;
         }
 
         // Retain the legacy two-day snapshot for existing diagnostics. It is not
@@ -356,6 +364,25 @@ class InspectSearchDelivery extends BaseGoogleAdsService
                 ? $this->rankEvidence($customerId, $campaignId, $measurement, $settings['time_zone'])
                 : ['status' => 'unavailable', 'reason' => 'google_account_timezone_unverified', 'checked_at' => now()->toIso8601String()],
         ];
+    }
+
+    /** A total-budget campaign has no provider daily amount. Use only a proven strategy allocation for forecasts. */
+    private function verifiedPlanningBudget(Campaign $campaign, string $campaignId, string $resource, array $settings): int
+    {
+        $approval = $campaign->spend_guardrails['google_total_budget'] ?? null;
+        if (! is_array($approval) || ! SearchBudgetReadback::matches($approval, $settings)) {
+            return 0;
+        }
+        $matches = $campaign->strategies()->whereIn('google_ads_campaign_id', [$campaignId, $resource])->limit(2)->get();
+        if ($matches->count() !== 1) {
+            return 0;
+        }
+        $strategy = $matches->first()->setRelation('campaign', $campaign);
+        try {
+            return GoogleSearchTotalBudget::forStrategy($strategy) === null ? 0 : CampaignSpendGuardrails::moneyToMicros($strategy->daily_budget);
+        } catch (ValidationException) {
+            return 0;
+        }
     }
 
     /** @return iterable<GoogleAdsRow> */

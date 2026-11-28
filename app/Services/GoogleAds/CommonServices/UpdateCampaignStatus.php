@@ -2,8 +2,14 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Enums\CampaignStatus as LocalCampaignStatus;
+use App\Models\Campaign as LocalCampaign;
+use App\Models\Strategy;
 use App\Services\Campaigns\CampaignSpendGuardrails;
 use App\Services\Campaigns\GoogleCampaignSpendSafety;
+use App\Services\Campaigns\GoogleSearchTotalBudget;
+use App\Services\CampaignStatusHelper;
+use App\Services\Deployment\CampaignLaunchIntent;
 use App\Services\GoogleAds\ApprovedAiMaxPilotActivation;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\InspectAiMaxPilot;
@@ -34,6 +40,17 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
             if ($local && ! CampaignSpendGuardrails::canEnable($local, $this->ownerApprovedRestart)) {
                 return ['success' => false, 'error' => 'Campaign is deliberately paused or held by spend safety. Review its limits and approve the restart first.'];
             }
+            if ($local && CampaignSpendGuardrails::hasGoogleTotalBudget($local)) {
+                try {
+                    $ready = $this->fixedSearchReady($local, $customerId, $campaignResourceName);
+                } catch (\Throwable $e) {
+                    report($e);
+                    $ready = false;
+                }
+                if (! $ready) {
+                    return ['success' => false, 'error' => 'Google Search activation requires the approved total budget, schedule and verified launch.'];
+                }
+            }
             if ($local && ($pilot = CampaignSpendGuardrails::aiMaxPilot($local)) !== null) {
                 try {
                     if (! $this->pilotRestartReady($local, $pilot)) {
@@ -43,6 +60,18 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
                     report($e);
 
                     return ['success' => false, 'error' => 'AI Max pilot activation could not be verified; the campaign was not enabled.'];
+                }
+            }
+            if ($local) {
+                try {
+                    $issues = app(VerifySingleSearchLandingPage::class, ['customer' => $this->customer])
+                        ->forEnable($local, $customerId, $campaignResourceName);
+                } catch (\Throwable $e) {
+                    report($e);
+                    $issues = ['The reviewed Search landing page could not be verified.'];
+                }
+                if ($issues !== []) {
+                    return ['success' => false, 'error' => implode(' ', $issues)];
                 }
             }
         }
@@ -99,6 +128,63 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
                 'rejected' => in_array($e->getStatus(), ['INVALID_ARGUMENT', 'PERMISSION_DENIED', 'FAILED_PRECONDITION'], true),
             ];
         }
+    }
+
+    private function fixedSearchReady(LocalCampaign $campaign, string $account, string $resource): bool
+    {
+        $strategies = $campaign->strategies()->limit(2)->get();
+        if ($strategies->count() !== 1 || $this->customer?->cleanGoogleCustomerId() !== $account) {
+            return false;
+        }
+        $strategy = $strategies->first()->setRelation('campaign', $campaign);
+        $expected = GoogleSearchTotalBudget::forStrategy($strategy);
+        if ($expected === null || ! $this->hasFixedSearchActivation($strategy, $resource, $expected)
+            || ! app(ReadCampaignConfiguration::class, ['customer' => $this->customer])
+                ->hasVerifiedSearchTotalBudget($account, $resource, $expected)) {
+            return false;
+        }
+
+        $fresh = $strategy->fresh(['campaign.customer']);
+        $current = $fresh?->campaign;
+        $owner = $current?->customer;
+
+        return $fresh && $current && $owner && $owner->cleanGoogleCustomerId() === $account
+            && CampaignSpendGuardrails::canEnable($current, $this->ownerApprovedRestart)
+            && CampaignSpendGuardrails::hasLaunchFunding($owner)
+            && CampaignStatusHelper::getGoogleAdsStatus(null, $owner) === CampaignStatus::ENABLED
+            && GoogleSearchTotalBudget::forStrategy($fresh) === $expected
+            && $this->hasFixedSearchActivation($fresh, $resource, $expected)
+            && ($fresh->launch_intent === null || app(CampaignLaunchIntent::class)->canPublish($fresh, $this->ownerApprovedRestart));
+    }
+
+    private function hasFixedSearchActivation(Strategy $strategy, string $resource, array $expected): bool
+    {
+        $metadata = $strategy->execution_result['metadata'] ?? [];
+        $activation = $metadata['search_reach_activation'] ?? [];
+        if ($strategy->google_ads_campaign_id !== $resource
+            || ! in_array($strategy->deployment_status, ['deployed', 'verified', 'active'], true)
+            || ($metadata['google_search_staging']['campaign_resource'] ?? null) !== $resource
+            || ($metadata['google_search_staging']['enable_after_success'] ?? null) !== true
+            || ($metadata['google_search_baseline']['google_total_budget'] ?? null) != $expected
+            || ($activation['campaign_resource'] ?? null) !== $resource
+            || ! array_key_exists('launch_id', $activation)
+            || $activation['launch_id'] !== ($strategy->launch_intent['id'] ?? null)) {
+            return false;
+        }
+        if (($activation['enabled_verified'] ?? null) === true && ($activation['status'] ?? null) === 'enabled_verified') {
+            return true;
+        }
+
+        $timestamp = $activation['enable_attempted_at'] ?? null;
+        $attempted = is_string($timestamp) ? strtotime($timestamp) : false;
+
+        return ! $this->ownerApprovedRestart && $strategy->campaign?->status === LocalCampaignStatus::Active
+            && ($activation['status'] ?? null) === 'activation_ready' && ($activation['enabled_verified'] ?? null) === false
+            && ($activation['preflight']['validated_campaign_resource'] ?? null) === $resource
+            && ($activation['preflight']['gate']['ready'] ?? null) === true
+            && ($activation['activation_check']['ready'] ?? null) === true
+            && ($activation['activation_check']['metadata']['google_total_budget'] ?? null) == $expected
+            && $attempted !== false && $attempted >= now()->subMinutes(5)->timestamp && $attempted <= now()->timestamp;
     }
 
     protected function pilotRestartReady(\App\Models\Campaign $campaign, array $pilot): bool

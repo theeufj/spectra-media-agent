@@ -481,7 +481,8 @@ class QualityScoreImprovementAgent
                     }
                     // A one-use copy recovery authorizes only the reviewed RSA replacement.
                     foreach (isset($attempt->details['generation_retry_authorization_id']) ? [] : $ad['action_items'] as $item) {
-                        if (! is_string($item) || ! str_contains(strtolower($item), 'sitelink')) {
+                        if (! is_string($item) || ! str_contains(strtolower($item), 'sitelink')
+                            || \App\Services\Campaigns\SingleGoogleSearchLandingPage::required($strategy)) {
                             continue;
                         }
                         preg_match('/add(?:ing)?\s+(\d+)\s+(?:more\s+)?sitelinks?/i', $item, $matches);

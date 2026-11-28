@@ -284,6 +284,9 @@ class CampaignMarketResearchWorkflow
                     throw ValidationException::withMessages(['daily_budget' => 'The researched Search keyword selection is missing.']);
                 }
                 $groups = $row['search_offer_groups'] ?? [];
+                if ($groups !== [] && SingleGoogleSearchLandingPage::enabled($strategy)) {
+                    throw ValidationException::withMessages(['daily_budget' => 'Refresh market research for the single campaign destination before approving this proposal.']);
+                }
                 if ($groups !== []) {
                     try {
                         app(SearchOfferGroups::class)->assertCurrent($campaign, $groups, $keywords);

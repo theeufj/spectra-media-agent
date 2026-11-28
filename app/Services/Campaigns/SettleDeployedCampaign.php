@@ -134,7 +134,9 @@ class SettleDeployedCampaign
                             throw new \RuntimeException('The immediate Search activation check did not pass: '.$activationCheck->errorMessage());
                         }
                         $attempted[] = ['strategy' => $strategy, 'resource' => $resource];
-                        $this->saveActivation($strategy, ['enable_attempted_at' => now()->toIso8601String(), 'enabled_verified' => false]);
+                        $this->saveActivation($strategy, ['enable_attempted_at' => now()->toIso8601String(), 'enabled_verified' => false,
+                            ...(isset($strategy->execution_result['metadata']['google_search_baseline']['google_total_budget'])
+                                ? ['launch_id' => $strategy->launch_intent['id'] ?? null] : [])]);
                         $enabled = $this->campaignStatusService($customer)->enable($customer->cleanGoogleCustomerId(), $resource);
                         $verified = app(GetCampaignStatus::class, ['customer' => $customer])($customer->cleanGoogleCustomerId(), $resource);
                         if (! ($enabled['success'] ?? false) || ($verified['status'] ?? null) !== GoogleCampaignStatus::ENABLED) {

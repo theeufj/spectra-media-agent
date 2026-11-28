@@ -9,6 +9,7 @@ use App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast;
 use App\Services\GoogleAds\KeywordResearch\GenerateKeywordHistoricalMetrics;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use App\Services\GoogleAds\Support\CampaignDateTimes;
+use App\Services\GoogleAds\Support\SearchBudgetReadback;
 use Carbon\CarbonImmutable;
 use Google\Ads\GoogleAds\V26\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
 use Illuminate\Support\Facades\Cache;
@@ -476,11 +477,13 @@ class GoogleSearchReachPlanner
 
     private function context(array $snapshot): array
     {
-        return array_intersect_key($snapshot, array_flip(['bidding_strategy', 'currency_code', 'time_zone',
+        $context = array_intersect_key($snapshot, array_flip(['bidding_strategy', 'currency_code', 'time_zone',
             'cpc_bid_ceiling_micros', 'daily_budget_micros', 'geo_target_constants', 'excluded_geo_target_constants',
             'language_constants', 'negative_keywords', 'ad_schedule', 'search_partners_enabled',
             'device_bid_modifiers', 'unsupported_targeting'])) + ['geo_target_constants' => [],
                 'language_constants' => [], 'daily_budget_micros' => 0];
+
+        return $context + SearchBudgetReadback::totalBudgetSettings($snapshot);
     }
 
     private function campaignContext(Campaign $campaign, array $snapshot): array
